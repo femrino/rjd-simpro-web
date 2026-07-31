@@ -1,0 +1,101 @@
+/* ============================================================
+ * SIMPRO -- simpro-pengiriman.css
+ * ============================================================
+ * DIMUAT DI : pengiriman.html
+ *
+ * Variabel warna DISALIN dari dashboard, sama alasannya dengan halaman
+ * order-list: tiap cabang punya blok :root sendiri dengan isi berbeda, jadi
+ * menggabungkannya ke global akan mengubah halaman lain diam-diam.
+ * ============================================================ */
+
+:root {
+  --cream: #F9F7F2;      --cream-deep: #F0EBE0;   --white: #FFFFFF;
+  --navy: #172134;       --navy-deep: #0F1623;    --navy-soft: #2A3754;
+  --ink: #172134;        --ink-soft: #6B7280;
+  --terra: #BD4335;      --terra-deep: #9E3528;   --terra-light: #D97A6E;
+  --thread: #BD4335;
+  --gold: #C8964A;       --emerald: #2D8A5F;      --sky: #3B7BBF;  --amber: #D9941E;
+  --line: #E5E0D6;       --line-soft: #EFEAE0;
+  /* paper dan paper:2 dipetakan ke cream supaya komponen lama yang masih
+     memakai token itu ikut berubah nada warnanya tanpa perlu diedit satu:satu.
+     PENTING: #db-section-tabs memakai background:var(::paper) sebagai latar
+     buram saat sticky, jadi token ini WAJIB tetap warna solid, bukan
+     transparent. */
+  --paper: #F9F7F2;      --paper-2: #F0EBE0;
+  --shadow-lg: 0 20px 60px rgba(15,22,35,.14);
+  --shadow-md: 0 8px 24px rgba(15,22,35,.08);
+  --shadow-sm: 0 2px 8px rgba(15,22,35,.05);
+}
+
+body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
+#kr-hero { position: relative; z-index: 1; animation: dbFadeUp .6s ease-out backwards; }
+.kr-wrap { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 0 24px 100px; }
+
+.kr-kotak { max-width: 420px; margin: 60px auto; text-align: center; background: var(--white);
+  border: 1px solid var(--line-soft); border-radius: 14px; padding: 28px 24px; }
+.kr-kotak h2 { font-size: 17px; margin: 0 0 6px; }
+.kr-kotak p { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 18px; }
+#kr-google-btn { display: flex; justify-content: center; }
+
+/* Ringkasan: angka yang paling sering ditanyakan, sebelum tabelnya dibaca. */
+.kr-ringkas { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.kr-kartu { background: var(--white); border: 1px solid var(--line-soft); border-radius: 12px;
+  padding: 14px 20px; min-width: 150px; }
+.kr-kartu.bahaya { border-color: var(--terra-light); background: #FCF3E3; }
+.kr-kartu-angka { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 24px; color: var(--ink); }
+.kr-kartu-label { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
+
+.kr-alat { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 14px; }
+.kr-alat input { flex: 1 1 260px; margin: 0; padding: 8px 12px; background: var(--white);
+  border: 1px solid var(--line-soft); border-radius: 9px; }
+.kr-alat select { flex: 0 1 200px; margin: 0; padding: 8px 10px; background: var(--white);
+  border: 1px solid var(--line-soft); border-radius: 9px; font-size: 12.5px; }
+
+.kr-tabelwrap { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--white); }
+.kr-tabel { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.kr-tabel th { background: var(--cream); border-bottom: 1.5px solid var(--line); padding: 9px 11px;
+  text-align: left; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft);
+  font-weight: 700; white-space: nowrap; }
+.kr-tabel td { border-bottom: 1px solid var(--line-soft); padding: 9px 11px; vertical-align: top; }
+.kr-tabel tbody tr:last-child td { border-bottom: none; }
+.kr-tabel .num { text-align: right; white-space: nowrap; font-weight: 700; }
+
+/* Baris utama bisa diklik untuk membuka rincian pengirimannya. */
+.kr-baris { cursor: pointer; }
+.kr-baris:hover td { background: var(--cream); }
+.kr-panah { color: var(--ink-soft); text-align: center; }
+
+.kr-nomor { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; white-space: nowrap; }
+.kr-nama { font-size: 11.5px; color: var(--ink-soft); line-height: 1.35; margin-top: 1px; }
+
+.kr-tabel td.kurang { color: var(--thread); }
+.kr-tabel td.lebih { color: #8A5D1F; }
+
+.kr-bar { width: 90px; height: 6px; background: var(--paper-2); border-radius: 4px; overflow: hidden; }
+.kr-bar-isi { height: 100%; border-radius: 4px; }
+.kr-bar-isi.ok { background: #2C6B3F; }
+.kr-bar-isi.sebagian { background: var(--gold); }
+.kr-bar-isi.belum { background: var(--line); }
+.kr-persen { font-size: 10px; color: var(--ink-soft); margin-top: 3px; }
+
+.kr-status { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 8px;
+  border-radius: 20px; white-space: nowrap; background: var(--cream); color: var(--ink-soft); }
+.kr-status.ok { background: #EAF4EC; color: #2C6B3F; }
+.kr-status.sebagian { background: #FCF3E3; color: #8A5D1F; }
+.kr-telat { font-size: 10.5px; font-weight: 700; color: var(--thread); margin-top: 2px; white-space: nowrap; }
+
+/* Rincian pengiriman -- tabel di dalam baris. */
+.kr-rincian td { background: var(--paper-2); padding: 0 11px 12px; }
+.kr-rincian-kosong { font-size: 12px; color: var(--ink-soft); padding: 10px 0; font-style: italic; }
+.kr-subtabel { width: 100%; border-collapse: collapse; font-size: 11.5px; background: var(--white);
+  border: 1px solid var(--line-soft); border-radius: 8px; overflow: hidden; }
+.kr-subtabel th { background: var(--white); border-bottom: 1px solid var(--line-soft); padding: 7px 10px;
+  text-align: left; font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; color: var(--ink-soft); }
+.kr-subtabel td { border-bottom: 1px solid var(--line-soft); padding: 7px 10px; }
+.kr-subtabel tbody tr:last-child td { border-bottom: none; }
+.kr-subtabel .num { text-align: right; font-weight: 700; }
+
+@media (max-width: 640px) {
+  .kr-kartu { flex: 1 1 100%; }
+  .kr-alat select { flex: 1 1 100%; }
+}
