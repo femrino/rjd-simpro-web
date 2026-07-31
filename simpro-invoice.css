@@ -1,0 +1,83 @@
+/* ============================================================
+ * SIMPRO -- simpro-invoice.css
+ * ============================================================
+ * DIMUAT DI : invoice.html
+ *
+ * Variabel warna DISALIN dari dashboard -- pola sama dengan order-list dan
+ * pengiriman: tiap cabang punya blok :root sendiri dengan isi berbeda.
+ * ============================================================ */
+
+:root {
+  --cream: #F9F7F2;      --cream-deep: #F0EBE0;   --white: #FFFFFF;
+  --navy: #172134;       --navy-deep: #0F1623;    --navy-soft: #2A3754;
+  --ink: #172134;        --ink-soft: #6B7280;
+  --terra: #BD4335;      --terra-deep: #9E3528;   --terra-light: #D97A6E;
+  --thread: #BD4335;
+  --gold: #C8964A;       --emerald: #2D8A5F;      --sky: #3B7BBF;  --amber: #D9941E;
+  --line: #E5E0D6;       --line-soft: #EFEAE0;
+  /* paper dan paper:2 dipetakan ke cream supaya komponen lama yang masih
+     memakai token itu ikut berubah nada warnanya tanpa perlu diedit satu:satu.
+     PENTING: #db-section-tabs memakai background:var(::paper) sebagai latar
+     buram saat sticky, jadi token ini WAJIB tetap warna solid, bukan
+     transparent. */
+  --paper: #F9F7F2;      --paper-2: #F0EBE0;
+  --shadow-lg: 0 20px 60px rgba(15,22,35,.14);
+  --shadow-md: 0 8px 24px rgba(15,22,35,.08);
+  --shadow-sm: 0 2px 8px rgba(15,22,35,.05);
+}
+
+body { padding-top: 0; }
+#iv-hero { position: relative; z-index: 1; animation: dbFadeUp .6s ease-out backwards; }
+.iv-wrap { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 0 24px 100px; }
+
+.iv-kotak { max-width: 420px; margin: 60px auto; text-align: center; background: var(--white);
+  border: 1px solid var(--line-soft); border-radius: 14px; padding: 28px 24px; }
+.iv-kotak h2 { font-size: 17px; margin: 0 0 6px; }
+.iv-kotak p { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 18px; }
+#iv-google-btn { display: flex; justify-content: center; }
+
+/* Ringkasan aging -- kartu pertama total piutang, empat berikutnya per bucket.
+   Bucket bisa diklik untuk menyaring tabel ke umur itu. */
+.iv-ringkas { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.iv-kartu { background: var(--white); border: 1px solid var(--line-soft); border-radius: 12px;
+  padding: 14px 20px; min-width: 150px; }
+.iv-kartu-utama { background: var(--ink); border-color: var(--ink); }
+.iv-kartu-utama .iv-kartu-angka { color: var(--white); }
+.iv-kartu-utama .iv-kartu-label { color: rgba(255,255,255,.7); }
+.iv-bucket { cursor: pointer; transition: border-color .15s; }
+.iv-bucket:hover { border-color: var(--thread); }
+.iv-kartu.bahaya { border-color: var(--terra-light); background: #FCF3E3; }
+.iv-kartu-angka { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 19px; color: var(--ink); white-space: nowrap; }
+.iv-kartu-label { font-size: 11px; color: var(--ink-soft); margin-top: 3px; }
+
+.iv-alat { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 10px; }
+.iv-alat input { flex: 1 1 260px; margin: 0; padding: 8px 12px; background: var(--white);
+  border: 1px solid var(--line-soft); border-radius: 9px; }
+.iv-alat select { flex: 0 1 220px; margin: 0; padding: 8px 10px; background: var(--white);
+  border: 1px solid var(--line-soft); border-radius: 9px; font-size: 12.5px; }
+
+.iv-jumlah { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--ink-soft); margin-bottom: 8px; }
+.iv-tabelwrap { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--white); }
+.iv-tabel { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.iv-tabel th { background: var(--cream); border-bottom: 1.5px solid var(--line); padding: 9px 11px;
+  text-align: left; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft);
+  font-weight: 700; white-space: nowrap; }
+.iv-tabel td { border-bottom: 1px solid var(--line-soft); padding: 9px 11px; vertical-align: top; }
+.iv-tabel tbody tr:last-child td { border-bottom: none; }
+.iv-tabel tbody tr:hover td { background: var(--cream); }
+.iv-tabel .num { text-align: right; white-space: nowrap; font-weight: 700; }
+.iv-tabel td.kurang { color: var(--thread); }
+
+.iv-nomor { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; white-space: nowrap; }
+.iv-sub { font-size: 11px; color: var(--ink-soft); margin-top: 1px; white-space: nowrap; }
+
+.iv-status { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 8px;
+  border-radius: 20px; white-space: nowrap; background: var(--cream); color: var(--ink-soft); }
+.iv-status.lunas { background: #EAF4EC; color: #2C6B3F; }
+.iv-status.belum { background: var(--cream); color: var(--ink-soft); }
+.iv-status.bahaya { background: #FCF3E3; color: #8A5D1F; }
+
+@media (max-width: 640px) {
+  .iv-kartu { flex: 1 1 calc(50% - 6px); }
+  .iv-alat select { flex: 1 1 100%; }
+}
