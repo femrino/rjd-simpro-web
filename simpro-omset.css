@@ -1,0 +1,348 @@
+/* ============================================================
+ * SIMPRO -- simpro-omset.css
+ * ============================================================
+ * Diekstrak dari template Blogger. Urutan aturan DIPERTAHANKAN persis
+ * seperti di template, karena cascade CSS bergantung pada urutan.
+ *
+ * DIMUAT DI : laporan-omset
+ * ============================================================ */
+
+/* ============ TOKEN WARNA (lokal cabang laporan-omset) ============ */
+:root {
+  --cream: #F9F7F2;      --cream-deep: #F0EBE0;   --white: #FFFFFF;
+  --navy: #172134;       --navy-deep: #0F1623;    --navy-soft: #2A3754;
+  --ink: #172134;        --ink-soft: #6B7280;
+  --terra: #BD4335;      --terra-deep: #9E3528;   --terra-light: #D97A6E;
+  --thread: #BD4335;
+  --gold: #C8964A;       --emerald: #2D8A5F;      --sky: #3B7BBF;  --amber: #D9941E;
+  --line: #E5E0D6;       --line-soft: #EFEAE0;
+  --shadow-lg: 0 20px 60px rgba(15,22,35,.14);
+  --shadow-md: 0 8px 24px rgba(15,22,35,.08);
+  --shadow-sm: 0 2px 8px rgba(15,22,35,.05);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  background: var(--cream);
+  color: var(--navy);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+  min-height: 100vh;
+
+  /* WAJIB untuk tiap cabang yang pindah dari nav{position:fixed} ke header
+     sticky. CSS global punya body{padding-top:68px} sebagai ganjal tinggi nav
+     fixed lama. Kalau nav fixed dilepas tapi padding ini tidak dinolkan,
+     muncul ruang kosong mati 68px di atas header, dan
+     getBoundingClientRect().top header jadi 68 saat scrollY=0.
+     Ini persis bug yang dulu makan berhari-hari di halaman tracking. */
+  padding-top: 0;
+}
+
+h1,h2,h3,h4,h5,h6 { font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif; }
+.lo-mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+.hidden { display: none !important; }
+
+/* ============ LATAR BERANIMASI ============ */
+.lo-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.lo-bg-gradient {
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(189,67,53,.06) 0%, transparent 35%),
+    radial-gradient(circle at 85% 75%, rgba(23,33,52,.05) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(200,150,74,.04) 0%, transparent 45%);
+  animation: loMeshShift 20s ease-in-out infinite alternate;
+}
+@keyframes loMeshShift {
+  0%   { transform: translate(0,0) scale(1); }
+  50%  { transform: translate(-2%,3%) scale(1.04); }
+  100% { transform: translate(2%,-2%) scale(1.02); }
+}
+.lo-float {
+  position: absolute;
+  border-radius: 24px;
+  opacity: 0.05;
+  animation: loFloatY 16s ease-in-out infinite;
+}
+.lo-float.f1 { width: 160px; height: 160px; background: var(--terra); top: 10%; left: 5%;  --rot: 15deg;  transform: rotate(15deg); }
+.lo-float.f2 { width: 100px; height: 100px; background: var(--navy);  top: 65%; left: 8%;  --rot: -20deg; transform: rotate(-20deg); border-radius: 50%; animation-delay: -4s; }
+.lo-float.f3 { width: 200px; height: 200px; background: var(--gold);  top: 12%; right: 6%; --rot: 8deg;   transform: rotate(8deg);  border-radius: 32px; animation-delay: -7s; }
+.lo-float.f4 { width: 80px;  height: 80px;  background: var(--terra); bottom: 15%; right: 12%; --rot: 25deg; transform: rotate(25deg); border-radius: 50%; animation-delay: -10s; }
+@keyframes loFloatY {
+  0%, 100% { transform: translateY(0) rotate(var(--rot, 0deg)); }
+  50% { transform: translateY(-25px) rotate(var(--rot, 0deg)); }
+}
+
+/* ============ HEADER STICKY TRANSPARAN ============ */
+.lo-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  padding: 20px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  /* fill-mode WAJIB backwards, JANGAN both. Kalau both, transform nempel
+     permanen setelah animasi selesai dan mematikan position:sticky. */
+  animation: loSlideDown 0.5s ease-out backwards;
+}
+@keyframes loSlideDown {
+  from { opacity: 0; transform: translateY(-16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.lo-header .logo {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 900;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+.lo-header .logo .navy  { color: var(--navy); }
+.lo-header .logo .terra { color: var(--terra); margin-left: 4px; }
+.lo-header .logo .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--terra);
+  animation: loPulse 2s ease-in-out infinite;
+}
+@keyframes loPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(189,67,53,.4); }
+  50% { opacity: 0.5; box-shadow: 0 0 0 5px rgba(189,67,53,0); }
+}
+
+/* Prefiks unik: JANGAN pakai nama nav-actions / nav-cta / nav-icon-btn,
+   ketiganya sudah dipakai CSS global sistem lama DENGAN position:absolute. */
+.lo-nav-actions {
+  display: flex; align-items: center; gap: 8px;
+  /* Reset per-PROPERTI, bukan per-blok: aturan global position:absolute tidak
+     otomatis batal cuma karena selektor lokal lebih spesifik. */
+  position: static; right: auto; top: auto; transform: none;
+}
+.lo-nav-icon-btn {
+  position: static; right: auto; top: auto; transform: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 9999px;
+  border: 1px solid var(--line); background: rgba(255,255,255,.6);
+  color: var(--ink-soft); cursor: pointer; transition: all .2s;
+}
+.lo-nav-icon-btn:hover { color: var(--navy); border-color: rgba(23,33,52,.15); background: var(--white); }
+.lo-nav-icon-btn svg { width: 16px; height: 16px; }
+.lo-nav-cta {
+  position: static; right: auto; top: auto; transform: none;
+  font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600;
+  color: var(--white); background: var(--navy); border: none;
+  padding: 8px 16px; border-radius: 9999px; cursor: pointer; transition: opacity .2s;
+}
+.lo-nav-cta:hover { opacity: .85; }
+
+/* ============ KERANGKA KONTEN ============ */
+#lo-app {
+  position: relative;
+  z-index: 1;
+  max-width: 1000px;
+  margin: 8px auto 40px;
+  padding: 0 24px;
+  animation: loFadeUp 0.6s ease-out backwards;
+}
+@keyframes loFadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============ KARTU LOGIN ============ */
+.lo-login-card {
+  text-align: center;
+  max-width: 420px;
+  margin: 40px auto;
+  padding: 48px 32px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow-lg);
+  animation: loCardEntrance 0.7s cubic-bezier(.34,1.56,.64,1) backwards;
+}
+@keyframes loCardEntrance {
+  from { opacity: 0; transform: scale(0.92) translateY(30px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.lo-login-icon {
+  width: 52px; height: 52px; margin: 0 auto 18px;
+  border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--cream-deep); color: var(--terra);
+  animation: loIconFloat 3s ease-in-out infinite;
+}
+@keyframes loIconFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.lo-login-icon svg { width: 24px; height: 24px; }
+.lo-login-title {
+  font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 19px;
+  color: var(--navy); margin-bottom: 6px;
+}
+.lo-login-sub { font-size: 13px; color: var(--ink-soft); margin-bottom: 22px; }
+.lo-login-note { margin-top: 16px; font-size: 12px; color: var(--ink-soft); }
+
+/* ============ LOADING DAN ERROR ============ */
+.lo-loading-box { text-align: center; padding: 60px 0; }
+.lo-spinner {
+  width: 30px; height: 30px; margin: 0 auto 14px;
+  border: 2.5px solid var(--line);
+  border-top-color: var(--terra);
+  border-radius: 50%;
+  animation: loSpin 0.8s linear infinite;
+}
+@keyframes loSpin { to { transform: rotate(360deg); } }
+.lo-loading-text {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.lo-error-box {
+  max-width: 480px; margin: 40px auto;
+  text-align: center; padding: 28px 24px;
+  background: #FDECEA; border: 1px solid #E8A49C; border-radius: 16px;
+  color: #8F2C22; font-size: 14px; line-height: 1.6;
+  animation: loShake 0.4s ease-out;
+}
+@keyframes loShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+/* ============ KEPALA ISI (judul + pemilih tahun) ============ */
+.lo-page-head {
+  margin-bottom: 22px;
+  display: flex; justify-content: space-between; align-items: flex-end;
+  flex-wrap: wrap; gap: 14px;
+}
+.lo-eyebrow {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--terra); display: inline-flex; align-items: center; gap: 10px;
+  margin-bottom: 10px;
+}
+.lo-eyebrow::before { content: ""; width: 26px; height: 1px; background: var(--terra); }
+.lo-page-title {
+  font-family: 'Archivo', sans-serif; font-weight: 900;
+  font-size: 26px; letter-spacing: -0.02em; color: var(--navy); line-height: 1.2;
+}
+.lo-page-title em { color: var(--terra); font-style: normal; }
+.lo-tahun-wrap { display: flex; align-items: center; gap: 8px; }
+.lo-tahun-label {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft);
+}
+#lo-tahun-selector {
+  padding: 9px 14px; border: 1px solid var(--line); border-radius: 9999px;
+  font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600;
+  color: var(--navy); background: var(--white); cursor: pointer;
+  box-shadow: var(--shadow-sm); transition: border-color .2s;
+}
+#lo-tahun-selector:hover { border-color: var(--terra-light); }
+
+/* ============ TABEL LAPORAN ============ */
+.lo-tabel {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+  background: var(--white); border: 1px solid var(--line);
+  border-radius: 16px; overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+.lo-tabel th {
+  background: var(--cream-deep); text-align: right; padding: 12px 14px;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--ink-soft); border-bottom: 2px solid var(--line); font-weight: 600;
+}
+.lo-tabel th:first-child, .lo-tabel td:first-child { text-align: left; }
+.lo-tabel td {
+  padding: 10px 14px; text-align: right;
+  border-bottom: 1px solid var(--line-soft);
+  font-variant-numeric: tabular-nums;
+}
+.lo-tabel tbody tr { transition: background .15s; animation: loItemIn 0.35s ease-out backwards; }
+.lo-tabel tbody tr:hover { background: var(--cream); }
+@keyframes loItemIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* Efek item muncul bertahap. Baris tabel dirender JS, tapi CSS tetap kena
+   karena penargetannya lewat struktur, bukan kelas yang harus ditambah JS. */
+.lo-tabel tbody tr:nth-child(1)  { animation-delay: 0.00s; }
+.lo-tabel tbody tr:nth-child(2)  { animation-delay: 0.04s; }
+.lo-tabel tbody tr:nth-child(3)  { animation-delay: 0.08s; }
+.lo-tabel tbody tr:nth-child(4)  { animation-delay: 0.12s; }
+.lo-tabel tbody tr:nth-child(5)  { animation-delay: 0.16s; }
+.lo-tabel tbody tr:nth-child(6)  { animation-delay: 0.20s; }
+.lo-tabel tbody tr:nth-child(7)  { animation-delay: 0.24s; }
+.lo-tabel tbody tr:nth-child(8)  { animation-delay: 0.28s; }
+.lo-tabel tbody tr:nth-child(n+9) { animation-delay: 0.32s; }
+.lo-tabel tr.lo-total td {
+  font-weight: 800; color: var(--navy);
+  border-top: 2px solid var(--navy); border-bottom: none;
+  background: var(--cream-deep);
+}
+.lo-tabel tr.lo-total:hover { background: var(--cream-deep); }
+.lo-tabel tr:last-child td { border-bottom: none; }
+
+.lo-catatan {
+  background: var(--white); border: 1px solid var(--line); border-radius: 14px;
+  padding: 16px 18px; font-size: 12px; color: var(--ink-soft);
+  margin-top: 16px; line-height: 1.7;
+  animation: loFadeUp 0.5s ease-out 0.3s backwards;
+}
+.lo-catatan b { color: var(--navy); }
+.lo-print-header { display: none; }
+
+/* ============ FOOTER ============ */
+.lo-footer {
+  position: relative; z-index: 1;
+  text-align: center; padding: 24px;
+  font-size: 12px; font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  color: var(--ink-soft);
+  animation: loFadeUp 0.6s ease-out 0.3s backwards;
+}
+.lo-footer .ft-logo {
+  font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13px;
+  color: var(--navy); margin-bottom: 4px;
+}
+.lo-footer .ft-logo .terra { color: var(--terra); margin-left: 4px; }
+
+/* ============ RESPONSIF ============ */
+@media (max-width: 600px) {
+  .lo-header { padding: 16px 20px; }
+  #lo-app { padding: 0 16px; margin-bottom: 24px; }
+  .lo-page-title { font-size: 21px; }
+  .lo-page-head { align-items: flex-start; }
+  .lo-login-card { padding: 36px 22px; margin: 24px auto; }
+  .lo-tabel { font-size: 12px; display: block; overflow-x: auto; }
+  .lo-tabel th, .lo-tabel td { padding: 9px 10px; white-space: nowrap; }
+  .lo-nav-cta { padding: 7px 13px; font-size: 12px; }
+}
+
+/* ============ CETAK ============ */
+@media print {
+  .lo-no-print, .lo-bg, .lo-footer, nav, footer { display: none !important; }
+  body { padding-top: 0 !important; background: var(--white) !important; }
+  #lo-app { margin: 0 !important; padding: 0 !important; max-width: 100% !important; }
+  .lo-print-header { display: block !important; margin-bottom: 20px; }
+  /* Semua animasi dimatikan saat cetak. Elemen ber-animation-fill-mode
+     backwards bisa tercetak transparan kalau kebetulan dicetak sebelum
+     animasinya jalan. */
+  * { animation: none !important; opacity: 1 !important; transform: none !important; }
+  .lo-tabel { box-shadow: none !important; border-radius: 0 !important; }
+}

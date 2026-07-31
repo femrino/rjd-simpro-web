@@ -1,0 +1,559 @@
+/* ============================================================
+ * SIMPRO -- simpro-home.css
+ * ============================================================
+ * Diekstrak dari template Blogger. Urutan aturan DIPERTAHANKAN persis
+ * seperti di template, karena cascade CSS bergantung pada urutan.
+ *
+ * DIMUAT DI : homepage
+ * ============================================================ */
+
+/* Landing app.rjdapparel.id. CSS SENGAJA ditaruh DI DALAM cabang ini,
+   bukan di CSS global. Blogger cuma nge-render SATU cabang per halaman,
+   jadi CSS ini nggak pernah kekirim ke halaman sistem. Isolasi alami,
+   nggak perlu scoping manual. Penting: CSS-nya pakai selektor polos
+   (bintang, body, .hero, .navbar) yang bakal NABRAK Portal Klien &
+   Dashboard kalau sampai ditaruh global. */
+:root {
+  --cream: #F9F7F2;
+  --cream-deep: #F0EBE0;
+  --white: #FFFFFF;
+  --navy: #172134;
+  --navy-deep: #0F1623;
+  --navy-soft: #2A3754;
+  --ink-soft: #6B7280;
+  --terra: #BD4335;
+  --terra-deep: #9E3528;
+  --terra-light: #D97A6E;
+  --gold: #C8964A;
+  --line: #E5E0D6;
+  --shadow-lg: 0 20px 60px rgba(15,22,35,.18);
+  --shadow-md: 0 8px 24px rgba(15,22,35,.10);
+  --shadow-sm: 0 2px 8px rgba(15,22,35,.06);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  background: var(--cream);
+  color: var(--navy);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+  /* overflow-x:hidden DIHAPUS dari sini -- udah ada di html{} (global, baris
+     paling atas file, berlaku ke semua halaman). Ada di DUA tempat (html DAN
+     body) sekaligus TERBUKTI (lewat tes langsung getBoundingClientRect() di
+     browser, header kelihatan ikut kegulir walau Computed panel bilang
+     "sticky") jadi biang bikin position:sticky gagal berfungsi -- html/body
+     jadi ambigu scroll container-nya. Cukup di SATU tempat aja (html). */
+  min-height: 100vh;
+
+  /* FIX: cabang landing juga kena body{padding-top:68px} global -- itu yang
+     bikin box model di Computed panel nunjukin padding 68 dan ada ruang kosong
+     di atas konten landing. Dinolkan; landing nggak pakai nav fixed. */
+  padding-top: 0;
+}
+
+h1,h2,h3,h4,h5,h6 { font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif; }
+
+a { color: inherit; text-decoration: none; }
+
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+
+.mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+
+/* ============ ANIMATED BACKGROUND ============ */
+.bg-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Gradient mesh */
+.bg-gradient {
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(189,67,53,.08) 0%, transparent 35%),
+    radial-gradient(circle at 85% 75%, rgba(23,33,52,.07) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(200,150,74,.05) 0%, transparent 45%);
+  animation: meshShift 18s ease-in-out infinite alternate;
+}
+
+@keyframes meshShift {
+  0%   { transform: translate(0,0) scale(1); }
+  50%  { transform: translate(-2%,3%) scale(1.05); }
+  100% { transform: translate(2%,-2%) scale(1.02); }
+}
+
+/* Floating shapes */
+.float-shape {
+  position: absolute;
+  border-radius: 24px;
+  opacity: 0.06;
+  animation: floatY 14s ease-in-out infinite;
+}
+.float-shape.s1 { width: 180px; height: 180px; background: var(--terra); top: 8%; left: 6%; transform: rotate(15deg); animation-delay: 0s; }
+.float-shape.s2 { width: 120px; height: 120px; background: var(--navy); top: 60%; left: 10%; transform: rotate(-20deg); animation-delay: -3s; border-radius: 50%; }
+.float-shape.s3 { width: 220px; height: 220px; background: var(--gold); top: 15%; right: 8%; transform: rotate(8deg); animation-delay: -6s; border-radius: 32px; }
+.float-shape.s4 { width: 90px; height: 90px; background: var(--terra); bottom: 12%; right: 15%; transform: rotate(25deg); animation-delay: -9s; border-radius: 50%; }
+.float-shape.s5 { width: 160px; height: 160px; background: var(--navy); bottom: 20%; left: 40%; transform: rotate(-10deg); animation-delay: -4s; }
+
+@keyframes floatY {
+  0%, 100% { transform: translateY(0) rotate(var(--rot, 0deg)); }
+  50% { transform: translateY(-30px) rotate(var(--rot, 0deg)); }
+}
+
+.float-shape.s1 { --rot: 15deg; }
+.float-shape.s2 { --rot: -20deg; }
+.float-shape.s3 { --rot: 8deg; }
+.float-shape.s4 { --rot: 25deg; }
+.float-shape.s5 { --rot: -10deg; }
+
+/* Particle dots */
+.particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  opacity: 0;
+  animation: particleRise 12s linear infinite;
+}
+.particle:nth-child(1) { left: 10%; animation-delay: 0s; background: var(--terra); }
+.particle:nth-child(2) { left: 22%; animation-delay: -2s; background: var(--navy); width: 3px; height: 3px; }
+.particle:nth-child(3) { left: 35%; animation-delay: -5s; background: var(--gold); width: 5px; height: 5px; }
+.particle:nth-child(4) { left: 48%; animation-delay: -1s; background: var(--terra); }
+.particle:nth-child(5) { left: 60%; animation-delay: -7s; background: var(--navy); width: 3px; height: 3px; }
+.particle:nth-child(6) { left: 72%; animation-delay: -3s; background: var(--gold); width: 6px; height: 6px; }
+.particle:nth-child(7) { left: 82%; animation-delay: -9s; background: var(--terra); }
+.particle:nth-child(8) { left: 92%; animation-delay: -4s; background: var(--navy); width: 3px; height: 3px; }
+.particle:nth-child(9) { left: 16%; animation-delay: -8s; background: var(--gold); width: 5px; height: 5px; }
+.particle:nth-child(10) { left: 55%; animation-delay: -6s; background: var(--terra); width: 3px; height: 3px; }
+
+@keyframes particleRise {
+  0%   { bottom: -10px; opacity: 0; transform: translateX(0) scale(0); }
+  10%  { opacity: 0.4; transform: translateX(0) scale(1); }
+  90%  { opacity: 0.3; }
+  100% { bottom: 110vh; opacity: 0; transform: translateX(40px) scale(0.5); }
+}
+
+/* ============ MAIN CONTAINER ============ */
+.landing-wrap {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ============ TOP BAR ============ */
+.top-bar {
+  padding: 20px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  animation: slideDown 0.6s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.top-bar .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--ink-soft);
+  background: var(--white);
+  border: 1px solid var(--line);
+  padding: 4px 10px;
+  border-radius: 9999px;
+  box-shadow: var(--shadow-sm);
+}
+.top-bar .badge .live-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--terra);
+  animation: pulseDot 2s ease-in-out infinite;
+}
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(189,67,53,.4); }
+  50% { opacity: 0.6; box-shadow: 0 0 0 6px rgba(189,67,53,0); }
+}
+
+.top-bar .domain {
+  font-size: 12px;
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--ink-soft);
+}
+
+/* ============ HERO ============ */
+.hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* justify-content DIUBAH dari "center" ke "flex-start" -- versi lama nge-center
+     konten SECARA VERTIKAL di sisa tinggi viewport, jadi di layar tinggi/lebar
+     (desktop biasa) muncul gap kosong gede di atas sebelum logo. flex-start bikin
+     konten nempel dekat top-bar konsisten di viewport tinggi berapa pun, sesuai
+     posisi yang diinginkan. */
+  justify-content: flex-start;
+  text-align: center;
+  padding: 56px 24px 60px;
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Logo monogram with glow */
+.logo-wrap {
+  position: relative;
+  margin-bottom: 32px;
+  animation: logoEntrance 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes logoEntrance {
+  from { opacity: 0; transform: scale(0.7) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.logo-glow {
+  position: absolute;
+  inset: -20px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(189,67,53,.18) 0%, transparent 65%);
+  animation: glowPulse 4s ease-in-out infinite;
+}
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+.logo-monogram {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-soft) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 8px 24px rgba(23,33,52,.25),
+    0 0 0 6px rgba(23,33,52,.04);
+  animation: logoFloat 5s ease-in-out infinite;
+}
+@keyframes logoFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.logo-monogram svg {
+  width: 44px;
+  height: 44px;
+}
+
+/* Orbit ring */
+.orbit-ring {
+  position: absolute;
+  inset: -32px;
+  border: 1.5px dashed rgba(189,67,53,.2);
+  border-radius: 50%;
+  animation: spinSlow 20s linear infinite;
+}
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.orbit-ring::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--terra);
+  box-shadow: 0 0 8px rgba(189,67,53,.5);
+}
+
+/* Brand name */
+.brand-name {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px;
+  margin-bottom: 12px;
+  animation: textRise 0.8s ease-out 0.2s both;
+}
+@keyframes textRise {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.brand-name .rjd {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 900;
+  font-size: clamp(32px, 6vw, 44px);
+  letter-spacing: -0.03em;
+  color: var(--navy);
+}
+.brand-name .apparel {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 900;
+  font-size: clamp(32px, 6vw, 44px);
+  letter-spacing: -0.03em;
+  color: var(--terra);
+  margin-left: 8px;
+}
+
+/* Tagline */
+.tagline {
+  font-size: 16px;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 8px;
+  animation: textRise 0.8s ease-out 0.35s both;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-family: 'IBM Plex Mono', monospace;
+  margin-bottom: 40px;
+  animation: textRise 0.8s ease-out 0.45s both;
+}
+
+/* ============ CTA BUTTONS ============ */
+.cta-row {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 420px;
+  animation: textRise 0.8s ease-out 0.6s both;
+}
+
+.cta-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  border-radius: 16px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  text-align: left;
+  width: 100%;
+}
+
+.cta-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(189,67,53,0) 0%, rgba(189,67,53,.04) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.cta-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: rgba(189,67,53,.2);
+}
+
+.cta-card:hover::before {
+  opacity: 1;
+}
+
+.cta-card:hover .cta-icon {
+  transform: scale(1.1) rotate(-5deg);
+}
+
+.cta-card:hover .cta-arrow {
+  transform: translateX(4px);
+  opacity: 1;
+}
+
+.cta-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  z-index: 1;
+}
+
+.cta-icon.client {
+  background: linear-gradient(135deg, var(--terra) 0%, var(--terra-light) 100%);
+  color: var(--cream);
+  box-shadow: 0 4px 12px rgba(189,67,53,.3);
+}
+
+.cta-icon.staff {
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-soft) 100%);
+  color: var(--cream);
+  box-shadow: 0 4px 12px rgba(23,33,52,.3);
+}
+
+.cta-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.cta-body {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+
+.cta-label {
+  font-family: 'Archivo', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--navy);
+  letter-spacing: -0.01em;
+}
+
+.cta-desc {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+
+.cta-arrow {
+  position: relative;
+  z-index: 1;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--cream-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--navy);
+  opacity: 0.6;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.cta-arrow svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Shimmer effect on hover */
+.cta-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.3), transparent);
+  transition: left 0.6s ease;
+}
+
+.cta-card:hover::after {
+  left: 120%;
+}
+
+/* ============ FEATURE PILLS ============ */
+.feature-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 40px;
+  animation: textRise 0.8s ease-out 0.75s both;
+}
+
+.feat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  background: rgba(255,255,255,.6);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--line);
+  padding: 6px 14px;
+  border-radius: 9999px;
+  transition: all 0.2s ease;
+}
+
+.feat-pill:hover {
+  background: var(--white);
+  color: var(--navy);
+  border-color: rgba(23,33,52,.15);
+  transform: translateY(-1px);
+}
+
+.feat-pill svg {
+  width: 13px;
+  height: 13px;
+  color: var(--terra);
+}
+
+/* ============ FOOTER ============ */
+.landing-footer {
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  animation: textRise 0.8s ease-out 0.9s both;
+}
+
+.landing-footer .ft-logo {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+}
+.landing-footer .ft-logo .terra { color: var(--terra); margin-left: 4px; }
+
+.landing-footer .ft-meta {
+  font-size: 11px;
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--ink-soft);
+}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 600px) {
+  .top-bar { padding: 16px 20px; }
+  .hero { padding: 20px 20px 40px; }
+  .cta-card { padding: 16px 18px; gap: 12px; }
+  .cta-icon { width: 44px; height: 44px; }
+  .cta-icon svg { width: 20px; height: 20px; }
+  .cta-label { font-size: 15px; }
+  .cta-desc { font-size: 12px; }
+  .feature-pills { margin-top: 32px; }
+  .landing-footer { padding: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

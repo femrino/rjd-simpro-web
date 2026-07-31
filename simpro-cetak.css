@@ -1,0 +1,264 @@
+/* ============================================================
+ * SIMPRO -- simpro-cetak.css
+ * ============================================================
+ * Diekstrak dari template Blogger. Urutan aturan DIPERTAHANKAN persis
+ * seperti di template, karena cascade CSS bergantung pada urutan.
+ *
+ * DIMUAT DI : cetak
+ * ============================================================ */
+
+/* FIX: cabang cetak nggak punya aturan body sendiri, jadi kena
+   body{padding-top:68px} global -- itu sumber padding 68 di box model & jarak
+   kosong di atas header cetak. Halaman cetak nggak pakai nav fixed, jadi
+   dinolkan. @media print di bawah juga sudah override padding-top:0, tapi ini
+   buat tampilan LAYAR (sebelum dicetak). */
+body { padding-top: 0; }
+.ck-scr-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.ck-scr-bg-gradient {
+  position: absolute; inset: -20%;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(178,58,46,.06) 0%, transparent 35%),
+    radial-gradient(circle at 85% 75%, rgba(20,33,61,.05) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(178,58,46,.03) 0%, transparent 45%);
+  animation: ckMeshShift 20s ease-in-out infinite alternate;
+}
+@keyframes ckMeshShift {
+  0%   { transform: translate(0,0) scale(1); }
+  50%  { transform: translate(-2%,3%) scale(1.04); }
+  100% { transform: translate(2%,-2%) scale(1.02); }
+}
+/* Bentuk mengambang -- SAMA PERSIS pola animasinya kayak .tk-float di tracking
+   (posisi, ukuran, delay, keyframe tkFloatY/ckFloatY identik), CUMA warnanya
+   dipetakan ke token GLOBAL (--thread/--ink) karena --navy & --gold cuma ada di
+   :root LOKAL tracking/landing, nggak ke-share ke cabang cetak. Kalau dipaksa
+   pakai var(--gold) di sini, variabelnya nggak kebaca sama sekali. */
+.ck-scr-float { position: absolute; border-radius: 24px; opacity: 0.05; animation: ckFloatY 16s ease-in-out infinite; }
+.ck-scr-float.f1 { width: 160px; height: 160px; background: var(--thread); top: 10%; left: 5%; --rot: 15deg; transform: rotate(15deg); }
+.ck-scr-float.f2 { width: 100px; height: 100px; background: var(--ink); top: 65%; left: 8%; --rot: -20deg; transform: rotate(-20deg); border-radius: 50%; animation-delay: -4s; }
+.ck-scr-float.f3 { width: 200px; height: 200px; background: var(--thread); top: 12%; right: 6%; --rot: 8deg; transform: rotate(8deg); border-radius: 32px; animation-delay: -7s; }
+.ck-scr-float.f4 { width: 80px; height: 80px; background: var(--ink); bottom: 15%; right: 12%; --rot: 25deg; transform: rotate(25deg); border-radius: 50%; animation-delay: -10s; }
+@keyframes ckFloatY {
+  0%, 100% { transform: translateY(0) rotate(var(--rot, 0deg)); }
+  50% { transform: translateY(-25px) rotate(var(--rot, 0deg)); }
+}
+.ck-scr-header {
+  position: relative; z-index: 1; padding: 20px 32px;
+  display: flex; align-items: center; justify-content: space-between;
+  animation: ckSlideDown .5s ease-out;
+}
+@keyframes ckSlideDown { from { opacity:0; transform:translateY(-16px); } to { opacity:1; transform:translateY(0); } }
+.ck-scr-logo {
+  font-family: 'Archivo', sans-serif; font-weight: 900; font-size: 18px;
+  letter-spacing: -.02em; display: flex; align-items: center; gap: 8px; text-decoration: none;
+}
+.ck-scr-logo .navy { color: var(--ink); }
+.ck-scr-logo .terra { color: var(--thread); margin-left: 4px; }
+.ck-scr-logo .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--thread); }
+.ck-scr-actions { display: flex; align-items: center; gap: 8px; }
+.ck-scr-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600;
+  color: var(--white); background: var(--ink); border: none;
+  padding: 10px 18px; border-radius: 9999px; cursor: pointer; transition: opacity .2s;
+}
+.ck-scr-btn:hover { opacity: .85; }
+.ck-scr-btn svg { width: 15px; height: 15px; }
+.ck-scr-main {
+  position: relative; z-index: 1;
+  max-width: 900px; margin: 40px auto 60px; padding: 0 24px;
+  animation: ckFadeUp .5s ease-out .1s both;
+}
+@keyframes ckFadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+.ck-scr-card {
+  text-align: center; padding: 48px 24px; background: var(--white);
+  border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: 0 2px 6px rgba(20,33,61,.06), 0 4px 16px rgba(20,33,61,.05);
+  max-width: 420px; margin: 20px auto;
+}
+.ck-scr-login-icon {
+  width: 56px; height: 56px; border-radius: 16px; margin: 0 auto 8px;
+  background: linear-gradient(135deg, var(--ink) 0%, #3A4659 100%);
+  display: flex; align-items: center; justify-content: center;
+}
+.ck-scr-login-icon svg { width: 26px; height: 26px; }
+.ck-scr-login-icon svg path, .ck-scr-login-icon svg circle { stroke: var(--white); }
+.ck-scr-sub { margin-top: 16px; font-size: 13px; color: var(--ink-soft); }
+.ck-scr-loading {
+  text-align: center; padding: 60px 0; color: var(--ink-soft);
+  font-family: 'IBM Plex Mono', monospace; font-size: 13px;
+}
+.ck-scr-spinner {
+  width: 34px; height: 34px; border: 3px solid var(--line); border-top-color: var(--thread);
+  border-radius: 50%; margin: 0 auto 16px; animation: ckSpin .8s linear infinite;
+}
+@keyframes ckSpin { to { transform: rotate(360deg); } }
+.ck-scr-error {
+  text-align: center; padding: 32px 24px; background: #FDECEA;
+  border: 1px solid #E8A49C; border-radius: 14px; color: #8f2c22; font-size: 14px;
+  max-width: 420px; margin: 20px auto;
+}
+@media (max-width: 640px) {
+  .ck-scr-header { padding: 16px 20px; }
+  .ck-scr-main { padding: 0 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ck-scr-header, .ck-scr-main { animation: none; }
+  .ck-scr-spinner { animation-duration: 1.5s; }
+  .ck-scr-bg-gradient, .ck-scr-float { animation: none; }
+}
+
+.ck-dok{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:40px 44px;box-shadow:0 2px 6px rgba(20,33,61,.06),0 4px 16px rgba(20,33,61,.05)}
+.ck-dok-header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:20px;padding-bottom:20px;border-bottom:2px solid var(--ink);margin-bottom:24px}
+.ck-dok-brand{font-family:'Archivo',sans-serif;font-weight:900;font-size:20px;letter-spacing:-.02em}
+.ck-dok-brand span{color:var(--thread)}
+.ck-dok-brand-info{font-size:12px;color:var(--ink-soft);margin-top:6px;line-height:1.6}
+.ck-dok-title{text-align:right}
+.ck-dok-title h1{font-family:'Archivo',sans-serif;font-weight:800;font-size:22px;letter-spacing:.04em;color:var(--thread)}
+.ck-dok-title .no{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink);margin-top:4px}
+.ck-dok-title .tgl{font-size:12px;color:var(--ink-soft);margin-top:2px}
+.ck-dok-pihak{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px}
+.ck-dok-pihak .lbl{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--thread);margin-bottom:8px}
+.ck-dok-pihak .nama{font-weight:700;font-size:15px;margin-bottom:4px}
+.ck-dok-pihak .detail{font-size:12.5px;color:var(--ink-soft);line-height:1.6}
+.ck-dok-tabel{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:13px}
+.ck-dok-tabel th{background:var(--paper-2);text-align:left;padding:10px 12px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-soft);border-bottom:2px solid var(--line)}
+.ck-dok-tabel th.num,.ck-dok-tabel td.num{text-align:right}
+.ck-dok-tabel td{padding:9px 12px;border-bottom:1px solid var(--line)}
+.ck-dok-ringkasan{display:flex;justify-content:flex-end;margin-bottom:32px}
+.ck-dok-ringkasan-box{width:100%;max-width:320px}
+.ck-dok-ringkasan-row{display:flex;justify-content:space-between;padding:7px 0;font-size:13px;color:var(--ink-soft)}
+.ck-dok-ringkasan-row.total{border-top:1.5px solid var(--ink);margin-top:6px;padding-top:12px;font-weight:800;font-size:15px;color:var(--ink)}
+.ck-dok-ringkasan-row.outstanding{color:var(--thread);font-weight:700}
+.ck-dok-ringkasan-row.lunas{color:#2C6B3F;font-weight:700}
+.ck-dok-catatan{background:var(--paper-2);border-radius:10px;padding:14px 16px;font-size:12.5px;color:var(--ink-soft);margin-bottom:28px}
+/* Isi catatan ditaruh di elemen sendiri ber-pre-wrap supaya ENTER & baris
+   kosong yang diketik klien di form order tetap tampil sama persis di dokumen.
+   Tanpa ini HTML meruntuhkan semua baris jadi satu paragraf panjang. */
+.ck-dok-catatan .isi,.ck-spk-catatan .isi{white-space:pre-wrap;margin-top:5px}
+.ck-dok-ttd{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:40px}
+.ck-dok-ttd .kolom{text-align:center;font-size:12.5px;color:var(--ink-soft)}
+.ck-dok-ttd .garis{height:70px;border-bottom:1px solid var(--ink);margin:8px 0 8px}
+.ck-dok-ttd .nama-ttd{font-weight:700;color:var(--ink)}
+.ck-badge-status{display:inline-block;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700}
+/* ============ KARTU ITEM -> WARNA (dipakai SPK & Konfirmasi Order) ============
+   Prefiks kelas tetap "ck-spk-" karena awalnya dibuat untuk SPK, TAPI sekarang
+   dipakai BERSAMA oleh dokumen Konfirmasi Order juga (lihat
+   ckBuildItemGroupsHtml_). Jangan diubah namanya tanpa mengubah kedua render.
+
+   Format kartu ini MENGGANTIKAN tabel baris di Konfirmasi Order versi pertama:
+   catatan model order konveksi bisa sangat panjang, dan di tabel kolom angka
+   terhimpit sampai angkanya menumpuk vertikal ("129" tercetak jadi "1 2 9"). */
+.ck-spk-pilih{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:20px;padding:12px 14px;background:var(--paper-2);border-radius:10px}
+.ck-spk-pilih .lbl{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);margin-right:4px}
+.ck-spk-pilih button{border:1px solid var(--line);background:var(--white);color:var(--ink);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.ck-spk-pilih button.aktif{background:var(--ink);color:var(--white);border-color:var(--ink)}
+.ck-spk-wm{position:fixed;top:42%;left:50%;transform:translate(-50%,-50%) rotate(-28deg);font-size:110px;font-weight:900;letter-spacing:.08em;color:rgba(190,60,45,.13);pointer-events:none;z-index:9;white-space:nowrap}
+.ck-spk-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;padding:14px 16px;border:1px solid var(--line);border-radius:10px}
+.ck-spk-meta .sel .lbl{font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:3px}
+.ck-spk-meta .sel .val{font-size:13px;font-weight:700;color:var(--ink)}
+.ck-spk-item{border:1.5px solid var(--ink);border-radius:10px;margin-bottom:22px;overflow:hidden}
+.ck-spk-item-head{background:var(--paper-2);padding:11px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.ck-spk-item-head .judul{font-size:14.5px;font-weight:800;color:var(--ink)}
+.ck-spk-item-head .sub{font-size:11.5px;color:var(--ink-soft);margin-top:2px}
+.ck-spk-item-head .qty{font-size:13px;font-weight:800;white-space:nowrap}
+.ck-spk-body{padding:14px 16px}
+/* ---- Tabel MATRIKS warna x size ----
+   Menggantikan blok terpisah per warna. Satu ITEM (Brand+Artikel+Style) yang
+   punya banyak warna dulu menghasilkan 1 blok + 1 tabel PER WARNA -- untuk
+   order 8 warna itu 8 blok berulang yang isinya nyaris sama, boros & sulit
+   dibandingkan. Sekarang: 1 tabel, warna jadi BARIS, size jadi KOLOM, dengan
+   baris TOTAL di bawah. Ini juga format size-ratio yang lazim di garmen. */
+.ck-spk-matrix{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:10px}
+.ck-spk-matrix th,.ck-spk-matrix td{border:1px solid var(--line);padding:6px 8px;text-align:center}
+.ck-spk-matrix thead th{background:var(--paper-2);font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.04em;color:var(--ink-soft);font-weight:700}
+.ck-spk-matrix th.warna{text-align:left;font-weight:800;font-size:12px;white-space:nowrap;font-family:inherit;letter-spacing:0;color:var(--ink);background:var(--white)}
+.ck-spk-matrix thead th.warna{background:var(--paper-2);color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:10px}
+.ck-spk-matrix td{font-weight:700}
+.ck-spk-matrix td.nol{color:var(--ink-soft);font-weight:400}
+.ck-spk-matrix td.num{text-align:right;white-space:nowrap}
+.ck-spk-matrix td.belum{color:var(--ink-soft);font-style:italic;font-weight:400}
+.ck-spk-matrix .tot{background:var(--paper-2);font-weight:800}
+.ck-spk-matrix tfoot th,.ck-spk-matrix tfoot td{background:var(--paper-2);font-weight:800;border-top:1.5px solid var(--ink)}
+/* ---- Galeri gambar desain (dikumpulkan dari semua warna dalam 1 ITEM) ---- */
+.ck-spk-galeri{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
+.ck-spk-galeri .sel{text-align:center;min-width:0}
+.ck-spk-galeri img{width:100%;aspect-ratio:3/4;object-fit:contain;background:var(--paper-2);border:1px solid var(--line);border-radius:8px;display:block;margin-bottom:4px}
+.ck-spk-galeri .cap{font-size:10px;color:var(--ink-soft);line-height:1.35;word-break:break-word}
+.ck-spk-galeri .kosong{grid-column:1/-1;font-size:10.5px;color:var(--ink-soft);font-style:italic;text-align:center;border:1px dashed var(--line);border-radius:8px;padding:14px 8px}
+.ck-kode-kain{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;color:var(--ink-soft)}
+.ck-kain-pisah{color:var(--line);margin:0 4px}
+.ck-kons-kecil{font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:400;color:var(--ink-soft);margin-top:2px}
+.ck-qc{margin:24px 0;page-break-inside:auto}
+.ck-qc-isi{display:grid;grid-template-columns:1fr 1fr;gap:10px 22px}
+.ck-qc-grup{break-inside:avoid;page-break-inside:avoid}
+.ck-qc-judul{font-size:11.5px;font-weight:800;color:var(--ink);margin-bottom:4px}
+.ck-qc-poin{font-size:11px;line-height:1.7;color:var(--ink);display:flex;gap:7px;align-items:flex-start}
+.ck-qc-poin .kotak{flex-shrink:0;width:11px;height:11px;border:1.2px solid var(--ink);border-radius:2px;margin-top:3px}
+.ck-qc-ttd{margin-top:12px;padding-top:9px;border-top:1px solid var(--line);font-size:11.5px;color:var(--ink-soft)}
+@media (max-width:640px){.ck-qc-isi{grid-template-columns:1fr}}
+.ck-standar{border:1.5px solid var(--terra-light);background:#FCF3E3;border-radius:10px;padding:12px 15px;margin-bottom:22px}
+.ck-standar-lbl{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--terra);font-weight:700;margin-bottom:6px}
+.ck-standar-isi{font-size:12px;line-height:1.55;white-space:pre-wrap;color:var(--ink)}
+.ck-standar-link{font-size:12px;font-weight:700;margin-top:6px}
+.ck-jadwal{margin:22px 0}
+.ck-kain-rekap{font-size:11px;color:var(--ink-soft);margin-top:6px;line-height:1.5}
+.ck-status-kain{font-size:10.5px;font-weight:700;color:#8A5D1F;background:#FCF3E3;border-radius:4px;padding:2px 7px;white-space:nowrap}
+.ck-status-kain.ok{color:#2C6B3F;background:#EAF4EC}
+.ck-jadwal-lbl{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:7px}
+.ck-jadwal-tabel{width:100%;border-collapse:collapse;font-size:12px}
+.ck-jadwal-tabel th{background:var(--paper-2);border:1px solid var(--line);padding:6px 8px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-soft)}
+.ck-jadwal-tabel td{border:1px solid var(--line);padding:6px 8px}
+.ck-jadwal-tabel .num{text-align:right;font-weight:700;white-space:nowrap}
+.ck-spk-catatan{font-size:11.5px;color:var(--ink);background:#FCF3E3;border-left:3px solid #EBCFA0;padding:8px 10px;border-radius:0 6px 6px 0;line-height:1.55;margin-top:12px}
+.ck-spk-harga{display:flex;justify-content:space-between;gap:12px;font-size:12px;margin-top:8px;padding-top:7px;border-top:1px dotted var(--line)}
+.ck-spk-harga .sat{color:var(--ink-soft)}
+.ck-spk-harga .sub{font-weight:800;color:var(--ink)}
+.ck-spk-harga .belum{color:var(--ink-soft);font-style:italic}
+.ck-spk-item-head .subtotal{font-size:11.5px;color:var(--ink-soft);font-weight:600;margin-top:2px}
+/* Gambar desain. MASALAH YANG DIPERBAIKI: sebelumnya tiap gambar cuma dibatasi
+   LEBAR (max-width) tanpa batas TINGGI, jadi foto potret (mis. screenshot HP,
+   rasio ~1:2) merender sangat tinggi. Dua foto bertumpuk vertikal bisa mencapai
+   ~700px sementara kolom teks di sebelahnya cuma ~250px -- menyisakan ruang
+   kosong besar di dalam kartu.
+   Sekarang: tiap thumbnail dikunci ke kotak ber-aspect-ratio tetap dengan
+   object-fit:contain -- tingginya SERAGAM apa pun rasio aslinya, dan gambar
+   TIDAK terpotong (cuma diberi latar di sisa ruang). Beberapa gambar mengisi
+   grid 2 kolom (berdampingan), bukan menumpuk ke bawah. */
+@media (max-width:640px){
+  .ck-dok{padding:24px 20px}
+  .ck-dok-pihak{grid-template-columns:1fr}
+  .ck-dok-header{flex-direction:column}
+  .ck-dok-title{text-align:left}
+  /* Kartu ITEM: di layar sempit kolom gambar 210px bikin kolom teks terhimpit
+     (tabel size jadi mepet). Turun jadi 1 kolom -- gambar pindah ke bawah teks. */
+  .ck-spk-galeri{grid-template-columns:repeat(2,1fr)}
+  .ck-spk-matrix{font-size:11px}
+  .ck-spk-matrix th,.ck-spk-matrix td{padding:5px 4px}
+  .ck-spk-meta{grid-template-columns:repeat(2,1fr)}
+}
+@media print{
+  .ck-no-print,nav,footer{display:none !important}
+  body{padding-top:0 !important;background:var(--white) !important}
+  #ck-app{margin:0 !important;padding:0 !important;max-width:100% !important}
+  .ck-dok{border:none !important;box-shadow:none !important;border-radius:0 !important;padding:0 !important}
+  /* Tanpa ini, browser membuang SEMUA warna latar saat cetak -- header kartu item,
+     baris total tabel size, & blok catatan jadi putih polos & kehilangan pembeda. */
+  .ck-status-kain,.ck-standar,.ck-spk-item-head,.ck-spk-matrix thead th,.ck-spk-matrix .tot,.ck-spk-matrix tfoot th,.ck-spk-matrix tfoot td,.ck-spk-catatan,.ck-spk-wm,.ck-spk-galeri img{
+    -webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
+  /* 1 kartu ITEM jangan terpotong 2 halaman -- penjahit pegang 1 lembar per item.
+     Blok warna & sel gambar juga dijaga utuh biar gambar nggak terbelah halaman. */
+  /* JANGAN pakai page-break-inside:avoid di kartu ITEM. Untuk order banyak warna
+     kartunya bisa LEBIH TINGGI dari 1 halaman -- browser lalu mendorong kartu utuh
+     ke halaman berikutnya, halaman sebelumnya nyaris kosong, DAN isinya tetap
+     terpotong juga. Jadi kartu dibiarkan mengalir; yang dijaga utuh cuma bagian
+     kecil yang memang jelek kalau terbelah. */
+  .ck-spk-item{page-break-inside:auto;break-inside:auto;overflow:visible}
+  /* Jangan sampai judul ITEM tertinggal sendirian di kaki halaman. */
+  .ck-spk-item-head{page-break-after:avoid;break-after:avoid}
+  /* Kalau tabel terpaksa terbelah, ulangi header & baris TOTAL di halaman baru
+     supaya kolom size tetap terbaca. */
+  .ck-spk-matrix thead{display:table-header-group}
+  .ck-spk-matrix tfoot{display:table-footer-group}
+  .ck-spk-matrix tr,.ck-spk-galeri .sel,.ck-spk-catatan{page-break-inside:avoid;break-inside:avoid}
+  .ck-spk-wm{position:fixed;font-size:120px}
+}

@@ -1,0 +1,567 @@
+/* ============================================================
+ * SIMPRO -- simpro-order.css
+ * ============================================================
+ * Diekstrak dari template Blogger. Urutan aturan DIPERTAHANKAN persis
+ * seperti di template, karena cascade CSS bergantung pada urutan.
+ *
+ * DIMUAT DI : order
+ * ============================================================ */
+
+/* ============ REDESIGN HALAMAN FORM ORDER (publik) ============
+   Beda dari dashboard dan laporan-omset: ini halaman PUBLIK yang diisi calon
+   klien, tidak wajib login. Prefiks kelas: of:. Tidak ada elemen sticky di
+   cabang ini, jadi tidak ada urusan offset. Blok JS di bawah TIDAK disentuh:
+   semua kelas of-f:* dan of-item-card dibuat JS lewat template string di dalam
+   ofTambahItem(), dan CSS-nya disediakan di sini supaya form dinamis ikut
+   tergaya. */
+
+:root {
+  --cream: #F9F7F2;      --cream-deep: #F0EBE0;   --white: #FFFFFF;
+  --navy: #172134;       --navy-deep: #0F1623;    --navy-soft: #2A3754;
+  --ink: #172134;        --ink-soft: #6B7280;
+  --terra: #BD4335;      --terra-deep: #9E3528;   --terra-light: #D97A6E;
+  --thread: #BD4335;
+  --gold: #C8964A;       --emerald: #2D8A5F;      --sky: #3B7BBF;  --amber: #D9941E;
+  --line: #E5E0D6;       --line-soft: #EFEAE0;
+  --paper: #F9F7F2;      --paper-2: #F0EBE0;
+  --shadow-lg: 0 20px 60px rgba(15,22,35,.14);
+  --shadow-md: 0 8px 24px rgba(15,22,35,.08);
+  --shadow-sm: 0 2px 8px rgba(15,22,35,.05);
+}
+
+body {
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  background: var(--cream);
+  color: var(--navy);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  /* Cabang order dulu memakai nav biasa (bukan fixed), tapi CSS global tetap
+     memasang body{padding-top:68px}. Di halaman ini padding itu menyisakan
+     jarak kosong di atas nav. Dinolkan biar konsisten dengan header baru. */
+  padding-top: 0;
+}
+
+h1,h2,h3,h4,h5,h6 { font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif; }
+
+/* ============ LATAR BERANIMASI ============ */
+.of-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.of-bg-gradient {
+  position: absolute; inset: -20%;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(189,67,53,.06) 0%, transparent 35%),
+    radial-gradient(circle at 85% 75%, rgba(23,33,52,.05) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(200,150,74,.04) 0%, transparent 45%);
+  animation: ofMeshShift 20s ease-in-out infinite alternate;
+}
+@keyframes ofMeshShift {
+  0%   { transform: translate(0,0) scale(1); }
+  50%  { transform: translate(-2%,3%) scale(1.04); }
+  100% { transform: translate(2%,-2%) scale(1.02); }
+}
+.of-float { position: absolute; border-radius: 24px; opacity: 0.05; animation: ofFloatY 16s ease-in-out infinite; }
+.of-float.f1 { width: 160px; height: 160px; background: var(--terra); top: 10%; left: 5%;  --rot: 15deg;  transform: rotate(15deg); }
+.of-float.f2 { width: 100px; height: 100px; background: var(--navy);  top: 65%; left: 8%;  --rot: -20deg; transform: rotate(-20deg); border-radius: 50%; animation-delay: -4s; }
+.of-float.f3 { width: 200px; height: 200px; background: var(--gold);  top: 12%; right: 6%; --rot: 8deg;   transform: rotate(8deg);  border-radius: 32px; animation-delay: -7s; }
+.of-float.f4 { width: 80px;  height: 80px;  background: var(--terra); bottom: 15%; right: 12%; --rot: 25deg; transform: rotate(25deg); border-radius: 50%; animation-delay: -10s; }
+@keyframes ofFloatY {
+  0%, 100% { transform: translateY(0) rotate(var(--rot, 0deg)); }
+  50% { transform: translateY(-25px) rotate(var(--rot, 0deg)); }
+}
+
+/* ============ HEADER STICKY ============ */
+.of-header {
+  position: sticky; top: 0; z-index: 40;
+  height: 68px; padding: 0 32px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  background: rgba(249,247,242,.88);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+  animation: ofSlideDown 0.5s ease-out backwards;
+}
+@keyframes ofSlideDown {
+  from { opacity: 0; transform: translateY(-16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.of-header .logo {
+  font-family: 'Archivo', sans-serif; font-weight: 900; font-size: 18px;
+  letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; text-decoration: none;
+}
+.of-header .logo .navy  { color: var(--navy); }
+.of-header .logo .terra { color: var(--terra); margin-left: 4px; }
+.of-header .logo .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--terra); animation: ofPulse 2s ease-in-out infinite; }
+@keyframes ofPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(189,67,53,.4); }
+  50% { opacity: 0.5; box-shadow: 0 0 0 5px rgba(189,67,53,0); }
+}
+.of-nav-actions { display: flex; align-items: center; gap: 8px; position: static; right: auto; top: auto; transform: none; }
+.of-nav-icon-btn {
+  position: static; right: auto; top: auto; transform: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 9999px;
+  border: 1px solid var(--line); background: rgba(255,255,255,.6);
+  color: var(--ink-soft); cursor: pointer; transition: all .2s; text-decoration: none;
+}
+.of-nav-icon-btn:hover { color: var(--navy); border-color: rgba(23,33,52,.15); background: var(--white); }
+.of-nav-icon-btn svg { width: 16px; height: 16px; }
+
+/* ============ HERO ============ */
+#of-hero { position: relative; z-index: 1; animation: ofFadeUp 0.6s ease-out backwards; }
+#of-hero .eyebrow {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--terra); display: inline-flex; align-items: center; gap: 10px; margin-bottom: 14px;
+}
+#of-hero .eyebrow::before, #of-hero .eyebrow::after { content: ""; width: 26px; height: 1px; background: var(--terra); }
+#of-hero h1 { font-family: 'Archivo', sans-serif; font-weight: 900; letter-spacing: -0.02em; color: var(--navy); }
+#of-hero h1 em { color: var(--terra); font-style: normal; }
+#of-hero .lead { color: var(--ink-soft); font-size: 15px; }
+@keyframes ofFadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============ KERANGKA KONTEN ============ */
+#of-app { position: relative; z-index: 1; animation: ofFadeUp 0.6s ease-out 0.1s backwards; }
+
+/* ---------- kartu pilih jalur ---------- */
+.of-pilih-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.of-pilih-card {
+  text-align: left; background: var(--white);
+  border: 1px solid var(--line); border-radius: 18px;
+  padding: 28px 24px; cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  font-family: inherit;
+  animation: ofCardIn 0.5s ease-out backwards;
+}
+.of-pilih-grid > *:nth-child(1) { animation-delay: 0.05s; }
+.of-pilih-grid > *:nth-child(2) { animation-delay: 0.12s; }
+@keyframes ofCardIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.of-pilih-card:hover { transform: translateY(-3px); border-color: var(--terra-light); box-shadow: var(--shadow-md); }
+.of-pilih-kode { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: .1em; color: var(--terra); margin-bottom: 12px; }
+.of-pilih-card h3 { font-size: 17px; font-weight: 800; margin-bottom: 6px; color: var(--navy); }
+.of-pilih-card p { font-size: 13px; color: var(--ink-soft); }
+@media (max-width: 640px) { .of-pilih-grid { grid-template-columns: 1fr; } }
+
+.of-link-btn { background: none; border: none; padding: 0; margin-top: 14px; font-size: 13px; color: var(--terra); cursor: pointer; font-family: inherit; display: block; margin-left: auto; margin-right: auto; }
+.of-link-btn:hover { text-decoration: underline; }
+
+/* ---------- kartu login ---------- */
+#of-login-box {
+  text-align: center; padding: 44px 28px;
+  background: var(--white); border: 1px solid var(--line);
+  border-radius: 20px; box-shadow: var(--shadow-lg);
+  animation: ofCardEntrance 0.6s cubic-bezier(.34,1.56,.64,1) backwards;
+}
+@keyframes ofCardEntrance {
+  from { opacity: 0; transform: scale(0.94) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ---------- seksi form ---------- */
+.of-form-section {
+  background: var(--white); border: 1px solid var(--line);
+  border-radius: 16px; padding: 24px 26px; margin-bottom: 18px;
+  box-shadow: var(--shadow-sm);
+  animation: ofFadeUp 0.45s ease-out backwards;
+}
+.of-form-section h4 { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 14.5px; margin-bottom: 14px; color: var(--navy); }
+.of-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.of-field-grid label, .of-form-section > label, .of-item-card > label {
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 12.5px; font-weight: 600; color: var(--ink-soft); margin-top: 12px;
+}
+.of-field-grid input, .of-form-section textarea,
+.of-item-card select, .of-item-card input, .of-item-card textarea {
+  font-family: 'Inter', sans-serif; font-size: 14px; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--cream); color: var(--navy); width: 100%; box-sizing: border-box;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.of-field-grid input:focus, .of-form-section textarea:focus,
+.of-item-card select:focus, .of-item-card input:focus, .of-item-card textarea:focus {
+  outline: none; border-color: var(--terra); box-shadow: 0 0 0 3px rgba(189,67,53,.10); background: var(--white);
+}
+.of-form-section textarea, .of-item-card textarea { resize: vertical; font-weight: 400; }
+/* Textarea auto-grow: resize manual dimatikan (tinggi ikut teks otomatis),
+   min-height biar area baca lega sejak kosong. */
+textarea.rjd-autogrow { resize: none; min-height: 88px; overflow-y: hidden; line-height: 1.55; }
+@media (max-width: 640px) { .of-field-grid { grid-template-columns: 1fr; } }
+
+/* ---------- kartu item (dirender JS) ---------- */
+.of-item-card {
+  background: var(--white); border: 1px solid var(--line);
+  border-radius: 16px; padding: 22px 24px; margin-bottom: 16px; position: relative;
+  box-shadow: var(--shadow-sm);
+  animation: ofCardIn 0.4s ease-out backwards;
+}
+.of-item-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.of-item-head b { font-size: 13px; font-family: 'IBM Plex Mono', monospace; letter-spacing: .04em; color: var(--terra); }
+.of-item-remove { background: none; border: none; color: var(--ink-soft); cursor: pointer; font-size: 18px; line-height: 1; padding: 2px 6px; border-radius: 6px; transition: all .15s; }
+.of-item-remove:hover { color: #8f2c22; background: #FDECEA; }
+.of-item-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+@media (max-width: 640px) { .of-item-grid { grid-template-columns: 1fr; } }
+.of-size-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 8px; margin-top: 10px; }
+.of-size-cell { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.of-size-cell span { font-size: 10.5px; font-family: 'IBM Plex Mono', monospace; color: var(--ink-soft); }
+.of-size-cell input { text-align: center; padding: 8px 4px; }
+
+/* ---- TABEL MATRIKS Warna x Size (form order / edit / proofing) ----
+   Menggantikan blok kartu per warna. 1 ITEM dengan 8 warna dulu = 8 kartu
+   tinggi berulang; sekarang 8 baris tabel. Catatan & foto per warna TETAP ADA
+   (data model tidak berubah) tapi disembunyikan di baris detail yang dibuka
+   lewat tombol pensil -- karena dari data nyata keduanya jarang diisi.
+   CSS ini WAJIB ada di SETIAP cabang <b:if> yang memakai form (b:if
+   mengisolasi CSS) -- disalin, jangan ditulis ulang. */
+.of-matrix-wrap{overflow-x:auto;margin-top:16px}
+.of-matrix{width:100%;border-collapse:collapse;font-size:13px}
+.of-matrix th{background:transparent;border:none;border-bottom:1.5px solid var(--line);padding:4px 6px 9px;font-size:10.5px;font-family:'IBM Plex Mono',monospace;color:var(--ink-soft);font-weight:700;text-align:center;white-space:nowrap}
+.of-matrix th.of-th-warna{text-align:left;min-width:168px}
+.of-matrix td{border:none;border-bottom:1px solid var(--line-soft);padding:5px 4px;vertical-align:middle;background:transparent}
+.of-matrix tbody tr:last-child td{border-bottom:none}
+/* tbody dipakai sebagai pembungkus 1 warna -- netralkan gaya kartu lama
+   (.of-warna-blok) yang dirancang untuk <div>, sisakan garis penanda kiri. */
+.of-matrix tbody.of-warna-blok{background:transparent;border:none;border-left:3px solid var(--terra-light);border-radius:0;padding:0}
+.of-matrix .of-td-warna input,.of-matrix .of-td-size input,.of-matrix .of-td-harga input{width:100%;margin:0;padding:7px 6px}
+.of-matrix .of-td-size input{text-align:center;min-width:56px}
+.of-matrix th.of-th-size{white-space:nowrap}
+.of-matrix .of-td-harga input{min-width:88px;text-align:right}
+.of-matrix .of-td-total{text-align:center;font-weight:800;background:var(--cream);min-width:44px}
+.of-matrix .of-td-aksi{white-space:nowrap;text-align:center;width:1%}
+.of-matrix .of-warna-remove{background:none;border:1px solid var(--line-soft);border-radius:6px;width:26px;height:26px;padding:0;margin:0;cursor:pointer;color:var(--ink-soft);font-size:11px;line-height:1}
+/* ---- Kolom Bahan (per warna) ---- */
+/* Judul kain boleh MEMBUNGKUS dua baris & kolomnya dipersempit -- judul
+   panjang seperti "Tulle Ginza MTX 634" dulu memaksa kolom selebar judulnya,
+   dan 4 kolom kain sekaligus mendorong kolom size sampai terpotong. */
+.of-matrix th.of-th-kain{text-align:left;min-width:86px;max-width:112px;white-space:normal;line-height:1.25;word-break:break-word}
+.of-matrix .of-td-kain input{width:100%;margin:0;padding:7px 7px;min-width:86px}
+.of-komposisi-wrap{margin-top:14px;padding:12px 14px;background:var(--cream);border-radius:10px}
+/* ---- Komposisi Kain & Size Chart: TABEL, sebahasa dengan tabel Warna x Size ----
+   Sebelumnya keduanya memakai layout bertumpuk (nama di satu baris, kotak
+   per-size di baris kedua, tombol hapus di baris ketiga). Tinggi, dan kolom
+   size-nya tidak sejajar dengan tabel warna -- padahal isinya berkaitan. */
+.of-kmp-tabel,.of-sc-tabel{margin-top:2px}
+.of-matrix th.of-th-kmp-kons{min-width:78px}
+.of-matrix th.of-th-kmp-satuan{min-width:72px}
+.of-matrix .of-td-kmp-nama input,.of-matrix .of-td-sc-nama input{width:100%;margin:0;padding:7px 9px;min-width:168px}
+.of-matrix .of-td-kmp-kons input{width:100%;margin:0;padding:7px 6px;text-align:center;min-width:72px}
+.of-matrix .of-td-kmp-satuan select{width:100%;margin:0;padding:7px 4px;min-width:68px;font-size:12px}
+.of-matrix .of-td-kmp-sz input,.of-matrix .of-td-sc-nilai input{width:100%;margin:0;padding:7px 4px;text-align:center;min-width:48px}
+/* ---- Kontras: isian PUTIH di atas latar tabel yang lebih redup ----
+   Sebelumnya input berlatar krem di atas panel krem -- batas antara "tempat
+   yang bisa diisi" dan "hiasan tabel" nyaris tidak terlihat. */
+.of-matrix input,.of-matrix select{background:var(--white);border:1px solid var(--line-soft);border-radius:7px}
+.of-matrix input:focus,.of-matrix select:focus{border-color:var(--thread);outline:none;box-shadow:0 0 0 2px rgba(178,58,42,.10)}
+.of-matrix input::placeholder{color:var(--ink-soft);opacity:.5}
+/* ---- Pemilih ukuran: preset (pintasan) + centang per size ---- */
+.of-size-pilih{margin-bottom:4px}
+.of-size-preset{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+.of-size-preset-btn{border:1px solid var(--line);background:var(--white);color:var(--ink);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.of-size-preset-btn:hover{border-color:var(--thread);color:var(--thread)}
+.of-size-preset-btn.aktif{background:var(--ink);color:var(--white);border-color:var(--ink)}
+.of-size-cek{display:flex;flex-wrap:wrap;gap:6px}
+.of-size-cek-item{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line-soft);border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;background:var(--white);margin:0}
+.of-size-cek-item input{margin:0;width:auto;cursor:pointer}
+.of-size-cek-item:has(input:checked){border-color:var(--thread);background:var(--paper-2);color:var(--thread)}
+.of-size-mode-angka{font-size:12px;color:var(--ink-soft);background:var(--cream);border-radius:8px;padding:8px 12px}
+.of-size-kembali{background:none;border:none;color:var(--thread);font-weight:700;cursor:pointer;text-decoration:underline;font-family:inherit;font-size:12px;padding:0}
+.of-pilihartikel-wrap{margin-top:14px;padding:10px 14px;background:var(--cream);border-radius:10px}
+.of-pilihartikel-wrap select{width:100%;margin-top:4px}
+.of-pilihartikel-status{font-size:11px;color:var(--thread);margin-top:5px;font-weight:600}
+.of-komposisi-lbl{font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:8px}
+.of-komposisi-hint{font-size:11px;color:var(--ink-soft);margin-top:6px}
+.of-aks-wrap{margin-top:14px;padding:12px 14px;background:var(--cream);border-radius:10px}
+/* Baris Aksesoris & Kain Dari Klien pakai FLEX-WRAP, bukan grid kolom tetap.
+   Grid kolom tetap (1fr 90px 70px 140px 1fr 30px) butuh ~500px; di dalam
+   .of-field-grid yang 2 kolom, wadahnya cuma separuh lebar -- akibatnya kolom
+   1fr (nama kain & keterangan) tergencet sampai nyaris nol lebar dan tidak
+   bisa diketik. Dengan flex-wrap, isian yang tidak muat turun ke baris
+   berikutnya alih-alih menyusut. */
+/* Kain Dari Klien tetap FLEX-WRAP: dia hidup di dalam .of-field-grid yang
+   2 kolom, jadi tabel kolom-tetap akan tergencet. Aksesoris kini tabel karena
+   posisinya selebar panel dan bersebelahan dengan Komposisi & Size Chart. */
+.of-kaink-baris{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--line-soft)}
+.of-kaink-baris:last-of-type{border-bottom:none}
+.of-kaink-baris input,.of-kaink-baris select{margin:0;padding:7px 8px;min-width:0}
+.of-f-kk-nama{flex:1 1 150px}
+.of-f-kk-jml{flex:0 1 88px}
+.of-f-kk-satuan{flex:0 1 66px}
+.of-f-kk-tgl{flex:0 1 140px}
+.of-f-kk-ket{flex:1 1 150px}
+.of-kaink-baris .of-jadwal-hapus{flex:0 0 28px}
+.of-matrix th.of-th-aks-ket{text-align:left;min-width:150px}
+.of-matrix .of-td-aks-ket input{width:100%;margin:0;padding:7px 9px;min-width:150px}
+/* Panel tabel warna: label & jarak sama dengan panel lain, tapi tanpa latar
+   supaya tabel utama tetap terasa sebagai pusat perhatian. */
+.of-warna-wrap{background:transparent;border:1px dashed var(--line-soft)}
+/* ---- Tombol sembunyikan kolom kain ---- */
+.of-warna-lbl-baris{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.of-toggle-kain{background:none;border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:11.5px;font-weight:600;color:var(--ink-soft);cursor:pointer;font-family:inherit;white-space:nowrap}
+.of-toggle-kain:hover{border-color:var(--thread);color:var(--thread)}
+/* Disembunyikan lewat CSS supaya nilainya TETAP ADA di DOM & tetap tersimpan. */
+.of-matrix.of-sembunyi-kain .of-th-kain,.of-matrix.of-sembunyi-kain .of-td-kain{display:none}
+/* Blok berulang ini SELALU selebar penuh, walau induknya grid 2 kolom. */
+.of-jadwal-wrap,.of-aks-wrap,.of-komposisi-wrap{grid-column:1/-1}
+/* ---- Jadwal Kirim Bertahap ---- */
+.of-jadwal-wrap{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line-soft)}
+.of-jadwal-lbl{font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:8px}
+.of-hint-akhir{font-size:11px;font-weight:400;color:var(--ink-soft)}
+.of-jadwal-baris{display:grid;grid-template-columns:150px 84px 1fr 30px;gap:8px;align-items:center;margin-bottom:8px}
+.of-jadwal-baris input{margin:0;padding:7px 8px}
+.of-jadwal-hapus{background:none;border:1px solid var(--line-soft);border-radius:6px;width:28px;height:28px;padding:0;cursor:pointer;color:var(--ink-soft);font-size:11px;line-height:1}
+.of-jadwal-add{width:100%;background:none;border:1px dashed var(--line);border-radius:10px;padding:9px;font-size:12.5px;font-weight:600;color:var(--thread);cursor:pointer;font-family:inherit}
+@media (max-width:640px){
+  .of-jadwal-baris{grid-template-columns:1fr 1fr;gap:6px}
+  .of-jadwal-baris .of-f-jadwal-ket{grid-column:1/-1}
+}
+
+/* ---- Foto tersimpan: bisa dihapus satuan, upload baru MENAMBAH ---- */
+.of-foto-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.of-foto-item{position:relative;width:72px}
+.of-foto-item img{width:72px;height:72px;object-fit:cover;border:1px solid var(--line-soft);border-radius:8px;display:block;background:var(--white)}
+.of-foto-nolink{display:flex;align-items:center;justify-content:center;width:72px;height:72px;border:1px dashed var(--line-soft);border-radius:8px;font-size:10px;color:var(--ink-soft)}
+.of-foto-hapus{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:1px solid var(--line);background:var(--white);color:var(--ink-soft);font-size:10px;line-height:1;padding:0;cursor:pointer;box-shadow:var(--shadow-sm)}
+.of-foto-hapus:hover{background:var(--terra-light);border-color:var(--terra-light);color:var(--white)}
+
+/* Catatan & Foto Desain berlaku per STYLE (ITEM), ditaruh di bawah tabel warna. */
+.of-item-detail{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line-soft)}
+
+/* ---------- banner MODE STAFF (isi order atas nama klien) ---------- */
+.of-staff-box {
+  background: #EDF3FA; border: 1px solid #B9D0E8; border-radius: 14px;
+  padding: 16px 18px; margin-bottom: 18px;
+}
+.of-staff-badge {
+  font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .06em;
+  color: var(--sky); margin-bottom: 10px;
+}
+.of-staff-box select {
+  display: block; width: 100%; margin-top: 6px;
+  font-family: 'Inter', sans-serif; font-size: 14px; color: var(--navy);
+  padding: 10px 12px; border: 1px solid #B9D0E8; border-radius: 10px; background: var(--white);
+}
+.of-staff-hint { font-size: 11.5px; color: var(--ink-soft); margin-top: 8px; }
+
+/* ---------- warna bersarang di dalam item ---------- */
+.of-warna-blok {
+  background: var(--cream); border: 1px solid var(--line-soft);
+  border-left: 3px solid var(--terra-light);
+  border-radius: 12px; padding: 14px 16px;
+}
+.of-warna-remove {
+  background: none; border: none; color: var(--ink-soft); cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 8px 8px; border-radius: 6px;
+  transition: all .15s; flex-shrink: 0;
+}
+.of-warna-remove:hover { color: #8f2c22; background: #FDECEA; }
+.of-add-warna-btn {
+  width: 100%; margin-top: 12px; padding: 10px;
+  border: 1px dashed var(--terra-light); border-radius: 10px;
+  background: none; color: var(--terra); font-family: 'Inter', sans-serif;
+  font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all .18s ease;
+}
+.of-add-warna-btn:hover { background: rgba(189,67,53,.05); border-color: var(--terra); }
+
+.of-add-item-btn {
+  width: 100%; padding: 15px; border: 1.5px dashed var(--line); border-radius: 14px;
+  background: none; color: var(--terra); font-weight: 700; font-size: 13.5px;
+  cursor: pointer; margin-bottom: 18px; font-family: inherit; transition: all .18s ease;
+}
+.of-add-item-btn:hover { border-color: var(--terra); background: rgba(189,67,53,.05); }
+
+/* ---------- tombol kirim ---------- */
+#of-submit-btn {
+  font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 15px;
+  color: var(--white); background: var(--navy); border: none;
+  border-radius: 9999px; padding: 15px 24px; cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
+  box-shadow: var(--shadow-md);
+}
+#of-submit-btn:hover { transform: translateY(-2px); opacity: .92; box-shadow: var(--shadow-lg); }
+
+/* ---------- kartu sukses ---------- */
+#of-sukses {
+  animation: ofCardEntrance 0.6s cubic-bezier(.34,1.56,.64,1) backwards;
+  border-radius: 20px !important; box-shadow: var(--shadow-lg) !important;
+}
+#of-sukses h3 { color: var(--navy); font-weight: 800; }
+.of-sukses-check {
+  width: 60px; height: 60px; margin: 0 auto 14px; border-radius: 50%;
+  background: #E3EFE6; color: #2C6B3F;
+  display: flex; align-items: center; justify-content: center; font-size: 30px;
+  animation: ofCheckPop 0.5s cubic-bezier(.34,1.56,.64,1) 0.2s backwards;
+}
+@keyframes ofCheckPop { from { transform: scale(0); } to { transform: scale(1); } }
+
+/* ============ FOOTER ============ */
+.of-footer {
+  position: relative; z-index: 1; text-align: center; padding: 24px;
+  font-size: 12px; font-family: 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-soft);
+}
+.of-footer .ft-logo { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13px; color: var(--navy); margin-bottom: 4px; }
+.of-footer .ft-logo .terra { color: var(--terra); margin-left: 4px; }
+
+@media (max-width: 600px) {
+  .of-header { padding: 0 18px; }
+  .of-form-section, .of-item-card { padding: 18px 18px; }
+}
+
+.of-pilih-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.of-pilih-card{text-align:left;background:var(--white);border:1px solid var(--line);border-radius:14px;padding:26px 22px;cursor:pointer;transition:box-shadow .15s,border-color .15s;box-shadow:0 1px 3px rgba(20,33,61,.05),0 2px 8px rgba(20,33,61,.04);font-family:inherit}
+.of-pilih-card:hover{border-color:var(--thread);box-shadow:0 2px 6px rgba(20,33,61,.08),0 4px 16px rgba(20,33,61,.07)}
+.of-pilih-kode{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.1em;color:var(--thread);margin-bottom:10px}
+.of-pilih-card h3{font-size:17px;font-weight:800;margin-bottom:6px}
+.of-pilih-card p{font-size:13px;color:var(--ink-soft)}
+@media (max-width:640px){.of-pilih-grid{grid-template-columns:1fr}}
+
+.of-link-btn{background:none;border:none;padding:0;margin-top:14px;font-size:13px;color:var(--thread);cursor:pointer;font-family:inherit;display:block;margin-left:auto;margin-right:auto}
+.of-link-btn:hover{text-decoration:underline}
+
+.of-form-section{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-bottom:18px}
+.of-form-section h4{font-family:'Archivo',sans-serif;font-weight:800;font-size:14.5px;margin-bottom:14px;color:var(--ink)}
+.of-field-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.of-field-grid label,.of-form-section > label,.of-item-card > label{display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink-soft);margin-top:12px}
+.of-field-grid input,.of-form-section textarea,.of-item-card select,.of-item-card input,.of-item-card textarea{
+  font-family:'Public Sans',sans-serif;font-size:14px;padding:10px 12px;border:1px solid var(--line);
+  border-radius:8px;background:var(--paper);color:var(--ink);width:100%;box-sizing:border-box
+}
+.of-form-section textarea,.of-item-card textarea{resize:vertical;font-weight:400}
+@media (max-width:640px){.of-field-grid{grid-template-columns:1fr}}
+
+.of-item-card{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin-bottom:16px;position:relative}
+.of-item-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.of-item-head b{font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:.04em;color:var(--thread)}
+.of-item-remove{background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:18px;line-height:1;padding:2px 6px}
+.of-item-remove:hover{color:#8f2c22}
+.of-item-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+@media (max-width:640px){.of-item-grid{grid-template-columns:1fr}}
+.of-size-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:8px;margin-top:10px}
+.of-size-cell{display:flex;flex-direction:column;gap:4px;align-items:center}
+.of-size-cell span{font-size:10.5px;font-family:'IBM Plex Mono',monospace;color:var(--ink-soft)}
+.of-size-cell input{text-align:center;padding:8px 4px}
+/* ---- TABEL MATRIKS Warna x Size (form order / edit / proofing) ----
+   Menggantikan blok kartu per warna. 1 ITEM dengan 8 warna dulu = 8 kartu
+   tinggi berulang; sekarang 8 baris tabel. Catatan & foto per warna TETAP ADA
+   (data model tidak berubah) tapi disembunyikan di baris detail yang dibuka
+   lewat tombol pensil -- karena dari data nyata keduanya jarang diisi.
+   CSS ini WAJIB ada di SETIAP cabang <b:if> yang memakai form (b:if
+   mengisolasi CSS) -- disalin, jangan ditulis ulang. */
+.of-matrix-wrap{overflow-x:auto;margin-top:16px}
+.of-matrix{width:100%;border-collapse:collapse;font-size:13px}
+.of-matrix th{background:transparent;border:none;border-bottom:1.5px solid var(--line);padding:4px 6px 9px;font-size:10.5px;font-family:'IBM Plex Mono',monospace;color:var(--ink-soft);font-weight:700;text-align:center;white-space:nowrap}
+.of-matrix th.of-th-warna{text-align:left;min-width:168px}
+.of-matrix td{border:none;border-bottom:1px solid var(--line-soft);padding:5px 4px;vertical-align:middle;background:transparent}
+.of-matrix tbody tr:last-child td{border-bottom:none}
+/* tbody dipakai sebagai pembungkus 1 warna -- netralkan gaya kartu lama
+   (.of-warna-blok) yang dirancang untuk <div>, sisakan garis penanda kiri. */
+.of-matrix tbody.of-warna-blok{background:transparent;border:none;border-left:3px solid var(--terra-light);border-radius:0;padding:0}
+.of-matrix .of-td-warna input,.of-matrix .of-td-size input,.of-matrix .of-td-harga input{width:100%;margin:0;padding:7px 6px}
+.of-matrix .of-td-size input{text-align:center;min-width:56px}
+.of-matrix th.of-th-size{white-space:nowrap}
+.of-matrix .of-td-harga input{min-width:88px;text-align:right}
+.of-matrix .of-td-total{text-align:center;font-weight:800;background:var(--cream);min-width:44px}
+.of-matrix .of-td-aksi{white-space:nowrap;text-align:center;width:1%}
+.of-matrix .of-warna-remove{background:none;border:1px solid var(--line-soft);border-radius:6px;width:26px;height:26px;padding:0;margin:0;cursor:pointer;color:var(--ink-soft);font-size:11px;line-height:1}
+/* ---- Kolom Bahan (per warna) ---- */
+/* Judul kain boleh MEMBUNGKUS dua baris & kolomnya dipersempit -- judul
+   panjang seperti "Tulle Ginza MTX 634" dulu memaksa kolom selebar judulnya,
+   dan 4 kolom kain sekaligus mendorong kolom size sampai terpotong. */
+.of-matrix th.of-th-kain{text-align:left;min-width:86px;max-width:112px;white-space:normal;line-height:1.25;word-break:break-word}
+.of-matrix .of-td-kain input{width:100%;margin:0;padding:7px 7px;min-width:86px}
+.of-komposisi-wrap{margin-top:14px;padding:12px 14px;background:var(--cream);border-radius:10px}
+/* ---- Komposisi Kain & Size Chart: TABEL, sebahasa dengan tabel Warna x Size ----
+   Sebelumnya keduanya memakai layout bertumpuk (nama di satu baris, kotak
+   per-size di baris kedua, tombol hapus di baris ketiga). Tinggi, dan kolom
+   size-nya tidak sejajar dengan tabel warna -- padahal isinya berkaitan. */
+.of-kmp-tabel,.of-sc-tabel{margin-top:2px}
+.of-matrix th.of-th-kmp-kons{min-width:78px}
+.of-matrix th.of-th-kmp-satuan{min-width:72px}
+.of-matrix .of-td-kmp-nama input,.of-matrix .of-td-sc-nama input{width:100%;margin:0;padding:7px 9px;min-width:168px}
+.of-matrix .of-td-kmp-kons input{width:100%;margin:0;padding:7px 6px;text-align:center;min-width:72px}
+.of-matrix .of-td-kmp-satuan select{width:100%;margin:0;padding:7px 4px;min-width:68px;font-size:12px}
+.of-matrix .of-td-kmp-sz input,.of-matrix .of-td-sc-nilai input{width:100%;margin:0;padding:7px 4px;text-align:center;min-width:48px}
+/* ---- Kontras: isian PUTIH di atas latar tabel yang lebih redup ----
+   Sebelumnya input berlatar krem di atas panel krem -- batas antara "tempat
+   yang bisa diisi" dan "hiasan tabel" nyaris tidak terlihat. */
+.of-matrix input,.of-matrix select{background:var(--white);border:1px solid var(--line-soft);border-radius:7px}
+.of-matrix input:focus,.of-matrix select:focus{border-color:var(--thread);outline:none;box-shadow:0 0 0 2px rgba(178,58,42,.10)}
+.of-matrix input::placeholder{color:var(--ink-soft);opacity:.5}
+/* ---- Pemilih ukuran: preset (pintasan) + centang per size ---- */
+.of-size-pilih{margin-bottom:4px}
+.of-size-preset{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+.of-size-preset-btn{border:1px solid var(--line);background:var(--white);color:var(--ink);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.of-size-preset-btn:hover{border-color:var(--thread);color:var(--thread)}
+.of-size-preset-btn.aktif{background:var(--ink);color:var(--white);border-color:var(--ink)}
+.of-size-cek{display:flex;flex-wrap:wrap;gap:6px}
+.of-size-cek-item{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line-soft);border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;background:var(--white);margin:0}
+.of-size-cek-item input{margin:0;width:auto;cursor:pointer}
+.of-size-cek-item:has(input:checked){border-color:var(--thread);background:var(--paper-2);color:var(--thread)}
+.of-size-mode-angka{font-size:12px;color:var(--ink-soft);background:var(--cream);border-radius:8px;padding:8px 12px}
+.of-size-kembali{background:none;border:none;color:var(--thread);font-weight:700;cursor:pointer;text-decoration:underline;font-family:inherit;font-size:12px;padding:0}
+.of-pilihartikel-wrap{margin-top:14px;padding:10px 14px;background:var(--cream);border-radius:10px}
+.of-pilihartikel-wrap select{width:100%;margin-top:4px}
+.of-pilihartikel-status{font-size:11px;color:var(--thread);margin-top:5px;font-weight:600}
+.of-komposisi-lbl{font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:8px}
+.of-komposisi-hint{font-size:11px;color:var(--ink-soft);margin-top:6px}
+.of-aks-wrap{margin-top:14px;padding:12px 14px;background:var(--cream);border-radius:10px}
+/* Baris Aksesoris & Kain Dari Klien pakai FLEX-WRAP, bukan grid kolom tetap.
+   Grid kolom tetap (1fr 90px 70px 140px 1fr 30px) butuh ~500px; di dalam
+   .of-field-grid yang 2 kolom, wadahnya cuma separuh lebar -- akibatnya kolom
+   1fr (nama kain & keterangan) tergencet sampai nyaris nol lebar dan tidak
+   bisa diketik. Dengan flex-wrap, isian yang tidak muat turun ke baris
+   berikutnya alih-alih menyusut. */
+/* Kain Dari Klien tetap FLEX-WRAP: dia hidup di dalam .of-field-grid yang
+   2 kolom, jadi tabel kolom-tetap akan tergencet. Aksesoris kini tabel karena
+   posisinya selebar panel dan bersebelahan dengan Komposisi & Size Chart. */
+.of-kaink-baris{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--line-soft)}
+.of-kaink-baris:last-of-type{border-bottom:none}
+.of-kaink-baris input,.of-kaink-baris select{margin:0;padding:7px 8px;min-width:0}
+.of-f-kk-nama{flex:1 1 150px}
+.of-f-kk-jml{flex:0 1 88px}
+.of-f-kk-satuan{flex:0 1 66px}
+.of-f-kk-tgl{flex:0 1 140px}
+.of-f-kk-ket{flex:1 1 150px}
+.of-kaink-baris .of-jadwal-hapus{flex:0 0 28px}
+.of-matrix th.of-th-aks-ket{text-align:left;min-width:150px}
+.of-matrix .of-td-aks-ket input{width:100%;margin:0;padding:7px 9px;min-width:150px}
+/* Panel tabel warna: label & jarak sama dengan panel lain, tapi tanpa latar
+   supaya tabel utama tetap terasa sebagai pusat perhatian. */
+.of-warna-wrap{background:transparent;border:1px dashed var(--line-soft)}
+/* ---- Tombol sembunyikan kolom kain ---- */
+.of-warna-lbl-baris{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.of-toggle-kain{background:none;border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:11.5px;font-weight:600;color:var(--ink-soft);cursor:pointer;font-family:inherit;white-space:nowrap}
+.of-toggle-kain:hover{border-color:var(--thread);color:var(--thread)}
+/* Disembunyikan lewat CSS supaya nilainya TETAP ADA di DOM & tetap tersimpan. */
+.of-matrix.of-sembunyi-kain .of-th-kain,.of-matrix.of-sembunyi-kain .of-td-kain{display:none}
+/* Blok berulang ini SELALU selebar penuh, walau induknya grid 2 kolom. */
+.of-jadwal-wrap,.of-aks-wrap,.of-komposisi-wrap{grid-column:1/-1}
+/* ---- Jadwal Kirim Bertahap ---- */
+.of-jadwal-wrap{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line-soft)}
+.of-jadwal-lbl{font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:8px}
+.of-hint-akhir{font-size:11px;font-weight:400;color:var(--ink-soft)}
+.of-jadwal-baris{display:grid;grid-template-columns:150px 84px 1fr 30px;gap:8px;align-items:center;margin-bottom:8px}
+.of-jadwal-baris input{margin:0;padding:7px 8px}
+.of-jadwal-hapus{background:none;border:1px solid var(--line-soft);border-radius:6px;width:28px;height:28px;padding:0;cursor:pointer;color:var(--ink-soft);font-size:11px;line-height:1}
+.of-jadwal-add{width:100%;background:none;border:1px dashed var(--line);border-radius:10px;padding:9px;font-size:12.5px;font-weight:600;color:var(--thread);cursor:pointer;font-family:inherit}
+@media (max-width:640px){
+  .of-jadwal-baris{grid-template-columns:1fr 1fr;gap:6px}
+  .of-jadwal-baris .of-f-jadwal-ket{grid-column:1/-1}
+}
+
+/* ---- Foto tersimpan: bisa dihapus satuan, upload baru MENAMBAH ---- */
+.of-foto-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.of-foto-item{position:relative;width:72px}
+.of-foto-item img{width:72px;height:72px;object-fit:cover;border:1px solid var(--line-soft);border-radius:8px;display:block;background:var(--white)}
+.of-foto-nolink{display:flex;align-items:center;justify-content:center;width:72px;height:72px;border:1px dashed var(--line-soft);border-radius:8px;font-size:10px;color:var(--ink-soft)}
+.of-foto-hapus{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:1px solid var(--line);background:var(--white);color:var(--ink-soft);font-size:10px;line-height:1;padding:0;cursor:pointer;box-shadow:var(--shadow-sm)}
+.of-foto-hapus:hover{background:var(--terra-light);border-color:var(--terra-light);color:var(--white)}
+
+/* Catatan & Foto Desain berlaku per STYLE (ITEM), ditaruh di bawah tabel warna. */
+.of-item-detail{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line-soft)}
+
+.of-add-item-btn{width:100%;padding:14px;border:1.5px dashed var(--line);border-radius:12px;background:none;color:var(--thread);font-weight:700;font-size:13.5px;cursor:pointer;margin-bottom:18px;font-family:inherit}
+.of-add-item-btn:hover{border-color:var(--thread);background:var(--paper-2)}

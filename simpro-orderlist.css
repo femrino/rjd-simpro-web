@@ -1,0 +1,46 @@
+/* ============================================================
+ * SIMPRO -- simpro-orderlist.css
+ * ============================================================
+ * Diekstrak dari template Blogger. Urutan aturan DIPERTAHANKAN persis
+ * seperti di template, karena cascade CSS bergantung pada urutan.
+ *
+ * DIMUAT DI : order-list
+ * ============================================================ */
+
+/* ===== GAP 68px DI ATAS HEADER =====
+   CSS GLOBAL punya body{padding-top:68px} -- peninggalan halaman lama yang
+   memakai nav{position:fixed;height:68px}; padding itu ganjal supaya konten
+   tidak tertimpa nav. Halaman ini TIDAK memakai nav fixed, melainkan
+   .db-header{position:sticky}, jadi padding itu cuma jadi ruang kosong mati
+   di atas header. Cabang tracking & dashboard sudah menolkannya masing-masing;
+   cabang ini terlewat. */
+body { padding-top: 0; }
+
+/* Halaman ini SENGAJA lebih lebar dari dashboard (1140px): tabelnya punya
+   banyak kolom, dan itu justru alasan halaman ini dipisah. */
+#ol-hero{position:relative;z-index:1;animation:dbFadeUp .6s ease-out backwards}
+.ol-wrap{position:relative;z-index:1;max-width:1500px;margin:0 auto;padding:0 24px 100px}
+.ol-kotak{max-width:420px;margin:60px auto;text-align:center;background:var(--white);border:1px solid var(--line-soft);border-radius:14px;padding:28px 24px}
+.ol-kotak h2{font-size:17px;margin:0 0 6px}
+.ol-kotak p{font-size:12.5px;color:var(--ink-soft);margin:0 0 18px}
+#ol-google-btn{display:flex;justify-content:center}
+/* ---- Tab Daftar PO ---- */
+.db-po-alat{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:14px}
+.db-po-alat input{flex:1 1 260px;margin:0;padding:8px 12px;background:var(--white);border:1px solid var(--line-soft);border-radius:9px}
+.db-po-alat select{flex:0 1 170px;margin:0;padding:8px 10px;background:var(--white);border:1px solid var(--line-soft);border-radius:9px;font-size:12.5px}
+.db-po-jumlah{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);margin-bottom:8px}
+.db-po-tabelwrap{overflow-x:auto;border:1px solid var(--line-soft);border-radius:12px;background:var(--white)}
+.db-po-tabel{width:100%;border-collapse:collapse;font-size:12.5px}
+.db-po-tabel th{background:var(--cream);border-bottom:1.5px solid var(--line);padding:9px 11px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-soft);font-weight:700;white-space:nowrap}
+.db-po-tabel td{border-bottom:1px solid var(--line-soft);padding:9px 11px;vertical-align:top}
+.db-po-tabel tbody tr:last-child td{border-bottom:none}
+.db-po-tabel tbody tr:hover td{background:var(--paper-2)}
+.db-po-tabel .num{text-align:right;white-space:nowrap;font-weight:700}
+.db-po-sub{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-soft);margin-top:2px}
+.db-po-kosong{color:var(--ink-soft);opacity:.6;font-style:italic}
+.db-po-asal{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--cream);color:var(--ink-soft);white-space:nowrap}
+.db-po-asal.form{background:#EAF4EC;color:#2C6B3F}
+.db-po-cetak{white-space:nowrap;font-weight:700}
+.db-po-cetak a{color:var(--thread)}
+/* ---- Edit PO: baris ditandai hapus & warna terkunci ---- */
+.dbep-dihapus td,.dbep-dihapus th{opacity:.45;text-decoration:line-through}

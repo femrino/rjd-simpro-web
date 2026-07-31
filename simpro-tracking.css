@@ -1,0 +1,1010 @@
+/* ============================================================
+ * SIMPRO -- simpro-tracking.css
+ * ============================================================
+ * Diekstrak dari template Blogger. Urutan aturan DIPERTAHANKAN persis
+ * seperti di template, karena cascade CSS bergantung pada urutan.
+ *
+ * DIMUAT DI : tracking
+ * ============================================================ */
+
+/* Skin halaman tracking. Ditaruh DI DALAM cabang ini (bukan CSS global) --
+   selektor di sini polos (*, body, .hero dst) yang bakal nabrak Portal Klien
+   & Dashboard kalau ditaruh global. Blogger cuma render 1 cabang per
+   halaman, jadi CSS ini otomatis nggak pernah kekirim ke halaman lain. */
+:root {
+  --cream: #F9F7F2;
+  --cream-deep: #F0EBE0;
+  --white: #FFFFFF;
+  --navy: #172134;
+  --navy-deep: #0F1623;
+  --navy-soft: #2A3754;
+  --ink: #172134;
+  --ink-soft: #6B7280;
+  --terra: #BD4335;
+  --terra-deep: #9E3528;
+  --terra-light: #D97A6E;
+  --gold: #C8964A;
+  --emerald: #2D8A5F;
+  --sky: #3B7BBF;
+  --amber: #D9941E;
+  --line: #E5E0D6;
+  --line-soft: #EFEAE0;
+  --shadow-lg: 0 20px 60px rgba(15,22,35,.14);
+  --shadow-md: 0 8px 24px rgba(15,22,35,.08);
+  --shadow-sm: 0 2px 8px rgba(15,22,35,.05);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  background: var(--cream);
+  color: var(--navy);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+  /* overflow-x:hidden DIHAPUS dari sini -- udah ada di html{} (global, baris
+     paling atas file, berlaku ke semua halaman). Ada di DUA tempat (html DAN
+     body) sekaligus TERBUKTI (lewat tes langsung getBoundingClientRect() di
+     browser, header kelihatan ikut kegulir walau Computed panel bilang
+     "sticky") jadi biang bikin position:sticky gagal berfungsi -- html/body
+     jadi ambigu scroll container-nya. Cukup di SATU tempat aja (html). */
+  min-height: 100vh;
+  /* ===== FIX TAHAP50 -- BIANG KEROK GAP 68px KETEMU =====
+     Style GLOBAL di atas file punya: body{ padding-top:68px }.
+     Itu dipasang buat halaman lama yang pakai nav{position:fixed;height:68px}
+     -- padding body sebagai "ganjal" biar konten nggak ketiban nav fixed.
+     TAPI halaman tracking NGGAK pakai nav fixed itu; dia pakai
+     .tk-header{position:sticky}. Jadi padding-top:68px cuma jadi ruang
+     kosong mati di atas header.
+     Ini persis yang bikin getBoundingClientRect().top = 68 saat scrollY=0.
+     Angka 68 BUKAN dari scroll-padding-top (kebetulan sama, karena dua-duanya
+     sama-sama diturunkan dari tinggi nav lama 68px). Sticky-nya sendiri
+     sebenarnya SUDAH jalan -- header cuma berangkat dari 68px lalu berhenti
+     di 0, makanya kelihatan "bergerak" antar screenshot.
+     Di-nol-kan khusus untuk cabang tracking. */
+  padding-top: 0;
+}
+
+h1,h2,h3,h4,h5,h6 { font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif; }
+
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+.hidden { display: none !important; }
+.mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+
+/* ============ ANIMATED BACKGROUND ============ */
+.tk-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.tk-bg-gradient {
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(189,67,53,.06) 0%, transparent 35%),
+    radial-gradient(circle at 85% 75%, rgba(23,33,52,.05) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(200,150,74,.04) 0%, transparent 45%);
+  animation: tkMeshShift 20s ease-in-out infinite alternate;
+}
+@keyframes tkMeshShift {
+  0%   { transform: translate(0,0) scale(1); }
+  50%  { transform: translate(-2%,3%) scale(1.04); }
+  100% { transform: translate(2%,-2%) scale(1.02); }
+}
+.tk-float {
+  position: absolute;
+  border-radius: 24px;
+  opacity: 0.05;
+  animation: tkFloatY 16s ease-in-out infinite;
+}
+.tk-float.f1 { width: 160px; height: 160px; background: var(--terra); top: 10%; left: 5%; --rot: 15deg; transform: rotate(15deg); }
+.tk-float.f2 { width: 100px; height: 100px; background: var(--navy); top: 65%; left: 8%; --rot: -20deg; transform: rotate(-20deg); border-radius: 50%; animation-delay: -4s; }
+.tk-float.f3 { width: 200px; height: 200px; background: var(--gold); top: 12%; right: 6%; --rot: 8deg; transform: rotate(8deg); border-radius: 32px; animation-delay: -7s; }
+.tk-float.f4 { width: 80px; height: 80px; background: var(--terra); bottom: 15%; right: 12%; --rot: 25deg; transform: rotate(25deg); border-radius: 50%; animation-delay: -10s; }
+
+@keyframes tkFloatY {
+  0%, 100% { transform: translateY(0) rotate(var(--rot, 0deg)); }
+  50% { transform: translateY(-25px) rotate(var(--rot, 0deg)); }
+}
+
+/* ============ HEADER ============ */
+.tk-header {
+  /* DIUBAH: header tracking sekarang BERLATAR (solid + blur + border-bottom),
+     disamakan dengan header dashboard (.db-header), atas permintaan Femri.
+     Sebelumnya transparan supaya "melayang" di atas latar beranimasi, tapi
+     konsekuensinya konten kelihatan nembus tipis di belakang teks/tombol pas
+     discroll. Versi berlatar ini menutup masalah itu: konten yang lewat di
+     belakang header nggak lagi kelihatan menembus. Nilai rgba, blur, dan
+     border-nya identik dengan .db-header biar dua halaman konsisten. */
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  padding: 20px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(249,247,242,.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+  /* fill-mode DIPERJELAS eksplisit jadi "backwards" (bukan dibiarkan default) --
+     defaultnya emang udah "none" (nggak nyimpen transform abis animasi kelar),
+     tapi ditulis eksplisit biar nggak ada ambiguitas sama sekali soal ini,
+     nyamain pola sama fix di #lacak-app/#lp-results di atas. */
+  animation: tkSlideDown 0.5s ease-out backwards;
+}
+/* max-width:1140px + margin:0 auto SENGAJA DIHAPUS -- itu yang bikin tombol
+   Beranda/nav-actions "ngambang" di tengah layar lebar, bukan nempel ke pinggir
+   kayak nav landing (.top-bar) & nav sistem lama (nav/.nav-inner), yang dua-duanya
+   full-width + padding doang, TANPA max-width. Disamakan ke pola itu biar konsisten
+   sama seluruh situs -- konten UTAMA (#lacak-app) tetap dibatasi max-width, cuma
+   header-nya yang sekarang span penuh. */
+@keyframes tkSlideDown {
+  from { opacity: 0; transform: translateY(-16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.tk-header .logo {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 900;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tk-header .logo .navy { color: var(--navy); }
+.tk-header .logo .terra { color: var(--terra); margin-left: 4px; }
+.tk-header .logo .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--terra);
+  animation: tkPulse 2s ease-in-out infinite;
+}
+@keyframes tkPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(189,67,53,.4); }
+  50% { opacity: 0.5; box-shadow: 0 0 0 5px rgba(189,67,53,0); }
+}
+/* .tk-header .back-link CSS DIHAPUS -- elemennya udah nggak ada di markup
+   (tombol Beranda dihapus, redundan sama logo yang udah link ke '/'). */
+
+/* ============ MAIN ============ */
+#lacak-app {
+  position: relative;
+  z-index: 1;
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 0 24px 100px;
+  animation: tkFadeUp 0.6s ease-out 0.1s backwards;
+}
+@keyframes tkFadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============ LOGIN BOX ============ */
+#lp-login-box {
+  text-align: center;
+  padding: 56px 32px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow-md);
+  position: relative;
+  overflow: hidden;
+  max-width: 480px;
+  margin: 40px auto;
+  animation: tkCardEntrance 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes tkCardEntrance {
+  from { opacity: 0; transform: scale(0.92) translateY(30px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+#lp-login-box::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(from 0deg, transparent 0%, rgba(189,67,53,.04) 25%, transparent 50%, rgba(23,33,52,.03) 75%, transparent 100%);
+  animation: tkSpinSlow 15s linear infinite;
+  pointer-events: none;
+}
+@keyframes tkSpinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+#lp-login-box > * { position: relative; z-index: 1; }
+
+.tk-login-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-soft) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 24px;
+  box-shadow: 0 8px 24px rgba(23,33,52,.2);
+  animation: tkIconFloat 4s ease-in-out infinite;
+}
+@keyframes tkIconFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.tk-login-icon svg { width: 30px; height: 30px; }
+.tk-login-icon svg path { stroke: var(--cream); }
+
+#lp-login-box h2 {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--navy);
+  margin-bottom: 6px;
+  letter-spacing: -0.02em;
+}
+
+#lp-login-box > p {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+#google-signin-btn {
+  display: inline-block;
+  margin-top: 8px;
+  transition: transform 0.2s ease;
+}
+#google-signin-btn:hover { transform: scale(1.03); }
+
+/* ============ LOADING ============ */
+#lp-loading {
+  text-align: center;
+  padding: 80px 24px;
+  color: var(--ink-soft);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+}
+.tk-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--line);
+  border-top-color: var(--terra);
+  border-radius: 50%;
+  margin: 0 auto 20px;
+  animation: tkSpin 0.8s linear infinite;
+}
+@keyframes tkSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============ ERROR ============ */
+#lp-error {
+  text-align: center;
+  padding: 40px 32px;
+  background: #FDECEA;
+  border: 1px solid #E8A49C;
+  border-radius: 16px;
+  color: #8f2c22;
+  font-size: 14px;
+  max-width: 480px;
+  margin: 40px auto;
+  animation: tkShake 0.5s ease-out;
+}
+@keyframes tkShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+#lp-error button {
+  display: inline-block;
+  margin-top: 16px;
+  padding: 10px 24px;
+  border: none;
+  border-radius: 9999px;
+  background: var(--navy);
+  color: var(--cream);
+  font-family: 'Archivo', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+#lp-error button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(23,33,52,.2);
+}
+#lp-error a {
+  font-weight: 700;
+  color: #8f2c22;
+  text-decoration: underline;
+  font-size: 13px;
+}
+
+/* ============ RESULTS ============ */
+#lp-results { animation: tkFadeUp 0.5s ease-out backwards; }
+
+/* Internal bar */
+#lp-internal-bar {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  box-shadow: var(--shadow-sm);
+}
+#lp-internal-bar span {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+#lp-internal-bar span::before {
+  content: '';
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--amber);
+  animation: tkPulse 2s ease-in-out infinite;
+}
+#lp-klien-selector {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  background: var(--white);
+  transition: border-color 0.2s ease;
+}
+#lp-klien-selector:focus { border-color: var(--terra); outline: none; }
+
+/* Welcome text */
+#lp-results > div:first-of-type {
+  margin-bottom: 4px;
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+#lp-results > div:first-of-type b {
+  color: var(--navy);
+  font-weight: 700;
+}
+
+/* Ajukan Order CTA */
+/* Baris hero: sapaan di kiri, tombol Ajukan Order di kanan sejajar (bukan
+   numpuk di bawah sapaan kayak dulu -- lebih rapi & hemat tinggi). Di layar
+   sempit, membungkus ke bawah otomatis. */
+.lp-hero-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.lp-cta-ajukan-order {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 9999px;
+  background: var(--terra);
+  color: var(--cream);
+  font-family: 'Archivo', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(189,67,53,.25);
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.lp-cta-ajukan-order::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
+  transition: left 0.5s ease;
+}
+.lp-cta-ajukan-order:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(189,67,53,.35);
+}
+.lp-cta-ajukan-order:hover::before { left: 100%; }
+
+/* ============ KARTU ORDER REQUEST (tab Orderan) ============
+   Cabang tracking TIDAK mewarisi versi redesign .lp-orderan-* dari cabang lain
+   (tiap <b:if> CSS-isolated). Didefinisikan lengkap di sini biar kartu order
+   pending di Portal Klien tampil serapi kartu produksi/tagihan. */
+.lp-orderan-card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px 22px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow-sm);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.lp-orderan-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--terra-light); }
+.lp-orderan-note { font-size: 12px; margin-top: 10px; padding: 8px 12px; border-radius: 10px; font-weight: 600; }
+.lp-orderan-note-ok { color: #2C6B3F; background: #E3EFE6; }
+.lp-orderan-note-tolak { color: #8f2c22; background: #FDECEA; }
+.lp-orderan-items { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.lp-orderan-item {
+  background: var(--cream);
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 12.5px;
+}
+.lp-oi-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.lp-oi-artikel { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 14px; color: var(--navy); letter-spacing: -0.01em; }
+/* ---- struktur ITEM -> Warna (seragam dengan Form Order) ---- */
+.lp-oi-nomor { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: .1em; color: var(--terra); margin-bottom: 3px; }
+.lp-oi-sub { font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; }
+.lp-oi-jml-warna { font-size: 11px; color: var(--ink-soft); background: var(--white); border: 1px solid var(--line); padding: 3px 10px; border-radius: 9999px; white-space: nowrap; }
+/* ---- Kartu Orderan: ringkasan + modal preview ---- */
+.lp-orderan-klik { cursor: pointer; }
+.lp-oi-ringkas { margin-top: 8px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.lp-oi-qty { font-size: 14px; font-weight: 800; color: var(--ink); }
+.lp-oi-harga { font-size: 12.5px; font-weight: 700; color: var(--thread); }
+.lp-oi-harga-kosong { color: var(--ink-soft); font-style: italic; font-weight: 400; }
+.lp-orderan-hint-klik { font-size: 11px; color: var(--ink-soft); margin-left: 8px; }
+.lp-preview-modal { max-width: 900px; display: flex; flex-direction: column; max-height: calc(100vh - 64px); }
+.lp-preview-body { flex: 1; min-height: 0; background: var(--paper-2); }
+.lp-preview-frame { width: 100%; height: 70vh; border: 0; display: block; background: var(--white); }
+.lp-preview-kaki { padding: 12px 24px 18px; border-top: 1px solid var(--line); }
+@media (max-width: 640px) {
+  .lp-preview-frame { height: 62vh; }
+}
+
+/* ---- modal edit: ITEM -> Warna ---- */
+.lp-edit-item-nomor { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: .1em; color: var(--terra); margin-bottom: 3px; }
+.lp-edit-item-sub { font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; font-weight: 400; }
+.lp-edit-warna { background: var(--cream); border: 1px solid var(--line-soft); border-left: 3px solid var(--terra-light); border-radius: 10px; padding: 12px 14px; margin-top: 10px; }
+.lp-edit-warna-head { margin-bottom: 8px; }
+.lp-edit-warna-nama { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13px; color: var(--navy); }
+
+/* Filter periode (dipindah dari tab Detail Klien Dashboard) */
+.lp-filter-periode { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 18px; }
+.lp-filter-periode-lbl { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); }
+.lp-filter-periode select {
+  padding: 8px 12px; border: 1px solid var(--line); border-radius: 9999px;
+  font-family: 'Inter', sans-serif; font-size: 12.5px; font-weight: 600;
+  color: var(--navy); background: var(--white); cursor: pointer; box-shadow: var(--shadow-sm);
+  transition: border-color .18s ease;
+}
+.lp-filter-periode select:hover { border-color: var(--terra-light); }
+.lp-filter-periode select:focus { outline: none; border-color: var(--terra); }
+@media (max-width: 480px) { .lp-filter-periode select { flex: 1; min-width: 0; } }
+/* ---- tombol Edit di kartu order pending ---- */
+.lp-orderan-actions { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.lp-edit-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: 9999px;
+  background: var(--navy); color: var(--cream);
+  border: none; cursor: pointer;
+  font-family: 'Archivo', sans-serif; font-size: 12.5px; font-weight: 700;
+  transition: opacity .18s ease, transform .18s ease;
+}
+.lp-edit-btn:hover { opacity: .9; transform: translateY(-1px); }
+.lp-edit-hint { font-size: 11px; color: var(--ink-soft); font-style: italic; }
+
+
+/* ============ KOMPONEN FORM ORDER di dalam modal Edit ============
+   JS-nya sudah global, TAPI CSS tetap harus DIDUPLIKASI ke cabang ini --
+   <b:if> mengisolasi CSS, bukan JS (pelajaran lama). Nilai disamakan persis
+   dengan cabang order biar tampilannya identik. */
+.of-item-card { background: var(--white); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; margin-bottom: 14px; position: relative; box-shadow: var(--shadow-sm); }
+.of-item-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.of-item-head b { font-size: 12.5px; font-family: 'IBM Plex Mono', monospace; letter-spacing: .04em; color: var(--terra); }
+.of-item-remove { background: none; border: none; color: var(--ink-soft); cursor: pointer; font-size: 17px; line-height: 1; padding: 2px 6px; border-radius: 6px; transition: all .15s; }
+.of-item-remove:hover { color: #8f2c22; background: #FDECEA; }
+.of-item-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.of-item-card label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+.of-item-card input, .of-item-card select, .of-item-card textarea {
+  font-family: 'Inter', sans-serif; font-size: 13.5px; padding: 9px 11px;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--cream);
+  color: var(--navy); width: 100%; box-sizing: border-box; transition: border-color .18s ease, box-shadow .18s ease;
+}
+.of-item-card input:focus, .of-item-card select:focus, .of-item-card textarea:focus {
+  outline: none; border-color: var(--terra); box-shadow: 0 0 0 3px rgba(189,67,53,.10); background: var(--white);
+}
+.of-item-card textarea { resize: vertical; font-weight: 400; }
+.of-size-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 7px; margin-top: 8px; }
+.of-size-cell { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.of-size-cell span { font-size: 10px; font-family: 'IBM Plex Mono', monospace; color: var(--ink-soft); }
+.of-size-cell input { text-align: center; padding: 7px 3px; }
+/* ---- TABEL MATRIKS Warna x Size (form order / edit / proofing) ----
+   Menggantikan blok kartu per warna. 1 ITEM dengan 8 warna dulu = 8 kartu
+   tinggi berulang; sekarang 8 baris tabel. Catatan & foto per warna TETAP ADA
+   (data model tidak berubah) tapi disembunyikan di baris detail yang dibuka
+   lewat tombol pensil -- karena dari data nyata keduanya jarang diisi.
+   CSS ini WAJIB ada di SETIAP cabang <b:if> yang memakai form (b:if
+   mengisolasi CSS) -- disalin, jangan ditulis ulang. */
+.of-matrix-wrap{overflow-x:auto;margin-top:16px}
+.of-matrix{width:100%;border-collapse:collapse;font-size:13px}
+.of-matrix th{background:transparent;border:none;border-bottom:1.5px solid var(--line);padding:4px 6px 9px;font-size:10.5px;font-family:'IBM Plex Mono',monospace;color:var(--ink-soft);font-weight:700;text-align:center;white-space:nowrap}
+.of-matrix th.of-th-warna{text-align:left;min-width:168px}
+.of-matrix td{border:none;border-bottom:1px solid var(--line-soft);padding:5px 4px;vertical-align:middle;background:transparent}
+.of-matrix tbody tr:last-child td{border-bottom:none}
+/* tbody dipakai sebagai pembungkus 1 warna -- netralkan gaya kartu lama
+   (.of-warna-blok) yang dirancang untuk <div>, sisakan garis penanda kiri. */
+.of-matrix tbody.of-warna-blok{background:transparent;border:none;border-left:3px solid var(--terra-light);border-radius:0;padding:0}
+.of-matrix .of-td-warna input,.of-matrix .of-td-size input,.of-matrix .of-td-harga input{width:100%;margin:0;padding:7px 6px}
+.of-matrix .of-td-size input{text-align:center;min-width:56px}
+.of-matrix th.of-th-size{white-space:nowrap}
+.of-matrix .of-td-harga input{min-width:88px;text-align:right}
+.of-matrix .of-td-total{text-align:center;font-weight:800;background:var(--cream);min-width:44px}
+.of-matrix .of-td-aksi{white-space:nowrap;text-align:center;width:1%}
+.of-matrix .of-warna-remove{background:none;border:1px solid var(--line-soft);border-radius:6px;width:26px;height:26px;padding:0;margin:0;cursor:pointer;color:var(--ink-soft);font-size:11px;line-height:1}
+/* ---- Kolom Bahan (per warna) ---- */
+/* Judul kain boleh MEMBUNGKUS dua baris & kolomnya dipersempit -- judul
+   panjang seperti "Tulle Ginza MTX 634" dulu memaksa kolom selebar judulnya,
+   dan 4 kolom kain sekaligus mendorong kolom size sampai terpotong. */
+.of-matrix th.of-th-kain{text-align:left;min-width:86px;max-width:112px;white-space:normal;line-height:1.25;word-break:break-word}
+.of-matrix .of-td-kain input{width:100%;margin:0;padding:7px 7px;min-width:86px}
+.of-komposisi-wrap{margin-top:14px;padding:12px 14px;background:var(--cream);border-radius:10px}
+/* ---- Komposisi Kain & Size Chart: TABEL, sebahasa dengan tabel Warna x Size ----
+   Sebelumnya keduanya memakai layout bertumpuk (nama di satu baris, kotak
+   per-size di baris kedua, tombol hapus di baris ketiga). Tinggi, dan kolom
+   size-nya tidak sejajar dengan tabel warna -- padahal isinya berkaitan. */
+.of-kmp-tabel,.of-sc-tabel{margin-top:2px}
+.of-matrix th.of-th-kmp-kons{min-width:78px}
+.of-matrix th.of-th-kmp-satuan{min-width:72px}
+.of-matrix .of-td-kmp-nama input,.of-matrix .of-td-sc-nama input{width:100%;margin:0;padding:7px 9px;min-width:168px}
+.of-matrix .of-td-kmp-kons input{width:100%;margin:0;padding:7px 6px;text-align:center;min-width:72px}
+.of-matrix .of-td-kmp-satuan select{width:100%;margin:0;padding:7px 4px;min-width:68px;font-size:12px}
+.of-matrix .of-td-kmp-sz input,.of-matrix .of-td-sc-nilai input{width:100%;margin:0;padding:7px 4px;text-align:center;min-width:48px}
+/* ---- Kontras: isian PUTIH di atas latar tabel yang lebih redup ----
+   Sebelumnya input berlatar krem di atas panel krem -- batas antara "tempat
+   yang bisa diisi" dan "hiasan tabel" nyaris tidak terlihat. */
+.of-matrix input,.of-matrix select{background:var(--white);border:1px solid var(--line-soft);border-radius:7px}
+.of-matrix input:focus,.of-matrix select:focus{border-color:var(--thread);outline:none;box-shadow:0 0 0 2px rgba(178,58,42,.10)}
+.of-matrix input::placeholder{color:var(--ink-soft);opacity:.5}
+/* ---- Pemilih ukuran: preset (pintasan) + centang per size ---- */
+.of-size-pilih{margin-bottom:4px}
+.of-size-preset{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+.of-size-preset-btn{border:1px solid var(--line);background:var(--white);color:var(--ink);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.of-size-preset-btn:hover{border-color:var(--thread);color:var(--thread)}
+.of-size-preset-btn.aktif{background:var(--ink);color:var(--white);border-color:var(--ink)}
+.of-size-cek{display:flex;flex-wrap:wrap;gap:6px}
+.of-size-cek-item{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line-soft);border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;background:var(--white);margin:0}
+.of-size-cek-item input{margin:0;width:auto;cursor:pointer}
+.of-size-cek-item:has(input:checked){border-color:var(--thread);background:var(--paper-2);color:var(--thread)}
+.of-size-mode-angka{font-size:12px;color:var(--ink-soft);background:var(--cream);border-radius:8px;padding:8px 12px}
+.of-size-kembali{background:none;border:none;color:var(--thread);font-weight:700;cursor:pointer;text-decoration:underline;font-family:inherit;font-size:12px;padding:0}
+.of-pilihartikel-wrap{margin-top:14px;padding:10px 14px;background:var(--cream);border-radius:10px}
+.of-pilihartikel-wrap select{width:100%;margin-top:4px}
+.of-pilihartikel-status{font-size:11px;color:var(--thread);margin-top:5px;font-weight:600}
+.of-komposisi-lbl{font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:8px}
+.of-komposisi-hint{font-size:11px;color:var(--ink-soft);margin-top:6px}
+.of-aks-wrap{margin-top:14px;padding:12px 14px;background:var(--cream);border-radius:10px}
+/* Baris Aksesoris & Kain Dari Klien pakai FLEX-WRAP, bukan grid kolom tetap.
+   Grid kolom tetap (1fr 90px 70px 140px 1fr 30px) butuh ~500px; di dalam
+   .of-field-grid yang 2 kolom, wadahnya cuma separuh lebar -- akibatnya kolom
+   1fr (nama kain & keterangan) tergencet sampai nyaris nol lebar dan tidak
+   bisa diketik. Dengan flex-wrap, isian yang tidak muat turun ke baris
+   berikutnya alih-alih menyusut. */
+/* Kain Dari Klien tetap FLEX-WRAP: dia hidup di dalam .of-field-grid yang
+   2 kolom, jadi tabel kolom-tetap akan tergencet. Aksesoris kini tabel karena
+   posisinya selebar panel dan bersebelahan dengan Komposisi & Size Chart. */
+.of-kaink-baris{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--line-soft)}
+.of-kaink-baris:last-of-type{border-bottom:none}
+.of-kaink-baris input,.of-kaink-baris select{margin:0;padding:7px 8px;min-width:0}
+.of-f-kk-nama{flex:1 1 150px}
+.of-f-kk-jml{flex:0 1 88px}
+.of-f-kk-satuan{flex:0 1 66px}
+.of-f-kk-tgl{flex:0 1 140px}
+.of-f-kk-ket{flex:1 1 150px}
+.of-kaink-baris .of-jadwal-hapus{flex:0 0 28px}
+.of-matrix th.of-th-aks-ket{text-align:left;min-width:150px}
+.of-matrix .of-td-aks-ket input{width:100%;margin:0;padding:7px 9px;min-width:150px}
+/* Panel tabel warna: label & jarak sama dengan panel lain, tapi tanpa latar
+   supaya tabel utama tetap terasa sebagai pusat perhatian. */
+.of-warna-wrap{background:transparent;border:1px dashed var(--line-soft)}
+/* ---- Tombol sembunyikan kolom kain ---- */
+.of-warna-lbl-baris{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.of-toggle-kain{background:none;border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:11.5px;font-weight:600;color:var(--ink-soft);cursor:pointer;font-family:inherit;white-space:nowrap}
+.of-toggle-kain:hover{border-color:var(--thread);color:var(--thread)}
+/* Disembunyikan lewat CSS supaya nilainya TETAP ADA di DOM & tetap tersimpan. */
+.of-matrix.of-sembunyi-kain .of-th-kain,.of-matrix.of-sembunyi-kain .of-td-kain{display:none}
+/* Blok berulang ini SELALU selebar penuh, walau induknya grid 2 kolom. */
+.of-jadwal-wrap,.of-aks-wrap,.of-komposisi-wrap{grid-column:1/-1}
+/* ---- Jadwal Kirim Bertahap ---- */
+.of-jadwal-wrap{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line-soft)}
+.of-jadwal-lbl{font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:8px}
+.of-hint-akhir{font-size:11px;font-weight:400;color:var(--ink-soft)}
+.of-jadwal-baris{display:grid;grid-template-columns:150px 84px 1fr 30px;gap:8px;align-items:center;margin-bottom:8px}
+.of-jadwal-baris input{margin:0;padding:7px 8px}
+.of-jadwal-hapus{background:none;border:1px solid var(--line-soft);border-radius:6px;width:28px;height:28px;padding:0;cursor:pointer;color:var(--ink-soft);font-size:11px;line-height:1}
+.of-jadwal-add{width:100%;background:none;border:1px dashed var(--line);border-radius:10px;padding:9px;font-size:12.5px;font-weight:600;color:var(--thread);cursor:pointer;font-family:inherit}
+@media (max-width:640px){
+  .of-jadwal-baris{grid-template-columns:1fr 1fr;gap:6px}
+  .of-jadwal-baris .of-f-jadwal-ket{grid-column:1/-1}
+}
+
+/* ---- Foto tersimpan: bisa dihapus satuan, upload baru MENAMBAH ---- */
+.of-foto-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.of-foto-item{position:relative;width:72px}
+.of-foto-item img{width:72px;height:72px;object-fit:cover;border:1px solid var(--line-soft);border-radius:8px;display:block;background:var(--white)}
+.of-foto-nolink{display:flex;align-items:center;justify-content:center;width:72px;height:72px;border:1px dashed var(--line-soft);border-radius:8px;font-size:10px;color:var(--ink-soft)}
+.of-foto-hapus{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:1px solid var(--line);background:var(--white);color:var(--ink-soft);font-size:10px;line-height:1;padding:0;cursor:pointer;box-shadow:var(--shadow-sm)}
+.of-foto-hapus:hover{background:var(--terra-light);border-color:var(--terra-light);color:var(--white)}
+
+/* Catatan & Foto Desain berlaku per STYLE (ITEM), ditaruh di bawah tabel warna. */
+.of-item-detail{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line-soft)}
+
+.of-warna-blok { background: var(--cream); border: 1px solid var(--line-soft); border-left: 3px solid var(--terra-light); border-radius: 12px; padding: 13px 15px; }
+.of-warna-remove { background: none; border: none; color: var(--ink-soft); cursor: pointer; font-size: 15px; line-height: 1; padding: 8px; border-radius: 6px; transition: all .15s; flex-shrink: 0; }
+.of-warna-remove:hover { color: #8f2c22; background: #FDECEA; }
+.of-add-warna-btn { width: 100%; margin-top: 12px; padding: 9px; border: 1px dashed var(--terra-light); border-radius: 10px; background: none; color: var(--terra); font-family: 'Inter', sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all .18s ease; }
+.of-add-warna-btn:hover { background: rgba(189,67,53,.05); border-color: var(--terra); }
+.of-add-item-btn { width: 100%; padding: 13px; border: 1.5px dashed var(--line); border-radius: 12px; background: none; color: var(--terra); font-weight: 700; font-size: 13px; cursor: pointer; margin-bottom: 14px; font-family: inherit; transition: all .18s ease; }
+.of-add-item-btn:hover { border-color: var(--terra); background: rgba(189,67,53,.05); }
+.of-form-section { background: var(--white); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+.of-form-section h4 { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13.5px; margin-bottom: 12px; color: var(--navy); }
+.of-form-section label { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+.of-form-section input, .of-form-section textarea {
+  display: block; width: 100%; box-sizing: border-box; margin-top: 5px;
+  font-family: 'Inter', sans-serif; font-size: 13.5px; color: var(--navy);
+  padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--cream);
+}
+.of-form-section input:focus, .of-form-section textarea:focus { outline: none; border-color: var(--terra); box-shadow: 0 0 0 3px rgba(189,67,53,.10); background: var(--white); }
+.of-form-section textarea.rjd-autogrow { resize: none; min-height: 60px; overflow-y: hidden; line-height: 1.55; }
+@media (max-width: 640px) { .of-item-grid { grid-template-columns: 1fr; } }
+
+.of-foto-lama { margin-top: 10px; padding: 10px 12px; background: var(--white); border: 1px solid var(--line-soft); border-radius: 10px; }
+.of-foto-lama-lbl { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 6px; }
+.of-f-gambar-lbl { display: block; }
+.lp-order-staff-banner {
+  background: #EDF3FA; border: 1px solid #B9D0E8; border-radius: 10px;
+  padding: 10px 14px; margin-bottom: 14px;
+  font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--sky);
+}
+.lp-order-staff-banner b { font-family: 'Inter', sans-serif; font-weight: 700; color: var(--navy); }
+.lp-order-error { margin-top: 12px; padding: 12px 14px; background: #FDECEA; border: 1px solid #E8A49C; border-radius: 10px; color: #8f2c22; font-size: 13px; line-height: 1.5; }
+/* Di layar kecil modal dibuat hampir penuh layar -- form order itu panjang,
+   kalau modalnya sempit jadi capek discroll di HP. */
+@media (max-width: 640px) {
+  .lp-edit-overlay { padding: 12px 8px; }
+  .lp-edit-modal { max-width: 100%; border-radius: 14px; }
+  .lp-edit-modal-body { padding: 14px 14px; }
+  .lp-edit-modal-head, .lp-edit-modal-foot { padding: 14px 16px; }
+}
+/* ---- modal editor ---- */
+.lp-edit-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(15,22,35,.55); backdrop-filter: blur(2px);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 32px 16px; overflow-y: auto;
+  animation: lpEditFade .2s ease-out;
+}
+@keyframes lpEditFade { from { opacity: 0; } to { opacity: 1; } }
+.lp-edit-modal {
+  /* 620px terlalu sempit untuk form order sekarang -- ada tabel matriks
+     warna x size, komposisi kain, aksesoris, dan jadwal bertahap. Di laptop
+     tabelnya sampai harus digeser ke samping. min() menjaga tetap muat di
+     layar kecil tanpa perlu media query terpisah. */
+  background: var(--cream); width: 100%; max-width: min(1100px, 96vw);
+  border-radius: 20px; box-shadow: var(--shadow-lg);
+  animation: lpEditPop .28s cubic-bezier(.34,1.56,.64,1);
+  margin: auto;
+}
+@keyframes lpEditPop { from { opacity: 0; transform: scale(.95) translateY(12px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+.lp-edit-modal-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 20px 24px; border-bottom: 1px solid var(--line);
+}
+.lp-edit-modal-title { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 17px; color: var(--navy); }
+.lp-edit-modal-sub { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--thread); margin-top: 2px; }
+.lp-edit-close {
+  width: 32px; height: 32px; border-radius: 9999px; flex-shrink: 0;
+  border: 1px solid var(--line); background: var(--white); color: var(--ink-soft);
+  cursor: pointer; font-size: 15px; transition: all .18s ease;
+}
+.lp-edit-close:hover { color: #8f2c22; border-color: #E8A49C; background: #FDECEA; }
+.lp-edit-modal-body { padding: 20px 24px; }
+.lp-edit-label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); margin-bottom: 14px; }
+.lp-edit-label input, .lp-edit-label textarea {
+  display: block; width: 100%; margin-top: 6px;
+  font-family: 'Inter', sans-serif; font-size: 14px; color: var(--navy);
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--white); box-sizing: border-box;
+}
+.lp-edit-label input:focus, .lp-edit-label textarea:focus { outline: none; border-color: var(--terra); box-shadow: 0 0 0 3px rgba(189,67,53,.10); }
+.lp-edit-label textarea.rjd-autogrow { resize: none; min-height: 60px; overflow-y: hidden; line-height: 1.55; }
+.lp-edit-items-wrap { margin-top: 4px; }
+.lp-edit-item { background: var(--white); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+.lp-edit-item-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+.lp-edit-item-head b { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 14px; color: var(--navy); }
+.lp-edit-item-warna { font-size: 11px; color: var(--ink-soft); background: var(--cream); border: 1px solid var(--line); padding: 2px 9px; border-radius: 9999px; }
+.lp-edit-size-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 7px; margin-bottom: 10px; }
+.lp-edit-size-cell { display: flex; flex-direction: column; gap: 3px; align-items: center; }
+.lp-edit-size-cell span { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft); }
+.lp-edit-size-cell input {
+  width: 100%; text-align: center; padding: 7px 2px;
+  font-family: 'Inter', sans-serif; font-size: 13px; color: var(--navy);
+  border: 1px solid var(--line); border-radius: 8px; background: var(--white); box-sizing: border-box;
+}
+.lp-edit-size-cell input:focus { outline: none; border-color: var(--terra); }
+.lp-edit-note-info { font-size: 11.5px; color: var(--ink-soft); margin-top: 4px; padding: 10px 12px; background: var(--cream-deep); border-radius: 10px; }
+.lp-edit-modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 24px; border-top: 1px solid var(--line); }
+.lp-edit-cancel { padding: 10px 18px; border-radius: 9999px; border: 1px solid var(--line); background: var(--white); color: var(--ink-soft); cursor: pointer; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; }
+.lp-edit-cancel:hover { border-color: var(--ink-soft); }
+.lp-edit-save { padding: 10px 22px; border-radius: 9999px; border: none; background: var(--terra); color: var(--cream); cursor: pointer; font-family: 'Archivo', sans-serif; font-size: 13px; font-weight: 700; box-shadow: 0 4px 12px rgba(189,67,53,.25); }
+.lp-edit-save:hover { opacity: .92; }
+.lp-edit-save:disabled { opacity: .55; cursor: default; }
+
+#lp-last-updated {
+  margin: 0 0 20px;
+  font-size: 11px;
+  color: #A9A392;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+/* ============ SECTION TABS ============ */
+.lp-section-tabs {
+  /* STICKY, nempel PERSIS di bawah .tk-header (top: 78px -- perkiraan tinggi
+     header dari padding 20px atas+bawah + tinggi konten tombol ~38px). Kalau
+     nanti padding/ukuran header diubah, angka 78px ini WAJIB disesuaikan lagi,
+     nggak otomatis ngikut -- posisinya angka hitungan manual, bukan dinamis. */
+  position: sticky;
+  top: 78px;
+  z-index: 30;
+  display: flex;
+  gap: 4px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 6px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.lp-section-tabs::-webkit-scrollbar { height: 3px; }
+.lp-section-tabs::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
+
+.lp-detail-tab {
+  flex: 1;
+  min-width: fit-content;
+  padding: 10px 18px;
+  font-family: 'Archivo', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  border-radius: 10px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  position: relative;
+}
+.lp-detail-tab:hover {
+  color: var(--navy);
+  background: var(--line-soft);
+}
+.lp-detail-tab.active {
+  background: var(--navy);
+  color: var(--cream);
+  box-shadow: 0 2px 8px rgba(23,33,52,.2);
+}
+
+/* ============ DETAIL PANELS ============ */
+.lp-detail-panel {
+  animation: tkPanelIn 0.4s ease-out;
+}
+@keyframes tkPanelIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Toggle row */
+.lp-toggle-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+/* Filter baris utama (Aktif/Semua Riwayat, Outstanding/Lunas, dst) -- 4 ID ini
+   spesifik row PALING ATAS tiap tab (anak langsung .lp-detail-panel), BUKAN
+   toggle Warna/Divisi yang nested di dalam kartu order/produk (itu tetap
+   .lp-toggle-row polos, statis, TIDAK sticky). top: 134px = 78px (tinggi
+   header) + 56px (perkiraan tinggi .lp-section-tabs: padding 12px + tombol
+   tab ~37px + sedikit buffer). Angka manual juga -- sama kayak di atas, kalau
+   ukuran header/tabs berubah, ini WAJIB disesuaikan ulang. */
+#lp-order-toggles, #lp-shipment-toggles, #lp-invoice-toggles, #lp-orderan-toggles {
+  /* Background var(--paper) yang tadinya di sini DIHAPUS -- sejalan sama
+     keputusan header di atas (transparan/melayang, bukan opaque). Individual
+     tombol .lp-toggle udah punya background putih sendiri, jadi masih kebaca
+     jelas biarpun row-nya sendiri transparan. */
+  position: sticky;
+  top: 134px;
+  z-index: 20;
+}
+.lp-toggle {
+  padding: 6px 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  transition: all 0.2s ease;
+}
+.lp-toggle:hover {
+  color: var(--navy);
+  border-color: rgba(23,33,52,.15);
+  transform: translateY(-1px);
+}
+.lp-toggle.active {
+  background: var(--navy);
+  color: var(--cream);
+  border-color: var(--navy);
+  box-shadow: 0 2px 8px rgba(23,33,52,.15);
+}
+
+/* Panel frames */
+.lp-panel-frame {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.lp-panel-scroll {
+  max-height: 600px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.lp-panel-scroll::-webkit-scrollbar { width: 5px; }
+.lp-panel-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+
+/* ============ ANIMATED LIST ITEMS ============ */
+/* These target dynamically created children from JS */
+.lp-panel-scroll > *,
+#lp-orderan-list > * {
+  animation: tkItemIn 0.35s ease-out both;
+}
+.lp-panel-scroll > *:nth-child(1), #lp-orderan-list > *:nth-child(1) { animation-delay: 0.00s; }
+.lp-panel-scroll > *:nth-child(2), #lp-orderan-list > *:nth-child(2) { animation-delay: 0.04s; }
+.lp-panel-scroll > *:nth-child(3), #lp-orderan-list > *:nth-child(3) { animation-delay: 0.08s; }
+.lp-panel-scroll > *:nth-child(4), #lp-orderan-list > *:nth-child(4) { animation-delay: 0.12s; }
+.lp-panel-scroll > *:nth-child(5), #lp-orderan-list > *:nth-child(5) { animation-delay: 0.16s; }
+.lp-panel-scroll > *:nth-child(6), #lp-orderan-list > *:nth-child(6) { animation-delay: 0.20s; }
+.lp-panel-scroll > *:nth-child(7), #lp-orderan-list > *:nth-child(7) { animation-delay: 0.24s; }
+.lp-panel-scroll > *:nth-child(8), #lp-orderan-list > *:nth-child(8) { animation-delay: 0.28s; }
+.lp-panel-scroll > *:nth-child(n+9), #lp-orderan-list > *:nth-child(n+9) { animation-delay: 0.32s; }
+
+@keyframes tkItemIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Hover effect on list children */
+.lp-panel-scroll > *:hover,
+#lp-orderan-list > *:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Invoice summary animation */
+#lp-invoice-summary {
+  animation: tkFadeUp 0.4s ease-out 0.2s both;
+}
+
+/* Profil form animation */
+#lp-profil-form {
+  animation: tkFadeUp 0.4s ease-out 0.1s both;
+}
+
+/* ============ FOOTER ============ */
+.tk-footer {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 24px;
+  font-size: 12px;
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--ink-soft);
+  animation: tkFadeUp 0.6s ease-out 0.3s both;
+}
+.tk-footer .ft-logo {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--navy);
+  margin-bottom: 4px;
+}
+.tk-footer .ft-logo .terra { color: var(--terra); margin-left: 4px; }
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 600px) {
+  .tk-header { padding: 16px 20px; }
+  #lacak-app { padding: 0 16px 60px; }
+  #lp-login-box { padding: 40px 20px; margin: 20px auto; }
+  .lp-detail-tab { padding: 8px 12px; font-size: 12px; }
+  .lp-section-tabs { border-radius: 12px; }
+}
+
+/* Form Profil (dipanggil dari JS via kelas lp-profil-*) -- CSS-nya SEMPAT KETINGGALAN
+   pas markup tracking diganti ke desain baru. Kelas ini didefinisikan JS (lpRenderProfilForm_
+   di script bawah), bukan di markup statis, jadi gampang keliatan "aman" pas migrasi padahal
+   nggak ketimpa. Tanpa CSS ini, label & input numpuk tanpa struktur -- itu yang kejadian
+   kemarin. Disesuaikan warnanya ke token desain baru (--white/--line/--navy), BUKAN
+   disalin mentah dari CSS lama yang tokennya (--paper dst) nggak ada di skin ini. */
+.lp-profil-card { max-width: 520px; }
+.lp-profil-label {
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 12.5px; font-weight: 600; color: var(--ink-soft);
+  margin-bottom: 16px;
+}
+.lp-profil-label input, .lp-profil-label textarea {
+  font-family: 'Inter', sans-serif; font-size: 14px;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--white); color: var(--navy); width: 100%; box-sizing: border-box;
+}
+.lp-profil-label input:disabled { background: var(--cream-deep); color: var(--ink-soft); }
+.lp-profil-tambah-email {
+  background: none; border: none; color: var(--terra); font-weight: 600;
+  font-size: 12.5px; cursor: pointer; padding: 0; margin: -10px 0 16px; font-family: inherit;
+}
+/* ---- Standar Produksi di tab Profil ---- */
+.lp-standar-blok { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line-soft); }
+.lp-standar-judul { font-size: 13px; font-weight: 800; color: var(--ink); margin-bottom: 4px; }
+.lp-standar-hint { font-size: 11.5px; color: var(--ink-soft); line-height: 1.5; margin-bottom: 10px; }
+.lp-standar-lbl-simpan { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 6px; }
+.lp-standar-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--white); border: 1px solid var(--line-soft); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; font-size: 12.5px; }
+.lp-standar-hapus { background: none; border: 1px solid var(--line-soft); border-radius: 6px; width: 24px; height: 24px; padding: 0; cursor: pointer; color: var(--ink-soft); font-size: 10px; line-height: 1; flex-shrink: 0; }
+.lp-standar-hapus:hover { background: var(--terra-light); border-color: var(--terra-light); color: var(--white); }
+
+.lp-profil-tambah-email:hover { text-decoration: underline; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Grup tombol aksi navbar (Dashboard/Refresh/Keluar) : SENGAJA ditambahkan,
+   nggak ada di desain aslinya. JS Portal Klien (lpLogout, fetchDashboard)
+   manggil getElementById buat 3 elemen ini. */
+.tk-header .tk-nav-actions { display: flex; align-items: center; gap: 8px; position: static; }
+.tk-header .nav-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 9999px;
+  border: 1px solid var(--line); background: var(--white); color: var(--ink-soft);
+  cursor: pointer; transition: all 0.2s ease;
+}
+.tk-header .nav-icon-btn:hover { color: var(--navy); border-color: rgba(23,33,52,.15); }
+.tk-header .nav-icon-btn svg { width: 16px; height: 16px; }
+.tk-header .nav-cta {
+  /* position/right/top/transform WAJIB direset eksplisit -- CSS global .nav-cta
+     (sistem lama) nyetel position:absolute;right:24px;top:50%;transform:translateY(-50%).
+     CSS itu per-PROPERTI, bukan per-blok: kalau properti position nggak disebut di
+     sini, aturan absolute dari global TETAP kepake meskipun warna/ukuran ke-override.
+     Itu sebabnya tombol Keluar "lompat keluar" dari flex .tk-nav-actions & numpuk
+     sama ikon Dashboard/Refresh -- ini yang benerin. */
+  position: static; right: auto; top: auto; transform: none;
+  font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600;
+  color: var(--white); background: var(--navy); border: none;
+  padding: 8px 16px; border-radius: 9999px; cursor: pointer; transition: opacity .2s;
+}
+.tk-header .nav-cta:hover { opacity: .85; }

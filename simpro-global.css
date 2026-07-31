@@ -1,0 +1,687 @@
+/* ============================================================
+ * SIMPRO -- simpro-global.css
+ * ============================================================
+ * Diekstrak dari template Blogger. Urutan aturan DIPERTAHANKAN persis
+ * seperti di template, karena cascade CSS bergantung pada urutan.
+ *
+ * DIMUAT DI : GLOBAL
+ * ============================================================ */
+
+:root{
+  --paper:#F7F5F0;
+  --paper-2:#EFECE4;
+  --ink:#14213D;
+  --ink-soft:#3D4A63;
+  --thread:#B23A2E;
+  --line:#D8D3C7;
+  --white:#FFFFFF;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;overflow-x:hidden}
+/* scroll-padding-top:68px DIHAPUS dari sini -- angka itu TERBUKTI PERSIS lewat
+   tes langsung getBoundingClientRect() di browser (window.scrollY=0 tapi
+   .tk-header top=68, cocok 1:1 sama angka scroll-padding-top ini). Properti ini
+   sebenarnya buat ngasih ruang pas scroll-ke-anchor/fragment (biar target
+   nggak ketiban sticky header), TAPI nggak ada satupun navigasi anchor/hash
+   yang beneran makai ini di halaman tracking -- jadi keberadaannya nggak ada
+   gunanya di sini, DAN sepertinya malah bikin browser masukin 68px itu ke
+   perhitungan posisi awal, dorong header (dan turunannya) 68px dari top asli. */
+body{
+  font-family:'Public Sans',sans-serif;
+  background:var(--paper);
+  color:var(--ink);
+  line-height:1.6;
+  font-size:16px;
+  /* overflow-x:hidden SENGAJA dihapus dari sini (dulu ada, sekarang cukup di html
+     aja) -- kalau ADA DI DUA-DUANYA (html + body), efeknya diem-diem mematikan
+     position:sticky buat semua elemen sticky di halaman manapun (termasuk tab bar
+     Dashboard). html-nya doang udah cukup buat nyegah scroll horizontal. */
+  max-width:100vw;
+  padding-top:68px;
+}
+.mono{font-family:'IBM Plex Mono',monospace}
+h1,h2,h3,h4,.display{font-family:'Archivo',sans-serif}
+.container{max-width:1140px;margin:0 auto;padding:0 24px}
+a{color:inherit;text-decoration:none}
+img{max-width:100%;display:block}
+:focus-visible{outline:3px solid var(--thread);outline-offset:2px}
+
+.eyebrow{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--thread);display:inline-flex;align-items:center;gap:10px;
+  margin-bottom:14px;
+}
+.eyebrow::before{content:"";width:28px;height:1px;background:var(--thread)}
+
+/* ---------- nav ---------- */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:50;
+  background:rgba(247,245,240,.92);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);
+}
+.nav-inner{display:flex;align-items:center;justify-content:space-between;height:68px;position:relative}
+.logo{font-family:'Archivo',sans-serif;font-weight:900;font-size:20px;letter-spacing:-.02em}
+.logo span{color:var(--thread)}
+.nav-links{display:flex;gap:22px;font-size:13.5px;font-weight:500}
+.nav-links a{color:var(--ink-soft);transition:color .15s}
+.nav-links a:hover{color:var(--thread)}
+.cross-link{color:#B23A2E !important;font-weight:600}
+.nav-cta{
+  position:absolute;right:24px;top:50%;transform:translateY(-50%);
+  background:var(--ink);color:var(--white);padding:10px 20px;
+  font-size:14px;font-weight:600;border-radius:2px;transition:background .15s;
+  white-space:nowrap;border:none;-webkit-appearance:none;appearance:none;cursor:pointer;
+  font-family:'Archivo',sans-serif;
+}
+.nav-cta:hover{background:var(--thread)}
+
+/* Wrapper buat nge-grup tombol-tombol pojok kanan nav (refresh, link, Keluar) jadi 1 unit
+   yang diposisikan absolute bareng -- dipakai di Portal Klien & Dashboard. Tombol .nav-cta
+   & link di dalam wrapper ini dinetralin posisi absolute-nya sendiri (position:static)
+   karena wrapper-nya udah yang ngatur posisi ke pojok kanan. */
+.nav-actions{position:absolute;right:24px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:10px}
+.nav-actions .nav-cta,.nav-actions > a{position:static;top:auto;right:auto;transform:none}
+/* Tombol Keluar dibikin oval (bukan kotak) biar serasi sama bentuk tombol ikon
+   bulat (refresh, link) di sebelahnya -- height disamain 38px biar sejajar rapi. */
+#lp-nav-logout,#db-nav-logout{border-radius:999px;height:38px;display:flex;align-items:center;box-sizing:border-box}
+.nav-icon-btn{
+  width:38px;height:38px;border-radius:50%;flex-shrink:0;padding:0;
+  border:1px solid var(--line);background:var(--white);color:var(--ink-soft);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  transition:border-color .15s,color .15s,opacity .15s;-webkit-appearance:none;appearance:none;
+  text-decoration:none;
+}
+.nav-icon-btn:hover{border-color:var(--thread);color:var(--thread)}
+.nav-icon-btn:disabled{opacity:.6;cursor:default}
+.nav-icon-btn.nav-icon-btn--error{border-color:#E8A49C;color:#8f2c22}
+.nav-icon-btn svg{width:16px;height:16px;display:block}
+.nav-icon-btn svg.spinning{animation:nav-icon-spin .7s linear infinite}
+@keyframes nav-icon-spin{to{transform:rotate(360deg)}}
+
+/* Sub-tab detail klien (Produksi/Pengiriman/Tagihan) --
+   dipakai di halaman Tracking (berdiri sendiri) DAN di-embed di tab "Detail Klien"
+   Dashboard. Class-nya SENGAJA beda dari .lp-section-tab (yang dipakai buat tab
+   utama Dashboard: Perlu Perhatian/Ringkasan Klien/Kontrol Data), biar pas keduanya
+   nempel bareng di 1 halaman Dashboard, function switch-nya nggak saling senggol.
+   Gaya kartu -- sama pola visualnya kayak card di Kontrol Data (.db-stat-card/
+   .db-card-btn): kotak putih, border-bottom nyala pas aktif, bukan underline tab biasa. */
+#lp-section-tabs{border-bottom:none;gap:10px}
+.lp-detail-tab{-webkit-appearance:none;appearance:none;-webkit-tap-highlight-color:transparent;flex:1;min-width:max-content;margin:0;cursor:pointer;background:var(--white);border:1px solid var(--line);border-bottom:3px solid transparent;border-radius:12px;padding:16px 18px;box-sizing:border-box;font-family:'Archivo',sans-serif;font-weight:700;font-size:14px;color:var(--ink-soft);text-align:center;white-space:nowrap;transition:all .15s}
+.lp-detail-tab:hover:not(.active){box-shadow:0 0 0 1px var(--ink-soft) inset}
+.lp-detail-tab.active{color:var(--ink);border-bottom:3px solid var(--thread);box-shadow:0 1px 3px rgba(20,33,61,.06),0 2px 8px rgba(20,33,61,.05)}
+.lp-detail-panel{margin-top:16px}
+@media (max-width:760px){
+  .lp-detail-tab{padding:12px 10px;font-size:12.5px}
+}
+
+/* Kartu order/invoice/pengiriman + badge + stepper progress + frame panel scroll --
+   dipakai di halaman Tracking (berdiri sendiri) DAN di-embed di tab "Detail Klien"
+   Dashboard, lewat fungsi rendering yang sama (lihat script global). Ditaruh di sini
+   (bukan di style lokal salah satu branch) biar KEDUANYA kebagian tampilan yang sama. */
+.lp-order-card{border:1px solid var(--line);background:var(--white);border-radius:12px;padding:24px;margin-bottom:20px;box-shadow:0 1px 3px rgba(20,33,61,.06),0 2px 10px rgba(20,33,61,.05)}
+.lp-order-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px dashed var(--line)}
+.lp-order-code{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--thread);letter-spacing:.06em}
+.lp-order-produk{font-weight:700;font-size:16px;margin-top:4px}
+.lp-order-badge-wrap{margin-top:8px}
+.lp-order-est{font-size:12px;color:var(--ink-soft);text-align:right}
+.lp-stepper{display:flex;overflow-x:auto;padding-bottom:8px}
+.lp-step{flex:1;min-width:90px;text-align:center;position:relative;padding:0 4px}
+.lp-step-dot{width:22px;height:22px;border-radius:50%;background:var(--paper-2);border:2px solid var(--line);margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--ink-soft)}
+.lp-step-label{font-size:10.5px;color:var(--ink-soft);line-height:1.3}
+.lp-step.done .lp-step-dot{background:var(--ink);border-color:var(--ink);color:var(--white)}
+.lp-step.done .lp-step-label{color:var(--ink)}
+.lp-step.current .lp-step-dot{background:var(--thread);border-color:var(--thread);color:var(--white)}
+.lp-step.current .lp-step-label{color:var(--thread);font-weight:700}
+.lp-step:not(:last-child)::after{content:"";position:absolute;top:11px;left:50%;width:100%;height:2px;background:var(--line);z-index:-1}
+.lp-step.done:not(:last-child)::after{background:var(--ink)}
+
+/* Matrix Warna x Size per Divisi -- expand di dalam .lp-order-card, di bawah stepper.
+   Sengaja collapsed by default (lp-matrix-section display:none) karena bisa lumayan
+   panjang kalau order-nya banyak warna/size, dan dipakai di list yang isinya banyak
+   order sekaligus. Warna badge REUSE palette .lp-badge-* (hijau=lunas,
+   amber=dp, merah=belum) biar konsisten sama badge status invoice/order di halaman
+   yang sama, bukan palet baru. */
+.lp-matrix-toggle-row{margin-top:14px}
+.lp-matrix-toggle-btn{background:none;border:none;padding:0;font-family:'Public Sans',sans-serif;font-size:12.5px;font-weight:600;color:var(--thread);cursor:pointer;-webkit-appearance:none;appearance:none}
+.lp-matrix-toggle-btn:hover{text-decoration:underline}
+.lp-matrix-section{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)}
+.lp-matrix-divisi-pills{margin-bottom:14px}
+.lp-matrix-empty{font-size:13px;color:var(--ink-soft)}
+.lp-matrix-wrap{overflow-x:auto}
+.lp-matrix{border-collapse:collapse;width:100%;font-size:12px;margin-bottom:4px}
+.lp-matrix th,.lp-matrix td{border:1px solid var(--line);padding:8px 10px;text-align:center;white-space:nowrap}
+.lp-matrix thead th{background:var(--paper-2);font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.02em;color:var(--ink-soft);font-weight:600}
+.lp-matrix tbody th{background:var(--paper-2);text-align:left;font-size:12px;font-weight:700;color:var(--ink)}
+.lp-matrix-out{font-weight:700;font-family:'IBM Plex Mono',monospace;font-size:12px}
+.lp-matrix-persen{font-size:10px;margin-top:2px;font-weight:600}
+.lp-matrix-cell-good{background:#E3EFE6;color:#2C6B3F}
+.lp-matrix-cell-medium{background:#FCF3E3;color:#8A5D1F}
+.lp-matrix-cell-low{background:#FDECEA;color:#8f2c22}
+.lp-matrix-cell-notarget{background:var(--white);color:var(--ink-soft)}
+.lp-matrix-cell-empty{background:var(--paper);color:var(--line)}
+@media (max-width:760px){
+  .lp-matrix{font-size:11px}
+  .lp-matrix th,.lp-matrix td{padding:6px 8px}
+}
+
+.lp-section-title{font-family:'Archivo',sans-serif;font-weight:800;font-size:18px;margin:40px 0 16px;padding-top:24px;border-top:1px solid var(--line)}
+.lp-section-title.first{margin-top:0;padding-top:0;border-top:none}
+
+.lp-panel-frame{
+  position:relative;
+  background:var(--paper-2);
+  border:1px solid var(--line);
+  border-radius:14px;
+  box-shadow:inset 0 2px 6px rgba(20,33,61,.06), 0 1px 2px rgba(20,33,61,.04);
+  overflow:hidden;
+}
+.lp-panel-frame::before,
+.lp-panel-frame::after{
+  content:"";
+  position:absolute;
+  left:0;right:0;
+  height:26px;
+  pointer-events:none;
+  z-index:2;
+}
+.lp-panel-frame::before{
+  top:0;
+  background:linear-gradient(to bottom, #EFECE4 0%, rgba(239,236,228,0) 100%);
+}
+.lp-panel-frame::after{
+  bottom:0;
+  background:linear-gradient(to top, #EFECE4 0%, rgba(239,236,228,0) 100%);
+}
+.lp-panel-scroll{
+  height:820px;
+  overflow-y:auto;
+  padding:16px 10px 16px 16px;
+}
+.lp-panel-scroll::-webkit-scrollbar{width:6px}
+.lp-panel-scroll::-webkit-scrollbar-track{background:transparent}
+.lp-panel-scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+.lp-order-frame{margin-bottom:8px}
+.lp-order-panel{max-height:860px}
+
+@media (max-width:900px){
+  .lp-panel-scroll{height:620px;overflow-y:auto;padding:14px 8px 14px 14px}
+  .lp-order-panel{height:680px}
+  .lp-section-title{margin:24px 0 12px;padding-top:16px;font-size:16px}
+  .lp-order-card{padding:16px}
+  .lp-invoice-card,.lp-shipment-card{padding:14px 16px}
+}
+
+.lp-invoice-card{border:1px solid var(--line);background:var(--white);border-radius:12px;padding:18px 20px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;box-shadow:0 1px 3px rgba(20,33,61,.05),0 2px 8px rgba(20,33,61,.04)}
+.lp-invoice-code{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft)}
+.lp-invoice-order{font-size:13px;color:var(--ink-soft);margin-top:2px}
+.lp-invoice-amount{font-weight:700;font-size:16px;text-align:right}
+.lp-invoice-outstanding{font-size:12px;margin-top:2px;text-align:right}
+.lp-cetak-link{display:inline-block;margin-top:8px;font-size:11.5px;font-weight:600;color:var(--thread)}
+.lp-cetak-link:hover{text-decoration:underline}
+
+.lp-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.02em}
+.lp-badge-lunas{background:#E3EFE6;color:#2C6B3F}
+.lp-badge-belum{background:#FDECEA;color:#8f2c22}
+.lp-badge-dp{background:#FCF3E3;color:#8A5D1F}
+.lp-badge-batal{background:var(--paper-2);color:var(--ink-soft)}
+
+.lp-shipment-card{border:1px solid var(--line);background:var(--white);border-radius:12px;padding:16px 20px;margin-bottom:12px;box-shadow:0 1px 3px rgba(20,33,61,.05),0 2px 8px rgba(20,33,61,.04)}
+.lp-shipment-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:6px}
+.lp-shipment-code{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--thread)}
+.lp-shipment-tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 9px;border-radius:20px;background:var(--paper-2);color:var(--ink-soft)}
+.lp-shipment-meta{font-size:13px;color:var(--ink-soft)}
+.lp-shipment-meta b{color:var(--ink)}
+
+.nav-links{margin-right:200px}
+/* Anti "APPA REL": item flex secara bawaan BOLEH menyusut (flex-shrink:1), dan
+   kalau ruangnya sempit teksnya dibungkus di tengah kata. Gejalanya kelihatan di
+   lebar 760-1100px -- di bawah 760px nav-links disembunyikan & tombol hamburger
+   yang ambil alih, jadi zona sempit itu yang selama ini nggak ketangani.
+   Logo dikunci nggak menyusut, semua teks nav dilarang membungkus. Diperbaiki di
+   CSS GLOBAL karena .logo & .nav-links dipakai 10 nav di SEMUA cabang, bukan cuma
+   homepage -- Portal Klien & Dashboard kena gejala yang sama. */
+.logo{white-space:nowrap;flex:none}
+.nav-links{white-space:nowrap;min-width:0}
+.nav-links a{white-space:nowrap}
+@media (max-width:1100px){
+  /* Rapatkan sedikit di lebar tanggung, biar muat tanpa perlu mengecilkan font
+     sampai nggak kebaca. Ruang buat .nav-cta yang position:absolute tetap dijaga. */
+  .nav-links{gap:15px;font-size:12.5px;margin-right:172px}
+}
+.nav-right{display:flex;align-items:center;gap:14px}
+.nav-toggle{
+  display:none;flex-direction:column;justify-content:center;align-items:center;gap:5px;
+  position:absolute;right:15px;top:50%;transform:translateY(-50%);
+  width:28px;height:28px;background:none;border:none;cursor:pointer;padding:0;margin:0;flex-shrink:0;
+  -webkit-appearance:none;appearance:none;line-height:0;font:inherit;
+}
+.nav-toggle span{width:22px;height:2px;background:var(--ink);display:block;transition:transform .15s,opacity .15s;flex-shrink:0}
+.nav-toggle[aria-expanded="true"] span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+.nav-toggle[aria-expanded="true"] span:nth-child(2){opacity:0}
+.nav-toggle[aria-expanded="true"] span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+.mobile-menu{
+  display:none;flex-direction:column;background:var(--white);
+  border-bottom:1px solid var(--line);padding:6px 24px 22px;
+}
+.mobile-menu.open{display:flex}
+.mobile-menu a{
+  padding:13px 0;font-size:15px;font-weight:500;border-top:1px solid var(--line);color:var(--ink-soft);
+}
+.mobile-menu a:first-child{border-top:none}
+.mobile-menu .mobile-cta{
+  margin-top:14px;text-align:center;background:var(--ink);color:var(--white);
+  border:none;padding:14px;font-weight:600;border-radius:2px;
+}
+@media (max-width:760px){
+  .nav-links{display:none}
+  .nav-cta:not(#lp-nav-logout):not(#db-nav-logout){display:none}
+  .nav-toggle{display:flex}
+  #lp-nav-logout,#db-nav-logout{padding:0 14px;font-size:13px;height:34px}
+  .nav-actions{gap:8px}
+  .nav-icon-btn{width:34px;height:34px}
+}
+
+/* ---------- hero ---------- */
+.hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
+.hero-grid{
+  position:absolute;inset:0;
+  background-image:
+    linear-gradient(var(--line) 1px,transparent 1px),
+    linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:56px 56px;
+  opacity:.45;
+  mask-image:linear-gradient(to bottom,black 60%,transparent);
+  -webkit-mask-image:linear-gradient(to bottom,black 60%,transparent);
+}
+.hero-inner{
+  position:relative;display:grid;grid-template-columns:1.1fr .9fr;gap:48px;
+  align-items:center;padding-top:84px;padding-bottom:96px;
+}
+.hero h1{
+  font-weight:900;font-size:clamp(38px,5.2vw,60px);
+  line-height:1.05;letter-spacing:-.025em;margin-bottom:22px;
+}
+.hero h1 em{font-style:normal;color:var(--thread)}
+.hero p.lead{font-size:18px;color:var(--ink-soft);max-width:52ch;margin-bottom:34px}
+.hero-ctas{display:flex;gap:14px;flex-wrap:wrap}
+.btn{
+  display:inline-flex;align-items:center;gap:10px;
+  padding:15px 26px;font-weight:600;font-size:15px;border-radius:2px;
+  border:1.5px solid var(--ink);transition:all .15s;
+}
+.btn-solid{background:var(--ink);color:var(--white)}
+.btn-solid:hover{background:var(--thread);border-color:var(--thread)}
+.btn-line{background:transparent;color:var(--ink)}
+.btn-line:hover{border-color:var(--thread);color:var(--thread)}
+
+.hero-art{position:relative}
+.hero-art svg{width:100%;height:auto}
+.hero-note{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);
+  letter-spacing:.08em;margin-top:10px;text-align:right;
+}
+
+/* ---------- stats ---------- */
+.stats{background:var(--ink);color:var(--paper)}
+.stats-inner{display:grid;grid-template-columns:repeat(4,1fr)}
+.stat{padding:30px 24px;border-left:1px solid rgba(247,245,240,.15)}
+.stat:first-child{border-left:none}
+.stat .num{font-family:'Archivo',sans-serif;font-weight:800;font-size:34px;line-height:1}
+.stat .num sup{font-size:18px;color:var(--thread)}
+.stat .lbl{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;opacity:.7;margin-top:8px}
+
+/* ---------- section base ---------- */
+section{padding:88px 0}
+.sec-head{max-width:640px;margin-bottom:52px}
+.sec-head h2{font-weight:800;font-size:clamp(28px,3.6vw,40px);letter-spacing:-.02em;line-height:1.12;margin-bottom:14px}
+.sec-head p{color:var(--ink-soft);font-size:16.5px}
+
+/* ---------- tentang ---------- */
+.tentang-inner{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:start}
+.tentang-text p{color:var(--ink-soft);font-size:16px;margin-bottom:18px}
+.tentang-text p b{color:var(--ink)}
+.pull-note{
+  border-left:3px solid var(--thread);
+  background:var(--white);
+  padding:20px 24px;
+  margin:26px 0;
+  font-size:16px;
+  font-weight:600;
+  letter-spacing:-.005em;
+}
+.fakta{list-style:none;border:1px solid var(--line);background:var(--white);border-radius:3px}
+.fakta li{display:flex;gap:16px;padding:17px 22px;border-top:1px solid var(--line);align-items:baseline}
+.fakta li:first-child{border-top:none}
+.fakta .k{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--thread);width:130px;flex-shrink:0}
+.fakta .v{font-size:14.5px}
+
+/* ---------- perjalanan (timeline) ---------- */
+.perjalanan-wrap{background:var(--paper-2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.timeline{border-top:1px solid var(--ink)}
+.tl-item{
+  display:grid;grid-template-columns:1fr;gap:14px;
+  padding:30px 0;border-bottom:1px solid var(--line);
+}
+@media (min-width:860px){
+  .tl-item{grid-template-columns:110px 200px 1fr;gap:32px;align-items:baseline;padding:38px 0}
+}
+.tl-item .tl-year{font-family:'Archivo',sans-serif;font-weight:900;font-size:clamp(26px,3.4vw,34px);color:var(--thread);line-height:1}
+.tl-item .tl-tag{
+  display:inline-block;font-family:'IBM Plex Mono',monospace;
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);
+  margin-bottom:6px;
+}
+.tl-item h4{font-size:19px;font-weight:700;margin-bottom:6px}
+.tl-item p{font-size:14.5px;color:var(--ink-soft);max-width:480px}
+.tl-item.is-now{background:var(--white);border:1px solid var(--line);border-bottom:1px solid var(--line);padding:30px 22px;margin-top:6px}
+@media (min-width:860px){.tl-item.is-now{padding:34px 26px}}
+.tl-item.is-now .tl-year{color:var(--ink)}
+
+/* ---------- layanan ---------- */
+.layanan-wrap{background:var(--paper-2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.svc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:26px}
+.svc{
+  background:var(--white);border:1px solid var(--line);border-radius:3px;padding:32px 28px;
+  position:relative;overflow:hidden;
+}
+.svc::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;background:var(--ink)}
+.svc.hl::before{background:var(--thread)}
+.svc .kode{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;color:var(--ink-soft);display:block;margin-bottom:14px}
+.svc h3{font-weight:800;font-size:20px;margin-bottom:10px;letter-spacing:-.01em}
+.svc>p{color:var(--ink-soft);font-size:14.5px;margin-bottom:18px}
+.svc ul{list-style:none}
+.svc li{padding:9px 0;border-top:1px dashed var(--line);font-size:13.5px;color:var(--ink-soft)}
+.svc li::before{content:"— ";color:var(--thread)}
+
+/* ---------- segmen klien ---------- */
+.segmen-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:26px}
+.seg{border:1px solid var(--line);background:var(--white);border-radius:3px;padding:28px 26px}
+.seg .kode{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.12em;color:var(--thread);display:block;margin-bottom:12px}
+.seg h4{font-family:'Archivo',sans-serif;font-weight:700;font-size:17px;margin-bottom:8px}
+.seg p{font-size:14px;color:var(--ink-soft)}
+
+/* ---------- proses ---------- */
+.steps{display:grid;grid-template-columns:repeat(8,1fr);gap:0;border:1px solid var(--line);background:var(--white);border-radius:3px;overflow:hidden}
+.step{padding:24px 18px;border-left:1px solid var(--line)}
+.step:first-child{border-left:none}
+.step .no{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--thread);letter-spacing:.1em;margin-bottom:10px}
+.step h4{font-family:'Archivo',sans-serif;font-weight:700;font-size:14.5px;margin-bottom:6px}
+.step p{font-size:12.5px;color:var(--ink-soft);line-height:1.5}
+.proses-note{
+  display:flex;align-items:center;gap:10px;margin-top:22px;
+  font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.06em;color:var(--ink-soft);
+}
+.proses-note .dot{width:8px;height:8px;border-radius:50%;background:var(--thread);flex-shrink:0}
+
+/* ---------- portofolio ---------- */
+.porto-wrap section{padding-top:0}
+.porto-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:22px}
+.porto{border:1px solid var(--line);background:var(--white);border-radius:3px;overflow:hidden}
+.porto-img{padding:26px;display:flex;align-items:center;justify-content:center;background:var(--paper-2);border-bottom:1px solid var(--line)}
+.porto-img svg{width:70px;height:auto}
+.porto-body{padding:20px 20px 24px}
+.porto-body .cat{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--thread);margin-bottom:8px}
+.porto-body h4{font-size:15.5px;font-weight:700;margin-bottom:6px}
+.porto-body p{font-size:13px;color:var(--ink-soft)}
+.porto-note{
+  margin-top:20px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;
+  color:var(--ink-soft);border:1px dashed var(--line);padding:14px 18px;border-radius:3px;
+}
+
+/* ---------- marker ---------- */
+.marker-sec{background:var(--paper-2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.marker-inner{display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center}
+.marker-spec{list-style:none;margin:22px 0 28px}
+.marker-spec li{padding:10px 0;border-top:1px dashed var(--line);font-size:14.5px;color:var(--ink-soft)}
+.marker-spec li .m{font-family:'IBM Plex Mono',monospace;color:var(--ink);font-weight:600}
+.marker-art{position:relative}
+.marker-art svg{width:100%;height:auto}
+
+/* ---------- keunggulan ---------- */
+.why-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:26px}
+.why-item .kode{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;color:var(--thread);display:block;margin-bottom:12px}
+.why-item h4{font-size:16.5px;font-weight:700;margin-bottom:8px;line-height:1.3}
+.why-item p{font-size:13.5px;color:var(--ink-soft)}
+
+/* ---------- testimoni ---------- */
+.testi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:26px}
+.testi{background:var(--white);border:1px solid var(--line);border-radius:3px;padding:28px 26px}
+.quote-mark{font-family:'Archivo',sans-serif;font-size:34px;color:var(--thread);line-height:1;margin-bottom:10px}
+.testi p{font-size:14.5px;color:var(--ink-soft);margin-bottom:18px}
+.testi .who b{display:block;font-size:14px}
+.testi .who span{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.1em;color:var(--ink-soft)}
+
+/* ---------- kontak ---------- */
+.kontak{background:var(--ink);color:var(--paper)}
+.kontak .eyebrow{color:var(--thread)}
+.kontak h2{color:var(--paper)}
+.kontak p{color:rgba(247,245,240,.72)}
+.kontak-inner{display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center}
+.wa-btn{
+  display:inline-flex;align-items:center;gap:10px;margin-top:26px;
+  background:var(--thread);color:var(--white);padding:16px 28px;
+  font-weight:700;font-size:15px;border-radius:2px;transition:background .15s;
+}
+.wa-btn:hover{background:#8f2c22}
+.kontak-info{list-style:none}
+.kontak-info li{display:flex;justify-content:space-between;gap:16px;padding:16px 0;border-top:1px solid rgba(247,245,240,.15)}
+.kontak-info li:first-child{border-top:none}
+.kontak-info .k{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;opacity:.6}
+.kontak-info .v{font-size:14.5px;text-align:right}
+
+/* ---------- footer ---------- */
+footer{padding:28px 0;background:var(--ink)}
+.foot-inner{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;color:rgba(247,245,240,.6)}
+.foot-inner .logo{color:var(--paper);font-size:15px}
+.foot-inner .mono{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em}
+
+@media (max-width:900px){
+  .hero-inner,.tentang-inner,.marker-inner,.kontak-inner{grid-template-columns:1fr}
+  .marker-art{order:-1}
+  .stats-inner{grid-template-columns:repeat(2,1fr)}
+  .stat:nth-child(3){border-left:none}
+  .svc-grid,.segmen-grid,.why-grid,.testi-grid{grid-template-columns:1fr}
+  .porto-grid{grid-template-columns:repeat(2,1fr)}
+  .steps{grid-template-columns:1fr;}
+  .step{border-left:none;border-top:1px solid var(--line)}
+  .step:first-child{border-top:none}
+  .tl-item{grid-template-columns:1fr}
+}
+@media (max-width:480px){
+  .container{padding:0 18px}
+  .nav-actions{right:18px}
+  .porto-grid{grid-template-columns:1fr}
+  .hero-note{text-align:left}
+  .stats-inner{grid-template-columns:1fr 1fr}
+  .stat{padding:22px 18px}
+}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto !important}}
+
+/* ===== Thumbnail lampiran (Foto Desain / File Lainnya) =====
+   SENGAJA di CSS global (sebelum <b:if>) biar 1 salinan kepake di SEMUA branch --
+   Order Masuk (dashboard), Orderan (tracking + tab Detail Klien). Ingat: branch
+   <b:if> itu CSS-nya terisolasi, kalau ditaruh di dalam branch harus diduplikasi. */
+.rjd-thumb-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.rjd-thumb{display:inline-block;text-decoration:none;line-height:0}
+.rjd-thumb img{display:block;width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line);background:var(--paper-2);transition:border-color .15s}
+.rjd-thumb:hover img{border-color:var(--thread)}
+/* Fallback: kalau gambar gagal load (file bukan gambar / izin Drive berubah),
+   img disembunyiin & teks link ini yang muncul -- balik ke perilaku lama, nggak rusak. */
+.rjd-thumb-fallback{display:none;font-size:11px;color:var(--thread);font-weight:600;white-space:nowrap;line-height:1.4}
+.rjd-thumb-teks{font-size:11px;color:var(--thread);font-weight:600;white-space:nowrap;line-height:1.4}
+
+/* ===== HOMEPAGE "KINETIC" -- peningkatan tampilan halaman depan =====
+   SEMUA aturan di bawah SENGAJA diberi prefix `.hp` (wrapper cuma dipasang di
+   cabang homepage). Alasannya: blok CSS ini GLOBAL, kepake SEMUA cabang <b:if> --
+   kalau selectornya polos (mis. `h2{...}`), Portal Klien & Dashboard ikut berubah.
+   Dengan cakupan begini, halaman sistem sama sekali nggak kesentuh.
+
+   Palet SENGAJA tetap warna RJD (krem/navy/merah bata), BUKAN oranye brutalis dari
+   template aslinya -- biar homepage tetap satu keluarga sama portal, dashboard, dan
+   dokumen invoice/surat jalan yang dicetak (itu benda fisik yang sampai ke klien).
+   Yang diadopsi STRUKTUR & RITMENYA: tipografi display besar-rapat, label mono
+   bergaris, sudut tajam, seksi gelap sebagai jeda, animasi muncul saat scroll. */
+
+/* Bar progres scroll -- garis tipis paling atas, isinya ngikutin posisi baca */
+.hp .kontak-cta{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+/* Link email di daftar kontak -- diwarnai aksen & digarisbawahi tipis biar
+   kelihatan bisa diklik, tapi nggak mencolok sampai ngalahin CTA utama. */
+.hp .kontak-info a{color:var(--thread);text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
+.hp .kontak-info a:hover{text-decoration-thickness:2px}
+.hp-progress{position:fixed;top:0;left:0;right:0;height:2px;background:rgba(20,33,61,.08);z-index:200}
+.hp-progress span{display:block;height:100%;width:0;background:var(--thread);transition:width .1s linear}
+
+/* Tipografi display: lebih besar & lebih rapat, khas "blueprint" */
+.hp h1,.hp h2{font-family:'Space Grotesk','Archivo',sans-serif}
+.hp h1{letter-spacing:-.035em;line-height:.94}
+.hp h2{font-weight:700;letter-spacing:-.03em;line-height:1.02}
+.hp .sec-head{max-width:760px;margin-bottom:64px}
+.hp .sec-head h2{font-size:clamp(30px,4.4vw,52px)}
+
+/* Label mono -- dikasih garis penanda di depan + tracking lebih lebar */
+.hp .eyebrow{letter-spacing:.22em;font-size:11px;margin-bottom:18px}
+.hp .eyebrow::before{content:"";width:28px;height:1px;background:var(--thread);flex:0 0 auto}
+
+/* Sudut tajam & ruang napas lebih lega */
+.hp section{padding:112px 0}
+.hp .card,.hp .porto-item,.hp .why-item,.hp .layanan-card,.hp .stat{border-radius:0}
+
+/* Seksi gelap -- JEDA visual, bukan dominan */
+.hp .hp-dark{background:var(--ink);color:var(--paper)}
+.hp .hp-dark h2,.hp .hp-dark h3{color:var(--paper)}
+.hp .hp-dark p,.hp .hp-dark .v{color:rgba(247,245,240,.78)}
+.hp .hp-dark .eyebrow{color:#E8A49C}
+.hp .hp-dark .eyebrow::before{background:#E8A49C}
+.hp .hp-dark .k{color:rgba(247,245,240,.55)}
+.hp .hp-dark li{border-color:rgba(247,245,240,.16)}
+
+/* Muncul saat scroll -- halus, sekali jalan. Otomatis mati kalau pengguna
+   nyetel "kurangi gerak" di sistemnya (aksesibilitas). */
+.hp .reveal{opacity:0;transform:translateY(18px);transition:opacity .6s ease,transform .6s ease}
+.hp .reveal.tampil{opacity:1;transform:none}
+@media (prefers-reduced-motion: reduce){
+  .hp .reveal{opacity:1;transform:none;transition:none}
+  .hp-progress span{transition:none}
+}
+
+@media (max-width:760px){
+  .hp section{padding:72px 0}
+  .hp .sec-head{margin-bottom:44px}
+}
+
+
+
+/* ============ KERANGKA HALAMAN INTERNAL (latar + header sticky) ============
+   Dipakai bersama oleh dashboard.html dan order-list.html. Ditaruh GLOBAL
+   (sebelum rantai b:if) supaya CUMA ADA 1 SALINAN -- kalau ditaruh di dalam
+   cabang, tiap halaman baru harus menduplikasinya. */
+.db-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.db-bg-gradient {
+  position: absolute; inset: -20%;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(189,67,53,.06) 0%, transparent 35%),
+    radial-gradient(circle at 85% 75%, rgba(23,33,52,.05) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(200,150,74,.04) 0%, transparent 45%);
+  animation: dbMeshShift 20s ease-in-out infinite alternate;
+}
+@keyframes dbMeshShift {
+  0%   { transform: translate(0,0) scale(1); }
+  50%  { transform: translate(-2%,3%) scale(1.04); }
+  100% { transform: translate(2%,-2%) scale(1.02); }
+}
+.db-float { position: absolute; border-radius: 24px; opacity: 0.05; animation: dbFloatY 16s ease-in-out infinite; }
+.db-float.f1 { width: 160px; height: 160px; background: var(--terra); top: 10%; left: 5%;  --rot: 15deg;  transform: rotate(15deg); }
+.db-float.f2 { width: 100px; height: 100px; background: var(--navy);  top: 65%; left: 8%;  --rot: -20deg; transform: rotate(-20deg); border-radius: 50%; animation-delay: -4s; }
+.db-float.f3 { width: 200px; height: 200px; background: var(--gold);  top: 12%; right: 6%; --rot: 8deg;   transform: rotate(8deg);  border-radius: 32px; animation-delay: -7s; }
+.db-float.f4 { width: 80px;  height: 80px;  background: var(--terra); bottom: 15%; right: 12%; --rot: 25deg; transform: rotate(25deg); border-radius: 50%; animation-delay: -10s; }
+@keyframes dbFloatY {
+  0%, 100% { transform: translateY(0) rotate(var(--rot, 0deg)); }
+  50% { transform: translateY(-25px) rotate(var(--rot, 0deg)); }
+}
+
+/* ============ HEADER STICKY ============
+   TINGGI DIKUNCI 68px, TIDAK BOLEH DIUBAH tanpa mengubah dua baris di bawah
+   ini juga, yang ada di blok style dashboard lama:
+       #db-section-tabs { position: sticky; top: 68px; }
+       #lp-section-tabs { position: sticky; top: 120px; }
+   Angka 68 di situ dulu diturunkan dari .nav-inner{height:68px} milik nav
+   fixed lama. Dengan mengunci tinggi header baru di angka yang sama, dua
+   aturan itu tetap benar tanpa perlu diedit sama sekali. */
+.db-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  height: 68px;
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  /* Latar SOLID, beda dari halaman tracking yang transparan. Alasannya:
+     dashboard itu halaman padat data yang discroll panjang. Header transparan
+     akan membuat angka dan tabel terlihat menembus di balik logo dan tombol.
+     Kalau lebih suka yang transparan seperti tracking, hapus dua baris
+     background dan border:bottom di bawah ini. */
+  background: rgba(249,247,242,.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+  /* fill-mode WAJIB backwards, JANGAN both. Kalau both, transform nempel
+     permanen setelah animasi selesai dan mematikan position:sticky, termasuk
+     sticky milik #db-section-tabs. */
+  animation: dbSlideDown 0.5s ease-out backwards;
+}
+@keyframes dbSlideDown {
+  from { opacity: 0; transform: translateY(-16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.db-header .logo {
+  font-family: 'Archivo', sans-serif; font-weight: 900; font-size: 18px;
+  letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px;
+  text-decoration: none;
+}
+.db-header .logo .navy  { color: var(--navy); }
+.db-header .logo .terra { color: var(--terra); margin-left: 4px; }
+.db-header .logo .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--terra); animation: dbPulse 2s ease-in-out infinite;
+}
+@keyframes dbPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(189,67,53,.4); }
+  50% { opacity: 0.5; box-shadow: 0 0 0 5px rgba(189,67,53,0); }
+}
+
+/* Prefiks unik. JANGAN pakai nav-actions, nav-cta, atau nav-icon-btn:
+   ketiganya sudah dipakai CSS global sistem lama DENGAN position:absolute. */
+.db-nav-actions {
+  display: flex; align-items: center; gap: 8px;
+  /* Reset per PROPERTI, bukan per blok. Aturan global position:absolute tidak
+     otomatis batal cuma karena selektor lokal lebih spesifik. */
+  position: static; right: auto; top: auto; transform: none;
+}
+.db-nav-icon-btn {
+  position: static; right: auto; top: auto; transform: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 9999px;
+  border: 1px solid var(--line); background: rgba(255,255,255,.6);
+  color: var(--ink-soft); cursor: pointer; transition: all .2s;
+}
+.db-nav-icon-btn:hover { color: var(--navy); border-color: rgba(23,33,52,.15); background: var(--white); }
+.db-nav-icon-btn svg { width: 16px; height: 16px; }
+.db-nav-cta {
+  position: static; right: auto; top: auto; transform: none;
+  font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600;
+  color: var(--white); background: var(--navy); border: none;
+  padding: 8px 16px; border-radius: 9999px; cursor: pointer; transition: opacity .2s;
+}
+.db-nav-cta:hover { opacity: .85; }
+@keyframes dbSpin { to { transform: rotate(360deg); } }
+/* DEPENDENSI PENTING. JS memanggil icon.classList.add("spinning") pada
+   #db-refresh-icon. Aturan yang membuat kelas itu berputar ada di CSS GLOBAL
+   sebagai .nav-icon-btn svg.spinning. Karena tombolnya sekarang berkelas
+   .db-nav-icon-btn, selektor global itu TIDAK KENA LAGI, dan ikon refresh
+   akan diam saat data dimuat ulang. Aturan di bawah ini yang menggantikannya.
+   Keyframes nav-icon-spin tetap dipakai dari CSS global. */
+.db-nav-icon-btn svg.spinning { animation: nav-icon-spin .7s linear infinite; }
+.db-nav-icon-btn:disabled { opacity: .55; cursor: default; }

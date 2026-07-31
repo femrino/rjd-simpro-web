@@ -1,0 +1,1158 @@
+/* ============================================================
+ * SIMPRO -- simpro-dashboard.css
+ * ============================================================
+ * Diekstrak dari template Blogger. Urutan aturan DIPERTAHANKAN persis
+ * seperti di template, karena cascade CSS bergantung pada urutan.
+ *
+ * DIMUAT DI : dashboard
+ * ============================================================ */
+
+/* ============ REDESIGN DASHBOARD : TAHAP 1 (kerangka) ============
+   Cakupan tahap ini SENGAJA dibatasi: token warna, latar beranimasi, header
+   sticky, kartu login/loading/error, dan footer. Komponen isi (chart, tab,
+   kartu perhatian, tabel kontrol data) BELUM disentuh : itu tahap 2 dan 3.
+   Blok <style> dashboard yang lama ada SETELAH blok ini, jadi kalau ada
+   properti yang bentrok, aturan lama yang menang. Ini disengaja supaya
+   komponen yang sudah teruji tidak berubah perilakunya di tahap ini. */
+
+:root {
+  --cream: #F9F7F2;      --cream-deep: #F0EBE0;   --white: #FFFFFF;
+  --navy: #172134;       --navy-deep: #0F1623;    --navy-soft: #2A3754;
+  --ink: #172134;        --ink-soft: #6B7280;
+  --terra: #BD4335;      --terra-deep: #9E3528;   --terra-light: #D97A6E;
+  --thread: #BD4335;
+  --gold: #C8964A;       --emerald: #2D8A5F;      --sky: #3B7BBF;  --amber: #D9941E;
+  --line: #E5E0D6;       --line-soft: #EFEAE0;
+  /* paper dan paper:2 dipetakan ke cream supaya komponen lama yang masih
+     memakai token itu ikut berubah nada warnanya tanpa perlu diedit satu:satu.
+     PENTING: #db-section-tabs memakai background:var(::paper) sebagai latar
+     buram saat sticky, jadi token ini WAJIB tetap warna solid, bukan
+     transparent. */
+  --paper: #F9F7F2;      --paper-2: #F0EBE0;
+  --shadow-lg: 0 20px 60px rgba(15,22,35,.14);
+  --shadow-md: 0 8px 24px rgba(15,22,35,.08);
+  --shadow-sm: 0 2px 8px rgba(15,22,35,.05);
+}
+
+body {
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  background: var(--cream);
+  color: var(--navy);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+
+  /* WAJIB untuk tiap cabang yang pindah dari nav{position:fixed} ke header
+     sticky. CSS global punya body{padding-top:68px} sebagai ganjal tinggi nav
+     fixed lama. Kalau nav fixed dilepas tapi padding ini tidak dinolkan,
+     muncul ruang kosong mati 68px di atas header. */
+  padding-top: 0;
+}
+
+/* ============ LATAR BERANIMASI ============ */
+/* CSS latar beranimasi + header sticky DIPINDAH ke CSS GLOBAL (sebelum
+   rantai b:if) supaya halaman order-list.html memakai salinan yang SAMA.
+   <b:if> mengisolasi CSS, jadi menaruhnya di sini berarti harus diduplikasi
+   tiap kali ada halaman baru yang memakai kerangka yang sama. */
+
+/* ============ KERANGKA KONTEN ============
+   PENTING: #db-app SENGAJA TIDAK diberi animation apa pun. Elemen ini adalah
+   induk dari #db-section-tabs yang position:sticky. Selama animasi berjalan,
+   transform pada induk membuat containing block baru dan sticky keturunannya
+   mati sementara. Animasi masuk cukup dipasang di kartu login dan di hero,
+   yang tidak punya keturunan sticky. */
+#db-hero, #db-app { position: relative; z-index: 1; }
+#db-hero { animation: dbFadeUp 0.6s ease-out backwards; }
+@keyframes dbFadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============ KARTU LOGIN, LOADING, ERROR ============ */
+#db-login-box {
+  text-align: center; max-width: 440px; margin: 32px auto 0;
+  padding: 48px 32px;
+  background: var(--white); border: 1px solid var(--line);
+  border-radius: 20px; box-shadow: var(--shadow-lg);
+  animation: dbCardEntrance 0.7s cubic-bezier(.34,1.56,.64,1) backwards;
+}
+@keyframes dbCardEntrance {
+  from { opacity: 0; transform: scale(0.92) translateY(30px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.db-login-icon {
+  width: 52px; height: 52px; margin: 0 auto 18px; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--cream-deep); color: var(--terra);
+  animation: dbIconFloat 3s ease-in-out infinite;
+}
+@keyframes dbIconFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.db-login-icon svg { width: 24px; height: 24px; }
+.db-login-title { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 19px; color: var(--navy); margin-bottom: 6px; }
+.db-login-sub { font-size: 13px; color: var(--ink-soft); margin-bottom: 22px; }
+
+#db-loading { text-align: center; padding: 60px 0; }
+.db-spinner {
+  width: 30px; height: 30px; margin: 0 auto 14px;
+  border: 2.5px solid var(--line); border-top-color: var(--terra);
+  border-radius: 50%; animation: dbSpin 0.8s linear infinite;
+}
+.db-loading-text {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft);
+}
+
+#db-error {
+  max-width: 520px; margin: 32px auto 0;
+  text-align: center; padding: 28px 24px;
+  background: #FDECEA; border: 1px solid #E8A49C; border-radius: 16px;
+  color: #8F2C22; font-size: 14px; line-height: 1.6;
+  animation: dbShake 0.4s ease-out;
+}
+@keyframes dbShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+/* ============ FOOTER ============ */
+.db-footer {
+  position: relative; z-index: 1; text-align: center; padding: 24px;
+  font-size: 12px; font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  color: var(--ink-soft);
+}
+.db-footer .ft-logo { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13px; color: var(--navy); margin-bottom: 4px; }
+.db-footer .ft-logo .terra { color: var(--terra); margin-left: 4px; }
+
+/* ============ RESPONSIF ============ */
+@media (max-width: 600px) {
+  /* height TETAP 68px, cuma padding sisinya yang mengecil. Tinggi tidak boleh
+     berubah karena offset sticky #db-section-tabs mengunci ke angka itu. */
+  .db-header { padding: 0 18px; }
+  .db-nav-cta { padding: 7px 13px; font-size: 12px; }
+  #db-login-box { padding: 36px 22px; }
+}
+
+.db-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.db-kontrol-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.db-kontrol-filter-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
+.db-detail-filter-row{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-bottom:20px}
+.db-omset-filter-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px}
+.db-card-btn{cursor:pointer;transition:box-shadow .15s;border-bottom:3px solid transparent!important;box-sizing:border-box}
+.db-card-btn:hover{box-shadow:0 0 0 1px var(--ink-soft) inset}
+.db-card-btn.active{border-bottom:3px solid var(--ink)!important}
+.db-stat-card{border-radius:12px;padding:18px 20px}
+.db-stat-clickable{cursor:pointer;transition:box-shadow .15s}
+.db-stat-clickable:hover{box-shadow:0 0 0 1px var(--ink-soft) inset}
+#db-urgent-strip{margin-top:14px;background:#FDECEA;border:1px solid #E8A49C;border-radius:14px;padding:14px 16px}
+.db-urgent-head{font-size:12.5px;font-weight:700;color:#8f2c22;margin-bottom:10px}
+.db-urgent-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.db-urgent-cell{background:var(--white);border:1px solid #E8A49C;border-radius:10px;padding:10px 12px;cursor:pointer;transition:box-shadow .15s}
+.db-urgent-cell:hover{box-shadow:0 0 0 1px #8f2c22 inset}
+.db-urgent-kode{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--thread);word-break:break-word}
+.db-urgent-hari{font-size:15px;font-weight:800;color:#8f2c22;margin:3px 0 1px}
+.db-urgent-tahap{font-size:10.5px;color:var(--ink-soft)}
+@media (max-width:760px){.db-urgent-grid{grid-template-columns:1fr}}
+#db-concentration-alert{margin-top:12px;background:#FCF3E3;border:1px solid #EBCFA0;border-radius:12px;padding:12px 16px;cursor:pointer;transition:box-shadow .15s;display:flex;align-items:center;gap:12px}
+#db-concentration-alert:hover{box-shadow:0 0 0 1px #8A5D1F inset}
+.db-conc-icon{flex:0 0 auto;font-size:16px;line-height:1;color:#8A5D1F}
+.db-conc-text{flex:1 1 auto;font-size:12.5px;color:#8A5D1F;line-height:1.45}
+.db-conc-text b{font-weight:800}
+.db-conc-cta{flex:0 0 auto;font-size:11.5px;font-weight:700;color:#8A5D1F;white-space:nowrap}
+.db-stat-num{font-size:24px;font-weight:800;line-height:1.15}
+.db-stat-label{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.03em;margin-top:4px}
+/* Titik warna kecil di kartu bucket Aging Piutang (adopsi prioritas 2 dari
+   mockup redesign): penanda visual bucket sekali-lihat, melengkapi warna latar.
+   Cuma di kartu bucket -- kartu "SEMUA BELUM LUNAS" sengaja tanpa dot krn netral. */
+.db-aging-label-row{display:flex;align-items:center;gap:6px}
+.db-aging-label-row .db-stat-label{margin-top:0}
+.db-aging-dot{width:8px;height:8px;border-radius:9999px;flex-shrink:0}
+.db-chart-frame{background:var(--paper-2);border:1px solid var(--line);border-radius:14px;padding:20px 16px;display:flex;align-items:flex-end;gap:10px;height:170px}
+.db-chart-col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
+.db-chart-bar{width:100%;background:var(--ink);border-radius:4px 4px 0 0;min-height:3px;box-sizing:border-box}
+.db-chart-num{font-size:11px;font-weight:700;color:var(--ink)}
+.db-chart-label{font-size:9px;color:var(--ink-soft);text-align:center;line-height:1.25;min-height:24px;display:flex;align-items:flex-end;justify-content:center}
+.db-tahap-layout{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
+/* align-items:start -> tiap kolom setinggi isinya sendiri. Kolom KIRI (chart+
+   insight+ringkasan) jadi acuan tinggi. Kolom KANAN (daftar order) tingginya
+   DISAMAKAN ke kiri lewat JS (dbSyncTahapHeight), lalu panel-scroll di dalamnya
+   overflow-y:auto -- jadi kalau ordernya banyak, yang scroll cuma daftarnya,
+   batas atas & bawah kedua kolom tetap sejajar. Kalau ordernya sedikit, panel
+   kanan keisi ruang kosong (dengan gradien) sampai batas bawah ketemu kiri. */
+.db-tahap-kiri{display:flex;flex-direction:column}
+.db-tahap-kanan{display:flex;flex-direction:column;min-height:0}
+/* Ringkasan ditaruh di BAWAH insight kolom kiri (atas permintaan Femri) supaya
+   ngisi ruang kosong yang dulu ada di bawah chart. */
+#db-tahap-ringkas-slot{margin-top:14px}
+/* Kartu ringkasan panel kanan chart tahap (adopsi prioritas 1 mockup redesign):
+   dibuka dengan agregat + bar kontribusi %, baru daftar order di bawahnya. */
+.db-tahap-ringkas{background:var(--white);border:1px solid var(--line);border-left-width:4px;border-radius:12px;padding:16px 18px;box-shadow:var(--shadow-sm);animation:dbCardIn .4s ease-out backwards}
+.db-tahap-ringkas-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.db-tahap-ringkas-dot{width:9px;height:9px;border-radius:9999px;flex-shrink:0}
+.db-tahap-ringkas-nama{font-family:'Archivo',sans-serif;font-weight:800;font-size:14px;letter-spacing:-.01em}
+.db-tahap-ringkas-angka{font-family:'Archivo',sans-serif;font-weight:900;font-size:34px;line-height:1;color:var(--navy);letter-spacing:-.02em}
+.db-tahap-ringkas-sub{font-size:12px;color:var(--ink-soft);margin-top:3px}
+.db-tahap-ringkas-konten{margin-top:14px;padding-top:14px;border-top:1px solid var(--line-soft)}
+.db-tahap-ringkas-konten-lbl{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px}
+.db-tahap-ringkas-konten-pct{font-family:'Archivo',sans-serif;font-weight:800;font-size:22px;color:var(--navy);line-height:1}
+.db-tahap-ringkas-track{width:100%;height:7px;border-radius:9999px;background:var(--line-soft);overflow:hidden;margin-top:8px}
+.db-tahap-ringkas-fill{height:100%;border-radius:9999px;transition:width .5s cubic-bezier(.22,1,.36,1)}
+@media (max-width:760px){
+  .db-stat-grid{grid-template-columns:1fr 1fr}
+  .db-kontrol-grid{grid-template-columns:1fr}
+  .db-kontrol-filter-row select{font-size:11.5px;padding:8px 4px}
+  .db-detail-filter-row select{font-size:11.5px;padding:8px 4px}
+  .db-omset-filter-row select{font-size:11.5px;padding:8px 4px}
+  .db-chart-label{font-size:8px}
+  .db-chart-frame{gap:4px;padding:16px 8px}
+  .db-kontrol-col{display:none}
+  .db-kontrol-col.active{display:block}
+  .db-tahap-layout{display:block}
+}
+.db-attention-card{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:11px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.db-attention-badge{font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap}
+.db-attention-badge.terlambat{background:#FDECEA;color:#8f2c22}
+.db-attention-badge.menunggu_pengiriman{background:#E3EFE6;color:#2C6B3F}
+.db-attention-badge.menunggu_invoice{background:#FCF3E3;color:#8A5D1F}
+.db-attention-badge.menunggu_pelunasan{background:#FDECEA;color:#8f2c22}
+.db-attention-badge.belum_lunas_baru{background:#EFECE4;color:#3D4A63}
+.db-client-table{background:var(--white);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.db-kinerja-muted{opacity:.6}
+.db-omset-understate{opacity:.6}
+.db-perhatian-domain{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-soft);margin:16px 0 8px}
+.db-perhatian-domain:first-child{margin-top:2px}
+.db-perhatian-domain span{font-weight:400;letter-spacing:0;text-transform:none}
+.db-kinerja-subhead{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-soft);margin:20px 0 8px}
+.db-kinerja-subhead span{font-weight:400;letter-spacing:0;text-transform:none}
+.db-client-row{display:grid;grid-template-columns:2fr 1fr 1fr;padding:11px 16px;font-size:12.5px;color:var(--ink);border-top:1px solid var(--line)}
+/* Lencana peringkat Kinerja Tim (adopsi prioritas 5 mockup): bulatan bernomor,
+   emas/perak/perunggu untuk 3 besar, abu untuk sisanya. */
+.db-kinerja-nama{display:flex;align-items:flex-start;gap:9px}
+.db-rank-badge{flex-shrink:0;width:22px;height:22px;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;font-family:'Archivo',sans-serif;font-weight:800;font-size:11px;margin-top:1px}
+.db-rank-gold{background:#F4E4BC;color:#8A6D1F;box-shadow:inset 0 0 0 1px #E3C67E}
+.db-rank-silver{background:#E4E7EB;color:#5A6472;box-shadow:inset 0 0 0 1px #C6CCD4}
+.db-rank-bronze{background:#EAD5C4;color:#8A5A38;box-shadow:inset 0 0 0 1px #D4B396}
+.db-rank-plain{background:var(--paper-2);color:var(--ink-soft);box-shadow:inset 0 0 0 1px var(--line)}
+.db-client-row:first-child{border-top:none}
+.db-client-head{display:grid;grid-template-columns:2fr 1fr 1fr;background:var(--paper-2);padding:9px 16px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-soft);letter-spacing:.03em}
+.db-panel-frame{
+  position:relative;
+  background:var(--paper-2);
+  border:1px solid var(--line);
+  border-radius:14px;
+  box-shadow:inset 0 2px 6px rgba(20,33,61,.06), 0 1px 2px rgba(20,33,61,.04);
+  overflow:hidden;
+}
+.db-panel-frame::before,
+.db-panel-frame::after{
+  content:"";
+  position:absolute;
+  left:0;right:0;
+  height:26px;
+  pointer-events:none;
+  z-index:2;
+}
+.db-panel-frame::before{
+  top:0;
+  background:linear-gradient(to bottom, #F0EBE0 0%, rgba(240,235,224,0) 100%);
+}
+.db-panel-frame::after{
+  bottom:0;
+  background:linear-gradient(to top, #F0EBE0 0%, rgba(240,235,224,0) 100%);
+}
+.db-panel-scroll{
+  height:400px;
+  overflow-y:auto;
+  padding:16px 10px 16px 16px;
+}
+.db-panel-scroll::-webkit-scrollbar{width:6px}
+.db-panel-scroll::-webkit-scrollbar-track{background:transparent}
+.db-panel-scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+.lp-section-tabs{display:flex;gap:4px;margin:24px 0 20px;border-bottom:1.5px solid var(--line);overflow-x:auto}
+/* top digeser dari 68px (nilai Portal Klien) -- di Dashboard, #lp-section-tabs
+   (sub-tab Detail Klien) ada DI BAWAH #db-section-tabs (tab utama Dashboard) yang
+   JUGA sticky di top:68px -- kalau dibiarkan sama, dua-duanya numpuk. z-index
+   sedikit lebih rendah biar tab utama Dashboard tetap di lapisan atas kalau overlap. */
+#lp-section-tabs{position:sticky;top:120px;background:var(--paper);z-index:9}
+/* Sticky khusus buat tab UTAMA Dashboard (#db-section-tabs) -- di-scope pakai ID
+   biar nggak ikut nyeret sub-tab Detail Klien (yang class-nya beda, .lp-detail-tab,
+   jadi sebenarnya nggak akan match rule ini) atau tab di halaman Tracking. top:68px
+   nyamain tinggi nav bar yang fixed di atas, biar nempel pas di bawahnya, bukan ketiban. */
+#db-section-tabs{position:sticky;top:68px;background:var(--paper);z-index:10}
+.db-tab-badge{display:inline-flex;align-items:center;justify-content:center;min-width:19px;height:19px;padding:0 5px;margin-left:6px;border-radius:10px;background:var(--thread);color:var(--white);font-size:10.5px;font-weight:700;font-family:'IBM Plex Mono',monospace;vertical-align:middle}
+
+.dbep-baru th,.dbep-baru td{background:#EAF4EC}
+.dbep-kunci{font-size:13px;opacity:.55;cursor:help}
+.lp-section-tab{-webkit-appearance:none;appearance:none;-webkit-tap-highlight-color:transparent;flex:1;min-width:max-content;padding:12px 16px;margin:0;background:none;outline:none;border:0;border-bottom:3px solid transparent;border-radius:0;font-family:'Archivo',sans-serif;font-weight:700;font-size:14px;color:var(--ink-soft);cursor:pointer;transition:all .15s;white-space:nowrap}
+.lp-section-tab.active{color:var(--ink);border-bottom-color:var(--thread)}
+.lp-section-tab:hover:not(.active){color:var(--thread)}
+.lp-section-panel{margin-top:8px}
+.lp-toggle-row{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.lp-toggle{padding:8px 16px;border:1px solid var(--line);border-radius:20px;background:var(--white);font-size:12.5px;font-weight:600;color:var(--ink-soft);cursor:pointer;transition:all .15s}
+.lp-toggle.active{background:var(--ink);border-color:var(--ink);color:var(--white)}
+.lp-toggle:hover:not(.active){border-color:var(--thread);color:var(--thread)}
+
+.lp-profil-card{max-width:520px}
+.lp-profil-label{display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink-soft);margin-bottom:16px}
+.lp-profil-label input,.lp-profil-label textarea{font-family:'Public Sans',sans-serif;font-size:14px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);width:100%;box-sizing:border-box}
+.lp-profil-label input:disabled{background:var(--paper-2);color:var(--ink-soft)}
+.lp-profil-tambah-email{background:none;border:none;color:var(--thread);font-weight:600;font-size:12.5px;cursor:pointer;padding:0;margin:-10px 0 16px;font-family:inherit}
+.lp-profil-tambah-email:hover{text-decoration:underline}
+.lp-orderan-card{background:var(--white);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:14px}
+.lp-orderan-item{border-top:1px dashed var(--line);padding:10px 0;font-size:12.5px}
+.db-perhatian-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
+.db-perhatian-card-grid .db-stat-card{padding:12px 14px;min-width:0}
+.db-perhatian-card-grid .db-stat-num{font-size:20px}
+.db-perhatian-card-grid .db-stat-label{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.db-perhatian-card-grid::-webkit-scrollbar{height:4px}
+.db-perhatian-card-grid::-webkit-scrollbar-track{background:transparent}
+.db-perhatian-card-grid::-webkit-scrollbar-thumb{background:var(--line);border-radius:2px}
+.lp-invoice-summary{background:var(--paper-2);border:1px solid var(--line);border-radius:14px;padding:14px 18px;margin-top:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.om-group-card{background:var(--white);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:10px}
+.om-group-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;cursor:pointer}
+.om-group-nama{font-weight:700;font-size:14px}
+.om-group-meta{font-size:11.5px;color:var(--ink-soft);margin-top:2px}
+.om-status-badge{font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap}
+.om-status-pending{background:#FCF3E3;color:#8A5D1F}
+.om-status-menunggu-verifikasi{background:#E6ECF5;color:#1F3A66}
+.om-status-disetujui{background:#E3EFE6;color:#2C6B3F}
+.om-status-ditolak{background:#FDECEA;color:#8f2c22}
+.om-detail{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);display:none}
+.om-item-row{background:var(--paper-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;max-width:100%;overflow:hidden}
+.om-item-fields{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:10px}
+.om-item-fields input{width:100%;min-width:0;box-sizing:border-box;font-size:12.5px;padding:7px 8px;border:1px solid var(--line);border-radius:6px;background:var(--white)}
+.om-item-harga-row{display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-bottom:10px;align-items:center}
+.om-item-harga-row input{width:100%;min-width:0;box-sizing:border-box;font-size:12.5px;padding:7px 8px;border:1px solid var(--line);border-radius:6px;background:var(--white)}
+.om-size-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:6px;margin-bottom:8px}
+.om-size-grid label{display:flex;flex-direction:column;align-items:center;font-size:9.5px;color:var(--ink-soft);gap:2px;min-width:0}
+.om-size-grid input{width:100%;min-width:0;box-sizing:border-box;text-align:center;font-size:12px;padding:5px 2px;border:1px solid var(--line);border-radius:5px;background:var(--white)}
+.om-btn{font-size:11.5px;font-weight:700;padding:7px 14px;border-radius:20px;border:1px solid var(--line);background:var(--white);cursor:pointer;font-family:inherit}
+.om-btn-primary{background:var(--ink);color:var(--white);border-color:var(--ink)}
+.om-btn-danger{color:#8f2c22;border-color:#E8A49C}
+.om-btn-success{color:#2C6B3F;border-color:#B7D6BE}
+.om-action-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.om-verify-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.om-verify-fields input{width:100%;min-width:0;box-sizing:border-box;font-size:12.5px;padding:8px 10px;border:1px solid var(--line);border-radius:6px}
+@media (max-width:760px){
+  .lp-section-tab{padding:10px 12px;font-size:13px}
+  .db-perhatian-card-grid{grid-auto-flow:column;grid-auto-columns:minmax(120px,1fr);grid-template-columns:none;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px}
+  .om-item-fields{grid-template-columns:1fr 1fr}
+}
+@media (max-width:480px){
+  .om-item-fields{grid-template-columns:1fr}
+  .om-item-harga-row{grid-template-columns:1fr}
+  .om-verify-fields{grid-template-columns:1fr}
+}
+
+/* ============ REDESIGN DASHBOARD : TAHAP 2 (komponen isi) ============
+   Blok ini SENGAJA ditaruh SESUDAH blok style dashboard lama, supaya aturan
+   di sini yang menang saat ada properti yang sama. Kebalikan dari blok tahap 1
+   yang ditaruh sebelumnya.
+
+   BATASAN KERAS yang TIDAK BOLEH dilanggar di blok ini, karena angkanya
+   dihitung manual di dalam JS dan JS tidak boleh disentuh:
+
+   1. .db-chart-frame  : height 170px, padding 20px 16px, border 1px
+      .db-chart-label  : min-height 24px
+      .db-chart-col    : gap 6px
+      JS memakai batas tinggi batang 90px yang diturunkan dari angka:angka itu
+      (170 dikurangi padding 40 dikurangi border 2 dikurangi gap 6 dikurangi
+      label 24, sisa sekitar 98). Mengubah salah satunya membuat batang
+      meluber keluar frame. Blok ini HANYA mengubah warna, sudut, dan bayangan.
+
+   2. .db-stat-card, .db-chart-bar, .db-urgent-cell dan kawan:kawan menerima
+      background dan border lewat style INLINE dari JS (warna status merah,
+      kuning, hijau). Inline selalu menang atas stylesheet, jadi jangan coba
+      menimpa warna di sini kecuali dengan important, dan itu justru akan
+      merusak penandaan status. Yang diubah di sini cuma properti yang TIDAK
+      diisi JS. */
+
+/* ---------- kartu statistik ---------- */
+.db-stat-card {
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
+  transition: transform .18s ease, box-shadow .18s ease;
+  animation: dbCardIn 0.4s ease-out backwards;
+}
+@keyframes dbCardIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.db-stat-grid > *:nth-child(1) { animation-delay: 0.00s; }
+.db-stat-grid > *:nth-child(2) { animation-delay: 0.05s; }
+.db-stat-grid > *:nth-child(3) { animation-delay: 0.10s; }
+.db-stat-grid > *:nth-child(4) { animation-delay: 0.15s; }
+.db-stat-grid > *:nth-child(n+5) { animation-delay: 0.20s; }
+.db-stat-clickable:hover, .db-card-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.db-stat-num {
+  font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+  font-size: 25px; font-weight: 900; letter-spacing: -0.02em; line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.db-stat-label { letter-spacing: .06em; text-transform: uppercase; opacity: .9; margin-top: 5px; }
+.db-card-btn.active { border-bottom: 3px solid var(--terra) !important; }
+
+/* ---------- zona aksi cepat dan alarm konsentrasi ---------- */
+#db-urgent-strip { border-radius: 16px; padding: 15px 17px; box-shadow: var(--shadow-sm); }
+.db-urgent-head { font-family: 'Archivo', sans-serif; font-weight: 800; letter-spacing: -0.01em; }
+.db-urgent-cell { border-radius: 12px; transition: transform .18s ease, box-shadow .18s ease; }
+.db-urgent-cell:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.db-urgent-hari { font-family: 'Archivo', sans-serif; font-weight: 900; font-size: 16px; }
+#db-concentration-alert { border-radius: 14px; padding: 13px 17px; transition: transform .18s ease, box-shadow .18s ease; }
+#db-concentration-alert:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+
+/* ---------- chart distribusi tahap produksi ----------
+   Cuma warna, sudut, dan bayangan. Geometri TIDAK disentuh. */
+.db-chart-frame {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.db-chart-bar {
+  border-radius: 6px 6px 0 0;
+  transition: filter .18s ease;
+  transform-origin: bottom center;
+  animation: dbBarGrow 0.5s cubic-bezier(.22,1,.36,1) backwards;
+}
+@keyframes dbBarGrow {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+.db-chart-col:nth-child(1) .db-chart-bar { animation-delay: 0.00s; }
+.db-chart-col:nth-child(2) .db-chart-bar { animation-delay: 0.05s; }
+.db-chart-col:nth-child(3) .db-chart-bar { animation-delay: 0.10s; }
+.db-chart-col:nth-child(4) .db-chart-bar { animation-delay: 0.15s; }
+.db-chart-col:nth-child(5) .db-chart-bar { animation-delay: 0.20s; }
+.db-chart-col:nth-child(6) .db-chart-bar { animation-delay: 0.25s; }
+.db-chart-col:nth-child(7) .db-chart-bar { animation-delay: 0.30s; }
+.db-chart-col:nth-child(n+8) .db-chart-bar { animation-delay: 0.35s; }
+.db-chart-col { cursor: pointer; }
+.db-chart-col:hover .db-chart-bar { filter: brightness(0.94); }
+.db-chart-num { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 11.5px; }
+.db-chart-label { color: var(--ink-soft); }
+
+/* ---------- panel bergulir ----------
+   Gradien pudar atas dan bawah dulu memakai #EFECE4 hardcode, yaitu nilai
+   paper:2 yang LAMA. Sejak token diseragamkan, paper:2 jadi #F0EBE0, sehingga
+   gradien lama meninggalkan garis sambungan yang kelihatan. Ditulis ulang di
+   sini memakai nilai yang baru.
+   Catatan: memang harus hardcode, bukan var(), karena gradien butuh versi
+   transparan dari warna yang sama dan rgba tidak bisa diturunkan dari
+   custom property hex tanpa color:mix. */
+.db-panel-frame { border-radius: 16px; }
+.db-panel-frame::before { background: linear-gradient(to bottom, #F0EBE0 0%, rgba(240,235,224,0) 100%); }
+.db-panel-frame::after  { background: linear-gradient(to top,    #F0EBE0 0%, rgba(240,235,224,0) 100%); }
+.db-panel-scroll::-webkit-scrollbar-thumb { background: #D8D2C4; border-radius: 3px; }
+.db-panel-scroll::-webkit-scrollbar-thumb:hover { background: var(--ink-soft); }
+
+/* ---------- kartu perlu perhatian ---------- */
+.db-attention-card {
+  border-radius: 12px;
+  padding: 12px 16px;
+  box-shadow: var(--shadow-sm);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  animation: dbCardIn 0.35s ease-out backwards;
+}
+.db-attention-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--terra-light);
+}
+#db-perhatian-list .db-attention-card:nth-child(1) { animation-delay: 0.00s; }
+#db-perhatian-list .db-attention-card:nth-child(2) { animation-delay: 0.04s; }
+#db-perhatian-list .db-attention-card:nth-child(3) { animation-delay: 0.08s; }
+#db-perhatian-list .db-attention-card:nth-child(4) { animation-delay: 0.12s; }
+#db-perhatian-list .db-attention-card:nth-child(5) { animation-delay: 0.16s; }
+#db-perhatian-list .db-attention-card:nth-child(6) { animation-delay: 0.20s; }
+#db-perhatian-list .db-attention-card:nth-child(7) { animation-delay: 0.24s; }
+#db-perhatian-list .db-attention-card:nth-child(n+8) { animation-delay: 0.28s; }
+.db-attention-badge { letter-spacing: .03em; padding: 4px 11px; }
+.db-perhatian-domain, .db-kinerja-subhead { letter-spacing: .08em; color: var(--ink-soft); }
+
+/* ---------- tabel klien ---------- */
+.db-client-table { border-radius: 14px; box-shadow: var(--shadow-sm); }
+.db-client-head { background: var(--cream-deep); letter-spacing: .06em; text-transform: uppercase; }
+.db-client-row { transition: background .15s; }
+.db-client-row:hover { background: var(--cream); }
+
+/* ---------- tab utama ----------
+   background TIDAK boleh transparan: tab ini sticky dan menutupi konten yang
+   lewat di belakangnya. Diberi sedikit ruang atas dan bawah supaya tidak
+   menempel mepet ke header. */
+#db-section-tabs {
+  background: var(--cream);
+  padding-top: 6px;
+  border-bottom: 1.5px solid var(--line);
+}
+#lp-section-tabs { background: var(--cream); }
+.lp-section-tab.active { color: var(--navy); border-bottom-color: var(--terra); }
+.lp-section-tab:hover:not(.active) { color: var(--terra); }
+.db-tab-badge { background: var(--terra); font-family: 'Archivo', sans-serif; font-weight: 800; }
+.lp-toggle { border-radius: 9999px; transition: all .18s ease; }
+.lp-toggle.active { background: var(--navy); border-color: var(--navy); }
+.lp-toggle:hover:not(.active) { border-color: var(--terra); color: var(--terra); }
+
+/* ---------- judul bagian ---------- */
+.lp-section-title { font-family: 'Archivo', sans-serif; font-weight: 900; letter-spacing: -0.02em; color: var(--navy); }
+
+@media (max-width: 760px) {
+  .db-stat-card { padding: 13px 14px; }
+  .db-stat-num { font-size: 21px; }
+}
+
+/* ============ REDESIGN DASHBOARD : TAHAP 3 (Detail Klien) ============
+   Detail Klien memakai kelas berprefiks lp: (.lp-detail-tab, .lp-detail-panel,
+   .lp-panel-frame, .lp-panel-scroll, .lp-order-frame, .lp-order-panel).
+   Kelas:kelas itu didefinisikan di CSS GLOBAL dengan gaya versi lama, dan
+   cabang tracking sudah punya versi redesign-nya sendiri. Tapi cabang Dashboard
+   TIDAK ikut kebagian versi redesign tracking : tiap cabang <b:if> itu terisolasi
+   penuh, jadi definisi harus DIDUPLIKASI di sini. Ini pelajaran nomor 1 di
+   handover. Tanpa blok ini, sub-tab Detail Klien tampil dengan gaya lama sendirian
+   di tengah dashboard yang sudah baru.
+
+   Blok ini ditaruh SESUDAH style lama, jadi menang saat properti bentrok.
+
+   Yang TIDAK disentuh: offset sticky #lp-section-tabs (top:120px) dan #db-section-tabs
+   (top:68px) sudah benar dari tahap 1 dan tidak boleh diubah di sini. */
+
+/* ---------- sub-tab Detail Klien ---------- */
+.lp-detail-tab {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-bottom: 3px solid transparent;
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  color: var(--ink-soft);
+  transition: all .18s ease;
+}
+.lp-detail-tab:hover:not(.active) {
+  color: var(--terra);
+  border-color: var(--terra-light);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+.lp-detail-tab.active {
+  color: var(--navy);
+  border-bottom: 3px solid var(--terra);
+  box-shadow: var(--shadow-md);
+}
+
+/* ---------- panel Detail Klien : animasi masuk ---------- */
+.lp-detail-panel { animation: dbPanelIn 0.4s ease-out; }
+@keyframes dbPanelIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- frame bergulir Detail Klien ----------
+   Samakan dengan .db-panel-frame: sudut 16px dan gradien pudar memakai nilai
+   paper:2 yang BARU (#F0EBE0). Versi global lama memakai #EFECE4 (paper:2 lama),
+   yang sekarang meninggalkan garis sambungan. */
+.lp-panel-frame { border-radius: 16px; }
+.lp-panel-frame::before { background: linear-gradient(to bottom, #F0EBE0 0%, rgba(240,235,224,0) 100%); }
+.lp-panel-frame::after  { background: linear-gradient(to top,    #F0EBE0 0%, rgba(240,235,224,0) 100%); }
+.lp-panel-scroll::-webkit-scrollbar-thumb { background: #D8D2C4; border-radius: 3px; }
+.lp-panel-scroll::-webkit-scrollbar-thumb:hover { background: var(--ink-soft); }
+
+/* ---------- baris item Detail Klien : muncul bertahap ----------
+   Ditargetkan lewat struktur (anak langsung .lp-panel-scroll), bukan kelas
+   yang harus ditambah JS, supaya kena ke isi yang dirender JS. */
+.lp-panel-scroll > * { animation: dbItemIn 0.35s ease-out backwards; }
+@keyframes dbItemIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.lp-panel-scroll > *:nth-child(1) { animation-delay: 0.00s; }
+.lp-panel-scroll > *:nth-child(2) { animation-delay: 0.05s; }
+.lp-panel-scroll > *:nth-child(3) { animation-delay: 0.10s; }
+.lp-panel-scroll > *:nth-child(4) { animation-delay: 0.15s; }
+.lp-panel-scroll > *:nth-child(5) { animation-delay: 0.20s; }
+.lp-panel-scroll > *:nth-child(n+6) { animation-delay: 0.25s; }
+
+/* ---------- kartu isi Detail Klien ---------- */
+.lp-orderan-card { border-radius: 12px; box-shadow: var(--shadow-sm); transition: transform .18s ease, box-shadow .18s ease; }
+.lp-orderan-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.lp-invoice-summary { border-radius: 14px; }
+.om-group-card { border-radius: 12px; box-shadow: var(--shadow-sm); transition: transform .18s ease, box-shadow .18s ease; }
+/* ============ CSS MODAL & KOMPONEN FORM (SALINAN dari cabang tracking) ============
+   WAJIB diduplikasi ke sini: <b:if> mengisolasi CSS antar cabang, jadi kelas yang
+   didefinisikan di cabang tracking TIDAK berlaku di dashboard walaupun JS-nya
+   sudah global. Tanpa blok ini, Modal Proofing tampil tanpa gaya sama sekali dan
+   jatuh di bawah footer (bukan melayang) -- karena .lp-edit-overlay nggak dikenal.
+   Isinya SALINAN PERSIS, bukan tulis ulang, biar nggak beda sendiri suatu saat. */
+
+
+/* ============ KOMPONEN FORM ORDER di dalam modal Edit ============
+   JS-nya sudah global, TAPI CSS tetap harus DIDUPLIKASI ke cabang ini --
+   <b:if> mengisolasi CSS, bukan JS (pelajaran lama). Nilai disamakan persis
+   dengan cabang order biar tampilannya identik. */
+.of-item-card { background: var(--white); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; margin-bottom: 14px; position: relative; box-shadow: var(--shadow-sm); }
+.of-item-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.of-item-head b { font-size: 12.5px; font-family: 'IBM Plex Mono', monospace; letter-spacing: .04em; color: var(--terra); }
+.of-item-remove { background: none; border: none; color: var(--ink-soft); cursor: pointer; font-size: 17px; line-height: 1; padding: 2px 6px; border-radius: 6px; transition: all .15s; }
+.of-item-remove:hover { color: #8f2c22; background: #FDECEA; }
+.of-item-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.of-item-card label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+.of-item-card input, .of-item-card select, .of-item-card textarea {
+  font-family: 'Inter', sans-serif; font-size: 13.5px; padding: 9px 11px;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--cream);
+  color: var(--navy); width: 100%; box-sizing: border-box; transition: border-color .18s ease, box-shadow .18s ease;
+}
+.of-item-card input:focus, .of-item-card select:focus, .of-item-card textarea:focus {
+  outline: none; border-color: var(--terra); box-shadow: 0 0 0 3px rgba(189,67,53,.10); background: var(--white);
+}
+.of-item-card textarea { resize: vertical; font-weight: 400; }
+.of-size-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 7px; margin-top: 8px; }
+.of-size-cell { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.of-size-cell span { font-size: 10px; font-family: 'IBM Plex Mono', monospace; color: var(--ink-soft); }
+.of-size-cell input { text-align: center; padding: 7px 3px; }
+/* ---- TABEL MATRIKS Warna x Size (form order / edit / proofing) ----
+   Menggantikan blok kartu per warna. 1 ITEM dengan 8 warna dulu = 8 kartu
+   tinggi berulang; sekarang 8 baris tabel. Catatan & foto per warna TETAP ADA
+   (data model tidak berubah) tapi disembunyikan di baris detail yang dibuka
+   lewat tombol pensil -- karena dari data nyata keduanya jarang diisi.
+   CSS ini WAJIB ada di SETIAP cabang <b:if> yang memakai form (b:if
+   mengisolasi CSS) -- disalin, jangan ditulis ulang. */
+.of-matrix-wrap{overflow-x:auto;margin-top:16px}
+.of-matrix{width:100%;border-collapse:collapse;font-size:13px}
+.of-matrix th{background:transparent;border:none;border-bottom:1.5px solid var(--line);padding:4px 6px 9px;font-size:10.5px;font-family:'IBM Plex Mono',monospace;color:var(--ink-soft);font-weight:700;text-align:center;white-space:nowrap}
+.of-matrix th.of-th-warna{text-align:left;min-width:168px}
+.of-matrix td{border:none;border-bottom:1px solid var(--line-soft);padding:5px 4px;vertical-align:middle;background:transparent}
+.of-matrix tbody tr:last-child td{border-bottom:none}
+/* tbody dipakai sebagai pembungkus 1 warna -- netralkan gaya kartu lama
+   (.of-warna-blok) yang dirancang untuk <div>, sisakan garis penanda kiri. */
+.of-matrix tbody.of-warna-blok{background:transparent;border:none;border-left:3px solid var(--terra-light);border-radius:0;padding:0}
+.of-matrix .of-td-warna input,.of-matrix .of-td-size input,.of-matrix .of-td-harga input{width:100%;margin:0;padding:7px 6px}
+.of-matrix .of-td-size input{text-align:center;min-width:56px}
+.of-matrix th.of-th-size{white-space:nowrap}
+.of-matrix .of-td-harga input{min-width:88px;text-align:right}
+.of-matrix .of-td-total{text-align:center;font-weight:800;background:var(--cream);min-width:44px}
+.of-matrix .of-td-aksi{white-space:nowrap;text-align:center;width:1%}
+.of-matrix .of-warna-remove{background:none;border:1px solid var(--line-soft);border-radius:6px;width:26px;height:26px;padding:0;margin:0;cursor:pointer;color:var(--ink-soft);font-size:11px;line-height:1}
+/* ---- Kolom Bahan (per warna) ---- */
+/* Judul kain boleh MEMBUNGKUS dua baris & kolomnya dipersempit -- judul
+   panjang seperti "Tulle Ginza MTX 634" dulu memaksa kolom selebar judulnya,
+   dan 4 kolom kain sekaligus mendorong kolom size sampai terpotong. */
+.of-matrix th.of-th-kain{text-align:left;min-width:86px;max-width:112px;white-space:normal;line-height:1.25;word-break:break-word}
+.of-matrix .of-td-kain input{width:100%;margin:0;padding:7px 7px;min-width:86px}
+.of-komposisi-wrap{margin-top:14px;padding:12px 14px;background:var(--cream);border-radius:10px}
+/* ---- Komposisi Kain & Size Chart: TABEL, sebahasa dengan tabel Warna x Size ----
+   Sebelumnya keduanya memakai layout bertumpuk (nama di satu baris, kotak
+   per-size di baris kedua, tombol hapus di baris ketiga). Tinggi, dan kolom
+   size-nya tidak sejajar dengan tabel warna -- padahal isinya berkaitan. */
+.of-kmp-tabel,.of-sc-tabel{margin-top:2px}
+.of-matrix th.of-th-kmp-kons{min-width:78px}
+.of-matrix th.of-th-kmp-satuan{min-width:72px}
+.of-matrix .of-td-kmp-nama input,.of-matrix .of-td-sc-nama input{width:100%;margin:0;padding:7px 9px;min-width:168px}
+.of-matrix .of-td-kmp-kons input{width:100%;margin:0;padding:7px 6px;text-align:center;min-width:72px}
+.of-matrix .of-td-kmp-satuan select{width:100%;margin:0;padding:7px 4px;min-width:68px;font-size:12px}
+.of-matrix .of-td-kmp-sz input,.of-matrix .of-td-sc-nilai input{width:100%;margin:0;padding:7px 4px;text-align:center;min-width:48px}
+/* ---- Kontras: isian PUTIH di atas latar tabel yang lebih redup ----
+   Sebelumnya input berlatar krem di atas panel krem -- batas antara "tempat
+   yang bisa diisi" dan "hiasan tabel" nyaris tidak terlihat. */
+.of-matrix input,.of-matrix select{background:var(--white);border:1px solid var(--line-soft);border-radius:7px}
+.of-matrix input:focus,.of-matrix select:focus{border-color:var(--thread);outline:none;box-shadow:0 0 0 2px rgba(178,58,42,.10)}
+.of-matrix input::placeholder{color:var(--ink-soft);opacity:.5}
+/* ---- Pemilih ukuran: preset (pintasan) + centang per size ---- */
+.of-size-pilih{margin-bottom:4px}
+.of-size-preset{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+.of-size-preset-btn{border:1px solid var(--line);background:var(--white);color:var(--ink);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.of-size-preset-btn:hover{border-color:var(--thread);color:var(--thread)}
+.of-size-preset-btn.aktif{background:var(--ink);color:var(--white);border-color:var(--ink)}
+.of-size-cek{display:flex;flex-wrap:wrap;gap:6px}
+.of-size-cek-item{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line-soft);border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;background:var(--white);margin:0}
+.of-size-cek-item input{margin:0;width:auto;cursor:pointer}
+.of-size-cek-item:has(input:checked){border-color:var(--thread);background:var(--paper-2);color:var(--thread)}
+.of-size-mode-angka{font-size:12px;color:var(--ink-soft);background:var(--cream);border-radius:8px;padding:8px 12px}
+.of-size-kembali{background:none;border:none;color:var(--thread);font-weight:700;cursor:pointer;text-decoration:underline;font-family:inherit;font-size:12px;padding:0}
+.of-pilihartikel-wrap{margin-top:14px;padding:10px 14px;background:var(--cream);border-radius:10px}
+.of-pilihartikel-wrap select{width:100%;margin-top:4px}
+.of-pilihartikel-status{font-size:11px;color:var(--thread);margin-top:5px;font-weight:600}
+.of-komposisi-lbl{font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:8px}
+.of-komposisi-hint{font-size:11px;color:var(--ink-soft);margin-top:6px}
+.of-aks-wrap{margin-top:14px;padding:12px 14px;background:var(--cream);border-radius:10px}
+/* Baris Aksesoris & Kain Dari Klien pakai FLEX-WRAP, bukan grid kolom tetap.
+   Grid kolom tetap (1fr 90px 70px 140px 1fr 30px) butuh ~500px; di dalam
+   .of-field-grid yang 2 kolom, wadahnya cuma separuh lebar -- akibatnya kolom
+   1fr (nama kain & keterangan) tergencet sampai nyaris nol lebar dan tidak
+   bisa diketik. Dengan flex-wrap, isian yang tidak muat turun ke baris
+   berikutnya alih-alih menyusut. */
+/* Kain Dari Klien tetap FLEX-WRAP: dia hidup di dalam .of-field-grid yang
+   2 kolom, jadi tabel kolom-tetap akan tergencet. Aksesoris kini tabel karena
+   posisinya selebar panel dan bersebelahan dengan Komposisi & Size Chart. */
+.of-kaink-baris{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--line-soft)}
+.of-kaink-baris:last-of-type{border-bottom:none}
+.of-kaink-baris input,.of-kaink-baris select{margin:0;padding:7px 8px;min-width:0}
+.of-f-kk-nama{flex:1 1 150px}
+.of-f-kk-jml{flex:0 1 88px}
+.of-f-kk-satuan{flex:0 1 66px}
+.of-f-kk-tgl{flex:0 1 140px}
+.of-f-kk-ket{flex:1 1 150px}
+.of-kaink-baris .of-jadwal-hapus{flex:0 0 28px}
+.of-matrix th.of-th-aks-ket{text-align:left;min-width:150px}
+.of-matrix .of-td-aks-ket input{width:100%;margin:0;padding:7px 9px;min-width:150px}
+/* Panel tabel warna: label & jarak sama dengan panel lain, tapi tanpa latar
+   supaya tabel utama tetap terasa sebagai pusat perhatian. */
+.of-warna-wrap{background:transparent;border:1px dashed var(--line-soft)}
+/* ---- Tombol sembunyikan kolom kain ---- */
+.of-warna-lbl-baris{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.of-toggle-kain{background:none;border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:11.5px;font-weight:600;color:var(--ink-soft);cursor:pointer;font-family:inherit;white-space:nowrap}
+.of-toggle-kain:hover{border-color:var(--thread);color:var(--thread)}
+/* Disembunyikan lewat CSS supaya nilainya TETAP ADA di DOM & tetap tersimpan. */
+.of-matrix.of-sembunyi-kain .of-th-kain,.of-matrix.of-sembunyi-kain .of-td-kain{display:none}
+/* Blok berulang ini SELALU selebar penuh, walau induknya grid 2 kolom. */
+.of-jadwal-wrap,.of-aks-wrap,.of-komposisi-wrap{grid-column:1/-1}
+/* ---- Jadwal Kirim Bertahap ---- */
+.of-jadwal-wrap{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line-soft)}
+.of-jadwal-lbl{font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:8px}
+.of-hint-akhir{font-size:11px;font-weight:400;color:var(--ink-soft)}
+.of-jadwal-baris{display:grid;grid-template-columns:150px 84px 1fr 30px;gap:8px;align-items:center;margin-bottom:8px}
+.of-jadwal-baris input{margin:0;padding:7px 8px}
+.of-jadwal-hapus{background:none;border:1px solid var(--line-soft);border-radius:6px;width:28px;height:28px;padding:0;cursor:pointer;color:var(--ink-soft);font-size:11px;line-height:1}
+.of-jadwal-add{width:100%;background:none;border:1px dashed var(--line);border-radius:10px;padding:9px;font-size:12.5px;font-weight:600;color:var(--thread);cursor:pointer;font-family:inherit}
+@media (max-width:640px){
+  .of-jadwal-baris{grid-template-columns:1fr 1fr;gap:6px}
+  .of-jadwal-baris .of-f-jadwal-ket{grid-column:1/-1}
+}
+
+/* ---- Foto tersimpan: bisa dihapus satuan, upload baru MENAMBAH ---- */
+.of-foto-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.of-foto-item{position:relative;width:72px}
+.of-foto-item img{width:72px;height:72px;object-fit:cover;border:1px solid var(--line-soft);border-radius:8px;display:block;background:var(--white)}
+.of-foto-nolink{display:flex;align-items:center;justify-content:center;width:72px;height:72px;border:1px dashed var(--line-soft);border-radius:8px;font-size:10px;color:var(--ink-soft)}
+.of-foto-hapus{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:1px solid var(--line);background:var(--white);color:var(--ink-soft);font-size:10px;line-height:1;padding:0;cursor:pointer;box-shadow:var(--shadow-sm)}
+.of-foto-hapus:hover{background:var(--terra-light);border-color:var(--terra-light);color:var(--white)}
+
+/* Catatan & Foto Desain berlaku per STYLE (ITEM), ditaruh di bawah tabel warna. */
+.of-item-detail{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line-soft)}
+
+.of-warna-blok { background: var(--cream); border: 1px solid var(--line-soft); border-left: 3px solid var(--terra-light); border-radius: 12px; padding: 13px 15px; }
+.of-warna-remove { background: none; border: none; color: var(--ink-soft); cursor: pointer; font-size: 15px; line-height: 1; padding: 8px; border-radius: 6px; transition: all .15s; flex-shrink: 0; }
+.of-warna-remove:hover { color: #8f2c22; background: #FDECEA; }
+.of-add-warna-btn { width: 100%; margin-top: 12px; padding: 9px; border: 1px dashed var(--terra-light); border-radius: 10px; background: none; color: var(--terra); font-family: 'Inter', sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all .18s ease; }
+.of-add-warna-btn:hover { background: rgba(189,67,53,.05); border-color: var(--terra); }
+.of-add-item-btn { width: 100%; padding: 13px; border: 1.5px dashed var(--line); border-radius: 12px; background: none; color: var(--terra); font-weight: 700; font-size: 13px; cursor: pointer; margin-bottom: 14px; font-family: inherit; transition: all .18s ease; }
+.of-add-item-btn:hover { border-color: var(--terra); background: rgba(189,67,53,.05); }
+.of-form-section { background: var(--white); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+.of-form-section h4 { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13.5px; margin-bottom: 12px; color: var(--navy); }
+.of-form-section label { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+.of-form-section input, .of-form-section textarea {
+  display: block; width: 100%; box-sizing: border-box; margin-top: 5px;
+  font-family: 'Inter', sans-serif; font-size: 13.5px; color: var(--navy);
+  padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--cream);
+}
+.of-form-section input:focus, .of-form-section textarea:focus { outline: none; border-color: var(--terra); box-shadow: 0 0 0 3px rgba(189,67,53,.10); background: var(--white); }
+.of-form-section textarea.rjd-autogrow { resize: none; min-height: 60px; overflow-y: hidden; line-height: 1.55; }
+@media (max-width: 640px) { .of-item-grid { grid-template-columns: 1fr; } }
+
+
+.of-foto-lama { margin-top: 10px; padding: 10px 12px; background: var(--white); border: 1px solid var(--line-soft); border-radius: 10px; }
+.of-foto-lama-lbl { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 6px; }
+.of-f-gambar-lbl { display: block; }
+.lp-order-staff-banner {
+  background: #EDF3FA; border: 1px solid #B9D0E8; border-radius: 10px;
+  padding: 10px 14px; margin-bottom: 14px;
+  font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--sky);
+}
+.lp-order-staff-banner b { font-family: 'Inter', sans-serif; font-weight: 700; color: var(--navy); }
+
+/* ---- modal editor ---- */
+.lp-edit-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(15,22,35,.55); backdrop-filter: blur(2px);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 32px 16px; overflow-y: auto;
+  animation: lpEditFade .2s ease-out;
+}
+@keyframes lpEditFade { from { opacity: 0; } to { opacity: 1; } }
+.lp-edit-modal {
+  /* 620px terlalu sempit untuk form order sekarang -- ada tabel matriks
+     warna x size, komposisi kain, aksesoris, dan jadwal bertahap. Di laptop
+     tabelnya sampai harus digeser ke samping. min() menjaga tetap muat di
+     layar kecil tanpa perlu media query terpisah. */
+  background: var(--cream); width: 100%; max-width: min(1100px, 96vw);
+  border-radius: 20px; box-shadow: var(--shadow-lg);
+  animation: lpEditPop .28s cubic-bezier(.34,1.56,.64,1);
+  margin: auto;
+}
+@keyframes lpEditPop { from { opacity: 0; transform: scale(.95) translateY(12px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+.lp-edit-modal-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 20px 24px; border-bottom: 1px solid var(--line);
+}
+.lp-edit-modal-title { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 17px; color: var(--navy); }
+.lp-edit-modal-sub { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--thread); margin-top: 2px; }
+.lp-edit-close {
+  width: 32px; height: 32px; border-radius: 9999px; flex-shrink: 0;
+  border: 1px solid var(--line); background: var(--white); color: var(--ink-soft);
+  cursor: pointer; font-size: 15px; transition: all .18s ease;
+}
+.lp-edit-close:hover { color: #8f2c22; border-color: #E8A49C; background: #FDECEA; }
+.lp-edit-modal-body { padding: 20px 24px; }
+.lp-edit-label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); margin-bottom: 14px; }
+.lp-edit-label input, .lp-edit-label textarea {
+  display: block; width: 100%; margin-top: 6px;
+  font-family: 'Inter', sans-serif; font-size: 14px; color: var(--navy);
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--white); box-sizing: border-box;
+}
+.lp-edit-label input:focus, .lp-edit-label textarea:focus { outline: none; border-color: var(--terra); box-shadow: 0 0 0 3px rgba(189,67,53,.10); }
+.lp-edit-label textarea.rjd-autogrow { resize: none; min-height: 60px; overflow-y: hidden; line-height: 1.55; }
+.lp-edit-items-wrap { margin-top: 4px; }
+.lp-edit-item { background: var(--white); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+.lp-edit-item-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+.lp-edit-item-head b { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 14px; color: var(--navy); }
+.lp-edit-item-warna { font-size: 11px; color: var(--ink-soft); background: var(--cream); border: 1px solid var(--line); padding: 2px 9px; border-radius: 9999px; }
+.lp-edit-size-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 7px; margin-bottom: 10px; }
+.lp-edit-size-cell { display: flex; flex-direction: column; gap: 3px; align-items: center; }
+.lp-edit-size-cell span { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft); }
+.lp-edit-size-cell input {
+  width: 100%; text-align: center; padding: 7px 2px;
+  font-family: 'Inter', sans-serif; font-size: 13px; color: var(--navy);
+  border: 1px solid var(--line); border-radius: 8px; background: var(--white); box-sizing: border-box;
+}
+.lp-edit-size-cell input:focus { outline: none; border-color: var(--terra); }
+.lp-edit-note-info { font-size: 11.5px; color: var(--ink-soft); margin-top: 4px; padding: 10px 12px; background: var(--cream-deep); border-radius: 10px; }
+.lp-edit-modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 24px; border-top: 1px solid var(--line); }
+.lp-edit-cancel { padding: 10px 18px; border-radius: 9999px; border: 1px solid var(--line); background: var(--white); color: var(--ink-soft); cursor: pointer; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; }
+.lp-edit-cancel:hover { border-color: var(--ink-soft); }
+.lp-edit-save { padding: 10px 22px; border-radius: 9999px; border: none; background: var(--terra); color: var(--cream); cursor: pointer; font-family: 'Archivo', sans-serif; font-size: 13px; font-weight: 700; box-shadow: 0 4px 12px rgba(189,67,53,.25); }
+.lp-edit-save:hover { opacity: .92; }
+.lp-edit-save:disabled { opacity: .55; cursor: default; }
+
+#lp-last-updated {
+  margin: 0 0 20px;
+  font-size: 11px;
+  color: #A9A392;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+/* ============ SECTION TABS ============ */
+.lp-section-tabs {
+  /* STICKY, nempel PERSIS di bawah .tk-header (top: 78px -- perkiraan tinggi
+     header dari padding 20px atas+bawah + tinggi konten tombol ~38px). Kalau
+     nanti padding/ukuran header diubah, angka 78px ini WAJIB disesuaikan lagi,
+     nggak otomatis ngikut -- posisinya angka hitungan manual, bukan dinamis. */
+  position: sticky;
+  top: 78px;
+  z-index: 30;
+  display: flex;
+  gap: 4px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 6px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.lp-section-tabs::-webkit-scrollbar { height: 3px; }
+.lp-section-tabs::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
+
+.lp-detail-tab {
+  flex: 1;
+  min-width: fit-content;
+  padding: 10px 18px;
+  font-family: 'Archivo', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  border-radius: 10px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  position: relative;
+}
+.lp-detail-tab:hover {
+  color: var(--navy);
+  background: var(--line-soft);
+}
+.lp-detail-tab.active {
+  background: var(--navy);
+  color: var(--cream);
+  box-shadow: 0 2px 8px rgba(23,33,52,.2);
+}
+
+/* ============ DETAIL PANELS ============ */
+.lp-detail-panel {
+  animation: tkPanelIn 0.4s ease-out;
+}
+@keyframes tkPanelIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Toggle row */
+.lp-toggle-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+/* Filter baris utama (Aktif/Semua Riwayat, Outstanding/Lunas, dst) -- 4 ID ini
+   spesifik row PALING ATAS tiap tab (anak langsung .lp-detail-panel), BUKAN
+   toggle Warna/Divisi yang nested di dalam kartu order/produk (itu tetap
+   .lp-toggle-row polos, statis, TIDAK sticky). top: 134px = 78px (tinggi
+   header) + 56px (perkiraan tinggi .lp-section-tabs: padding 12px + tombol
+   tab ~37px + sedikit buffer). Angka manual juga -- sama kayak di atas, kalau
+   ukuran header/tabs berubah, ini WAJIB disesuaikan ulang. */
+#lp-order-toggles, #lp-shipment-toggles, #lp-invoice-toggles, #lp-orderan-toggles {
+  /* Background var(--paper) yang tadinya di sini DIHAPUS -- sejalan sama
+     keputusan header di atas (transparan/melayang, bukan opaque). Individual
+     tombol .lp-toggle udah punya background putih sendiri, jadi masih kebaca
+     jelas biarpun row-nya sendiri transparan. */
+  position: sticky;
+  top: 134px;
+  z-index: 20;
+}
+.lp-toggle {
+  padding: 6px 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  transition: all 0.2s ease;
+}
+.lp-toggle:hover {
+  color: var(--navy);
+  border-color: rgba(23,33,52,.15);
+  transform: translateY(-1px);
+}
+.lp-toggle.active {
+  background: var(--navy);
+  color: var(--cream);
+  border-color: var(--navy);
+  box-shadow: 0 2px 8px rgba(23,33,52,.15);
+}
+
+/* Panel frames */
+.lp-panel-frame {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.lp-panel-scroll {
+  max-height: 600px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.lp-panel-scroll::-webkit-scrollbar { width: 5px; }
+.lp-panel-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+
+/* ============ ANIMATED LIST ITEMS ============ */
+/* These target dynamically created children from JS */
+.lp-panel-scroll > *,
+#lp-orderan-list > * {
+  animation: tkItemIn 0.35s ease-out both;
+}
+.lp-panel-scroll > *:nth-child(1), #lp-orderan-list > *:nth-child(1) { animation-delay: 0.00s; }
+.lp-panel-scroll > *:nth-child(2), #lp-orderan-list > *:nth-child(2) { animation-delay: 0.04s; }
+.lp-panel-scroll > *:nth-child(3), #lp-orderan-list > *:nth-child(3) { animation-delay: 0.08s; }
+.lp-panel-scroll > *:nth-child(4), #lp-orderan-list > *:nth-child(4) { animation-delay: 0.12s; }
+.lp-panel-scroll > *:nth-child(5), #lp-orderan-list > *:nth-child(5) { animation-delay: 0.16s; }
+.lp-panel-scroll > *:nth-child(6), #lp-orderan-list > *:nth-child(6) { animation-delay: 0.20s; }
+.lp-panel-scroll > *:nth-child(7), #lp-orderan-list > *:nth-child(7) { animation-delay: 0.24s; }
+.lp-panel-scroll > *:nth-child(8), #lp-orderan-list > *:nth-child(8) { animation-delay: 0.28s; }
+.lp-panel-scroll > *:nth-child(n+9), #lp-orderan-list > *:nth-child(n+9) { animation-delay: 0.32s; }
+
+@keyframes tkItemIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Hover effect on list children */
+.lp-panel-scroll > *:hover,
+#lp-orderan-list > *:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Invoice summary animation */
+#lp-invoice-summary {
+  animation: tkFadeUp 0.4s ease-out 0.2s both;
+}
+
+/* Profil form animation */
+#lp-profil-form {
+  animation: tkFadeUp 0.4s ease-out 0.1s both;
+}
+
+/* ============ FOOTER ============ */
+.tk-footer {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 24px;
+  font-size: 12px;
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--ink-soft);
+  animation: tkFadeUp 0.6s ease-out 0.3s both;
+}
+.tk-footer .ft-logo {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--navy);
+  margin-bottom: 4px;
+}
+.tk-footer .ft-logo .terra { color: var(--terra); margin-left: 4px; }
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 600px) {
+  .tk-header { padding: 16px 20px; }
+  #lacak-app { padding: 0 16px 60px; }
+  #lp-login-box { padding: 40px 20px; margin: 20px auto; }
+  .lp-detail-tab { padding: 8px 12px; font-size: 12px; }
+  .lp-section-tabs { border-radius: 12px; }
+}
+
+/* Form Profil (dipanggil dari JS via kelas lp-profil-*) -- CSS-nya SEMPAT KETINGGALAN
+   pas markup tracking diganti ke desain baru. Kelas ini didefinisikan JS (lpRenderProfilForm_
+   di script bawah), bukan di markup statis, jadi gampang keliatan "aman" pas migrasi padahal
+   nggak ketimpa. Tanpa CSS ini, label & input numpuk tanpa struktur -- itu yang kejadian
+   kemarin. Disesuaikan warnanya ke token desain baru (--white/--line/--navy), BUKAN
+   disalin mentah dari CSS lama yang tokennya (--paper dst) nggak ada di skin ini. */
+.lp-profil-card { max-width: 520px; }
+.lp-profil-label {
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 12.5px; font-weight: 600; color: var(--ink-soft);
+  margin-bottom: 16px;
+}
+.lp-profil-label input, .lp-profil-label textarea {
+  font-family: 'Inter', sans-serif; font-size: 14px;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--white); color: var(--navy); width: 100%; box-sizing: border-box;
+}
+.lp-profil-label input:disabled { background: var(--cream-deep); color: var(--ink-soft); }
+.lp-profil-tambah-email {
+  background: none; border: none; color: var(--terra); font-weight: 600;
+  font-size: 12.5px; cursor: pointer; padding: 0; margin: -10px 0 16px; font-family: inherit;
+}
+.lp-profil-tambah-email:hover { text-decoration: underline; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Grup tombol aksi navbar (Dashboard/Refresh/Keluar) : SENGAJA ditambahkan,
+   nggak ada di desain aslinya. JS Portal Klien (lpLogout, fetchDashboard)
+   manggil getElementById buat 3 elemen ini. */
+.tk-header .tk-nav-actions { display: flex; align-items: center; gap: 8px; position: static; }
+.tk-header .nav-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 9999px;
+  border: 1px solid var(--line); background: var(--white); color: var(--ink-soft);
+  cursor: pointer; transition: all 0.2s ease;
+}
+.tk-header .nav-icon-btn:hover { color: var(--navy); border-color: rgba(23,33,52,.15); }
+.tk-header .nav-icon-btn svg { width: 16px; height: 16px; }
+.tk-header .nav-cta {
+  /* position/right/top/transform WAJIB direset eksplisit -- CSS global .nav-cta
+     (sistem lama) nyetel position:absolute;right:24px;top:50%;transform:translateY(-50%).
+     CSS itu per-PROPERTI, bukan per-blok: kalau properti position nggak disebut di
+     sini, aturan absolute dari global TETAP kepake meskipun warna/ukuran ke-override.
+     Itu sebabnya tombol Keluar "lompat keluar" dari flex .tk-nav-actions & numpuk
+     sama ikon Dashboard/Refresh -- ini yang benerin. */
+  position: static; right: auto; top: auto; transform: none;
+  font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600;
+  color: var(--white); background: var(--navy); border: none;
+  padding: 8px 16px; border-radius: 9999px; cursor: pointer; transition: opacity .2s;
+}
+.tk-header .nav-cta:hover { opacity: .85; }
+
+/* ---- Tab Jadwal Produksi ---- */
+.jp-intro { font-size: 12.5px; color: var(--ink-soft); margin-bottom: 16px; }
+.jp-warning { background: #FCF3E3; border: 1px solid #EBCFA0; border-radius: 12px; padding: 12px 16px; font-size: 12.5px; color: #8A5D1F; margin-bottom: 16px; line-height: 1.6; }
+.jp-warning code { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; background: rgba(0,0,0,.05); padding: 1px 5px; border-radius: 4px; }
+.jp-blok { margin-bottom: 26px; }
+.jp-judul { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 14.5px; color: var(--navy); margin-bottom: 4px; }
+.jp-sub { font-size: 12px; color: var(--ink-soft); margin-bottom: 12px; }
+.jp-loading { font-size: 13px; color: var(--ink-soft); padding: 16px; }
+
+/* papan beban */
+.jp-divisi { background: var(--white); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 10px; box-shadow: var(--shadow-sm); }
+.jp-divisi-nama { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13px; color: var(--navy); margin-bottom: 10px; }
+.jp-minggu-row { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+.jp-minggu { text-align: center; }
+.jp-bar-wrap { height: 70px; display: flex; align-items: flex-end; background: var(--cream); border-radius: 6px; overflow: hidden; }
+.jp-bar { width: 100%; border-radius: 6px 6px 0 0; transition: height .3s ease; }
+.jp-lega { background: #A8CBB0; }
+.jp-padat { background: #EBCFA0; }
+.jp-lebih { background: #E8A49C; }
+.jp-minggu-pct { font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 10.5px; color: var(--navy); margin-top: 4px; }
+.jp-minggu-lbl { font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: var(--ink-soft); }
+
+/* daftar order */
+.jp-filter-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.jp-order { background: var(--white); border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: 12px; margin-bottom: 8px; box-shadow: var(--shadow-sm); }
+.jp-order.jp-st-terlambat { border-left-color: #C0554A; }
+.jp-order.jp-st-mepet { border-left-color: #D9941E; }
+.jp-order.jp-st-aman { border-left-color: #2D8A5F; }
+.jp-order-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 12px 16px; cursor: pointer; }
+.jp-order-po { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--thread); font-weight: 600; }
+.jp-prioritas { font-size: 10px; background: var(--navy); color: var(--cream); padding: 2px 8px; border-radius: 9999px; margin-left: 8px; }
+.jp-order-meta { font-size: 11.5px; color: var(--ink-soft); margin-top: 3px; }
+.jp-order-tgl { text-align: right; white-space: nowrap; }
+.jp-est { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13px; color: var(--navy); }
+.jp-akurasi { font-family: 'Inter', sans-serif; font-weight: 500; font-size: 10px; color: var(--ink-soft); margin-left: 4px; }
+.jp-deadline { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
+.jp-badge { display: inline-block; margin-top: 5px; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; padding: 3px 10px; border-radius: 9999px; }
+.jp-badge.jp-st-terlambat { background: #FDECEA; color: #8f2c22; }
+.jp-badge.jp-st-mepet { background: #FCF3E3; color: #8A5D1F; }
+.jp-badge.jp-st-aman { background: #E3EFE6; color: #2C6B3F; }
+.jp-badge.jp-st-tanpa-deadline { background: var(--cream-deep); color: var(--ink-soft); }
+.jp-timeline { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; padding: 0 16px 14px; }
+.jp-tl-item { background: var(--cream); border: 1px solid var(--line-soft); border-radius: 10px; padding: 9px 11px; font-size: 11.5px; }
+.jp-tl-item b { display: block; color: var(--navy); font-size: 12px; }
+.jp-tl-item span { display: block; font-family: 'IBM Plex Mono', monospace; color: var(--terra); margin-top: 2px; }
+.jp-tl-item small { display: block; color: var(--ink-soft); margin-top: 2px; }
+.jp-tl-done { color: var(--ink-soft); font-style: italic; }
+.jp-asumsi { background: var(--cream-deep); border-radius: 12px; padding: 14px 16px; font-size: 11.5px; color: var(--ink-soft); line-height: 1.7; }
+.jp-asumsi b { color: var(--navy); }
+@media (max-width: 760px) { .jp-minggu-row { grid-template-columns: repeat(4, 1fr); } }
+
+/* ---- Modal Proofing ---- */
+.om-group-head { cursor: pointer; }
+.om-verif-box { background: #EDF3FA; border: 1px solid #B9D0E8; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+.om-verif-judul { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13px; color: var(--sky); margin-bottom: 10px; }
+.om-verif-catatan { font-size: 11.5px; color: var(--ink-soft); margin-top: 8px; }
+.om-proofing-foot { flex-wrap: wrap; gap: 8px; }
+.om-status-final { font-size: 12.5px; color: #2C6B3F; font-weight: 600; align-self: center; }
+/* ---- editor proofing: ITEM -> Warna (seragam dengan Form Order) ---- */
+.om-item-nomor { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: .1em; color: var(--terra); margin-bottom: 10px; }
+.om-fld { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); }
+.om-fld input, .om-fld textarea {
+  display: block; width: 100%; box-sizing: border-box; margin-top: 4px;
+  font-family: 'Inter', sans-serif; font-size: 13px; color: var(--navy);
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--white);
+}
+.om-fld textarea { resize: vertical; }
+.om-fld input:focus, .om-fld textarea:focus { outline: none; border-color: var(--terra); }
+.om-warna-wrap { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+.om-warna-blok { background: var(--paper-2); border: 1px solid var(--line); border-left: 3px solid var(--terra); border-radius: 10px; padding: 12px 14px; }
+.om-warna-head { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.om-warna-foto { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+@media (max-width: 640px) { .om-warna-head { grid-template-columns: 1fr; } }
+.om-group-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+
+/* ---------- form profil ---------- */
+.lp-profil-label input, .lp-profil-label textarea { border-radius: 10px; transition: border-color .18s ease; }
+.lp-profil-label input:focus, .lp-profil-label textarea:focus { outline: none; border-color: var(--terra); }
