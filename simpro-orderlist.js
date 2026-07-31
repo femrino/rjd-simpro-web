@@ -60,19 +60,36 @@ function olLogout(){
   OL_ID_TOKEN = null;
   try{ localStorage.removeItem("db_session"); }catch(e){}
   if(typeof google !== "undefined" && google.accounts) google.accounts.id.disableAutoSelect();
-  const nav = document.getElementById("ol-nav-logout");
-  if(nav) nav.classList.add("hidden");
+  ["ol-nav-logout", "ol-nav-refresh"].forEach(function(id){
+    const el = document.getElementById(id);
+    if(el) el.classList.add("hidden");
+  });
   olShow("ol-login-box");
 }
 
 /** Muat daftar setelah token tersedia. */
 function olMulai(){
   olShow("ol-loading");
-  const nav = document.getElementById("ol-nav-logout");
-  if(nav) nav.classList.remove("hidden");
+  ["ol-nav-logout", "ol-nav-refresh"].forEach(function(id){
+    const el = document.getElementById(id);
+    if(el) el.classList.remove("hidden");
+  });
   // Paksa muat ulang -- halaman ini memang khusus daftar order.
   window.OL_DAFTAR_PO = null;
   dbMuatDaftarPO();
+}
+
+/** Muat ulang daftar dari server, dengan ikon berputar selama menunggu. */
+function olRefresh(){
+  const ikon = document.getElementById("ol-refresh-icon");
+  if(ikon) ikon.classList.add("spinning");
+  window.OL_DAFTAR_PO = null;
+  olShow("ol-loading");
+  dbMuatDaftarPO();
+  // Ikon dihentikan setelah jeda pendek -- dbMuatDaftarPO tidak mengembalikan
+  // promise, dan menambah callback ke sana berarti menyunting fungsi yang
+  // dipakai bersama hanya demi animasi.
+  setTimeout(function(){ if(ikon) ikon.classList.remove("spinning"); }, 1200);
 }
 
 function olSetupTombolGoogle(){
@@ -105,11 +122,16 @@ function dbMuatDaftarPO(){
   .then(function(r){ return r.json(); })
   .then(function(d){
     if(!d || !d.success){
+      olShow("ol-isi");
       document.getElementById("db-po-isi").innerHTML =
         '<p style="font-size:12.5px;color:var(--thread)">' + rjdEscapeHtml_((d && d.error) || "Gagal memuat daftar PO.") + '</p>';
       return;
     }
     window.OL_DAFTAR_PO = d.daftar || [];
+    // WAJIB: olShow("ol-loading") menyembunyikan #ol-isi, dan #db-po-isi ada
+    // DI DALAMNYA. Tanpa baris ini datanya termuat ke elemen tersembunyi --
+    // halaman terlihat menggantung di "Memuat..." padahal sudah selesai.
+    olShow("ol-isi");
     // Pilihan status diisi dari data NYATA, bukan daftar tetap -- supaya
     // status apa pun yang dipakai di AppSheet ikut muncul tanpa perlu
     // menyunting kode setiap kali ada status baru.
@@ -125,6 +147,7 @@ function dbMuatDaftarPO(){
     dbRenderDaftarPO();
   })
   .catch(function(){
+    olShow("ol-isi");
     document.getElementById("db-po-isi").innerHTML =
       '<p style="font-size:12.5px;color:var(--thread)">Gagal menghubungi server.</p>';
   });
