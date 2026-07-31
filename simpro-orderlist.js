@@ -195,7 +195,18 @@ function dbRenderDaftarPO(){
             : '')
         : '<span class="db-po-kosong" title="PO ini belum punya baris di SD Rincian Sales Order">-</span>';
       return '<tr>' +
-        '<td><b>' + rjdEscapeHtml_(p.idPurchaseOrder) + '</b>' +
+        // ID PO sering berbentuk "260731/Pashmina Oval Bandana" -- nomor lalu
+        // nama pesanan. Ditampilkan utuh dalam satu baris, kolomnya jadi sempit
+        // dan teksnya membungkus per kata sampai berbaris ke bawah.
+        // Dipecah di "/" PERTAMA: nomor tebal di atas, nama kecil di bawah.
+        '<td>' + (function(){
+          const teks = String(p.idPurchaseOrder || "");
+          const garis = teks.indexOf("/");
+          const nomor = garis === -1 ? teks : teks.slice(0, garis);
+          const nama = garis === -1 ? "" : teks.slice(garis + 1).trim();
+          return '<b class="db-po-nomor">' + rjdEscapeHtml_(nomor) + '</b>' +
+            (nama ? '<div class="db-po-nama">' + rjdEscapeHtml_(nama) + '</div>' : '');
+        })() +
           (p.noSO ? '<div class="db-po-sub">SO ' + rjdEscapeHtml_(p.noSO) + '</div>' : '') + '</td>' +
         '<td>' + rjdEscapeHtml_(p.namaKlien) + '</td>' +
         '<td>' + artikel + '</td>' +

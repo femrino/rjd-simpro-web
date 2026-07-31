@@ -112,3 +112,43 @@ body { padding-top: 0; }
   bottom: 18%; left: 38%; --rot: -10deg; transform: rotate(-10deg);
   border-radius: 28px; animation-delay: -13s;
 }
+
+/* ============================================================
+ * TABEL DAFTAR ORDER -- lebar kolom & keterbacaan
+ * ============================================================
+ * Sebelumnya semua kolom dibiarkan otomatis. Kolom Artikel yang isinya
+ * panjang mengambil sebagian besar lebar, menyisakan kolom PO, Klien, dan
+ * Status begitu sempit sampai teksnya membungkus satu kata per baris --
+ * satu baris order jadi setinggi sepuluh baris teks.
+ *
+ * Perbaikannya: kolom pendek dikunci agar tidak pernah membungkus, kolom
+ * panjang (Artikel) yang menyerap sisa ruang.
+ * ============================================================ */
+
+.db-po-tabel th, .db-po-tabel td { vertical-align: top; }
+
+/* Kolom yang isinya pendek & tetap: JANGAN pernah membungkus. */
+.db-po-tabel td:nth-child(4),   /* Qty      */
+.db-po-tabel td:nth-child(5),   /* Deadline */
+.db-po-tabel td:nth-child(6),   /* Status   */
+.db-po-tabel td:nth-child(7),   /* Asal     */
+.db-po-tabel td:nth-child(8),   /* Cetak    */
+.db-po-tabel th:nth-child(4),
+.db-po-tabel th:nth-child(5),
+.db-po-tabel th:nth-child(6),
+.db-po-tabel th:nth-child(7),
+.db-po-tabel th:nth-child(8) { white-space: nowrap; }
+
+/* PO & Klien: cukup lebar untuk satu-dua kata, tidak dipaksa menyempit. */
+.db-po-tabel th:nth-child(1), .db-po-tabel td:nth-child(1) { min-width: 132px; }
+.db-po-tabel th:nth-child(2), .db-po-tabel td:nth-child(2) { min-width: 116px; }
+/* Artikel: kolom yang menyerap sisa ruang. */
+.db-po-tabel th:nth-child(3), .db-po-tabel td:nth-child(3) { width: 100%; min-width: 220px; }
+
+.db-po-nomor { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; white-space: nowrap; }
+.db-po-nama { font-size: 11.5px; color: var(--ink-soft); line-height: 1.35; margin-top: 1px; }
+.db-po-sub { margin-top: 3px; }
+
+/* Baris berselang-seling -- membantu mata mengikuti baris di tabel selebar ini. */
+.db-po-tabel tbody tr:nth-child(even) td { background: rgba(0,0,0,.015); }
+.db-po-tabel tbody tr:hover td { background: var(--cream); }
