@@ -8,14 +8,33 @@
  * ============================================================ */
 
 :root{
-  --paper:#F7F5F0;
-  --paper-2:#EFECE4;
-  --ink:#14213D;
-  --ink-soft:#3D4A63;
-  --thread:#B23A2E;
-  --line:#D8D3C7;
-  --white:#FFFFFF;
+  --cream:#F9F7F2;      --cream-deep:#F0EBE0;   --white:#FFFFFF;
+  --navy:#172134;       --navy-deep:#0F1623;    --navy-soft:#2A3754;
+  --ink:#172134;        --ink-soft:#6B7280;
+  --terra:#BD4335;      --terra-deep:#9E3528;   --terra-light:#D97A6E;
+  --thread:#BD4335;
+  --gold:#C8964A;       --emerald:#2D8A5F;      --sky:#3B7BBF;  --amber:#D9941E;
+  --line:#E5E0D6;       --line-soft:#EFEAE0;
+  /* paper dan paper-2 dipetakan ke cream, sama seperti di semua file halaman
+     -- lihat catatan yang sama di simpro-dashboard.css. Sebelum perbaikan ini,
+     blok :root di sini punya nilai SENDIRI yang beda dari 8 file halaman
+     lainnya (--ink #14213D vs #172134, --thread #B23A2E vs #BD4335, dst).
+     Nggak kelihatan efeknya di halaman yang punya :root lokal (lokal selalu
+     menang), TAPI Cetak Dokumen nggak punya :root lokal sama sekali -- jadi
+     seluruh warna dasarnya (body background/text) dan beberapa token yang
+     nggak ke-cover (--gold, --terra, --terra-light) diam-diam salah/patah.
+     Disamakan di sini supaya jadi satu sumber kebenaran yang konsisten. */
+  --paper:#F9F7F2;      --paper-2:#F0EBE0;
+  --shadow-lg:0 20px 60px rgba(15,22,35,.14);
+  --shadow-md:0 8px 24px rgba(15,22,35,.08);
+  --shadow-sm:0 2px 8px rgba(15,22,35,.05);
 }
+/* .hidden dulu cuma didefinisikan di simpro-tracking.css & simpro-omset.css --
+   8 file lain (termasuk file ini sendiri) nggak punya sama sekali. Ditambal
+   sementara langsung di template Blogger (b:skin) waktu kerjain hamburger
+   menu; sekarang dibenerin di sumbernya biar tambalan itu nggak jadi satu-
+   satunya yang jaga elemen tetap tersembunyi sebelum login. */
+.hidden{display:none !important}
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth;overflow-x:hidden}
 /* scroll-padding-top:68px DIHAPUS dari sini -- angka itu TERBUKTI PERSIS lewat
