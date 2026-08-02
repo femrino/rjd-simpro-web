@@ -1,0 +1,149 @@
+/* ============================================================
+ * SIMPRO -- simpro-qc.css
+ * ============================================================
+ * DIMUAT DI : qc.html
+ *
+ * Token warna & .hidden dari simpro-global.css (pola sama seperti semua
+ * cabang lain -- lihat catatan di simpro-omset.css/simpro-orderlist.css).
+ * ============================================================ */
+
+body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
+#qc-hero { position: relative; z-index: 1; animation: dbFadeUp .6s ease-out backwards; }
+.qc-wrap { position: relative; z-index: 1; max-width: 720px; margin: 0 auto; padding: 0 24px 100px; }
+/* Lebih SEMPIT dari halaman tabel (order-list/pengiriman/invoice, 1400-1500px)
+   SENGAJA -- ini form input & kartu ringkasan, bukan tabel lebar banyak kolom.
+   Kolom sempit lebih mudah dipakai checker yang buka dari HP. */
+
+.qc-kotak { max-width: 420px; margin: 60px auto; text-align: center; background: var(--white);
+  border: 1px solid var(--line-soft); border-radius: 14px; padding: 28px 24px; }
+.qc-kotak h2 { font-size: 17px; margin: 0 0 6px; }
+.qc-kotak p { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 18px; }
+#qc-google-btn { display: flex; justify-content: center; }
+
+/* ============ TAB SWITCHER (Mode A / Mode B) ============ */
+.qc-tabs { display: flex; gap: 6px; margin-bottom: 16px; background: var(--paper-2, var(--cream-deep));
+  border-radius: 12px; padding: 4px; }
+.qc-tab { flex: 1; padding: 10px 12px; border-radius: 9px; font-size: 13px; font-weight: 600;
+  color: var(--ink-soft); background: transparent; border: none; cursor: pointer; transition: all .15s; }
+.qc-tab:hover { color: var(--navy); }
+.qc-tab.active { background: var(--white); color: var(--navy); box-shadow: var(--shadow-sm); }
+
+.qc-panel { animation: dbFadeUp .4s ease-out backwards; }
+
+/* ============ MODE A: FORM INPUT ============ */
+.qc-form-card { background: var(--white); border: 1px solid var(--line-soft); border-radius: 16px;
+  padding: 22px 20px; box-shadow: var(--shadow-sm); }
+
+.qc-field { margin-bottom: 16px; }
+.qc-field label { display: block; font-size: 12px; font-weight: 600; color: var(--ink-soft);
+  margin-bottom: 6px; }
+.qc-field input, .qc-field select, .qc-field textarea {
+  width: 100%; padding: 10px 12px; background: var(--white); border: 1px solid var(--line-soft);
+  border-radius: 9px; font-family: 'Inter', sans-serif; font-size: 14px; color: var(--navy);
+}
+.qc-field textarea { resize: vertical; }
+
+.qc-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.qc-grid-2 .qc-field { margin-bottom: 0; }
+
+/* Toggle 3 tombol Tahap -- besar & jelas, dipakai checker yang buru-buru di
+   lantai produksi, bukan dropdown kecil yang gampang salah pencet. */
+.qc-tahap-toggle { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.qc-tahap-btn { padding: 12px 0; border-radius: 10px; border: 1px solid var(--line-soft);
+  background: var(--white); color: var(--navy); font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: all .15s; }
+.qc-tahap-btn:hover { border-color: var(--terra-light, var(--thread)); }
+.qc-tahap-btn.active { background: var(--navy); color: var(--white); border-color: var(--navy); }
+
+.qc-cacat-box { display: flex; justify-content: space-between; align-items: center;
+  background: var(--cream, var(--paper-2)); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; }
+.qc-cacat-box span:first-child { font-size: 13px; color: var(--ink-soft); }
+.qc-cacat-box span:last-child { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 22px;
+  color: var(--thread, #B23B2E); }
+.qc-cacat-box.qc-cacat-nol span:last-child { color: #2C6B3F; }
+
+.qc-detail-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.qc-detail-head label { margin: 0; }
+#qc-detail-tambah { font-size: 12px; font-weight: 700; color: var(--navy); background: var(--cream, var(--paper-2));
+  border: 1px solid var(--line-soft); border-radius: 8px; padding: 5px 11px; cursor: pointer; }
+#qc-detail-tambah:hover { background: var(--white); border-color: var(--navy); }
+#qc-detail-tambah:disabled { opacity: .4; cursor: not-allowed; }
+
+.qc-detail-row { display: grid; grid-template-columns: 1fr 70px 32px; gap: 8px; margin-bottom: 8px; }
+.qc-detail-row select, .qc-detail-row input { padding: 9px 10px; border: 1px solid var(--line-soft);
+  border-radius: 8px; font-size: 13px; }
+.qc-detail-row button { border: none; background: none; color: var(--ink-soft); cursor: pointer;
+  font-size: 16px; border-radius: 6px; }
+.qc-detail-row button:hover { color: var(--thread, #B23B2E); background: var(--cream, var(--paper-2)); }
+
+.qc-hint { font-size: 11.5px; color: var(--ink-soft); font-style: italic; margin: 4px 0 0; }
+
+.qc-keputusan-preview { margin-top: 8px; padding: 10px 12px; border-radius: 9px; font-size: 12.5px;
+  display: none; align-items: center; gap: 8px; }
+.qc-keputusan-preview.show { display: flex; }
+.qc-keputusan-preview.lolos { background: #EAF4EC; color: #2C6B3F; }
+.qc-keputusan-preview.bersyarat { background: #FCF3E3; color: #8A5D1F; }
+.qc-keputusan-preview.reject { background: #FDECEA; color: #8F2C22; }
+
+.qc-submit-error { background: #FDECEA; border: 1px solid #E8A49C; color: #8F2C22; border-radius: 10px;
+  padding: 12px 14px; font-size: 12.5px; margin-bottom: 14px; white-space: pre-line; }
+.qc-submit-sukses { background: #EAF4EC; border: 1px solid #9FCBA9; color: #2C6B3F; border-radius: 10px;
+  padding: 12px 14px; font-size: 12.5px; margin-bottom: 14px; }
+
+.qc-submit-btn { width: 100%; padding: 13px 0; background: var(--navy); color: var(--white);
+  border: none; border-radius: 10px; font-size: 14.5px; font-weight: 700; cursor: pointer;
+  transition: opacity .15s; }
+.qc-submit-btn:hover { opacity: .88; }
+.qc-submit-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ============ MODE B: RINGKASAN & DASHBOARD ============ */
+.qc-alat { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 16px; }
+.qc-alat select { flex: 0 1 170px; padding: 9px 12px; background: var(--white);
+  border: 1px solid var(--line-soft); border-radius: 9px; font-size: 12.5px; }
+.qc-alat input { flex: 1 1 200px; padding: 9px 12px; background: var(--white);
+  border: 1px solid var(--line-soft); border-radius: 9px; font-size: 13px; }
+
+.qc-kartu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px; margin-bottom: 22px; }
+.qc-kartu { background: var(--white); border: 1px solid var(--line-soft); border-radius: 12px; padding: 14px 18px; }
+.qc-kartu-label { font-size: 11px; color: var(--ink-soft); margin-bottom: 4px; }
+.qc-kartu-angka { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 22px; color: var(--navy); }
+.qc-kartu-angka.bahaya { color: var(--thread, #B23B2E); }
+
+.qc-subjudul { font-size: 12.5px; color: var(--ink-soft); font-weight: 600; margin: 0 0 10px; }
+
+.qc-bar-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
+.qc-bar-row { display: flex; align-items: center; gap: 10px; }
+.qc-bar-label { width: 74px; font-size: 13px; color: var(--navy); flex-shrink: 0; }
+.qc-bar-track { flex: 1; background: var(--cream, var(--paper-2)); border-radius: 4px; height: 10px; overflow: hidden; }
+.qc-bar-fill { height: 100%; border-radius: 4px; }
+.qc-bar-fill.ok { background: #2C6B3F; }
+.qc-bar-fill.warn { background: var(--gold, #C8964A); }
+.qc-bar-fill.bahaya { background: var(--thread, #B23B2E); }
+.qc-bar-angka { width: 42px; text-align: right; font-size: 12px; color: var(--ink-soft); flex-shrink: 0; }
+
+.qc-dua-kolom { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; }
+.qc-operator-tabel { width: 100%; font-size: 13px; border-collapse: collapse; }
+.qc-operator-tabel td { padding: 7px 0; }
+.qc-operator-tabel td:first-child { color: var(--navy); }
+.qc-operator-tabel td:last-child { width: 40px; text-align: right; color: var(--ink-soft); font-size: 12px; }
+.qc-operator-mini-bar { width: 90px; background: var(--cream, var(--paper-2)); border-radius: 4px;
+  height: 8px; overflow: hidden; display: inline-block; vertical-align: middle; }
+.qc-operator-mini-fill { height: 100%; border-radius: 4px; }
+.qc-operator-mini-fill.ok { background: #2C6B3F; }
+.qc-operator-mini-fill.warn { background: var(--gold, #C8964A); }
+.qc-operator-mini-fill.bahaya { background: var(--thread, #B23B2E); }
+
+.qc-jenis-list { display: flex; flex-direction: column; gap: 8px; }
+.qc-jenis-row { display: flex; justify-content: space-between; font-size: 13px; }
+.qc-jenis-row span:last-child { color: var(--ink-soft); }
+
+.qc-kosong { font-size: 12.5px; color: var(--ink-soft); padding: 20px 0; text-align: center; font-style: italic; }
+
+@media (max-width: 640px) {
+  .qc-wrap { padding: 0 16px 80px; }
+  .qc-grid-2 { grid-template-columns: 1fr; gap: 0; }
+  .qc-grid-2 .qc-field { margin-bottom: 16px; }
+  .qc-dua-kolom { grid-template-columns: 1fr; gap: 24px; }
+  .qc-alat select, .qc-alat input { flex: 1 1 100%; }
+}
