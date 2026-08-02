@@ -13,34 +13,13 @@
    dinolkan. @media print di bawah juga sudah override padding-top:0, tapi ini
    buat tampilan LAYAR (sebelum dicetak). */
 body { padding-top: 0; }
-.ck-scr-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-.ck-scr-bg-gradient {
-  position: absolute; inset: -20%;
-  background:
-    radial-gradient(circle at 15% 20%, rgba(178,58,46,.06) 0%, transparent 35%),
-    radial-gradient(circle at 85% 75%, rgba(20,33,61,.05) 0%, transparent 40%),
-    radial-gradient(circle at 50% 50%, rgba(178,58,46,.03) 0%, transparent 45%);
-  animation: ckMeshShift 20s ease-in-out infinite alternate;
-}
-@keyframes ckMeshShift {
-  0%   { transform: translate(0,0) scale(1); }
-  50%  { transform: translate(-2%,3%) scale(1.04); }
-  100% { transform: translate(2%,-2%) scale(1.02); }
-}
-/* Bentuk mengambang -- SAMA PERSIS pola animasinya kayak .tk-float di tracking
-   (posisi, ukuran, delay, keyframe tkFloatY/ckFloatY identik), CUMA warnanya
-   dipetakan ke token GLOBAL (--thread/--ink) karena --navy & --gold cuma ada di
-   :root LOKAL tracking/landing, nggak ke-share ke cabang cetak. Kalau dipaksa
-   pakai var(--gold) di sini, variabelnya nggak kebaca sama sekali. */
-.ck-scr-float { position: absolute; border-radius: 24px; opacity: 0.05; animation: ckFloatY 16s ease-in-out infinite; }
-.ck-scr-float.f1 { width: 160px; height: 160px; background: var(--thread); top: 10%; left: 5%; --rot: 15deg; transform: rotate(15deg); }
-.ck-scr-float.f2 { width: 100px; height: 100px; background: var(--ink); top: 65%; left: 8%; --rot: -20deg; transform: rotate(-20deg); border-radius: 50%; animation-delay: -4s; }
-.ck-scr-float.f3 { width: 200px; height: 200px; background: var(--thread); top: 12%; right: 6%; --rot: 8deg; transform: rotate(8deg); border-radius: 32px; animation-delay: -7s; }
-.ck-scr-float.f4 { width: 80px; height: 80px; background: var(--ink); bottom: 15%; right: 12%; --rot: 25deg; transform: rotate(25deg); border-radius: 50%; animation-delay: -10s; }
-@keyframes ckFloatY {
-  0%, 100% { transform: translateY(0) rotate(var(--rot, 0deg)); }
-  50% { transform: translateY(-25px) rotate(var(--rot, 0deg)); }
-}
+/* Latar beranimasi dipindah ke simpro-global.css sebagai master
+   (.bg-canvas/.float-shape/.particle), dipakai bersama semua halaman.
+   Blok lokal .ck-scr-bg* dihapus -- dulu warnanya dipaksa pakai
+   --thread/--ink karena --navy/--gold dikira cuma ada di :root lokal
+   tracking/landing; itu keliru untuk arsitektur sekarang: semua token
+   warna (termasuk --navy & --gold) sudah 1 sumber di simpro-global.css
+   dan otomatis kebaca di cabang manapun termasuk cetak. */
 .ck-scr-header {
   position: relative; z-index: 1; padding: 20px 32px;
   display: flex; align-items: center; justify-content: space-between;
@@ -104,7 +83,7 @@ body { padding-top: 0; }
 @media (prefers-reduced-motion: reduce) {
   .ck-scr-header, .ck-scr-main { animation: none; }
   .ck-scr-spinner { animation-duration: 1.5s; }
-  .ck-scr-bg-gradient, .ck-scr-float { animation: none; }
+  /* .bg-gradient/.float-shape/.particle sudah ditangani aturan global. */
 }
 
 .ck-dok{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:40px 44px;box-shadow:0 2px 6px rgba(20,33,61,.06),0 4px 16px rgba(20,33,61,.05)}

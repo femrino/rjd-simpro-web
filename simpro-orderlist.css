@@ -57,38 +57,14 @@ body { padding-top: 0; }
 .dbep-dihapus td,.dbep-dihapus th{opacity:.45;text-decoration:line-through}
 
 /* ============================================================
- * LATAR BERANIMASI -- diperkuat khusus halaman ini
+ * LATAR BERANIMASI -- kini ikut default global (gaya Home)
  * ============================================================
- * Kelas .db-bg/.db-float dipakai bersama dengan dashboard dan CSS dasarnya
- * ada di simpro-global.css. Di halaman ini bentuknya nyaris tidak terlihat:
- * tabelnya lebar dan berlatar putih, jadi bentuk beropacity 0.05 tenggelam.
- *
- * File ini dimuat SETELAH simpro-global.css, jadi aturan di bawah menang
- * tanpa perlu selector khusus -- dan TIDAK memengaruhi dashboard, karena
- * file ini cuma dimuat di order-list.html.
+ * Dulu di sini ada override lokal (gradient lebih pekat, float diperbesar,
+ * tambahan .f5) supaya bentuknya kelihatan di atas tabel lebar berlatar
+ * putih. Sekarang halaman ini SENGAJA disamakan dengan halaman lain --
+ * cukup pakai kelas polos .bg-canvas/.float-shape/.particle dari
+ * simpro-global.css, tanpa override apa pun.
  * ============================================================ */
-
-.db-bg-gradient {
-  background:
-    radial-gradient(circle at 15% 18%, rgba(189,67,53,.10) 0%, transparent 38%),
-    radial-gradient(circle at 85% 72%, rgba(23,33,52,.08) 0%, transparent 42%),
-    radial-gradient(circle at 50% 50%, rgba(200,150,74,.07) 0%, transparent 48%);
-}
-
-/* Lebih besar & sedikit lebih pekat, mengikuti proporsi halaman landing. */
-.db-float { opacity: .075; }
-.db-float.f1 { width: 200px; height: 200px; top: 8%;  left: 5%; }
-.db-float.f2 { width: 130px; height: 130px; top: 62%; left: 8%; }
-.db-float.f3 { width: 240px; height: 240px; top: 12%; right: 6%; }
-.db-float.f4 { width: 110px; height: 110px; bottom: 12%; right: 12%; }
-
-/* Bentuk kelima -- markup halaman ini menyediakan .f5; dashboard tidak punya,
-   jadi aturan ini tidak berpengaruh apa pun di sana. */
-.db-float.f5 {
-  width: 170px; height: 170px; background: var(--navy);
-  bottom: 18%; left: 38%; --rot: -10deg; transform: rotate(-10deg);
-  border-radius: 28px; animation-delay: -13s;
-}
 
 /* ============================================================
  * TABEL DAFTAR ORDER -- lebar kolom & keterbacaan

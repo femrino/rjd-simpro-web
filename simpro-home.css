@@ -64,82 +64,10 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 
 .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
 
-/* ============ ANIMATED BACKGROUND ============ */
-.bg-canvas {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-/* Gradient mesh */
-.bg-gradient {
-  position: absolute;
-  inset: -20%;
-  background:
-    radial-gradient(circle at 15% 20%, rgba(189,67,53,.08) 0%, transparent 35%),
-    radial-gradient(circle at 85% 75%, rgba(23,33,52,.07) 0%, transparent 40%),
-    radial-gradient(circle at 50% 50%, rgba(200,150,74,.05) 0%, transparent 45%);
-  animation: meshShift 18s ease-in-out infinite alternate;
-}
-
-@keyframes meshShift {
-  0%   { transform: translate(0,0) scale(1); }
-  50%  { transform: translate(-2%,3%) scale(1.05); }
-  100% { transform: translate(2%,-2%) scale(1.02); }
-}
-
-/* Floating shapes */
-.float-shape {
-  position: absolute;
-  border-radius: 24px;
-  opacity: 0.06;
-  animation: floatY 14s ease-in-out infinite;
-}
-.float-shape.s1 { width: 180px; height: 180px; background: var(--terra); top: 8%; left: 6%; transform: rotate(15deg); animation-delay: 0s; }
-.float-shape.s2 { width: 120px; height: 120px; background: var(--navy); top: 60%; left: 10%; transform: rotate(-20deg); animation-delay: -3s; border-radius: 50%; }
-.float-shape.s3 { width: 220px; height: 220px; background: var(--gold); top: 15%; right: 8%; transform: rotate(8deg); animation-delay: -6s; border-radius: 32px; }
-.float-shape.s4 { width: 90px; height: 90px; background: var(--terra); bottom: 12%; right: 15%; transform: rotate(25deg); animation-delay: -9s; border-radius: 50%; }
-.float-shape.s5 { width: 160px; height: 160px; background: var(--navy); bottom: 20%; left: 40%; transform: rotate(-10deg); animation-delay: -4s; }
-
-@keyframes floatY {
-  0%, 100% { transform: translateY(0) rotate(var(--rot, 0deg)); }
-  50% { transform: translateY(-30px) rotate(var(--rot, 0deg)); }
-}
-
-.float-shape.s1 { --rot: 15deg; }
-.float-shape.s2 { --rot: -20deg; }
-.float-shape.s3 { --rot: 8deg; }
-.float-shape.s4 { --rot: 25deg; }
-.float-shape.s5 { --rot: -10deg; }
-
-/* Particle dots */
-.particle {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  opacity: 0;
-  animation: particleRise 12s linear infinite;
-}
-.particle:nth-child(1) { left: 10%; animation-delay: 0s; background: var(--terra); }
-.particle:nth-child(2) { left: 22%; animation-delay: -2s; background: var(--navy); width: 3px; height: 3px; }
-.particle:nth-child(3) { left: 35%; animation-delay: -5s; background: var(--gold); width: 5px; height: 5px; }
-.particle:nth-child(4) { left: 48%; animation-delay: -1s; background: var(--terra); }
-.particle:nth-child(5) { left: 60%; animation-delay: -7s; background: var(--navy); width: 3px; height: 3px; }
-.particle:nth-child(6) { left: 72%; animation-delay: -3s; background: var(--gold); width: 6px; height: 6px; }
-.particle:nth-child(7) { left: 82%; animation-delay: -9s; background: var(--terra); }
-.particle:nth-child(8) { left: 92%; animation-delay: -4s; background: var(--navy); width: 3px; height: 3px; }
-.particle:nth-child(9) { left: 16%; animation-delay: -8s; background: var(--gold); width: 5px; height: 5px; }
-.particle:nth-child(10) { left: 55%; animation-delay: -6s; background: var(--terra); width: 3px; height: 3px; }
-
-@keyframes particleRise {
-  0%   { bottom: -10px; opacity: 0; transform: translateX(0) scale(0); }
-  10%  { opacity: 0.4; transform: translateX(0) scale(1); }
-  90%  { opacity: 0.3; }
-  100% { bottom: 110vh; opacity: 0; transform: translateX(40px) scale(0.5); }
-}
+/* ============ ANIMATED BACKGROUND ============
+   Dipindah ke simpro-global.css sebagai master (.bg-canvas/.bg-gradient/
+   .float-shape/.particle) -- dipakai bersama SEMUA halaman, bukan cuma
+   Home. Home.css tidak lagi mendefinisikannya sendiri. */
 
 /* ============ MAIN CONTAINER ============ */
 .landing-wrap {

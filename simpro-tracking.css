@@ -73,43 +73,9 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 /* .hidden dipindah ke simpro-global.css (Tahap 2 beres-beres teknis). */
 .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
 
-/* ============ ANIMATED BACKGROUND ============ */
-.tk-bg {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-.tk-bg-gradient {
-  position: absolute;
-  inset: -20%;
-  background:
-    radial-gradient(circle at 15% 20%, rgba(189,67,53,.06) 0%, transparent 35%),
-    radial-gradient(circle at 85% 75%, rgba(23,33,52,.05) 0%, transparent 40%),
-    radial-gradient(circle at 50% 50%, rgba(200,150,74,.04) 0%, transparent 45%);
-  animation: tkMeshShift 20s ease-in-out infinite alternate;
-}
-@keyframes tkMeshShift {
-  0%   { transform: translate(0,0) scale(1); }
-  50%  { transform: translate(-2%,3%) scale(1.04); }
-  100% { transform: translate(2%,-2%) scale(1.02); }
-}
-.tk-float {
-  position: absolute;
-  border-radius: 24px;
-  opacity: 0.05;
-  animation: tkFloatY 16s ease-in-out infinite;
-}
-.tk-float.f1 { width: 160px; height: 160px; background: var(--terra); top: 10%; left: 5%; --rot: 15deg; transform: rotate(15deg); }
-.tk-float.f2 { width: 100px; height: 100px; background: var(--navy); top: 65%; left: 8%; --rot: -20deg; transform: rotate(-20deg); border-radius: 50%; animation-delay: -4s; }
-.tk-float.f3 { width: 200px; height: 200px; background: var(--gold); top: 12%; right: 6%; --rot: 8deg; transform: rotate(8deg); border-radius: 32px; animation-delay: -7s; }
-.tk-float.f4 { width: 80px; height: 80px; background: var(--terra); bottom: 15%; right: 12%; --rot: 25deg; transform: rotate(25deg); border-radius: 50%; animation-delay: -10s; }
-
-@keyframes tkFloatY {
-  0%, 100% { transform: translateY(0) rotate(var(--rot, 0deg)); }
-  50% { transform: translateY(-25px) rotate(var(--rot, 0deg)); }
-}
+/* ============ ANIMATED BACKGROUND ============
+   Dipindah ke simpro-global.css sebagai master (.bg-canvas/.float-shape/
+   .particle), dipakai bersama semua halaman. Blok lokal .tk-bg* dihapus. */
 
 /* ============ HEADER ============ */
 .tk-header {
