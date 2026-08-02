@@ -7,19 +7,10 @@
  * DIMUAT DI : laporan-omset
  * ============================================================ */
 
-/* ============ TOKEN WARNA (lokal cabang laporan-omset) ============ */
-:root {
-  --cream: #F9F7F2;      --cream-deep: #F0EBE0;   --white: #FFFFFF;
-  --navy: #172134;       --navy-deep: #0F1623;    --navy-soft: #2A3754;
-  --ink: #172134;        --ink-soft: #6B7280;
-  --terra: #BD4335;      --terra-deep: #9E3528;   --terra-light: #D97A6E;
-  --thread: #BD4335;
-  --gold: #C8964A;       --emerald: #2D8A5F;      --sky: #3B7BBF;  --amber: #D9941E;
-  --line: #E5E0D6;       --line-soft: #EFEAE0;
-  --shadow-lg: 0 20px 60px rgba(15,22,35,.14);
-  --shadow-md: 0 8px 24px rgba(15,22,35,.08);
-  --shadow-sm: 0 2px 8px rgba(15,22,35,.05);
-}
+/* Token warna & .hidden dipindah ke simpro-global.css (Tahap 2 beres-beres
+   teknis) -- dulu blok :root di-copy manual di sini dan .hidden cuma
+   didefinisikan di file ini + tracking.css. Sekarang keduanya 1 sumber
+   di global. */
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -43,7 +34,6 @@ body {
 
 h1,h2,h3,h4,h5,h6 { font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif; }
 .lo-mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
-.hidden { display: none !important; }
 
 /* ============ LATAR BERANIMASI ============ */
 .lo-bg {

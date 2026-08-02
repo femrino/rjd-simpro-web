@@ -15,24 +15,10 @@
    properti yang bentrok, aturan lama yang menang. Ini disengaja supaya
    komponen yang sudah teruji tidak berubah perilakunya di tahap ini. */
 
-:root {
-  --cream: #F9F7F2;      --cream-deep: #F0EBE0;   --white: #FFFFFF;
-  --navy: #172134;       --navy-deep: #0F1623;    --navy-soft: #2A3754;
-  --ink: #172134;        --ink-soft: #6B7280;
-  --terra: #BD4335;      --terra-deep: #9E3528;   --terra-light: #D97A6E;
-  --thread: #BD4335;
-  --gold: #C8964A;       --emerald: #2D8A5F;      --sky: #3B7BBF;  --amber: #D9941E;
-  --line: #E5E0D6;       --line-soft: #EFEAE0;
-  /* paper dan paper:2 dipetakan ke cream supaya komponen lama yang masih
-     memakai token itu ikut berubah nada warnanya tanpa perlu diedit satu:satu.
-     PENTING: #db-section-tabs memakai background:var(::paper) sebagai latar
-     buram saat sticky, jadi token ini WAJIB tetap warna solid, bukan
-     transparent. */
-  --paper: #F9F7F2;      --paper-2: #F0EBE0;
-  --shadow-lg: 0 20px 60px rgba(15,22,35,.14);
-  --shadow-md: 0 8px 24px rgba(15,22,35,.08);
-  --shadow-sm: 0 2px 8px rgba(15,22,35,.05);
-}
+/* Token warna dipindah ke simpro-global.css (Tahap 2 beres-beres teknis).
+   Sebelumnya blok :root di sini di-copy manual -- sekarang cukup 1 sumber
+   di global, file ini otomatis kepakai lewat cascade karena global.css
+   dimuat lebih dulu. Kalau perlu ganti warna, edit di simpro-global.css. */
 
 body {
   font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;

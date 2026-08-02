@@ -70,7 +70,7 @@ h1,h2,h3,h4,h5,h6 { font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif
 
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; cursor: pointer; border: none; background: none; }
-.hidden { display: none !important; }
+/* .hidden dipindah ke simpro-global.css (Tahap 2 beres-beres teknis). */
 .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
 
 /* ============ ANIMATED BACKGROUND ============ */
