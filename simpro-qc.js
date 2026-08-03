@@ -22,6 +22,8 @@ const QC_API_URL = "https://script.google.com/macros/s/AKfycbwIe9qIookHaaYNEyQ0O
 
 let QC_ID_TOKEN = null;
 let QC_MASTER = null;       // hasil getMasterQC, dipuat ulang tiap qcMulai()
+let QC_DAFTAR_PO = [];      // hasil getDaftarPO (action YANG SUDAH ADA -- dipakai juga oleh Dashboard/Orderan)
+let QC_PO_TERPILIH = null;  // { idPurchaseOrder, namaKlien, artikel } -- null = BELUM dipilih dari daftar
 let QC_TAHAP_DIPILIH = "";  // Tahap yang lagi aktif di form (kosong = belum pilih)
 let QC_RINGKASAN_DIMUAT = false; // cegah fetch ulang tiap ganti tab kalau filter belum berubah
 
@@ -92,12 +94,12 @@ function qcRefresh() {
 // ============ MUAT MASTER (jenis cacat per tahap, daftar operator, dst) ============
 
 function qcMuatMaster_() {
-  fetch(QC_API_URL, {
-    method: "POST",
-    body: JSON.stringify({ idToken: QC_ID_TOKEN, action: "getMasterQC" })
-  })
-    .then(function (r) { return r.json(); })
-    .then(function (d) {
+  Promise.all([
+    fetch(QC_API_URL, { method: "POST", body: JSON.stringify({ idToken: QC_ID_TOKEN, action: "getMasterQC" }) }).then(function (r) { return r.json(); }),
+    fetch(QC_API_URL, { method: "POST", body: JSON.stringify({ idToken: QC_ID_TOKEN, action: "getDaftarPO" }) }).then(function (r) { return r.json(); })
+  ])
+    .then(function (hasil) {
+      const d = hasil[0], dPO = hasil[1];
       if (!d || !d.success) {
         qcShow("qc-isi");
         document.getElementById("qc-panel-input").innerHTML =
@@ -106,6 +108,20 @@ function qcMuatMaster_() {
       }
       QC_MASTER = d;
       qcIsiDaftarOperator_();
+
+      // Daftar PO dipakai kotak cari PO -- kalau gagal dimuat, kotak PO
+      // DIKUNCI (bukan jatuh ke ketik manual). Itu justru sumber masalah
+      // yang mau dihindari: ID PO ketik manual rawan typo, datanya jadi
+      // tidak terkoneksi ke PO asli di SD Purchase Order.
+      const inputPO = document.getElementById("qc-po");
+      if (dPO && dPO.success) {
+        QC_DAFTAR_PO = dPO.daftar || [];
+        if (inputPO) { inputPO.disabled = false; inputPO.placeholder = "Ketik nama klien / artikel / ID PO..."; }
+      } else {
+        QC_DAFTAR_PO = [];
+        if (inputPO) { inputPO.disabled = true; inputPO.placeholder = "Daftar PO gagal dimuat -- coba muat ulang halaman."; }
+      }
+
       qcShow("qc-isi");
     })
     .catch(function () {
@@ -121,6 +137,63 @@ function qcIsiDaftarOperator_() {
   dl.innerHTML = (QC_MASTER.daftarOperator || []).map(function (op) {
     return '<option value="' + rjdEscapeHtml_(op) + '"></option>';
   }).join("");
+}
+
+// ============ KOTAK CARI PO (anti-typo -- WAJIB pilih dari daftar, bukan ketik bebas) ============
+
+function qcCariPO() {
+  const teks = document.getElementById("qc-po").value.trim().toLowerCase();
+  const dropdown = document.getElementById("qc-po-dropdown");
+  if (!teks) { dropdown.classList.add("hidden"); dropdown.innerHTML = ""; return; }
+
+  const cocok = QC_DAFTAR_PO.filter(function (po) {
+    const gabungan = [po.idPurchaseOrder, po.namaKlien, (po.artikel || []).join(" ")].join(" ").toLowerCase();
+    return gabungan.indexOf(teks) !== -1;
+  }).slice(0, 8);
+
+  if (!cocok.length) {
+    dropdown.innerHTML = '<div class="qc-po-kosong">Tidak ketemu. Cek ejaan, atau pastikan PO-nya sudah ada di Daftar PO.</div>';
+    dropdown.classList.remove("hidden");
+    return;
+  }
+
+  dropdown.innerHTML = cocok.map(function (po, i) {
+    const artikelTeks = (po.artikel || []).join(", ") || "-";
+    return '<div class="qc-po-opsi" onclick="qcPilihPO(' + i + ')">' +
+      '<div class="qc-po-opsi-id">' + rjdEscapeHtml_(po.idPurchaseOrder) + '</div>' +
+      '<div class="qc-po-opsi-sub">' + rjdEscapeHtml_(po.namaKlien) + ' &middot; ' + rjdEscapeHtml_(artikelTeks) + '</div>' +
+      '</div>';
+  }).join("");
+  dropdown.dataset.hasilCocok = JSON.stringify(cocok.map(function (po) { return po.idPurchaseOrder; }));
+  dropdown.classList.remove("hidden");
+}
+
+function qcPilihPO(indexTampil) {
+  const teks = document.getElementById("qc-po").value.trim().toLowerCase();
+  const cocok = QC_DAFTAR_PO.filter(function (po) {
+    const gabungan = [po.idPurchaseOrder, po.namaKlien, (po.artikel || []).join(" ")].join(" ").toLowerCase();
+    return gabungan.indexOf(teks) !== -1;
+  }).slice(0, 8);
+  const po = cocok[indexTampil];
+  if (!po) return;
+
+  QC_PO_TERPILIH = po;
+  document.getElementById("qc-po-dropdown").classList.add("hidden");
+  document.getElementById("qc-po").value = "";
+  document.getElementById("qc-po").classList.add("hidden");
+  document.getElementById("qc-po-terpilih-id").textContent = po.idPurchaseOrder;
+  document.getElementById("qc-po-terpilih-sub").textContent =
+    po.namaKlien + (po.artikel && po.artikel.length ? " \u00b7 " + po.artikel.join(", ") : "");
+  document.getElementById("qc-po-terpilih").classList.add("show");
+}
+
+function qcGantiPO() {
+  QC_PO_TERPILIH = null;
+  document.getElementById("qc-po-terpilih").classList.remove("show");
+  const input = document.getElementById("qc-po");
+  input.classList.remove("hidden");
+  input.value = "";
+  input.focus();
 }
 
 // ============ TAB SWITCHER ============
@@ -213,7 +286,7 @@ function qcTampilkanError_(pesan) {
 }
 
 function qcResetForm_() {
-  document.getElementById("qc-po").value = "";
+  qcGantiPO();
   document.getElementById("qc-operator").value = "";
   document.getElementById("qc-periksa").value = "";
   document.getElementById("qc-lolos").value = "";
@@ -230,7 +303,7 @@ function qcSubmitInspeksi() {
   document.getElementById("qc-submit-error").classList.add("hidden");
   document.getElementById("qc-submit-sukses").classList.add("hidden");
 
-  const idPO = document.getElementById("qc-po").value.trim();
+  const idPO = QC_PO_TERPILIH ? QC_PO_TERPILIH.idPurchaseOrder : "";
   const operator = document.getElementById("qc-operator").value.trim();
   const qtyDiperiksa = Number(document.getElementById("qc-periksa").value) || 0;
   const qtyLolos = Number(document.getElementById("qc-lolos").value) || 0;
@@ -238,7 +311,7 @@ function qcSubmitInspeksi() {
   const detailCacat = qcKumpulkanDetailCacat_();
   const totalDetail = detailCacat.reduce(function (s, d) { return s + d.qty; }, 0);
 
-  if (!idPO) return qcTampilkanError_("Purchase Order wajib diisi.");
+  if (!idPO) return qcTampilkanError_("Pilih PO dari daftar (ketik lalu tap hasilnya) -- jangan dikosongkan.");
   if (!QC_TAHAP_DIPILIH) return qcTampilkanError_("Pilih tahap (Potong/Jahit/Finishing) dulu.");
   if (!operator) return qcTampilkanError_("Operator / line wajib diisi.");
   if (qtyDiperiksa <= 0) return qcTampilkanError_("Qty diperiksa harus lebih dari 0.");

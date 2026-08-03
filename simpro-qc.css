@@ -43,6 +43,32 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 }
 .qc-field textarea { resize: vertical; }
 
+/* ---- kotak cari PO: dropdown hasil + kartu konfirmasi setelah dipilih ----
+   SENGAJA bukan <select> biasa -- daftar PO bisa ratusan baris, scroll di
+   dropdown native jelek dipakai di HP. SENGAJA bukan <input> bebas ketik --
+   itu justru sumber masalah (typo bikin data tidak terkoneksi ke PO asli). */
+.qc-po-field { position: relative; }
+#qc-po-dropdown { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; right: 0;
+  background: var(--white); border: 1px solid var(--line-soft); border-radius: 10px;
+  box-shadow: var(--shadow-md); max-height: 260px; overflow-y: auto; }
+.qc-po-opsi { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--line-soft); }
+.qc-po-opsi:last-child { border-bottom: none; }
+.qc-po-opsi:hover, .qc-po-opsi:active { background: var(--cream, var(--paper-2)); }
+.qc-po-opsi-id { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; font-weight: 700; color: var(--navy); }
+.qc-po-opsi-sub { font-size: 11.5px; color: var(--ink-soft); margin-top: 1px; }
+.qc-po-kosong { padding: 12px 14px; font-size: 12.5px; color: var(--ink-soft); font-style: italic; }
+
+.qc-po-terpilih { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--cream, var(--paper-2)); border: 1px solid var(--line-soft); border-radius: 9px;
+  padding: 10px 14px; }
+.qc-po-terpilih.show { display: flex; }
+.qc-po-terpilih-id { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 700; color: var(--navy); }
+.qc-po-terpilih-sub { font-size: 11.5px; color: var(--ink-soft); margin-top: 1px; }
+.qc-po-terpilih button { flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--navy);
+  background: var(--white); border: 1px solid var(--line-soft); border-radius: 7px; padding: 6px 12px;
+  cursor: pointer; }
+.qc-po-terpilih button:hover { border-color: var(--navy); }
+
 .qc-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
 .qc-grid-2 .qc-field { margin-bottom: 0; }
 
