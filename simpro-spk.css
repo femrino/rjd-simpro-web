@@ -233,3 +233,22 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 .sp-riw-btn { font-size: 12px; font-weight: 700; color: var(--thread); background: var(--white);
   border: 1px solid var(--line-soft); border-radius: 8px; padding: 6px 13px; cursor: pointer; }
 .sp-riw-btn:hover { border-color: var(--thread); }
+
+/* 5 tab -- di layar sempit harus bisa turun baris, kalau tidak tabnya
+   terhimpit sampai tulisannya tidak terbaca. */
+.sp-tabs { flex-wrap: wrap; }
+.sp-tab { flex: 1 1 140px; }
+
+/* ============ TAB SETORAN HASIL ============ */
+.sp-setor-qty { width: 58px; padding: 6px 4px; border: 1px solid var(--line-soft); border-radius: 7px;
+  font-family: 'Inter', sans-serif; font-size: 13px; text-align: center; color: var(--ink); }
+.sp-setor-qty:focus { outline: none; border-color: var(--ink); }
+.sp-setor-qty.sp-lebih { border-color: var(--thread); background: #FDECEA; color: #8F2C22; }
+.sp-setor-jenis { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  background: var(--white); border: 1px solid var(--line-soft); border-radius: 5px;
+  padding: 2px 7px; margin-left: 6px; color: var(--ink-soft); }
+
+@media (max-width: 640px) {
+  .sp-setor-qty { width: 48px; }
+  .sp-tab { flex: 1 1 45%; font-size: 12px; padding: 9px 6px; }
+}

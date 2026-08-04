@@ -87,7 +87,11 @@ function spMuatDaftarLine_() {
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
-    if (d && d.success) spIsiFilterLineKonf_(d.daftar || []);
+    if (d && d.success) {
+      window.SP_DAFTAR_LINE = d.daftar || [];
+      spIsiFilterLineKonf_(window.SP_DAFTAR_LINE);
+      spMuatLineSetoran_();
+    }
   })
   .catch(function () { /* filter line opsional -- halaman tetap jalan */ });
 }
@@ -162,6 +166,7 @@ function spPilihPO(idPO) {
   window.SP_PO_AKTIF = idPO;
   window.SP_PO = null;
   window.SP_CUT = null;
+  window.SP_SETOR = null;
   spSwitchTab(window.SP_TAB || "cutting");
 }
 
@@ -424,6 +429,7 @@ function spSwitchTab(tab) {
   document.getElementById("sp-panel-bagi").classList.toggle("hidden", tab !== "bagi");
   document.getElementById("sp-panel-konf").classList.toggle("hidden", tab !== "konf");
   document.getElementById("sp-panel-riw").classList.toggle("hidden", tab !== "riw");
+  document.getElementById("sp-panel-setor").classList.toggle("hidden", tab !== "setor");
   // Kartu "Pilih PO" cuma relevan untuk dua tab pertama. Tab Konfirmasi
   // melihat semua yang menunggu LINTAS ORDER -- memaksa pilih PO dulu di situ
   // justru membalik cara kepala line bekerja (dia pegang beberapa order).
@@ -432,6 +438,7 @@ function spSwitchTab(tab) {
 
   if (tab === "konf") { spMuatKonfirmasi(); return; }
   if (tab === "riw") { spMuatRiwayat(); return; }
+  if (tab === "setor") { spMuatLineSetoran_(); spMuatSetoran(); return; }
   if (!window.SP_PO_AKTIF) return;
   if (tab === "cutting" && !window.SP_CUT) spMuatCutting();
   if (tab === "bagi" && !window.SP_PO) spMuatDistribusi();
@@ -940,6 +947,209 @@ function spBatalkanCatatan(i) {
     spMuatRiwayat();
   })
   .catch(function () { alert("Gagal menghubungi server."); });
+}
+
+/* ============================================================
+ * TAB -- SETORAN HASIL (line/subkon -> Finishing)
+ * ============================================================
+ * Menutup lubang di tengah rantai: potongan keluar sudah tercatat, barang jadi
+ * masuk kembali belum. Tanpa ini, WIP per line tidak terlihat dan upah borongan
+ * tidak punya dasar yang benar -- dasarnya harus qty DISETOR, bukan qty yang
+ * dibagikan (line yang kehilangan 5 pcs jangan sampai dibayar penuh).
+ *
+ * Yang ditampilkan sebagai batas adalah SISA DI TANGAN LINE, bukan qty order.
+ * Line tidak mungkin menyetor lebih dari yang dia terima -- angka yang melebihi
+ * pasti salah input, dan backend menolaknya.
+ * ============================================================ */
+
+function spMuatLineSetoran_() {
+  // Dropdown line diisi dari daftar yang sudah dimuat untuk tab Konfirmasi --
+  // satu sumber, tidak perlu panggil server dua kali.
+  const sel = document.getElementById("sp-setor-line");
+  if (!sel || !window.SP_DAFTAR_LINE) return;
+  const terpilih = sel.value;
+  sel.innerHTML = '<option value="">-- Pilih line penyetor --</option>' +
+    window.SP_DAFTAR_LINE.map(function (l) {
+      return '<option value="' + rjdEscapeHtml_(l.idLine) + '">' + rjdEscapeHtml_(l.namaLine) +
+        (l.lokasi ? " (" + rjdEscapeHtml_(l.lokasi) + ")" : "") + '</option>';
+    }).join("");
+  if (terpilih) sel.value = terpilih;
+}
+
+function spMuatSetoran() {
+  const wadah = document.getElementById("sp-setor-tabel");
+  if (!window.SP_PO_AKTIF) {
+    if (wadah) wadah.innerHTML = '<p class="sp-info">Pilih Purchase Order dulu di atas.</p>';
+    return;
+  }
+  const idLine = (document.getElementById("sp-setor-line") || {}).value || "";
+  if (!idLine) {
+    if (wadah) wadah.innerHTML = '<p class="sp-info">Pilih line yang menyetor.</p>';
+    window.SP_SETOR = null;
+    spHitungTotalSetor();
+    return;
+  }
+  if (wadah) wadah.innerHTML = '<p class="sp-info">Memuat...</p>';
+
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: SP_ID_TOKEN, action: "getLineUntukSetoran",
+      idPurchaseOrder: window.SP_PO_AKTIF, idLine: idLine
+    })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) {
+      wadah.innerHTML = '<p class="sp-pesan sp-galat">' +
+        rjdEscapeHtml_((d && d.error) || "Gagal memuat data setoran.") + '</p>';
+      window.SP_SETOR = null;
+      spHitungTotalSetor();
+      return;
+    }
+    window.SP_SETOR = d;
+    spRenderFormSetoran();
+  })
+  .catch(function () {
+    wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
+  });
+}
+
+function spRenderFormSetoran() {
+  const po = window.SP_SETOR;
+  if (!po) return;
+
+  const dipakai = {};
+  po.baris.forEach(function (b) {
+    Object.keys(b.dipegang).forEach(function (sz) { dipakai[sz] = true; });
+  });
+  const kolom = po.sizeKolom.filter(function (sz) { return dipakai[sz]; });
+
+  const wip = po.totalDipegang - po.totalSudahSetor;
+  document.getElementById("sp-setor-ringkas").innerHTML =
+    '<div class="sp-ringkas-judul">' + rjdEscapeHtml_(po.namaLine) +
+      ' <span class="sp-setor-jenis">' + rjdEscapeHtml_(po.jenisLine) + '</span></div>' +
+    '<div class="sp-ringkas-list">' +
+      '<div class="sp-ringkas-item"><span>Diterima line ini</span><b>' + po.totalDipegang + ' pcs</b></div>' +
+      '<div class="sp-ringkas-item"><span>Sudah disetor</span><b>' + po.totalSudahSetor + ' pcs</b></div>' +
+      '<div class="sp-ringkas-item"><span>Masih di tangan line</span><b>' + wip + ' pcs</b></div>' +
+    '</div>';
+  document.getElementById("sp-setor-ringkas").classList.remove("hidden");
+
+  document.getElementById("sp-setor-tabel").innerHTML =
+    '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
+      '<th>Artikel / Warna</th>' +
+      kolom.map(function (sz) { return '<th class="num">' + rjdEscapeHtml_(sz) + '</th>'; }).join("") +
+      '<th class="num">Total</th>' +
+    '</tr></thead><tbody>' +
+    po.baris.map(function (b, i) {
+      const habis = b.totalSisa <= 0;
+      return '<tr' + (habis ? ' class="sp-habis"' : '') + '>' +
+        '<td><div class="sp-warna">' + rjdEscapeHtml_(b.warna || "-") + '</div>' +
+          '<div class="sp-artikel">' + rjdEscapeHtml_([b.artikel, b.style].filter(Boolean).join(" / ")) + '</div>' +
+          '<div class="sp-sisa-info">' + (habis ? 'sudah disetor semua'
+            : ('sisa ' + b.totalSisa + ' dari ' + b.totalDipegang + ' pcs')) + '</div></td>' +
+        kolom.map(function (sz) {
+          const dipegangSz = b.dipegang[sz] || 0;
+          if (!dipegangSz) return '<td class="num sp-kosong">&#183;</td>';
+          const sisa = b.sisa[sz] === undefined ? 0 : b.sisa[sz];
+          if (sisa <= 0) return '<td class="num sp-kosong" title="sudah disetor semua">0</td>';
+          return '<td class="num"><input class="sp-setor-qty" type="number" min="0" max="' + sisa + '"' +
+            ' data-baris="' + i + '" data-size="' + rjdEscapeHtml_(sz) + '"' +
+            ' oninput="spHitungTotalSetor()" placeholder="0"/>' +
+            '<div class="sp-maks">/' + sisa + '</div></td>';
+        }).join("") +
+        '<td class="num sp-total-baris" id="sp-setor-tot-' + i + '">0</td>' +
+      '</tr>';
+    }).join("") +
+    '</tbody></table></div>';
+
+  const t = new Date();
+  const inp = document.getElementById("sp-setor-tanggal");
+  if (inp && !inp.value) {
+    inp.value = t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") +
+      "-" + String(t.getDate()).padStart(2, "0");
+  }
+  spHitungTotalSetor();
+}
+
+function spHitungTotalSetor() {
+  const po = window.SP_SETOR;
+  const perBaris = {};
+  let total = 0;
+  document.querySelectorAll(".sp-setor-qty").forEach(function (inp) {
+    const v = Number(inp.value) || 0;
+    const maks = Number(inp.max) || 0;
+    inp.classList.toggle("sp-lebih", v > maks);
+    perBaris[inp.dataset.baris] = (perBaris[inp.dataset.baris] || 0) + v;
+    total += v;
+  });
+  if (po) {
+    po.baris.forEach(function (b, i) {
+      const el = document.getElementById("sp-setor-tot-" + i);
+      if (el) el.textContent = perBaris[i] || 0;
+    });
+  }
+  const elTotal = document.getElementById("sp-setor-total");
+  if (elTotal) elTotal.textContent = total;
+  const btn = document.getElementById("sp-setor-simpan-btn");
+  if (btn) btn.disabled = (total <= 0);
+}
+
+function spSimpanSetoran() {
+  const po = window.SP_SETOR;
+  if (!po) return;
+
+  const perBaris = {};
+  document.querySelectorAll(".sp-setor-qty").forEach(function (inp) {
+    const v = Number(inp.value) || 0;
+    if (v <= 0) return;
+    const i = inp.dataset.baris;
+    if (!perBaris[i]) perBaris[i] = {};
+    perBaris[i][inp.dataset.size] = v;
+  });
+  const barisKirim = Object.keys(perBaris).map(function (i) {
+    const b = po.baris[i];
+    return { brand: b.brand, artikel: b.artikel, style: b.style, warna: b.warna, sizeQty: perBaris[i] };
+  });
+  if (!barisKirim.length) { alert("Belum ada qty yang diisi."); return; }
+
+  const btn = document.getElementById("sp-setor-simpan-btn");
+  btn.disabled = true;
+  btn.textContent = "Menyimpan...";
+
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: SP_ID_TOKEN, action: "simpanSetoranHasil",
+      payload: {
+        idPurchaseOrder: po.idPurchaseOrder,
+        idLine: po.idLine,
+        tanggalSetor: (document.getElementById("sp-setor-tanggal") || {}).value || "",
+        disetorkanOleh: (document.getElementById("sp-setor-dari") || {}).value || "",
+        diterimaOleh: (document.getElementById("sp-setor-penerima") || {}).value || "",
+        catatan: (document.getElementById("sp-setor-catatan") || {}).value || "",
+        baris: barisKirim
+      }
+    })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (h) {
+    btn.disabled = false;
+    btn.textContent = "Simpan Setoran";
+    if (!h || !h.success) { alert((h && h.error) || "Gagal menyimpan setoran."); return; }
+    const kotak = document.getElementById("sp-setor-sukses");
+    kotak.innerHTML = '<div class="sp-sukses-isi"><b>' + h.totalQty +
+      ' pcs</b> disetor oleh <b>' + rjdEscapeHtml_(h.namaLine) + '</b>. ' +
+      'Sisa di tangan line: <b>' + h.sisaDiTangan + ' pcs</b>.</div>';
+    kotak.classList.remove("hidden");
+    spMuatSetoran();
+  })
+  .catch(function () {
+    btn.disabled = false;
+    btn.textContent = "Simpan Setoran";
+    alert("Gagal menghubungi server.");
+  });
 }
 
 function spPesan_(id, teks, bahaya) {
