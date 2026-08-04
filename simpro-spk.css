@@ -152,3 +152,41 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   .sp-cut-qty { width: 48px; }
   .sp-kain-row { grid-template-columns: 1fr; }
 }
+
+/* ============ TAB KONFIRMASI TERIMA ============
+   Kartu per serah-terima, dirancang untuk dibuka kepala line dari HP di lantai:
+   angka besar, dua tombol jelas, rincian size terlihat tanpa perlu diklik. */
+.sp-konf-kartu { border: 1px solid var(--line-soft); border-radius: 12px; padding: 14px 16px;
+  margin-bottom: 12px; background: var(--white); }
+.sp-konf-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.sp-konf-line { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 15px; color: var(--ink); }
+.sp-konf-sub { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
+.sp-konf-qty { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 24px;
+  color: var(--ink); line-height: 1; flex-shrink: 0; }
+.sp-konf-qty span { display: block; font-family: 'Inter', sans-serif; font-size: 9.5px;
+  font-weight: 500; color: var(--ink-soft); text-align: right; margin-top: 2px; }
+.sp-konf-artikel { font-size: 12.5px; color: var(--ink); margin-top: 8px; }
+.sp-konf-sizes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.sp-konf-size { font-size: 11.5px; background: var(--cream); border-radius: 6px; padding: 4px 9px;
+  color: var(--ink-soft); }
+.sp-konf-size b { color: var(--ink); }
+.sp-konf-catatan { font-size: 11.5px; color: var(--ink-soft); font-style: italic; margin-top: 8px; }
+
+.sp-konf-aksi { display: flex; gap: 8px; margin-top: 12px; }
+.sp-konf-btn { flex: 1; padding: 11px 0; border-radius: 9px; font-size: 13px; font-weight: 700;
+  cursor: pointer; border: 1px solid transparent; transition: opacity .15s; }
+.sp-konf-btn:hover { opacity: .88; }
+.sp-konf-btn.terima { background: #2C6B3F; color: var(--white); }
+.sp-konf-btn.selisih { background: var(--white); color: #8A5D1F; border-color: #E3C388; }
+.sp-konf-btn.batal { background: var(--white); color: var(--ink-soft); border-color: var(--line-soft); }
+
+.sp-konf-selisih { border-top: 1px solid var(--line-soft); margin-top: 12px; padding-top: 12px; }
+.sp-konf-hint { font-size: 11.5px; color: var(--ink-soft); font-style: italic; margin: 0 0 10px; }
+.sp-konf-size-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; }
+.sp-konf-size-sel { text-align: center; }
+.sp-konf-size-sel label { display: block; font-size: 11px; font-weight: 700; color: var(--ink);
+  margin-bottom: 4px; }
+.sp-konf-qty-input { width: 100%; padding: 8px 4px; border: 1px solid var(--line-soft);
+  border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 13px; text-align: center; color: var(--ink); }
+.sp-konf-qty-input:focus { outline: none; border-color: var(--ink); }
+.sp-konf-size-asal { font-size: 9.5px; color: var(--ink-soft); margin-top: 3px; }

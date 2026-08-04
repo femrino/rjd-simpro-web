@@ -76,6 +76,20 @@ function spMulai() {
   const el = document.getElementById("sp-nav-logout");
   if (el) el.classList.remove("hidden");
   spMuatDaftarPO();
+  spMuatDaftarLine_();
+}
+
+/** Daftar line untuk filter di tab Konfirmasi. */
+function spMuatDaftarLine_() {
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getDaftarLine" })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (d && d.success) spIsiFilterLineKonf_(d.daftar || []);
+  })
+  .catch(function () { /* filter line opsional -- halaman tetap jalan */ });
 }
 
 /* ============================================================
@@ -148,7 +162,6 @@ function spPilihPO(idPO) {
   window.SP_PO_AKTIF = idPO;
   window.SP_PO = null;
   window.SP_CUT = null;
-  document.getElementById("sp-tabs").classList.remove("hidden");
   spSwitchTab(window.SP_TAB || "cutting");
 }
 
@@ -405,6 +418,14 @@ function spSwitchTab(tab) {
   });
   document.getElementById("sp-panel-cutting").classList.toggle("hidden", tab !== "cutting");
   document.getElementById("sp-panel-bagi").classList.toggle("hidden", tab !== "bagi");
+  document.getElementById("sp-panel-konf").classList.toggle("hidden", tab !== "konf");
+  // Kartu "Pilih PO" cuma relevan untuk dua tab pertama. Tab Konfirmasi
+  // melihat semua yang menunggu LINTAS ORDER -- memaksa pilih PO dulu di situ
+  // justru membalik cara kepala line bekerja (dia pegang beberapa order).
+  const kartuPO = document.getElementById("sp-kartu-po");
+  if (kartuPO) kartuPO.classList.toggle("hidden", tab === "konf");
+
+  if (tab === "konf") { spMuatKonfirmasi(); return; }
   if (!window.SP_PO_AKTIF) return;
   if (tab === "cutting" && !window.SP_CUT) spMuatCutting();
   if (tab === "bagi" && !window.SP_PO) spMuatDistribusi();
@@ -591,6 +612,184 @@ function spSimpanCutting() {
     btn.textContent = "Simpan Hasil Potong";
     alert("Gagal menghubungi server.");
   });
+}
+
+/* ============================================================
+ * TAB 3 -- KONFIRMASI TERIMA (kepala line)
+ * ============================================================
+ * Kontrol pihak kedua. Cutting yang MENCATAT serah-terima, line yang
+ * MEMBENARKAN -- kalau line mencatat sendiri jatahnya, tidak ada pembanding
+ * saat terjadi sengketa, padahal angka ini nanti jadi dasar upah borongan.
+ *
+ * Selisih TIDAK mengedit angka asli: backend membuat baris KOREKSI berisi
+ * selisihnya, sehingga total alokasi jadi benar TANPA menghapus jejak "cutting
+ * menyerahkan sekian, line mengaku terima sekian". Justru selisih itulah datanya.
+ *
+ * Tab ini TIDAK butuh PO dipilih -- kepala line melihat semua yang menunggu
+ * untuknya, lintas order.
+ * ============================================================ */
+
+function spMuatKonfirmasi() {
+  const wadah = document.getElementById("sp-konf-daftar");
+  if (wadah) wadah.innerHTML = '<p class="sp-info">Memuat daftar...</p>';
+  const idLine = (document.getElementById("sp-konf-line") || {}).value || "";
+
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getMenungguKonfirmasi", idLine: idLine })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) {
+      wadah.innerHTML = '<p class="sp-pesan sp-galat">' +
+        rjdEscapeHtml_((d && d.error) || "Gagal memuat daftar konfirmasi.") + '</p>';
+      return;
+    }
+    window.SP_KONF = d.daftar || [];
+    spRenderKonfirmasi();
+  })
+  .catch(function () {
+    wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
+  });
+}
+
+/** Isi dropdown filter line di tab konfirmasi (dari daftar line aktif). */
+function spIsiFilterLineKonf_(daftarLine) {
+  const sel = document.getElementById("sp-konf-line");
+  if (!sel) return;
+  const terpilih = sel.value;
+  sel.innerHTML = '<option value="">Semua line</option>' +
+    (daftarLine || []).map(function (l) {
+      return '<option value="' + rjdEscapeHtml_(l.idLine) + '">' + rjdEscapeHtml_(l.namaLine) + '</option>';
+    }).join("");
+  if (terpilih) sel.value = terpilih;
+}
+
+function spRenderKonfirmasi() {
+  const wadah = document.getElementById("sp-konf-daftar");
+  if (!wadah) return;
+  const daftar = window.SP_KONF || [];
+
+  if (!daftar.length) {
+    wadah.innerHTML = '<p class="sp-info">Tidak ada serah-terima yang menunggu konfirmasi.</p>';
+    return;
+  }
+
+  wadah.innerHTML = daftar.map(function (k, i) {
+    const sizes = Object.keys(k.sizeQty || {});
+    return '<div class="sp-konf-kartu" id="sp-konf-' + i + '">' +
+      '<div class="sp-konf-head">' +
+        '<div>' +
+          '<div class="sp-konf-line">' + rjdEscapeHtml_(k.namaLine || k.idLine || "-") + '</div>' +
+          '<div class="sp-konf-sub">' + rjdEscapeHtml_(k.idPurchaseOrder) +
+            ' &#183; ' + rjdEscapeHtml_(k.tanggalSerah || "-") +
+            (k.diserahkanOleh ? ' &#183; dari ' + rjdEscapeHtml_(k.diserahkanOleh) : '') + '</div>' +
+        '</div>' +
+        '<div class="sp-konf-qty">' + k.totalQty + '<span>pcs</span></div>' +
+      '</div>' +
+      '<div class="sp-konf-artikel">' +
+        rjdEscapeHtml_([k.artikel, k.style].filter(Boolean).join(" / ")) +
+        ' &#183; <b>' + rjdEscapeHtml_(k.warna || "-") + '</b></div>' +
+      // Rincian size ditampilkan supaya kepala line bisa mencocokkan bundel
+      // fisik dengan angkanya, bukan cuma total.
+      '<div class="sp-konf-sizes">' +
+        sizes.map(function (sz) {
+          return '<span class="sp-konf-size">' + rjdEscapeHtml_(sz) + ' <b>' + k.sizeQty[sz] + '</b></span>';
+        }).join("") +
+      '</div>' +
+      (k.catatan ? '<div class="sp-konf-catatan">' + rjdEscapeHtml_(k.catatan) + '</div>' : '') +
+
+      '<div class="sp-konf-aksi">' +
+        '<button class="sp-konf-btn terima" data-i="' + i + '" onclick="spKonfirmasiCocok(this.dataset.i)" type="button">Terima sesuai</button>' +
+        '<button class="sp-konf-btn selisih" data-i="' + i + '" onclick="spBukaSelisih(this.dataset.i)" type="button">Ada selisih</button>' +
+      '</div>' +
+
+      // Panel selisih: isi qty yang BENAR-BENAR diterima per size.
+      '<div class="sp-konf-selisih hidden" id="sp-konf-selisih-' + i + '">' +
+        '<p class="sp-konf-hint">Isi jumlah yang benar-benar diterima. Angka asli tidak diubah &#8212; selisihnya dicatat sebagai baris koreksi tersendiri.</p>' +
+        '<div class="sp-konf-size-grid">' +
+          sizes.map(function (sz) {
+            return '<div class="sp-konf-size-sel"><label>' + rjdEscapeHtml_(sz) + '</label>' +
+              '<input class="sp-konf-qty-input" type="number" min="0" data-kartu="' + i + '"' +
+              ' data-size="' + rjdEscapeHtml_(sz) + '" value="' + k.sizeQty[sz] + '"/>' +
+              '<div class="sp-konf-size-asal">dari ' + k.sizeQty[sz] + '</div></div>';
+          }).join("") +
+        '</div>' +
+        '<div class="sp-field" style="margin-top:10px">' +
+          '<label>Catatan (kenapa berbeda)</label>' +
+          '<input id="sp-konf-catatan-' + i + '" placeholder="mis. 3 pcs kain cacat, dikembalikan ke cutting" type="text"/>' +
+        '</div>' +
+        '<div class="sp-konf-aksi">' +
+          '<button class="sp-konf-btn batal" data-i="' + i + '" onclick="spTutupSelisih(this.dataset.i)" type="button">Batal</button>' +
+          '<button class="sp-konf-btn selisih" data-i="' + i + '" onclick="spKonfirmasiSelisih(this.dataset.i)" type="button">Simpan selisih</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join("");
+}
+
+function spBukaSelisih(i) {
+  const el = document.getElementById("sp-konf-selisih-" + i);
+  if (el) el.classList.remove("hidden");
+}
+function spTutupSelisih(i) {
+  const el = document.getElementById("sp-konf-selisih-" + i);
+  if (el) el.classList.add("hidden");
+}
+
+function spKonfirmasiCocok(i) {
+  const k = (window.SP_KONF || [])[i];
+  if (!k) return;
+  spKirimKonfirmasi_({ idDistribusi: k.idDistribusi, cocok: true });
+}
+
+function spKonfirmasiSelisih(i) {
+  const k = (window.SP_KONF || [])[i];
+  if (!k) return;
+
+  const sizeQtyDiterima = {};
+  let ada = false;
+  document.querySelectorAll('.sp-konf-qty-input[data-kartu="' + i + '"]').forEach(function (inp) {
+    const v = Number(inp.value) || 0;
+    sizeQtyDiterima[inp.dataset.size] = v;
+    if (v !== (k.sizeQty[inp.dataset.size] || 0)) ada = true;
+  });
+  if (!ada) {
+    alert("Angkanya sama persis dengan yang dicatat.\n\nKalau memang cocok, pakai tombol \"Terima sesuai\".");
+    return;
+  }
+  const catatan = (document.getElementById("sp-konf-catatan-" + i) || {}).value || "";
+  if (!catatan.trim()) {
+    alert("Isi dulu catatan kenapa jumlahnya berbeda.\n\nStatus \"ada selisih\" tanpa keterangan tidak menolong siapa pun saat ditelusuri nanti.");
+    return;
+  }
+  spKirimKonfirmasi_({
+    idDistribusi: k.idDistribusi,
+    cocok: false,
+    sizeQtyDiterima: sizeQtyDiterima,
+    catatan: catatan.trim()
+  });
+}
+
+function spKirimKonfirmasi_(payload) {
+  payload.diterimaOleh = (document.getElementById("sp-konf-nama") || {}).value || "";
+
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "konfirmasiTerima", payload: payload })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (h) {
+    if (!h || !h.success) {
+      alert((h && h.error) || "Gagal menyimpan konfirmasi.");
+      return;
+    }
+    // Konfirmasi mengubah alokasi (kalau ada koreksi), jadi cache tab Bagi ke
+    // Line dikosongkan -- kalau tidak, sisa di sana memakai angka sebelum koreksi.
+    window.SP_PO = null;
+    spMuatKonfirmasi();
+  })
+  .catch(function () { alert("Gagal menghubungi server."); });
 }
 
 function spPesan_(id, teks, bahaya) {
