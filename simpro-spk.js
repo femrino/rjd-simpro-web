@@ -423,13 +423,15 @@ function spSwitchTab(tab) {
   document.getElementById("sp-panel-cutting").classList.toggle("hidden", tab !== "cutting");
   document.getElementById("sp-panel-bagi").classList.toggle("hidden", tab !== "bagi");
   document.getElementById("sp-panel-konf").classList.toggle("hidden", tab !== "konf");
+  document.getElementById("sp-panel-riw").classList.toggle("hidden", tab !== "riw");
   // Kartu "Pilih PO" cuma relevan untuk dua tab pertama. Tab Konfirmasi
   // melihat semua yang menunggu LINTAS ORDER -- memaksa pilih PO dulu di situ
   // justru membalik cara kepala line bekerja (dia pegang beberapa order).
   const kartuPO = document.getElementById("sp-kartu-po");
-  if (kartuPO) kartuPO.classList.toggle("hidden", tab === "konf");
+  if (kartuPO) kartuPO.classList.toggle("hidden", tab === "konf" || tab === "riw");
 
   if (tab === "konf") { spMuatKonfirmasi(); return; }
+  if (tab === "riw") { spMuatRiwayat(); return; }
   if (!window.SP_PO_AKTIF) return;
   if (tab === "cutting" && !window.SP_CUT) spMuatCutting();
   if (tab === "bagi" && !window.SP_PO) spMuatDistribusi();
@@ -792,6 +794,150 @@ function spKirimKonfirmasi_(payload) {
     // Line dikosongkan -- kalau tidak, sisa di sana memakai angka sebelum koreksi.
     window.SP_PO = null;
     spMuatKonfirmasi();
+  })
+  .catch(function () { alert("Gagal menghubungi server."); });
+}
+
+/* ============================================================
+ * TAB 4 -- RIWAYAT & KOREKSI
+ * ============================================================
+ * Menjawab dua kebutuhan yang selama ini tidak ada tempatnya:
+ *
+ *   1. "Apa saja yang sudah dicatat?" -- sebelumnya harus pilih PO dulu, jadi
+ *      pertanyaan sehari-hari ("apa yang dibagi hari ini", "mana yang barusan
+ *      saya input") tidak bisa dijawab tanpa tahu PO-nya lebih dulu.
+ *   2. "Saya salah input, bagaimana membetulkannya?"
+ *
+ * SENGAJA TIDAK ADA TOMBOL EDIT. Kalau baris lama bisa ditimpa, jejak "siapa
+ * mencatat apa kapan" hilang -- padahal itu dasar upah borongan nanti, dan
+ * justru alasan seluruh struktur ini dibuat sebagai ledger.
+ *
+ * Gantinya BATALKAN: barisnya tetap ada tapi dilewati saat dijumlahkan, alasan
+ * wajib diisi, lalu input ulang yang benar. Fakta "pernah ada kesalahan" tetap
+ * tercatat -- itu yang dibutuhkan saat ditelusuri, bukan disembunyikan.
+ * ============================================================ */
+
+function spSwitchRiwayat(jenis) {
+  window.SP_RIW_JENIS = jenis;
+  document.querySelectorAll(".sp-riw-tab").forEach(function (b) {
+    b.classList.toggle("active", b.dataset.jenis === jenis);
+  });
+  spMuatRiwayat();
+}
+
+function spMuatRiwayat() {
+  const jenis = window.SP_RIW_JENIS || "distribusi";
+  const wadah = document.getElementById("sp-riw-daftar");
+  if (wadah) wadah.innerHTML = '<p class="sp-info">Memuat riwayat...</p>';
+
+  const cari = (document.getElementById("sp-riw-cari") || {}).value || "";
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: SP_ID_TOKEN,
+      action: jenis === "cutting" ? "getRiwayatCutting" : "getRiwayatDistribusi",
+      opsi: { idPurchaseOrder: cari.trim() }
+    })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) {
+      wadah.innerHTML = '<p class="sp-pesan sp-galat">' +
+        rjdEscapeHtml_((d && d.error) || "Gagal memuat riwayat.") + '</p>';
+      return;
+    }
+    window.SP_RIW = d.daftar || [];
+    spRenderRiwayat();
+  })
+  .catch(function () {
+    wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
+  });
+}
+
+function spRenderRiwayat() {
+  const wadah = document.getElementById("sp-riw-daftar");
+  if (!wadah) return;
+  const jenis = window.SP_RIW_JENIS || "distribusi";
+  const daftar = window.SP_RIW || [];
+
+  if (!daftar.length) {
+    wadah.innerHTML = '<p class="sp-info">Belum ada catatan.</p>';
+    return;
+  }
+
+  wadah.innerHTML = daftar.map(function (k, i) {
+    const dibatalkan = k.status === "Dibatalkan";
+    // Serah-terima yang SUDAH dikonfirmasi kepala line tidak bisa dibatalkan --
+    // begitu pihak kedua membenarkan, catatan itu bukan lagi input sepihak.
+    const terkunci = jenis === "distribusi" &&
+      (k.status === "Diterima" || k.status === "Ada Selisih");
+    const id = jenis === "cutting" ? k.idCutting : k.idDistribusi;
+    const total = jenis === "cutting" ? k.totalPotong : k.totalQty;
+    const tanggal = jenis === "cutting" ? k.tanggalPotong : k.tanggalSerah;
+    const oleh = jenis === "cutting" ? k.dipotongOleh : k.diserahkanOleh;
+
+    return '<div class="sp-riw-kartu' + (dibatalkan ? ' batal' : '') + '">' +
+      '<div class="sp-riw-head">' +
+        '<div>' +
+          '<div class="sp-riw-id">' + rjdEscapeHtml_(id) + '</div>' +
+          '<div class="sp-riw-sub">' + rjdEscapeHtml_(k.idPurchaseOrder) +
+            ' &#183; ' + rjdEscapeHtml_(tanggal || "-") +
+            (oleh ? ' &#183; ' + rjdEscapeHtml_(oleh) : '') + '</div>' +
+        '</div>' +
+        '<div class="sp-riw-qty">' + total + '<span>pcs</span></div>' +
+      '</div>' +
+      '<div class="sp-riw-artikel">' + rjdEscapeHtml_(k.artikel) +
+        ' &#183; <b>' + rjdEscapeHtml_(k.warna || "-") + '</b>' +
+        (jenis === "distribusi" ? ' &#8594; ' + rjdEscapeHtml_(k.namaLine) : '') + '</div>' +
+      '<div class="sp-riw-sizes">' +
+        (k.rincian || []).map(function (x) {
+          return '<span class="sp-konf-size">' + rjdEscapeHtml_(x.size) + ' <b>' + x.qty + '</b></span>';
+        }).join("") +
+      '</div>' +
+      '<div class="sp-riw-status-row">' +
+        '<span class="sp-riw-status' + (dibatalkan ? ' batal' : '') + '">' +
+          rjdEscapeHtml_(k.status || "-") + '</span>' +
+        (dibatalkan
+          ? ''
+          : (terkunci
+              ? '<span class="sp-riw-kunci">sudah dikonfirmasi, tidak bisa dibatalkan</span>'
+              : '<button class="sp-riw-btn" data-i="' + i + '" onclick="spBatalkanCatatan(this.dataset.i)" type="button">Batalkan</button>')) +
+      '</div>' +
+      (k.catatan ? '<div class="sp-riw-catatan">' + rjdEscapeHtml_(k.catatan) + '</div>' : '') +
+    '</div>';
+  }).join("");
+}
+
+function spBatalkanCatatan(i) {
+  const jenis = window.SP_RIW_JENIS || "distribusi";
+  const k = (window.SP_RIW || [])[i];
+  if (!k) return;
+  const id = jenis === "cutting" ? k.idCutting : k.idDistribusi;
+
+  const alasan = prompt("Batalkan catatan " + id + "?\n\n" +
+    "Barisnya TIDAK dihapus \u2014 ditandai batal dan tidak ikut dihitung, " +
+    "supaya jelas pernah ada kesalahan.\n\nAlasan pembatalan:");
+  if (alasan === null) return;
+  if (!alasan.trim()) { alert("Alasan wajib diisi."); return; }
+
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: SP_ID_TOKEN,
+      action: jenis === "cutting" ? "batalkanHasilCutting" : "batalkanDistribusi",
+      payload: jenis === "cutting"
+        ? { idCutting: id, alasan: alasan.trim() }
+        : { idDistribusi: id, alasan: alasan.trim() }
+    })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (h) {
+    if (!h || !h.success) { alert((h && h.error) || "Gagal membatalkan."); return; }
+    // Pembatalan mengubah angka di tab lain -- cache dikosongkan supaya sisa &
+    // total tidak menampilkan angka sebelum pembatalan.
+    window.SP_PO = null;
+    window.SP_CUT = null;
+    spMuatRiwayat();
   })
   .catch(function () { alert("Gagal menghubungi server."); });
 }
