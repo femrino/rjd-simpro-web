@@ -142,7 +142,12 @@ function ivRender(){
       '<div class="iv-kartu-label">total piutang &#183; ' + (r.jumlahBelumLunas || 0) + ' invoice</div></div>' +
     ["0-30", "31-60", "61-90", "90+"].map(function(b){
       const bahaya = (b === "61-90" || b === "90+") && bucket[b] > 0;
-      return '<div class="iv-kartu iv-bucket' + (bahaya ? ' bahaya' : '') + '" onclick="ivFilterBucket(' + JSON.stringify(b) + ')">' +
+      // data-bucket, bukan interpolasi ke atribut onclick -- lihat catatan di
+      // ivRenderPengiriman. Pola lama di sini SUDAH RUSAK sejak awal (kutip
+      // ganda dari JSON.stringify memutus atribut), jadi kartu bucket ini
+      // sebenarnya tidak pernah bisa diklik. Ikut diperbaiki di sini.
+      return '<div class="iv-kartu iv-bucket' + (bahaya ? ' bahaya' : '') + '"' +
+        ' data-bucket="' + rjdEscapeHtml_(b) + '" onclick="ivFilterBucket(this.dataset.bucket)">' +
         '<div class="iv-kartu-angka">' + ivFormatRupiah_(bucket[b] || 0) + '</div>' +
         '<div class="iv-kartu-label">umur ' + b + ' hari</div></div>';
     }).join("");
@@ -285,8 +290,15 @@ function ivRenderPengiriman() {
       perKlien[k].map(function (p) {
         const dipilih = !!(window.IV_DIPILIH || {})[p.idPengiriman];
         return '<label class="iv-kirim-baris' + (dipilih ? ' dipilih' : '') + '">' +
-          '<input type="checkbox"' + (dipilih ? ' checked="checked"' : '') +
-            ' onchange="ivTogglePilih(' + JSON.stringify(p.idPengiriman) + ')"/>' +
+          // Nilai dinamis lewat data-id, BUKAN diinterpolasi ke dalam atribut
+          // onchange. JSON.stringify menghasilkan string BERKUTIP GANDA; kalau
+          // ditaruh di atribut yang juga berkutip ganda, HTML parser memutus
+          // atributnya di kutip kedua dan handler-nya tidak pernah jalan --
+          // gejalanya checkbox tercentang (perilaku bawaan browser) tapi tombol
+          // lanjut tetap mati. Pola data-* ini kebal terhadap isi nilainya.
+          '<input type="checkbox" data-id="' + rjdEscapeHtml_(p.idPengiriman) + '"' +
+            (dipilih ? ' checked="checked"' : '') +
+            ' onchange="ivTogglePilih(this.dataset.id)"/>' +
           '<div class="iv-kirim-isi">' +
             '<div class="iv-kirim-id">' + rjdEscapeHtml_(p.idPengiriman) + '</div>' +
             '<div class="iv-kirim-sub">' + rjdEscapeHtml_(p.tanggal || "-") +
