@@ -76,12 +76,15 @@ function ckHandleLogin(response){
 }
 
 function ckFetchData(){
-  const jenisValid = ["invoice", "suratjalan", "konfirmasiorder", "spk"];
-  if(!CK_JENIS || !CK_ID || jenisValid.indexOf(CK_JENIS) === -1){
+  const jenisValid = ["invoice", "suratjalan", "konfirmasiorder", "spk", "rekapline"];
+  // "rekapline" identitasnya di ?line=, BUKAN ?id= -- dokumennya milik LINE,
+  // bukan milik satu order. Jadi syarat CK_ID sengaja dilonggarkan khusus dia.
+  const punyaIdentitas = CK_JENIS === "rekapline" ? !!CK_LINE : !!CK_ID;
+  if(!CK_JENIS || !punyaIdentitas || jenisValid.indexOf(CK_JENIS) === -1){
     ckTampilkanError("Link tidak lengkap/valid -- buka halaman ini lewat tombol Cetak di Portal Klien atau Dashboard, bukan diketik manual.");
     return;
   }
-  const CK_ACTION_MAP = { invoice: "getInvoiceCetak", suratjalan: "getSuratJalanCetak", konfirmasiorder: "getKonfirmasiOrderCetak", spk: "getSPKCetak" };
+  const CK_ACTION_MAP = { invoice: "getInvoiceCetak", suratjalan: "getSuratJalanCetak", konfirmasiorder: "getKonfirmasiOrderCetak", spk: "getSPKCetak", rekapline: "getRekapLineCetak" };
   const action = CK_ACTION_MAP[CK_JENIS];
   fetch(CK_API_URL, {
     method: "POST",
@@ -96,6 +99,7 @@ function ckFetchData(){
     if(CK_JENIS === "invoice") ckRenderInvoice(data.data);
     else if(CK_JENIS === "suratjalan") ckRenderSuratJalan(data.data);
     else if(CK_JENIS === "konfirmasiorder") ckRenderKonfirmasiOrder(data.data);
+    else if(CK_JENIS === "rekapline") ckRenderRekapLine(data.data);
     else { CK_SPK_DATA = data.data; ckRenderSPK(); }
     document.getElementById("ck-print-btn").classList.remove("hidden");
     ckShow("ck-isi");
@@ -853,6 +857,87 @@ function ckSPKLineHtml_(line, ringkasan){
         : '') +
     '</div>' +
   '</div>';
+}
+
+/**
+ * ============ REKAP KERJA LINE ============
+ * Papan PANTAU kepala line: semua PO yang sedang dipegang line ini, deadline
+ * terdekat di atas.
+ *
+ * SENGAJA TIDAK memuat spesifikasi (size chart, komposisi kain, checklist QC)
+ * -- itu wilayah SPK per order. Dokumen ini menjawab pertanyaan lain:
+ * "hari ini kita pegang apa saja, mana yang paling mepet." Kalau keduanya
+ * digabung, dua-duanya jadi sulit dipakai.
+ *
+ * Nol data harga, sama seperti SPK -- dokumen lantai produksi.
+ */
+function ckRenderRekapLine(d){
+  const line = d.line || {};
+
+  const kartu =
+    '<div class="ck-rl-ringkas">' +
+      '<div class="ck-rl-kartu"><div class="ck-rl-angka">' + d.jumlahPO + '</div>' +
+        '<div class="ck-rl-lbl">order berjalan</div></div>' +
+      '<div class="ck-rl-kartu"><div class="ck-rl-angka">' + d.totalQty + '</div>' +
+        '<div class="ck-rl-lbl">pcs dipegang</div></div>' +
+      '<div class="ck-rl-kartu' + (d.jumlahTerlambat ? ' bahaya' : '') + '">' +
+        '<div class="ck-rl-angka">' + d.jumlahTerlambat + '</div>' +
+        '<div class="ck-rl-lbl">lewat deadline</div></div>' +
+    '</div>';
+
+  let isi;
+  if(!d.daftar.length){
+    isi = '<p class="ck-rl-kosong">Line ini belum memegang order apa pun.</p>';
+  } else {
+    isi = '<table class="ck-rl-tabel"><thead><tr>' +
+        '<th>Purchase Order</th><th>Artikel &#183; Warna</th>' +
+        '<th class="num">Jatah</th><th>Deadline</th>' +
+      '</tr></thead><tbody>' +
+      d.daftar.map(function(p){
+        // Sisa hari dihitung backend; ditampilkan sebagai kata karena "H-3"
+        // langsung terbaca, sedangkan tanggal saja masih perlu dihitung sendiri.
+        let ket = "", kelas = "";
+        if(p.sisaHari !== null && p.sisaHari !== undefined){
+          if(p.sisaHari < 0){ ket = "telat " + Math.abs(p.sisaHari) + " hari"; kelas = "telat"; }
+          else if(p.sisaHari === 0){ ket = "HARI INI"; kelas = "telat"; }
+          else if(p.sisaHari <= 3){ ket = "H-" + p.sisaHari; kelas = "mepet"; }
+          else ket = "H-" + p.sisaHari;
+        }
+        return '<tr class="' + kelas + '">' +
+          '<td><b class="ck-rl-po">' + rjdEscapeHtml_(p.idPurchaseOrder) + '</b>' +
+            '<div class="ck-rl-sub">' + rjdEscapeHtml_(p.namaKlien) +
+              (p.status ? ' &#183; ' + rjdEscapeHtml_(p.status) : '') + '</div></td>' +
+          '<td>' + p.item.map(function(it){
+              return '<div class="ck-rl-item">' + rjdEscapeHtml_(it.label) +
+                (it.warna ? ' <span class="wr">' + rjdEscapeHtml_(it.warna) + '</span>' : '') +
+                ' <b>' + it.qty + '</b></div>';
+            }).join("") + '</td>' +
+          '<td class="num"><b>' + p.qtyLine + '</b>' +
+            (p.qtyPO ? '<div class="ck-rl-sub">dari ' + p.qtyPO + ' pcs PO</div>' : '') + '</td>' +
+          '<td>' + rjdEscapeHtml_(p.deadline || "-") +
+            (ket ? '<div class="ck-rl-ket ' + kelas + '">' + ket + '</div>' : '') + '</td>' +
+        '</tr>';
+      }).join("") +
+      '</tbody></table>';
+  }
+
+  document.getElementById("ck-dokumen").innerHTML =
+    ckHeaderHtml("REKAP KERJA LINE", rjdEscapeHtml_(line.namaLine || line.idLine || "-"), d.tanggalCetak) +
+    '<div class="ck-rl-line">' +
+      '<div>' +
+        '<div class="ck-rl-line-nama">' + rjdEscapeHtml_(line.namaLine || "-") + '</div>' +
+        '<div class="ck-rl-sub">' +
+          (line.lokasi ? rjdEscapeHtml_(line.lokasi) : "") +
+          (line.kepalaLine ? ' &#183; kepala line: ' + rjdEscapeHtml_(line.kepalaLine) : "") +
+          (line.jumlahOperator ? ' &#183; ' + line.jumlahOperator + ' operator' : "") +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    kartu + isi +
+    '<div class="ck-rl-catatan">Dokumen pantau, bukan perintah kerja. Spesifikasi lengkap tiap order ada di SPK masing-masing. Dicetak oleh ' +
+      rjdEscapeHtml_(d.dicetakOleh || "-") + '.</div>';
+
+  document.title = "Rekap Kerja " + (line.namaLine || "") + " -- RJD Apparel";
 }
 
 function ckRenderSPK(){

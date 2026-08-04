@@ -195,10 +195,14 @@ function spRenderForm() {
     rk.innerHTML = '<div class="sp-ringkas-judul">Sudah dibagi ke</div>' +
       '<div class="sp-ringkas-list">' +
       po.perLine.map(function (l) {
+        // Dua tautan, dua peran: SPK = dokumen kerja PO ini untuk line itu;
+        // Rekap = semua PO yang dipegang line itu (lintas order).
         return '<div class="sp-ringkas-item"><span>' + rjdEscapeHtml_(l.namaLine) + '</span>' +
           '<b>' + l.qty + ' pcs</b>' +
           '<a href="/p/cetak.html?jenis=spk&amp;id=' + encodeURIComponent(po.idPurchaseOrder) +
-            '&amp;line=' + encodeURIComponent(l.idLine) + '" target="_blank">Cetak SPK</a></div>';
+            '&amp;line=' + encodeURIComponent(l.idLine) + '" target="_blank">Cetak SPK</a>' +
+          '<a class="sp-rekap-link" href="/p/cetak.html?jenis=rekapline&amp;line=' +
+            encodeURIComponent(l.idLine) + '" target="_blank">Rekap Line</a></div>';
       }).join("") + '</div>';
     rk.classList.remove("hidden");
   } else {

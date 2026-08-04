@@ -117,3 +117,9 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   .sp-cetak-btn { margin-left: 0; width: 100%; text-align: center; }
   .sp-ringkas-item { flex-wrap: wrap; }
 }
+
+/* Tautan Rekap Line -- sekunder (garis, bukan solid) supaya jelas Cetak SPK
+   yang jadi aksi utama. Rekap itu dokumen pantau, dibuka sesekali. */
+.sp-ringkas-item a.sp-rekap-link { background: var(--white); color: var(--ink);
+  border: 1px solid var(--line-soft); }
+.sp-ringkas-item a.sp-rekap-link:hover { border-color: var(--ink); opacity: 1; }
