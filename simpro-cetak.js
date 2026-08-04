@@ -96,15 +96,30 @@ function ckFetchData(){
       ckGagalMuat_(data.error || "Gagal memuat dokumen.");
       return;
     }
-    if(CK_JENIS === "invoice") ckRenderInvoice(data.data);
-    else if(CK_JENIS === "suratjalan") ckRenderSuratJalan(data.data);
-    else if(CK_JENIS === "konfirmasiorder") ckRenderKonfirmasiOrder(data.data);
-    else if(CK_JENIS === "rekapline") ckRenderRekapLine(data.data);
-    else { CK_SPK_DATA = data.data; ckRenderSPK(); }
+    // RENDER dibungkus try/catch SENDIRI, terpisah dari catch jaringan di bawah.
+    // Sebelumnya keduanya jatuh ke .catch() yang sama, jadi error saat MENGGAMBAR
+    // dokumen (mis. menulis ke elemen yang tidak ada) muncul sebagai "Gagal
+    // menghubungi server" -- padahal servernya sudah menjawab dengan benar.
+    // Pesan yang menyesatkan itu bikin bug rekapline lama tidak ketemu:
+    // pencarian terus mengarah ke backend & deployment, bukan ke frontend.
+    try{
+      if(CK_JENIS === "invoice") ckRenderInvoice(data.data);
+      else if(CK_JENIS === "suratjalan") ckRenderSuratJalan(data.data);
+      else if(CK_JENIS === "konfirmasiorder") ckRenderKonfirmasiOrder(data.data);
+      else if(CK_JENIS === "rekapline") ckRenderRekapLine(data.data);
+      else { CK_SPK_DATA = data.data; ckRenderSPK(); }
+    }catch(errRender){
+      console.error("Gagal menggambar dokumen:", errRender);
+      ckGagalMuat_("Data dokumen berhasil diambil, tapi gagal ditampilkan: " +
+        (errRender && errRender.message ? errRender.message : errRender) +
+        " -- buka Console (F12) untuk rinciannya.");
+      return;
+    }
     document.getElementById("ck-print-btn").classList.remove("hidden");
     ckShow("ck-isi");
   })
-  .catch(function(){
+  .catch(function(errJaringan){
+    console.error("Gagal menghubungi server:", errJaringan);
     ckGagalMuat_("Gagal menghubungi server. Coba beberapa saat lagi.");
   });
 }
@@ -921,7 +936,7 @@ function ckRenderRekapLine(d){
       '</tbody></table>';
   }
 
-  document.getElementById("ck-dokumen").innerHTML =
+  document.getElementById("ck-isi").innerHTML =
     ckHeaderHtml("REKAP KERJA LINE", rjdEscapeHtml_(line.namaLine || line.idLine || "-"), d.tanggalCetak) +
     '<div class="ck-rl-line">' +
       '<div>' +
