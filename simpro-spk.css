@@ -1,0 +1,119 @@
+/* ============================================================
+ * SIMPRO -- simpro-spk.css
+ * ============================================================
+ * DIMUAT DI : spk.html
+ *
+ * Token warna & .hidden dari simpro-global.css (pola sama seperti semua cabang
+ * lain). Prefiks .sp- dipakai konsisten supaya tidak bentrok dengan CSS global
+ * sistem lama.
+ * ============================================================ */
+
+body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
+#sp-hero { position: relative; z-index: 1; animation: dbFadeUp .6s ease-out backwards; }
+.sp-wrap { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 24px 100px; }
+/* Lebih lebar dari qc.html (720px) karena tabel isian punya kolom per size,
+   tapi lebih sempit dari order-list (1500px) karena kolomnya tetap terbatas. */
+
+.sp-kotak { max-width: 420px; margin: 60px auto; text-align: center; background: var(--white);
+  border: 1px solid var(--line-soft); border-radius: 14px; padding: 28px 24px; }
+.sp-kotak h2 { font-size: 17px; margin: 0 0 6px; }
+.sp-kotak p { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 18px; }
+#sp-google-btn { display: flex; justify-content: center; }
+
+.sp-card { background: var(--white); border: 1px solid var(--line-soft); border-radius: 16px;
+  padding: 20px; box-shadow: var(--shadow-sm); margin-bottom: 16px; }
+.sp-judul { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 15px;
+  color: var(--ink); margin: 0 0 4px; }
+.sp-info { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 14px; }
+.sp-pesan { font-size: 12.5px; color: var(--ink-soft); padding: 10px 12px; border-radius: 9px;
+  background: var(--cream); margin-top: 10px; }
+.sp-pesan.sp-galat { background: #FDECEA; border: 1px solid #E8A49C; color: #8F2C22; }
+
+/* ---- Pemilih PO: kotak cari + dropdown hasil ----
+   SENGAJA bukan <select> native: daftar PO bisa ratusan baris dan scroll
+   dropdown native jelek dipakai di HP. Pola sama dengan pemilih PO di qc.html. */
+.sp-po-field { position: relative; }
+.sp-po-field input { width: 100%; padding: 11px 13px; background: var(--white);
+  border: 1px solid var(--line-soft); border-radius: 9px; font-family: 'Inter', sans-serif;
+  font-size: 14px; color: var(--ink); }
+#sp-po-dropdown { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; right: 0;
+  background: var(--white); border: 1px solid var(--line-soft); border-radius: 10px;
+  box-shadow: var(--shadow-md); max-height: 280px; overflow-y: auto; }
+.sp-po-opsi { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--line-soft); }
+.sp-po-opsi:last-child { border-bottom: none; }
+.sp-po-opsi:hover { background: var(--cream); }
+.sp-po-opsi-id { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.sp-po-opsi-sub { font-size: 11.5px; color: var(--ink-soft); margin-top: 1px; }
+.sp-po-kosong { padding: 12px 14px; font-size: 12.5px; color: var(--ink-soft); font-style: italic; }
+
+/* ---- Ringkasan pembagian yang sudah ada + tautan cetak ---- */
+.sp-ringkas { background: var(--cream); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; }
+.sp-ringkas-judul { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-soft); margin-bottom: 8px; }
+.sp-ringkas-list { display: flex; flex-direction: column; gap: 6px; }
+.sp-ringkas-item { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink); }
+.sp-ringkas-item b { margin-left: auto; font-variant-numeric: tabular-nums; }
+.sp-ringkas-item a { font-size: 12px; font-weight: 700; color: var(--white); background: var(--ink);
+  border-radius: 7px; padding: 5px 11px; text-decoration: none; white-space: nowrap; }
+.sp-ringkas-item a:hover { opacity: .88; }
+
+/* ---- Tabel isian qty per size ---- */
+.sp-tabelwrap { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: 12px;
+  background: var(--white); margin-bottom: 16px; }
+.sp-tabel { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.sp-tabel th { background: var(--cream); border-bottom: 1.5px solid var(--line); padding: 9px 11px;
+  text-align: left; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft);
+  font-weight: 700; white-space: nowrap; }
+.sp-tabel th.num, .sp-tabel td.num { text-align: center; }
+.sp-tabel td { border-bottom: 1px solid var(--line-soft); padding: 8px 10px; vertical-align: top; }
+.sp-tabel tbody tr:last-child td { border-bottom: none; }
+.sp-tabel tr.sp-habis td { opacity: .5; }
+
+.sp-warna { font-weight: 700; color: var(--ink); }
+.sp-artikel { font-size: 11px; color: var(--ink-soft); margin-top: 1px; }
+.sp-sisa-info { font-size: 10.5px; color: var(--ink-soft); margin-top: 3px; font-style: italic; }
+
+.sp-qty { width: 58px; padding: 6px 4px; border: 1px solid var(--line-soft); border-radius: 7px;
+  font-family: 'Inter', sans-serif; font-size: 13px; text-align: center; color: var(--ink); }
+.sp-qty:focus { outline: none; border-color: var(--ink); }
+.sp-qty.sp-lebih { border-color: var(--thread); background: #FDECEA; color: #8F2C22; }
+.sp-maks { font-size: 9.5px; color: var(--ink-soft); margin-top: 2px; }
+.sp-kosong { color: var(--ink-soft); opacity: .4; }
+.sp-total-baris { font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* ---- Field serah-terima ---- */
+.sp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px; margin-bottom: 16px; }
+.sp-field label { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink-soft);
+  margin-bottom: 5px; }
+.sp-field input, .sp-field select, .sp-field textarea {
+  width: 100%; padding: 9px 11px; background: var(--white); border: 1px solid var(--line-soft);
+  border-radius: 9px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--ink); }
+.sp-field textarea { resize: vertical; }
+
+.sp-total-kotak { display: flex; justify-content: space-between; align-items: center;
+  background: var(--cream); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; }
+.sp-total-kotak span:first-child { font-size: 13px; color: var(--ink-soft); }
+.sp-total-kotak b { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 22px; color: var(--ink); }
+
+.sp-simpan-btn { width: 100%; padding: 13px 0; background: var(--ink); color: var(--white);
+  border: none; border-radius: 10px; font-size: 14.5px; font-weight: 700; cursor: pointer;
+  transition: opacity .15s; }
+.sp-simpan-btn:hover { opacity: .88; }
+.sp-simpan-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+.sp-sukses { background: #EAF4EC; border: 1px solid #9FCBA9; border-radius: 12px;
+  padding: 14px 16px; margin-top: 14px; }
+.sp-sukses-isi { font-size: 13px; color: #2C6B3F; display: flex; align-items: center;
+  flex-wrap: wrap; gap: 12px; }
+.sp-cetak-btn { margin-left: auto; font-size: 13px; font-weight: 700; color: var(--white);
+  background: var(--ink); border-radius: 9px; padding: 9px 16px; text-decoration: none; white-space: nowrap; }
+.sp-cetak-btn:hover { opacity: .88; }
+
+@media (max-width: 640px) {
+  .sp-wrap { padding: 0 16px 80px; }
+  .sp-qty { width: 48px; }
+  .sp-tabel td, .sp-tabel th { padding: 7px 7px; }
+  .sp-cetak-btn { margin-left: 0; width: 100%; text-align: center; }
+  .sp-ringkas-item { flex-wrap: wrap; }
+}
