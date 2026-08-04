@@ -62,3 +62,97 @@ body { padding-top: 0; }
   .iv-kartu { flex: 1 1 calc(50% - 6px); }
   .iv-alat select { flex: 1 1 100%; }
 }
+
+/* ============================================================
+ * TAB "BUAT INVOICE" -- invoice dirakit dari pengiriman
+ * ============================================================
+ * Pola tab meniru .qc-tabs di simpro-qc.css: SENGAJA sama, supaya tidak ada
+ * bahasa visual baru yang harus dipelajari. Prefiks .iv- dipertahankan biar
+ * tidak bentrok dengan CSS global lama.
+ * ============================================================ */
+
+.iv-tabs { display: flex; gap: 6px; margin-bottom: 16px; background: var(--paper-2, var(--cream-deep));
+  border-radius: 12px; padding: 4px; }
+.iv-tab { flex: 1; padding: 10px 12px; border-radius: 9px; font-size: 13px; font-weight: 600;
+  color: var(--ink-soft); background: transparent; border: none; cursor: pointer; transition: all .15s; }
+.iv-tab:hover { color: var(--navy); }
+.iv-tab.active { background: var(--white); color: var(--navy); box-shadow: var(--shadow-sm); }
+
+.iv-buat-card { background: var(--white); border: 1px solid var(--line-soft); border-radius: 16px;
+  padding: 20px; box-shadow: var(--shadow-sm); }
+.iv-buat-judul { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 15px;
+  color: var(--ink); margin: 0 0 4px; }
+.iv-buat-info { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 14px; }
+.iv-buat-galat { font-size: 12.5px; color: var(--thread); background: #FDECEA;
+  border: 1px solid #E8A49C; border-radius: 9px; padding: 10px 12px; margin: 12px 0 0; }
+
+/* ---- Langkah 1: pilih pengiriman ---- */
+.iv-kirim-cari { width: 100%; padding: 9px 12px; background: var(--white);
+  border: 1px solid var(--line-soft); border-radius: 9px; font-size: 13px; margin-bottom: 12px; }
+.iv-kirim-daftar { max-height: 420px; overflow-y: auto; margin-bottom: 14px; }
+.iv-kirim-grup { margin-bottom: 14px; }
+.iv-kirim-klien { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; font-weight: 700;
+  color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+
+.iv-kirim-baris { display: flex; align-items: center; gap: 11px; padding: 10px 12px;
+  border: 1px solid var(--line-soft); border-radius: 10px; margin-bottom: 6px; cursor: pointer;
+  transition: border-color .15s, background .15s; }
+.iv-kirim-baris:hover { border-color: var(--thread); }
+.iv-kirim-baris.dipilih { border-color: var(--ink); background: var(--cream); }
+.iv-kirim-baris input { flex-shrink: 0; width: 16px; height: 16px; cursor: pointer; }
+.iv-kirim-isi { flex: 1; min-width: 0; }
+.iv-kirim-id { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.iv-kirim-sub { font-size: 11px; color: var(--ink-soft); margin-top: 1px; }
+.iv-kirim-qty { flex-shrink: 0; font-weight: 700; font-size: 13px; color: var(--ink); white-space: nowrap; }
+
+.iv-aksi-btn { width: 100%; padding: 12px 0; background: var(--ink); color: var(--white);
+  border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer;
+  transition: opacity .15s; }
+.iv-aksi-btn:hover { opacity: .88; }
+.iv-aksi-btn:disabled { opacity: .4; cursor: not-allowed; }
+.iv-aksi-btn.sekunder { background: var(--white); color: var(--ink); border: 1px solid var(--line-soft); }
+.iv-aksi-btn.sekunder:hover { border-color: var(--ink); opacity: 1; }
+.iv-aksi-baris { display: flex; gap: 10px; margin-top: 16px; }
+.iv-aksi-baris .iv-aksi-btn { flex: 1; }
+
+/* ---- Langkah 2: draf invoice ---- */
+.iv-draft-kepala { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px; background: var(--cream); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+.iv-draft-label { display: block; font-size: 10.5px; color: var(--ink-soft);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; }
+.iv-draft-nilai { display: block; font-size: 13px; font-weight: 600; color: var(--ink); word-break: break-word; }
+
+/* Kolom Qty SENGAJA bukan input; lihat catatan di simpro-invoice.js. */
+.iv-draft-tabel td { vertical-align: middle; }
+.iv-harga-input { width: 110px; padding: 6px 8px; border: 1px solid var(--line-soft);
+  border-radius: 7px; font-family: 'Inter', sans-serif; font-size: 12.5px; text-align: right; color: var(--ink); }
+.iv-harga-input:focus { outline: none; border-color: var(--ink); }
+.iv-baris-perhatian td { background: #FCF3E3; }
+
+.iv-biaya-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px; margin: 18px 0 0; }
+.iv-biaya-field label { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink-soft);
+  margin-bottom: 5px; }
+.iv-biaya-field input { width: 100%; padding: 9px 11px; background: var(--white);
+  border: 1px solid var(--line-soft); border-radius: 9px; font-family: 'Inter', sans-serif;
+  font-size: 13px; color: var(--ink); }
+
+.iv-total-kotak { background: var(--cream); border-radius: 10px; padding: 14px 16px; margin-top: 18px; }
+.iv-total-baris { display: flex; justify-content: space-between; gap: 12px; font-size: 13px;
+  color: var(--ink-soft); padding: 4px 0; }
+.iv-total-baris span:last-child { font-variant-numeric: tabular-nums; }
+.iv-total-tebal { font-weight: 800; font-size: 15px; color: var(--ink);
+  border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; }
+
+/* ---- Langkah 3: sukses ---- */
+.iv-sukses-kotak { text-align: center; padding: 36px 24px; }
+.iv-sukses-ikon { font-size: 34px; margin-bottom: 10px; }
+.iv-sukses-id { font-family: 'IBM Plex Mono', monospace; font-size: 21px; font-weight: 700;
+  color: var(--ink); margin-bottom: 6px; }
+.iv-sukses-rincian { font-size: 12.5px; color: var(--ink-soft); margin-bottom: 22px; }
+
+@media (max-width: 640px) {
+  .iv-aksi-baris { flex-direction: column; }
+  .iv-harga-input { width: 90px; }
+  .iv-kirim-daftar { max-height: 320px; }
+}
