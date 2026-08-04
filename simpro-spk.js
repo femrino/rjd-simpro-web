@@ -2,7 +2,17 @@
  * ============================================================
  * SIMPRO -- simpro-spk
  * ============================================================
- * Halaman PEMBAGIAN POTONGAN & SPK PER LINE (spk.html).
+ * Halaman LANTAI PRODUKSI (produksi.html; URL lama spk.html masih dilayani).
+ *
+ * Semula halaman ini cuma soal SPK per line, lalu tumbuh jadi tempat mencatat
+ * SELURUH pergerakan barang di lantai: hasil cutting, pembagian ke line,
+ * setoran balik ke finishing, konfirmasi terima, dan riwayat/koreksi. Nama
+ * "SPK" sudah tidak mewakili -- SPK kini cuma salah satu keluaran dari tab
+ * "Bagi ke Line".
+ *
+ * Nama file (simpro-spk.js) SENGAJA tidak ikut diganti: mengganti nama file
+ * berarti semua tag CDN lama menunjuk file yang hilang, dan itu risiko yang
+ * tidak sepadan dengan kerapian nama.
  *
  * Menjawab satu urutan kerja yang selama ini tidak punya tempat di sistem:
  * setelah cutting selesai, potongan dibagi ke beberapa line jahit -- lalu tiap
@@ -16,10 +26,17 @@
  * Kepala produksi bisa membukanya tanpa melihat data harga & daftar order
  * lengkap. Pola sama dengan qc.html.
  *
+ * TAB SENGAJA TIDAK BERNOMOR. Penomoran cocok untuk wizard -- langkah
+ * berurutan yang dilalui SATU orang dalam SATU sesi. Halaman ini bukan itu:
+ * lima tabnya adalah lima pintu untuk lima momen & peran berbeda (cutting,
+ * kepala produksi, finishing, kepala line, siapa pun yang mengoreksi). Tidak
+ * ada yang melalui 1-2-3-4 berurutan, dan nomor justru menyiratkan "harus
+ * mulai dari 1". Urutan kiri-ke-kanan sudah cukup menunjukkan alurnya.
+ *
  * SESI LOGIN DIPAKAI BERSAMA dengan Dashboard, Daftar Order, Pengiriman,
  * Invoice (localStorage "db_session").
  *
- * DIMUAT DI : spk.html
+ * DIMUAT DI : produksi.html (dan spk.html, URL lama)
  * URUTAN    : simpro-global.js WAJIB lebih dulu.
  *
  * JANGAN diunggah ke Apps Script. Ini kode BROWSER, bukan server.
