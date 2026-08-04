@@ -190,3 +190,8 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 13px; text-align: center; color: var(--ink); }
 .sp-konf-qty-input:focus { outline: none; border-color: var(--ink); }
 .sp-konf-size-asal { font-size: 9.5px; color: var(--ink-soft); margin-top: 3px; }
+
+/* Target selesai di ringkasan "sudah dibagi ke" -- line tanpa target ditandai
+   supaya kelihatan, bukan didiamkan (SPK-nya akan tercetak "belum ditentukan"). */
+.sp-ringkas-target { font-size: 10.5px; color: var(--ink-soft); }
+.sp-ringkas-target.kosong { color: #8A5D1F; font-style: italic; }

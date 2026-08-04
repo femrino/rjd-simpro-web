@@ -809,7 +809,10 @@ function ckBuildItemGroupsHtml_(daftarItem, opsi){
         '<table class="ck-spk-matrix">' + kepala + badan + kaki + '</table>' +
         // Gambar DULU, catatan di bawahnya -- sama dengan urutan di form order:
         // klien mengunggah foto acuan lebih dulu, keterangannya menyusul.
-        ckKomposisiHtml_(it.komposisiKain, warnaList, qtyDi) +
+        // Kebutuhan kain per warna DILEWATI di SPK per line: yang memotong kain
+        // adalah cutting, dan potongan sudah jadi saat SPK ini sampai ke tim
+        // sewing. Menampilkannya cuma menambah halaman yang tidak dipakai.
+        (CK_SPK_DATA && CK_SPK_DATA.line ? "" : ckKomposisiHtml_(it.komposisiKain, warnaList, qtyDi)) +
         ckAksesorisHtml_(it.aksesoris, it.totalQtyItem) +
         galeriHtml +
         // Size chart ditaruh SETELAH gambar desain: keduanya sama-sama
@@ -999,14 +1002,23 @@ function ckRenderSPK(){
   const html = pilihHtml +
     '<div class="ck-dok">' +
       (d.isDraft ? '<div class="ck-spk-wm">DRAFT</div>' : '') +
-      ckHeaderHtml(d.line ? ("SURAT PERINTAH KERJA " + String(d.line.namaLine).toUpperCase()) : "SURAT PERINTAH KERJA", nomorSPK, d.tanggalDiajukan) +
+      ckHeaderHtml(d.line ? ("SPK " + String(d.line.namaLine).toUpperCase()) : "SURAT PERINTAH KERJA", nomorSPK, d.tanggalDiajukan) +
       (d.isDraft ? '<div class="ck-dok-catatan" style="background:#FCF3E3;border-left:3px solid #EBCFA0">' +
         '<b>DRAFT &#183; status "' + d.status + '".</b> Order ini BELUM disetujui jadi PO. Jangan dijadikan dasar memulai produksi atau memotong kain.</div>' : '') +
       ckSPKLineHtml_(d.line, d.ringkasanLine) +
       ckStandarKlienHtml_(d.standarKlien, d.namaKlien) +
       '<div class="ck-spk-meta">' +
         '<div class="sel"><div class="lbl">Klien</div><div class="val">' + rjdEscapeHtml_(d.namaKlien) + '</div></div>' +
-        '<div class="sel"><div class="lbl">Target Kirim</div><div class="val">' + (d.targetTanggalKirim || "-") + '</div></div>' +
+        // MODE PER LINE: yang berlaku di lantai adalah target INTERNAL line,
+        // bukan deadline kirim ke klien (backend memang tidak mengirimnya --
+        // lihat getSPKPerLine_). Kalau belum ditentukan, ditulis terang-terangan
+        // supaya jadi dorongan mengisinya, bukan diisi deadline klien diam-diam.
+        (d.line
+          ? '<div class="sel"><div class="lbl">Target Selesai</div><div class="val">' +
+              (d.line.targetSelesai
+                ? rjdEscapeHtml_(d.line.targetSelesai)
+                : '<span style="color:#8A5D1F">belum ditentukan</span>') + '</div></div>'
+          : '<div class="sel"><div class="lbl">Target Kirim</div><div class="val">' + (d.targetTanggalKirim || "-") + '</div></div>') +
         '<div class="sel"><div class="lbl">' + (modePerItem ? "Qty Item Ini" : "Total Qty") + '</div><div class="val">' + totalDitampilkan + ' pcs</div></div>' +
         '<div class="sel"><div class="lbl">No. SO</div><div class="val">' + (d.noSOHasil || "-") + '</div></div>' +
       '</div>' +

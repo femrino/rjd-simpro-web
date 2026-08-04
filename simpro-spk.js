@@ -226,7 +226,10 @@ function spRenderForm() {
       po.perLine.map(function (l) {
         // Dua tautan, dua peran: SPK = dokumen kerja PO ini untuk line itu;
         // Rekap = semua PO yang dipegang line itu (lintas order).
-        return '<div class="sp-ringkas-item"><span>' + rjdEscapeHtml_(l.namaLine) + '</span>' +
+        return '<div class="sp-ringkas-item"><span>' + rjdEscapeHtml_(l.namaLine) +
+          (l.targetSelesai
+            ? ' <span class="sp-ringkas-target">target ' + rjdEscapeHtml_(l.targetSelesai) + '</span>'
+            : ' <span class="sp-ringkas-target kosong">target belum diisi</span>') + '</span>' +
           '<b>' + l.qty + ' pcs</b>' +
           '<a href="/p/cetak.html?jenis=spk&amp;id=' + encodeURIComponent(po.idPurchaseOrder) +
             '&amp;line=' + encodeURIComponent(l.idLine) + '" target="_blank">Cetak SPK</a>' +
@@ -354,6 +357,7 @@ function spSimpan() {
         idPurchaseOrder: po.idPurchaseOrder,
         idLine: idLine,
         tanggalSerah: document.getElementById("sp-tanggal").value || "",
+        targetSelesai: (document.getElementById("sp-target") || {}).value || "",
         diterimaOleh: document.getElementById("sp-diterima").value || "",
         catatan: document.getElementById("sp-catatan").value || "",
         baris: barisKirim
