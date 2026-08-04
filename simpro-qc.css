@@ -173,3 +173,25 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   .qc-dua-kolom { grid-template-columns: 1fr; gap: 24px; }
   .qc-alat select, .qc-alat input { flex: 1 1 100%; }
 }
+
+/* ============ RINCIAN QTY LOLOS PER SIZE ============
+   Cuma qty LOLOS yang dirinci per size -- kalau diperiksa & cacat ikut per
+   size, checker harus mengisi 30 angka per sesi dan form ini akan
+   ditinggalkan. Lihat catatan di simpro-qc.js. */
+.qc-size-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px; }
+.qc-size-sel { text-align: center; }
+.qc-size-sel label { display: block; font-size: 11px; font-weight: 700; color: var(--navy);
+  margin-bottom: 4px; }
+.qc-size-qty { width: 100%; padding: 8px 4px; border: 1px solid var(--line-soft);
+  border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 13px; text-align: center;
+  color: var(--navy); }
+.qc-size-qty:focus { outline: none; border-color: var(--navy); }
+.qc-size-order { font-size: 9.5px; color: var(--ink-soft); margin-top: 3px; }
+
+/* Kecocokan rincian size vs Qty Lolos ditandai SEBELUM submit -- backend juga
+   menolak kalau tidak sama, tapi memberi tahu setelah gagal simpan itu
+   terlambat buat checker yang sedang buru-buru di lantai. */
+.qc-size-total { font-size: 11.5px; font-weight: 600; margin-top: 8px; }
+.qc-size-total.ok { color: #2C6B3F; }
+.qc-size-total.beda { color: var(--thread, #B23B2E); }

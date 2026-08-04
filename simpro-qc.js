@@ -25,7 +25,11 @@ let QC_MASTER = null;       // hasil getMasterQC, dipuat ulang tiap qcMulai()
 let QC_DAFTAR_PO = [];      // hasil getDaftarPO (action YANG SUDAH ADA -- dipakai juga oleh Dashboard/Orderan)
 let QC_PO_TERPILIH = null;  // { idPurchaseOrder, namaKlien, artikel } -- null = BELUM dipilih dari daftar
 let QC_TAHAP_DIPILIH = "";  // Tahap yang lagi aktif di form (kosong = belum pilih)
-let QC_RINGKASAN_DIMUAT = false; // cegah fetch ulang tiap ganti tab kalau filter belum berubah
+let QC_RINGKASAN_DIMUAT = false;
+// Rincian warna+size PO yang dipilih. Dipakai dropdown Warna & input qty lolos
+// per size -- itu yang menyambungkan QC ke stok siap kirim di hilir.
+let QC_RINCIAN_PO = null;
+let QC_WARNA_DIPILIH = null; // cegah fetch ulang tiap ganti tab kalau filter belum berubah
 
 function qcShow(id) {
   ["qc-login-box", "qc-loading", "qc-isi"].forEach(function (x) {
@@ -108,6 +112,7 @@ function qcMuatMaster_() {
       }
       QC_MASTER = d;
       qcIsiDaftarOperator_();
+    qcIsiDropdownLine_();
 
       // Daftar PO dipakai kotak cari PO -- kalau gagal dimuat, kotak PO
       // DIKUNCI (bukan jatuh ke ketik manual). Itu justru sumber masalah
@@ -185,10 +190,144 @@ function qcPilihPO(indexTampil) {
   document.getElementById("qc-po-terpilih-sub").textContent =
     po.namaKlien + (po.artikel && po.artikel.length ? " \u00b7 " + po.artikel.join(", ") : "");
   document.getElementById("qc-po-terpilih").classList.add("show");
+  qcMuatRincianPO_(po.idPurchaseOrder);
+}
+
+/**
+ * Ambil rincian Warna + Size PO yang dipilih.
+ *
+ * SENGAJA memakai rute "getPOUntukCutting" yang sudah ada, bukan bikin rute
+ * baru: keluarannya persis yang dibutuhkan di sini (daftar warna beserta size
+ * yang benar-benar dipesan), dan menambah rute kembar cuma menambah tempat
+ * yang harus ikut diperbaiki kalau cara baca Rincian SO berubah.
+ */
+function qcMuatRincianPO_(idPO) {
+  QC_RINCIAN_PO = null;
+  QC_WARNA_DIPILIH = null;
+  const sel = document.getElementById("qc-warna");
+  if (sel) sel.innerHTML = '<option value="">Memuat warna...</option>';
+  qcRenderSizeLolos_();
+
+  fetch(QC_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: QC_ID_TOKEN, action: "getPOUntukCutting", idPurchaseOrder: idPO })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) {
+      if (sel) sel.innerHTML = '<option value="">Gagal memuat warna</option>';
+      qcTampilkanError_((d && d.error) || "Gagal memuat rincian warna PO ini.");
+      return;
+    }
+    QC_RINCIAN_PO = d;
+    qcIsiDropdownWarna_();
+  })
+  .catch(function () {
+    if (sel) sel.innerHTML = '<option value="">Gagal memuat warna</option>';
+    qcTampilkanError_("Gagal menghubungi server saat memuat rincian PO.");
+  });
+}
+
+function qcIsiDropdownWarna_() {
+  const sel = document.getElementById("qc-warna");
+  if (!sel || !QC_RINCIAN_PO) return;
+  sel.innerHTML = '<option value="">-- Pilih warna --</option>' +
+    QC_RINCIAN_PO.baris.map(function (b, i) {
+      return '<option value="' + i + '">' + rjdEscapeHtml_(b.warna || "(tanpa warna)") +
+        ' &#183; ' + rjdEscapeHtml_([b.artikel, b.style].filter(Boolean).join(" / ")) +
+        ' (' + b.totalOrder + ' pcs)</option>';
+    }).join("");
+}
+
+function qcPilihWarna() {
+  const v = document.getElementById("qc-warna").value;
+  QC_WARNA_DIPILIH = (v === "" || !QC_RINCIAN_PO) ? null : QC_RINCIAN_PO.baris[Number(v)];
+  qcRenderSizeLolos_();
+}
+
+/**
+ * Input qty lolos PER SIZE.
+ *
+ * Cuma qty LOLOS yang dirinci per size, bukan diperiksa & cacat sekaligus --
+ * kalau ketiganya, checker harus mengisi 30 angka per sesi dan form ini akan
+ * ditinggalkan. Yang dibutuhkan hilir (stok siap kirim, pengiriman) memang
+ * qty lolos per size; defect rate cukup di tingkat sesi.
+ */
+function qcRenderSizeLolos_() {
+  const wadah = document.getElementById("qc-size-rows");
+  if (!wadah) return;
+  if (!QC_WARNA_DIPILIH) {
+    wadah.innerHTML = '<p class="qc-hint">Pilih warna dulu untuk merinci qty lolos per size.</p>';
+    qcHitungTotalSize_();
+    return;
+  }
+  const sizes = Object.keys(QC_WARNA_DIPILIH.sizeQty);
+  if (!sizes.length) {
+    wadah.innerHTML = '<p class="qc-hint">Warna ini tidak punya rincian size di Rincian SO.</p>';
+    qcHitungTotalSize_();
+    return;
+  }
+  wadah.innerHTML = '<div class="qc-size-grid">' +
+    sizes.map(function (sz) {
+      return '<div class="qc-size-sel"><label>' + rjdEscapeHtml_(sz) + '</label>' +
+        '<input class="qc-size-qty" type="number" min="0" data-size="' + rjdEscapeHtml_(sz) + '"' +
+        ' oninput="qcHitungTotalSize_()" placeholder="0"/>' +
+        '<div class="qc-size-order">order ' + QC_WARNA_DIPILIH.sizeQty[sz] + '</div></div>';
+    }).join("") + '</div>';
+  qcHitungTotalSize_();
+}
+
+/**
+ * Cocokkan jumlah per size dengan Qty Lolos. Ditandai di layar SEBELUM submit
+ * -- backend juga menolak kalau tidak sama, tapi memberi tahu setelah gagal
+ * simpan itu terlambat buat checker yang sedang buru-buru di lantai.
+ */
+function qcHitungTotalSize_() {
+  let total = 0;
+  document.querySelectorAll(".qc-size-qty").forEach(function (inp) {
+    total += Number(inp.value) || 0;
+  });
+  const qtyLolos = Number((document.getElementById("qc-lolos") || {}).value) || 0;
+  const el = document.getElementById("qc-size-total");
+  if (!el) return;
+  if (!QC_WARNA_DIPILIH) { el.textContent = ""; el.className = "qc-hint"; return; }
+  if (total === qtyLolos) {
+    el.textContent = "Rincian size: " + total + " (cocok dengan Qty Lolos)";
+    el.className = "qc-size-total ok";
+  } else {
+    el.textContent = "Rincian size: " + total + " -- Qty Lolos: " + qtyLolos + " (harus sama)";
+    el.className = "qc-size-total beda";
+  }
+}
+
+function qcKumpulkanLolosPerSize_() {
+  const hasil = {};
+  document.querySelectorAll(".qc-size-qty").forEach(function (inp) {
+    const v = Number(inp.value) || 0;
+    if (v > 0) hasil[inp.dataset.size] = v;
+  });
+  return hasil;
+}
+
+/** Isi dropdown Line dari master. Kosong = distribusi-potongan.gs belum terpasang. */
+function qcIsiDropdownLine_() {
+  const sel = document.getElementById("qc-line");
+  if (!sel || !QC_MASTER) return;
+  const daftar = QC_MASTER.daftarLine || [];
+  sel.innerHTML = '<option value="">-- Pilih line --</option>' +
+    daftar.map(function (l) {
+      return '<option value="' + rjdEscapeHtml_(l.idLine) + '">' + rjdEscapeHtml_(l.namaLine) +
+        (l.lokasi ? " (" + rjdEscapeHtml_(l.lokasi) + ")" : "") + '</option>';
+    }).join("");
 }
 
 function qcGantiPO() {
   QC_PO_TERPILIH = null;
+  QC_RINCIAN_PO = null;
+  QC_WARNA_DIPILIH = null;
+  const selWarna = document.getElementById("qc-warna");
+  if (selWarna) selWarna.innerHTML = '<option value="">-- Pilih PO dulu --</option>';
+  qcRenderSizeLolos_();
   document.getElementById("qc-po-terpilih").classList.remove("show");
   const input = document.getElementById("qc-po");
   input.classList.remove("hidden");
@@ -225,6 +364,8 @@ function qcPilihTahap(tahap) {
 }
 
 function qcRecalc() {
+  // Qty Lolos berubah -> pembanding rincian size ikut berubah.
+  if (typeof qcHitungTotalSize_ === "function") setTimeout(qcHitungTotalSize_, 0);
   const p = Number(document.getElementById("qc-periksa").value) || 0;
   const l = Number(document.getElementById("qc-lolos").value) || 0;
   const c = Math.max(p - l, 0);
@@ -305,17 +446,29 @@ function qcSubmitInspeksi() {
 
   const idPO = QC_PO_TERPILIH ? QC_PO_TERPILIH.idPurchaseOrder : "";
   const operator = document.getElementById("qc-operator").value.trim();
+  const idLine = (document.getElementById("qc-line") || {}).value || "";
   const qtyDiperiksa = Number(document.getElementById("qc-periksa").value) || 0;
   const qtyLolos = Number(document.getElementById("qc-lolos").value) || 0;
   const qtyCacat = Math.max(qtyDiperiksa - qtyLolos, 0);
   const detailCacat = qcKumpulkanDetailCacat_();
   const totalDetail = detailCacat.reduce(function (s, d) { return s + d.qty; }, 0);
+  const lolosPerSize = qcKumpulkanLolosPerSize_();
+  const totalSize = Object.keys(lolosPerSize).reduce(function (s, k) { return s + lolosPerSize[k]; }, 0);
 
   if (!idPO) return qcTampilkanError_("Pilih PO dari daftar (ketik lalu tap hasilnya) -- jangan dikosongkan.");
   if (!QC_TAHAP_DIPILIH) return qcTampilkanError_("Pilih tahap (Potong/Jahit/Finishing) dulu.");
-  if (!operator) return qcTampilkanError_("Operator / line wajib diisi.");
+  if (!QC_WARNA_DIPILIH) return qcTampilkanError_("Pilih warna dulu -- tanpa warna, qty lolos tidak bisa dihubungkan ke stok siap kirim.");
+  // Line WAJIB di Jahit & Finishing, opsional di Potong -- cutting bukan line
+  // jahit. Aturan yang sama ditegakkan backend, ini cuma supaya checker tahu
+  // sebelum menekan simpan.
+  if (QC_TAHAP_DIPILIH !== "Potong" && !idLine) {
+    return qcTampilkanError_("Pilih line untuk tahap " + QC_TAHAP_DIPILIH + ".");
+  }
   if (qtyDiperiksa <= 0) return qcTampilkanError_("Qty diperiksa harus lebih dari 0.");
   if (qtyLolos < 0 || qtyLolos > qtyDiperiksa) return qcTampilkanError_("Qty lolos tidak masuk akal (harus 0..Qty Diperiksa).");
+  if (qtyLolos > 0 && totalSize !== qtyLolos) {
+    return qcTampilkanError_("Rincian qty lolos per size (" + totalSize + ") harus sama dengan Qty Lolos (" + qtyLolos + ").");
+  }
   if (qtyCacat > 0 && totalDetail !== qtyCacat) {
     return qcTampilkanError_("Total qty jenis cacat (" + totalDetail + ") harus sama dengan Qty Cacat (" + qtyCacat + "). Cek lagi rincian jenis cacat.");
   }
@@ -332,9 +485,15 @@ function qcSubmitInspeksi() {
       payload: {
         idPurchaseOrder: idPO,
         tahap: QC_TAHAP_DIPILIH,
+        idLine: idLine,
         operator: operator,
+        brand: QC_WARNA_DIPILIH.brand || "",
+        artikel: QC_WARNA_DIPILIH.artikel || "",
+        style: QC_WARNA_DIPILIH.style || "",
+        warna: QC_WARNA_DIPILIH.warna || "",
         qtyDiperiksa: qtyDiperiksa,
         qtyLolos: qtyLolos,
+        lolosPerSize: lolosPerSize,
         detailCacat: detailCacat,
         catatan: document.getElementById("qc-catatan").value.trim(),
         keputusanOverride: document.getElementById("qc-keputusan-override").value || ""
