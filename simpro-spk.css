@@ -123,3 +123,32 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 .sp-ringkas-item a.sp-rekap-link { background: var(--white); color: var(--ink);
   border: 1px solid var(--line-soft); }
 .sp-ringkas-item a.sp-rekap-link:hover { border-color: var(--ink); opacity: 1; }
+
+/* ============================================================
+ * TAB SWITCHER + PANEL HASIL CUTTING
+ * ============================================================
+ * Pola tab meniru .qc-tabs / .iv-tabs -- sengaja sama supaya tidak ada bahasa
+ * visual baru yang harus dipelajari.
+ * ============================================================ */
+.sp-tabs { display: flex; gap: 6px; margin: 16px 0; background: var(--paper-2, var(--cream-deep));
+  border-radius: 12px; padding: 4px; }
+.sp-tab { flex: 1; padding: 10px 12px; border-radius: 9px; font-size: 13px; font-weight: 600;
+  color: var(--ink-soft); background: transparent; border: none; cursor: pointer; transition: all .15s; }
+.sp-tab:hover { color: var(--navy); }
+.sp-tab.active { background: var(--white); color: var(--navy); box-shadow: var(--shadow-sm); }
+
+/* Input cutting SENGAJA tanpa atribut max -- overcut itu praktik normal, dan
+   memblokirnya cuma bikin petugas mengisi angka bohong. Karena itu juga tidak
+   ada state .sp-lebih di sini, beda dengan tab Bagi ke Line. */
+.sp-cut-qty { width: 58px; padding: 6px 4px; border: 1px solid var(--line-soft); border-radius: 7px;
+  font-family: 'Inter', sans-serif; font-size: 13px; text-align: center; color: var(--ink); }
+.sp-cut-qty:focus { outline: none; border-color: var(--ink); }
+
+.sp-kain-row { display: grid; grid-template-columns: 1fr 120px; gap: 10px; align-items: end; }
+.sp-catatan-kain { font-size: 11.5px; color: var(--ink-soft); font-style: italic;
+  margin: 6px 0 0; line-height: 1.5; }
+
+@media (max-width: 640px) {
+  .sp-cut-qty { width: 48px; }
+  .sp-kain-row { grid-template-columns: 1fr; }
+}

@@ -136,10 +136,26 @@ function spCariPO() {
   }).join("");
 }
 
+/**
+ * PO dipilih SEKALI, dipakai bersama kedua tab. Alur di lantai memang satu
+ * rangkaian (potong -> bagi -> cetak SPK), jadi memaksa cari PO dua kali cuma
+ * jadi friksi tanpa manfaat.
+ */
 function spPilihPO(idPO) {
   document.getElementById("sp-po-dropdown").classList.add("hidden");
   document.getElementById("sp-po-cari").value = idPO;
   spPesan_("sp-po-pesan", "", false);
+  window.SP_PO_AKTIF = idPO;
+  window.SP_PO = null;
+  window.SP_CUT = null;
+  document.getElementById("sp-tabs").classList.remove("hidden");
+  spSwitchTab(window.SP_TAB || "cutting");
+}
+
+/** Muat data tab "Bagi ke Line" (perilaku lama spPilihPO). */
+function spMuatDistribusi() {
+  const idPO = window.SP_PO_AKTIF;
+  if (!idPO) return;
   document.getElementById("sp-form").classList.add("hidden");
   document.getElementById("sp-memuat-po").classList.remove("hidden");
 
@@ -350,14 +366,229 @@ function spSimpan() {
           'Cetak SPK ' + rjdEscapeHtml_(h.namaLine) + '</a>' +
       '</div>';
     kotak.classList.remove("hidden");
-    // Muat ulang PO supaya kolom sisa & ringkasan line ikut ter-update --
-    // kalau tidak, layar menampilkan sisa yang sudah basi dan pembagian
-    // berikutnya dihitung dari angka salah.
-    spPilihPO(po.idPurchaseOrder);
+    // Muat ulang supaya kolom sisa & ringkasan line ikut ter-update -- kalau
+    // tidak, layar menampilkan sisa yang sudah basi dan pembagian berikutnya
+    // dihitung dari angka salah.
+    window.SP_PO = null;
+    spMuatDistribusi();
   })
   .catch(function () {
     btn.disabled = false;
     btn.textContent = "Simpan Pembagian";
+    alert("Gagal menghubungi server.");
+  });
+}
+
+/* ============================================================
+ * TAB 1 -- HASIL CUTTING (qty potong AKTUAL)
+ * ============================================================
+ * Titik kontrol kuantitas yang selama ini hilang dari sistem:
+ *
+ *     qty order  ->  QTY POTONG  ->  dibagi ke line  ->  output
+ *
+ * Tanpa angka potong, saat barang kirim tidak sama dengan order, tidak ada
+ * yang bisa menjawab di titik mana selisihnya lahir. Untuk order CMT (kain
+ * dari klien) ini lebih penting lagi: tanpa catatan potong + kain terpakai,
+ * RJD tidak punya dasar apa pun saat klien menagih kekurangan barang.
+ *
+ * BEDA SIKAP dengan tab Bagi ke Line: di sini TIDAK ADA batas atas. Overcut
+ * (potong lebih untuk cadangan) itu praktik normal, dan memblokirnya cuma
+ * akan bikin petugas mengisi angka bohong supaya tersimpan. Selisih terhadap
+ * order tetap ditampilkan, tapi sebagai INFORMASI, bukan penghalang.
+ * ============================================================ */
+
+/** Pindah tab. Data tiap tab dimuat MALAS -- baru diambil saat tabnya dibuka. */
+function spSwitchTab(tab) {
+  window.SP_TAB = tab;
+  document.querySelectorAll(".sp-tab").forEach(function (b) {
+    b.classList.toggle("active", b.dataset.tab === tab);
+  });
+  document.getElementById("sp-panel-cutting").classList.toggle("hidden", tab !== "cutting");
+  document.getElementById("sp-panel-bagi").classList.toggle("hidden", tab !== "bagi");
+  if (!window.SP_PO_AKTIF) return;
+  if (tab === "cutting" && !window.SP_CUT) spMuatCutting();
+  if (tab === "bagi" && !window.SP_PO) spMuatDistribusi();
+}
+
+function spMuatCutting() {
+  const wadah = document.getElementById("sp-cut-tabel");
+  if (wadah) wadah.innerHTML = '<p class="sp-info">Memuat rincian PO...</p>';
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: SP_ID_TOKEN, action: "getPOUntukCutting",
+      idPurchaseOrder: window.SP_PO_AKTIF
+    })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) {
+      wadah.innerHTML = '<p class="sp-pesan sp-galat">' +
+        rjdEscapeHtml_((d && d.error) || "Gagal memuat rincian PO.") + '</p>';
+      return;
+    }
+    window.SP_CUT = d;
+    spRenderFormCutting();
+  })
+  .catch(function () {
+    wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
+  });
+}
+
+/**
+ * Tabel isian hasil potong. Tiap sel menampilkan qty ORDER sebagai acuan dan
+ * berapa yang SUDAH tercatat dipotong -- supaya petugas tahu ini pencatatan
+ * ke berapa, bukan mengira harus mengisi total dari nol tiap kali.
+ */
+function spRenderFormCutting() {
+  const po = window.SP_CUT;
+  if (!po) return;
+
+  const dipakai = {};
+  po.baris.forEach(function (b) {
+    Object.keys(b.sizeQty).forEach(function (sz) { dipakai[sz] = true; });
+  });
+  const kolom = po.sizeKolom.filter(function (sz) { return dipakai[sz]; });
+
+  // Ringkasan catatan yang sudah ada -- konteks sebelum mengisi.
+  const rk = document.getElementById("sp-cut-ringkas");
+  if (po.sudahAdaCatatan) {
+    const kain = Object.keys(po.kainTotal || {});
+    rk.innerHTML = '<div class="sp-ringkas-judul">Sudah tercatat dipotong</div>' +
+      '<div class="sp-ringkas-list"><div class="sp-ringkas-item">' +
+        '<span>' + po.jumlahBarisCatatan + ' catatan' +
+          (po.tanggalTerakhir ? ' &#183; terakhir ' + rjdEscapeHtml_(po.tanggalTerakhir) : '') + '</span>' +
+        '<b>' + po.totalPotong + ' pcs</b></div>' +
+        (kain.length ? '<div class="sp-ringkas-item"><span>Kain terpakai</span><b>' +
+          kain.map(function (s) { return po.kainTotal[s] + " " + rjdEscapeHtml_(s); }).join(", ") +
+          '</b></div>' : '') +
+      '</div>';
+    rk.classList.remove("hidden");
+  } else {
+    rk.innerHTML = '';
+    rk.classList.add("hidden");
+  }
+
+  document.getElementById("sp-cut-tabel").innerHTML =
+    '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
+      '<th>Artikel / Warna</th>' +
+      kolom.map(function (sz) { return '<th class="num">' + rjdEscapeHtml_(sz) + '</th>'; }).join("") +
+      '<th class="num">Total</th>' +
+    '</tr></thead><tbody>' +
+    po.baris.map(function (b, i) {
+      const s = b.totalSelisih;
+      return '<tr>' +
+        '<td><div class="sp-warna">' + rjdEscapeHtml_(b.warna || "-") + '</div>' +
+          '<div class="sp-artikel">' + rjdEscapeHtml_([b.artikel, b.style].filter(Boolean).join(" / ")) + '</div>' +
+          '<div class="sp-sisa-info">order ' + b.totalOrder + ' &#183; potong ' + b.totalPotong +
+            (b.totalPotong ? (s === 0 ? ' (pas)' : (s > 0 ? ' (+' + s + ' overcut)' : ' (' + s + ')')) : '') +
+          '</div></td>' +
+        kolom.map(function (sz) {
+          const order = b.sizeQty[sz] || 0;
+          if (!order) return '<td class="num sp-kosong">&#183;</td>';
+          const sudah = b.sudahPotong[sz] || 0;
+          return '<td class="num"><input class="sp-cut-qty" type="number"' +
+            ' data-baris="' + i + '" data-size="' + rjdEscapeHtml_(sz) + '"' +
+            ' oninput="spHitungTotalCutting()" placeholder="0"/>' +
+            '<div class="sp-maks">order ' + order + (sudah ? ' &#183; ada ' + sudah : '') + '</div></td>';
+        }).join("") +
+        '<td class="num sp-total-baris" id="sp-cut-tot-' + i + '">0</td>' +
+      '</tr>';
+    }).join("") +
+    '</tbody></table></div>';
+
+  const t = new Date();
+  const inp = document.getElementById("sp-cut-tanggal");
+  if (inp && !inp.value) {
+    inp.value = t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") +
+      "-" + String(t.getDate()).padStart(2, "0");
+  }
+  spHitungTotalCutting();
+}
+
+function spHitungTotalCutting() {
+  const po = window.SP_CUT;
+  if (!po) return;
+  const perBaris = {};
+  let total = 0;
+  document.querySelectorAll(".sp-cut-qty").forEach(function (inp) {
+    const v = Number(inp.value) || 0;
+    perBaris[inp.dataset.baris] = (perBaris[inp.dataset.baris] || 0) + v;
+    total += v;
+  });
+  po.baris.forEach(function (b, i) {
+    const el = document.getElementById("sp-cut-tot-" + i);
+    if (el) el.textContent = perBaris[i] || 0;
+  });
+  document.getElementById("sp-cut-total").textContent = total;
+  const btn = document.getElementById("sp-cut-simpan-btn");
+  if (btn) btn.disabled = (total === 0);
+}
+
+function spSimpanCutting() {
+  const po = window.SP_CUT;
+  if (!po) return;
+
+  const perBaris = {};
+  document.querySelectorAll(".sp-cut-qty").forEach(function (inp) {
+    const v = Number(inp.value) || 0;
+    if (v === 0) return;
+    const i = inp.dataset.baris;
+    if (!perBaris[i]) perBaris[i] = {};
+    perBaris[i][inp.dataset.size] = v;
+  });
+  const barisKirim = Object.keys(perBaris).map(function (i) {
+    const b = po.baris[i];
+    return {
+      noSO: b.noSO, brand: b.brand, artikel: b.artikel, style: b.style,
+      warna: b.warna, sizeQty: perBaris[i]
+    };
+  });
+  if (!barisKirim.length) { alert("Belum ada qty yang diisi."); return; }
+
+  const btn = document.getElementById("sp-cut-simpan-btn");
+  btn.disabled = true;
+  btn.textContent = "Menyimpan...";
+
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: SP_ID_TOKEN, action: "simpanHasilCutting",
+      payload: {
+        idPurchaseOrder: po.idPurchaseOrder,
+        tanggalPotong: (document.getElementById("sp-cut-tanggal") || {}).value || "",
+        dipotongOleh: (document.getElementById("sp-cut-oleh") || {}).value || "",
+        lokasi: (document.getElementById("sp-cut-lokasi") || {}).value || "",
+        kainDipakai: (document.getElementById("sp-cut-kain") || {}).value || "",
+        satuanKain: (document.getElementById("sp-cut-satuan") || {}).value || "meter",
+        catatan: (document.getElementById("sp-cut-catatan") || {}).value || "",
+        baris: barisKirim
+      }
+    })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (h) {
+    btn.disabled = false;
+    btn.textContent = "Simpan Hasil Potong";
+    if (!h || !h.success) {
+      alert((h && h.error) || "Gagal menyimpan hasil potong.");
+      return;
+    }
+    const kotak = document.getElementById("sp-cut-sukses");
+    kotak.innerHTML = '<div class="sp-sukses-isi"><b>' + h.totalQty +
+      ' pcs</b> tersimpan (' + h.jumlahBaris + ' baris warna). Total potong PO ini sekarang <b>' +
+      h.totalPotongKumulatif + ' pcs</b>.</div>';
+    kotak.classList.remove("hidden");
+    // KEDUANYA dikosongkan: catatan potong baru mengubah "sisa yang boleh
+    // dibagi" di tab sebelah. Kalau tidak direset, tab Bagi ke Line masih
+    // memakai angka lama dan pembagian berikutnya dihitung dari dasar salah.
+    window.SP_CUT = null;
+    window.SP_PO = null;
+    spMuatCutting();
+  })
+  .catch(function () {
+    btn.disabled = false;
+    btn.textContent = "Simpan Hasil Potong";
     alert("Gagal menghubungi server.");
   });
 }
