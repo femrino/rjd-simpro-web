@@ -296,24 +296,66 @@ function dbRenderKontrolData(){
       el.innerHTML = '<p style="color:var(--ink-soft);font-size:13px;padding:16px">Tidak ada gap qty untuk periode ini. \u2705</p>';
       return;
     }
+    // RANTAI KUANTITAS LIMA TITIK: order -> potong -> siap kirim -> kirim -> tagih.
+    // Sebelumnya cuma tiga (PO/Kirim/Invoice), jadi kalau ada selisih tidak ada
+    // yang bisa menjawab DI TITIK MANA selisih itu lahir -- kain kurang saat
+    // potong? reject QC? atau memang belum dikirim? Dua titik tengah itu yang
+    // sekarang tercatat (hasil-cutting.gs & qc-inspeksi.gs).
+    //
+    // Titik yang BELUM PUNYA CATATAN ditampilkan sebagai "-" abu-abu, BUKAN 0.
+    // Nol berarti "diukur, hasilnya nol"; strip berarti "belum diukur". Dua hal
+    // yang sangat berbeda, dan menyamakannya bikin orang mengira ada masalah
+    // produksi padahal cuma pencatatannya yang belum jalan.
     el.innerHTML = list.map(function(o){
-      const gapKirimTxt = o.gapPengiriman !== 0 ? ' <span style="color:#8A5D1F;font-weight:700">(' + (o.gapPengiriman > 0 ? '-' : '+') + Math.abs(o.gapPengiriman) + ')</span>' : '';
-      const gapInvTxt = o.gapInvoice !== 0 ? ' <span style="color:#8A5D1F;font-weight:700">(' + (o.gapInvoice > 0 ? '-' : '+') + Math.abs(o.gapInvoice) + ')</span>' : '';
-      return '<div class="db-attention-card">' +
+      function selisih_(nilai, tampil){
+        if(!tampil || nilai === 0) return '';
+        return ' <span style="color:#8A5D1F;font-weight:700">(' +
+          (nilai > 0 ? '+' : '') + nilai + ')</span>';
+      }
+      function titik_(label, nilai, ada, delta, tampilDelta){
+        if(!ada) return '<span style="opacity:.45">' + label + ': <b>&#183;</b></span>';
+        return '<span>' + label + ': <b>' + nilai + '</b>' + selisih_(delta, tampilDelta) + '</span>';
+      }
+      // Delta dihitung terhadap titik SEBELUMNYA yang benar-benar terukur,
+      // bukan selalu terhadap qty PO -- kalau tidak, order yang potongnya
+      // memang bertahap terus tampil "kurang" tanpa alasan.
+      const dPotong = o.adaCatatanPotong ? (o.qtyPotong - o.qtyPO) : 0;
+      const dasarKirim = o.adaCatatanQC ? o.qtySiapKirim
+        : (o.adaCatatanPotong ? o.qtyPotong : o.qtyPO);
+      const dSiap = o.adaCatatanQC ? (o.qtySiapKirim - (o.adaCatatanPotong ? o.qtyPotong : o.qtyPO)) : 0;
+      const dKirim = o.qtyDikirim - dasarKirim;
+      const dInv = o.qtyInvoice - o.qtyDikirim;
+
+      // Kirim melebihi yang lolos QC = barang keluar gudang tanpa lolos
+      // pemeriksaan. Ini satu-satunya kondisi di daftar ini yang ditandai
+      // merah, karena bukan sekadar selisih angka.
+      const bahaya = o.adaCatatanQC && o.qtyDikirim > o.qtySiapKirim;
+
+      return '<div class="db-attention-card"' +
+          (bahaya ? ' style="border-left:3px solid var(--thread)"' : '') + '>' +
         '<div>' +
           '<span style="font-family:monospace;font-size:11px;color:var(--thread)">' + o.kodeOrder + '</span>' +
           '<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">' + o.tanggalPesanan + ' &#183; Status: ' + (o.status || "-") + '</div>' +
+          (bahaya ? '<div style="font-size:11px;color:var(--thread);font-weight:700;margin-top:3px">Dikirim ' +
+            (o.qtyDikirim - o.qtySiapKirim) + ' pcs lebih banyak dari yang lolos QC</div>' : '') +
         '</div>' +
-        '<div style="display:flex;gap:16px;font-family:monospace;font-size:12px;white-space:nowrap">' +
+        '<div style="display:flex;gap:14px;font-family:monospace;font-size:12px;white-space:nowrap;flex-wrap:wrap">' +
           '<span>PO: <b>' + o.qtyPO + '</b></span>' +
-          '<span>Kirim: <b>' + o.qtyDikirim + '</b>' + gapKirimTxt + '</span>' +
-          '<span>Invoice: <b>' + o.qtyInvoice + '</b>' + gapInvTxt + '</span>' +
+          titik_('Potong', o.qtyPotong, o.adaCatatanPotong, dPotong, true) +
+          titik_('Siap', o.qtySiapKirim, o.adaCatatanQC, dSiap, true) +
+          '<span>Kirim: <b>' + o.qtyDikirim + '</b>' + selisih_(dKirim, true) + '</span>' +
+          '<span>Invoice: <b>' + o.qtyInvoice + '</b>' + selisih_(dInv, true) + '</span>' +
         '</div>' +
       '</div>';
     }).join("");
   }
   // Urutin gap paling gede (PO vs Kirim, ATAU Kirim vs Invoice, dipilih yang lebih besar) duluan
   const gapSorted = adaGapQty.slice().sort(function(a, b){
+    // "Dikirim melebihi yang lolos QC" naik paling atas -- itu bukan sekadar
+    // selisih angka, tapi barang keluar gudang tanpa lolos pemeriksaan.
+    const bahayaA = (a.adaCatatanQC && a.qtyDikirim > a.qtySiapKirim) ? 1 : 0;
+    const bahayaB = (b.adaCatatanQC && b.qtyDikirim > b.qtySiapKirim) ? 1 : 0;
+    if(bahayaA !== bahayaB) return bahayaB - bahayaA;
     const gapA = Math.max(Math.abs(a.gapPengiriman), Math.abs(a.gapInvoice));
     const gapB = Math.max(Math.abs(b.gapPengiriman), Math.abs(b.gapInvoice));
     return gapB - gapA;
