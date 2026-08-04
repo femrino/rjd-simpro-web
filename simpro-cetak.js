@@ -31,6 +31,10 @@ let CK_SPK_ITEM_AKTIF = (function(){
 })();
 let CK_SPK_DATA = null; // disimpan biar ganti pilihan item nggak perlu fetch ulang
 const CK_ID = ckGetQueryParam("id");
+// Khusus SPK: ?line={ID Line} -> qty disaring jadi JATAH LINE ITU SAJA, dibaca
+// dari SD Distribusi Potongan. Tanpa parameter ini, dokumennya SPK PO penuh
+// seperti sebelumnya -- tautan cetak lama tidak berubah perilakunya.
+const CK_LINE = ckGetQueryParam("line");
 let CK_ID_TOKEN = null;
 let CK_AUTO_LOGIN = false; // true kalau token dipakai berasal dari sesi tersimpan, bukan login barusan
 
@@ -81,7 +85,7 @@ function ckFetchData(){
   const action = CK_ACTION_MAP[CK_JENIS];
   fetch(CK_API_URL, {
     method: "POST",
-    body: JSON.stringify({ idToken: CK_ID_TOKEN, action: action, id: CK_ID })
+    body: JSON.stringify({ idToken: CK_ID_TOKEN, action: action, id: CK_ID, line: CK_LINE || "" })
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
@@ -817,6 +821,40 @@ function ckSPKPilihItem(nilai){
   ckRenderSPK();
 }
 
+/**
+ * Panel identitas LINE di SPK per line. WAJIB tercetak: tanpa ini penjahit
+ * mengira PO ini memang cuma sebanyak jatahnya, dan tidak tahu dia mengerjakan
+ * sebagian dari order yang lebih besar. Pembagian ke line lain ikut ditampilkan
+ * supaya kepala line tahu sisanya di siapa.
+ */
+function ckSPKLineHtml_(line, ringkasan){
+  if(!line) return "";
+  const lain = (ringkasan || []).filter(function(r){ return !r.ini; });
+  return '<div class="ck-spk-line">' +
+    '<div class="ck-spk-line-head">' +
+      '<div>' +
+        '<div class="ck-spk-line-lbl">Surat Perintah Kerja untuk</div>' +
+        '<div class="ck-spk-line-nama">' + rjdEscapeHtml_(line.namaLine) +
+          (line.lokasi ? ' <span class="lok">' + rjdEscapeHtml_(line.lokasi) + '</span>' : '') + '</div>' +
+        (line.kepalaLine ? '<div class="ck-spk-line-sub">Kepala line: ' + rjdEscapeHtml_(line.kepalaLine) + '</div>' : '') +
+      '</div>' +
+      '<div class="ck-spk-line-qty">' +
+        '<div class="angka">' + line.totalQtyLine + '</div>' +
+        '<div class="ket">pcs jatah line ini</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="ck-spk-line-bagi">' +
+      'Jatah ini <b>' + line.persenDariPO + '%</b> dari total PO ' + line.totalQtyPO + ' pcs' +
+      (line.serahTerakhir ? ' &#183; serah terakhir ' + rjdEscapeHtml_(line.serahTerakhir) : '') +
+      (lain.length
+        ? '. Sisanya di ' + lain.map(function(r){
+            return rjdEscapeHtml_(r.namaLine) + ' (' + r.qty + ')';
+          }).join(", ")
+        : '') +
+    '</div>' +
+  '</div>';
+}
+
 function ckRenderSPK(){
   const d = CK_SPK_DATA;
   if(!d) return;
@@ -861,9 +899,10 @@ function ckRenderSPK(){
   const html = pilihHtml +
     '<div class="ck-dok">' +
       (d.isDraft ? '<div class="ck-spk-wm">DRAFT</div>' : '') +
-      ckHeaderHtml("SURAT PERINTAH KERJA", nomorSPK, d.tanggalDiajukan) +
+      ckHeaderHtml(d.line ? ("SURAT PERINTAH KERJA " + String(d.line.namaLine).toUpperCase()) : "SURAT PERINTAH KERJA", nomorSPK, d.tanggalDiajukan) +
       (d.isDraft ? '<div class="ck-dok-catatan" style="background:#FCF3E3;border-left:3px solid #EBCFA0">' +
         '<b>DRAFT &#183; status "' + d.status + '".</b> Order ini BELUM disetujui jadi PO. Jangan dijadikan dasar memulai produksi atau memotong kain.</div>' : '') +
+      ckSPKLineHtml_(d.line, d.ringkasanLine) +
       ckStandarKlienHtml_(d.standarKlien, d.namaKlien) +
       '<div class="ck-spk-meta">' +
         '<div class="sel"><div class="lbl">Klien</div><div class="val">' + rjdEscapeHtml_(d.namaKlien) + '</div></div>' +
@@ -894,7 +933,8 @@ function ckRenderSPK(){
     '</div>';
 
   document.getElementById("ck-isi").innerHTML = html;
-  document.title = "SPK " + nomorSPK + (modePerItem ? " - Item " + (idxAktif + 1) : "") + " -- RJD Apparel";
+  document.title = "SPK " + nomorSPK + (d.line ? " - " + d.line.namaLine : "") +
+    (modePerItem ? " - Item " + (idxAktif + 1) : "") + " -- RJD Apparel";
 }
 
 /**

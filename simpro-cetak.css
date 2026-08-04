@@ -241,3 +241,27 @@ body { padding-top: 0; }
   .ck-spk-matrix tr,.ck-spk-galeri .sel,.ck-spk-catatan{page-break-inside:avoid;break-inside:avoid}
   .ck-spk-wm{position:fixed;font-size:120px}
 }
+
+/* ============================================================
+ * PANEL LINE di SPK per line
+ * ============================================================
+ * IKUT TERCETAK (bukan .ck-no-print): penjahit HARUS melihat bahwa qty di
+ * dokumen ini jatah line-nya, bukan total PO. Tanpa itu, angka di SPK
+ * disalahpahami sebagai keseluruhan order.
+ * ============================================================ */
+.ck-spk-line { border: 1.5px solid var(--ink, #172134); border-radius: 8px;
+  padding: 12px 14px; margin: 0 0 14px; }
+.ck-spk-line-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; }
+.ck-spk-line-lbl { font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-soft, #6B7280); margin-bottom: 2px; }
+.ck-spk-line-nama { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 17px;
+  color: var(--ink, #172134); line-height: 1.2; }
+.ck-spk-line-nama .lok { font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+  font-weight: 500; color: var(--ink-soft, #6B7280); }
+.ck-spk-line-sub { font-size: 11px; color: var(--ink-soft, #6B7280); margin-top: 3px; }
+.ck-spk-line-qty { text-align: right; flex-shrink: 0; }
+.ck-spk-line-qty .angka { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 26px;
+  line-height: 1; color: var(--ink, #172134); }
+.ck-spk-line-qty .ket { font-size: 9.5px; color: var(--ink-soft, #6B7280); margin-top: 2px; }
+.ck-spk-line-bagi { font-size: 11px; color: var(--ink-soft, #6B7280);
+  border-top: 1px solid var(--line-soft, #E5E0D6); margin-top: 10px; padding-top: 8px; line-height: 1.5; }
