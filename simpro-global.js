@@ -3063,10 +3063,37 @@ function rjdBacaTokenStaff_() {
  * lebih ringan akibatnya daripada menu yang hilang seluruhnya karena satu
  * permintaan gagal.
  */
+/**
+ * Tandai <body> bahwa peran sudah diketahui (apa pun hasilnya).
+ *
+ * WAJIB dipanggil di SETIAP jalur keluar -- termasuk saat gagal & saat
+ * pemanggilnya bukan staff. CSS menyembunyikan tautan berperan selama
+ * body BELUM punya data-peran; kalau ada satu jalur yang lupa menandai,
+ * menu itu hilang PERMANEN di situ. Klien di Portal/Form Order paling
+ * berisiko: mereka tidak punya token staff sama sekali.
+ */
+function rjdTandaiPeranSelesai_(peran, area) {
+  if (document.body.hasAttribute("data-peran")) return;  // sudah ditandai duluan
+  document.body.setAttribute("data-peran", peran || "publik");
+  document.body.setAttribute("data-area", (area || []).join(" "));
+}
+
 function rjdTerapkanPeranKeMenu() {
   var api = rjdApiUrlMenu_();
   var token = rjdBacaTokenStaff_();
-  if (!api || !token) return;
+  if (!api || !token) {
+    // Bukan staff (klien di Portal/Form Order) atau belum login. Menu mereka
+    // memang tidak memuat tautan staff, jadi cukup lepaskan penyembunyian.
+    rjdTandaiPeranSelesai_("publik", ["keuangan", "order", "produksi", "pajak"]);
+    return;
+  }
+
+  // Jaring pengaman: kalau server tidak menjawab dalam 6 detik, tampilkan menu
+  // apa adanya. Menu berlebih akibatnya jauh lebih ringan daripada menu yang
+  // hilang seluruhnya -- dan penolakan sesungguhnya tetap ada di backend.
+  var jaring = setTimeout(function () {
+    rjdTandaiPeranSelesai_("tidak-diketahui", ["keuangan", "order", "produksi", "pajak"]);
+  }, 6000);
 
   fetch(api, {
     method: "POST",
@@ -3074,12 +3101,19 @@ function rjdTerapkanPeranKeMenu() {
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
-    if (!d || !d.success) return;
+    clearTimeout(jaring);
+    if (!d || !d.success) {
+      rjdTandaiPeranSelesai_("tidak-diketahui", ["keuangan", "order", "produksi", "pajak"]);
+      return;
+    }
     var area = d.area || [];
     // Bukan staff (klien biasa) -> jangan sentuh apa pun. Menu mereka memang
     // tidak punya tautan staff, dan menyembunyikan berdasarkan area kosong
     // justru akan menghapus menu yang sah.
-    if (!d.peran) return;
+    if (!d.peran) {
+      rjdTandaiPeranSelesai_("publik", ["keuangan", "order", "produksi", "pajak"]);
+      return;
+    }
 
     Object.keys(RJD_AREA_HALAMAN).forEach(function (href) {
       if (area.indexOf(RJD_AREA_HALAMAN[href]) !== -1) return;
@@ -3087,15 +3121,24 @@ function rjdTerapkanPeranKeMenu() {
         .forEach(function (a) { a.style.display = "none"; });
     });
     // Ditandai di <body> supaya CSS/JS halaman bisa ikut menyesuaikan tanpa
-    // memanggil server lagi (mis. menyembunyikan tab Order Masuk di Dashboard).
+    // memanggil server lagi (mis. menyembunyikan tab Order Masuk di Dashboard),
+    // SEKALIGUS melepas penyembunyian awal tautan menu.
     document.body.setAttribute("data-peran", d.peran);
     document.body.setAttribute("data-area", area.join(" "));
   })
-  .catch(function () { /* gagal diam-diam -- lihat catatan di atas */ });
+  .catch(function () {
+    clearTimeout(jaring);
+    // Gagal (jaringan/server) -> tampilkan menu apa adanya. Lihat catatan
+    // di jaring pengaman di atas.
+    rjdTandaiPeranSelesai_("tidak-diketahui", ["keuangan", "order", "produksi", "pajak"]);
+  });
 }
 
 document.addEventListener("DOMContentLoaded", function () {
-  // Ditunda sebentar: sebagian halaman baru menyisipkan headernya setelah
-  // login sukses, jadi menjalankan ini terlalu awal tidak menemukan apa pun.
-  setTimeout(rjdTerapkanPeranKeMenu, 1200);
+  // Dijalankan SEGERA. Versi pertama menundanya 1200ms dengan alasan menunggu
+  // header tersisip, tapi itu justru bikin menu penuh sempat terlihat sekejap
+  // sebelum berubah. Sekarang penyembunyian awal ditangani CSS
+  // (body:not([data-peran])), jadi tidak ada lagi yang perlu ditunggu --
+  // JS cukup melepasnya begitu peran diketahui.
+  rjdTerapkanPeranKeMenu();
 });
