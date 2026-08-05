@@ -2871,111 +2871,6 @@ async function lpSimpanEditOrder(idOrderRequest){
 var LP_ORDER_EDIT_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
 
 /* ============================================================
- * PENYESUAIAN MENU MENURUT PERAN
- * ============================================================
- * Menyembunyikan item menu yang memang akan ditolak server, supaya staff
- * produksi tidak mengklik Invoice lalu bertemu pesan "tidak punya akses" --
- * pengalaman yang bukan cuma mengganggu, tapi terasa seperti sistemnya rusak.
- *
- * INI MURNI KENYAMANAN, BUKAN PENGAMAN. Penolakan sebenarnya ada di
- * pastikanBoleh_() di backend (akses-role.gs). Kalau skrip ini gagal jalan,
- * tidak ada data yang bocor -- menu cuma tampil lalu halamannya menolak,
- * persis seperti sebelum penyesuaian ini ada.
- *
- * Menyembunyikan menu TIDAK PERNAH boleh dijadikan satu-satunya pembatas:
- * siapa pun yang pernah melihat URL-nya tetap bisa mengetiknya langsung.
- * ============================================================ */
-
-/** Item menu yang disembunyikan per area yang TIDAK dimiliki. */
-var RJD_MENU_PER_AREA = {
-  keuangan: ["/p/invoice.html"],
-  pajak: ["/p/laporan-omset.html"]
-  // Catatan: /p/order-list.html SENGAJA tidak disembunyikan untuk peran
-  // produksi. Daftar order itu sendiri boleh dilihat (area "produksi") --
-  // yang ditolak cuma tab Edit PO di dalamnya, karena di situ ada harga.
-};
-
-function rjdSesuaikanMenuPeran_(peran) {
-  if (!peran || !peran.staff) return;
-  var punya = peran.area || [];
-  Object.keys(RJD_MENU_PER_AREA).forEach(function (area) {
-    if (punya.indexOf(area) !== -1) return;   // punya aksesnya -> biarkan
-    RJD_MENU_PER_AREA[area].forEach(function (href) {
-      document.querySelectorAll(".rjd-menu-panel a[href='" + href + "']").forEach(function (a) {
-        a.style.display = "none";
-      });
-    });
-  });
-  // Ditandai di <body> supaya CSS halaman bisa ikut menyesuaikan kalau perlu,
-  // tanpa harus memanggil rute ini lagi.
-  document.body.setAttribute("data-peran", peran.peran || "");
-}
-
-/**
- * Panggil sekali setelah token tersedia. Aman dipanggil berkali-kali --
- * hasilnya disimpan supaya tidak menembak server tiap ganti tab.
- */
-function rjdMuatPeran(apiUrl, idToken) {
-  if (!apiUrl || !idToken) return;
-  if (window.RJD_PERAN) { rjdSesuaikanMenuPeran_(window.RJD_PERAN); return; }
-  fetch(apiUrl, {
-    method: "POST",
-    body: JSON.stringify({ idToken: idToken, action: "getPeranSaya" })
-  })
-  .then(function (r) { return r.json(); })
-  .then(function (d) {
-    if (!d || !d.success) return;   // gagal -> menu tampil apa adanya, tidak fatal
-    window.RJD_PERAN = d;
-    rjdSesuaikanMenuPeran_(d);
-  })
-  .catch(function () { /* diamkan -- ini kenyamanan, bukan fondasi */ });
-}
-
-/**
- * Deteksi otomatis: begitu ada sesi tersimpan, sesuaikan menunya.
- *
- * SENGAJA di sini, bukan disisipkan ke tiap halaman. Tiap halaman punya pola
- * login yang berbeda (login manual, auto-login dari cache, sesi bersama), dan
- * menempelkan panggilan di tiap jalur berarti cepat atau lambat ada jalur yang
- * terlewat -- lalu menunya tidak tersesuaikan tanpa ada yang sadar.
- *
- * "db_session" dipakai bersama Dashboard, Orderan, Pengiriman, Invoice, QC,
- * dan Produksi. Portal Klien memakai "lp_session" dan memang tidak perlu
- * penyesuaian ini (menunya sudah versi ringkas untuk klien).
- *
- * Dijalankan berulang sebentar di awal karena sebagian halaman baru menulis
- * sesinya setelah tombol Google diklik -- lebih andal daripada menebak kapan
- * tiap halaman selesai login. Berhenti begitu dapat, atau setelah 30 detik.
- */
-(function rjdPantauSesiUntukMenu_() {
-  var API = "https://script.google.com/macros/s/AKfycbwIe9qIookHaaYNEyQ0OdX5mtIVXXwQThMKnvKBOslSxlstZaPjvqmiTeC9pz_FMpfLig/exec";
-  var percobaan = 0;
-
-  function coba() {
-    percobaan++;
-    if (window.RJD_PERAN) return;              // sudah dapat -> berhenti
-    if (percobaan > 15) return;                // ~30 detik -> menyerah diam-diam
-    var token = null;
-    try {
-      var raw = localStorage.getItem("db_session");
-      if (raw) {
-        var data = JSON.parse(raw);
-        if (data && data.token && data.exp && data.exp * 1000 > Date.now()) token = data.token;
-      }
-    } catch (e) { /* localStorage diblokir -> lewati, menu tampil apa adanya */ }
-
-    if (token) { rjdMuatPeran(API, token); return; }
-    setTimeout(coba, 2000);
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function () { setTimeout(coba, 300); });
-  } else {
-    setTimeout(coba, 300);
-  }
-})();
-
-/* ============================================================
  * PERAN -> MENU (kenyamanan, BUKAN keamanan)
  * ============================================================
  * Menyembunyikan tautan menu yang memang akan ditolak server. Penolakan
@@ -3076,6 +2971,39 @@ function rjdTandaiPeranSelesai_(peran, area) {
   if (document.body.hasAttribute("data-peran")) return;  // sudah ditandai duluan
   document.body.setAttribute("data-peran", peran || "publik");
   document.body.setAttribute("data-area", (area || []).join(" "));
+  rjdBersihkanDividerMenu_();
+}
+
+/**
+ * Rapikan <hr class="rjd-menu-divider"> yang jadi ganda atau menggantung
+ * setelah tautan di sekitarnya disembunyikan oleh rjdTerapkanPeranKeMenu().
+ *
+ * Aturan sederhana per divider (dicek berurutan dari atas ke bawah, hanya
+ * di antara ANAK YANG MASIH TAMPIL -- tautan yang disembunyikan dianggap
+ * tidak ada sama sekali):
+ *   - Divider paling pertama atau paling terakhir yang tampil -> sembunyikan
+ *     (tidak ada gunanya membatasi kalau tidak ada apa-apa di satu sisinya).
+ *   - Divider yang tepat menempel ke divider tampil sebelumnya -> sembunyikan
+ *     (dua pembatas nempel = seharusnya cuma satu, atau nol kalau bagian di
+ *     antaranya kosong semua).
+ *
+ * Generik dengan sengaja: tidak perlu tahu peran/area apa pun, tidak perlu
+ * di-update kalau nanti ada item menu baru ditambah/dipindah. Cukup dipanggil
+ * ulang setiap kali sekumpulan tautan menu disembunyikan/ditampilkan.
+ */
+function rjdBersihkanDividerMenu_() {
+  document.querySelectorAll(".rjd-menu-panel").forEach(function (panel) {
+    var anakTampil = Array.prototype.filter.call(panel.children, function (el) {
+      return el.style.display !== "none";
+    });
+    var sebelumnyaDivider = true;  // posisi awal dianggap "divider", biar divider pertama ikut disembunyikan
+    anakTampil.forEach(function (el, i) {
+      if (el.tagName !== "HR") { sebelumnyaDivider = false; return; }
+      var iniTerakhir = (i === anakTampil.length - 1);
+      el.style.display = (sebelumnyaDivider || iniTerakhir) ? "none" : "";
+      sebelumnyaDivider = true;
+    });
+  });
 }
 
 function rjdTerapkanPeranKeMenu() {
@@ -3122,9 +3050,9 @@ function rjdTerapkanPeranKeMenu() {
     });
     // Ditandai di <body> supaya CSS/JS halaman bisa ikut menyesuaikan tanpa
     // memanggil server lagi (mis. menyembunyikan tab Order Masuk di Dashboard),
-    // SEKALIGUS melepas penyembunyian awal tautan menu.
-    document.body.setAttribute("data-peran", d.peran);
-    document.body.setAttribute("data-area", area.join(" "));
+    // SEKALIGUS melepas penyembunyian awal tautan menu, SEKALIGUS merapikan
+    // divider yang jadi ganda/menggantung akibat tautan di atas disembunyikan.
+    rjdTandaiPeranSelesai_(d.peran, area);
   })
   .catch(function () {
     clearTimeout(jaring);
