@@ -2994,12 +2994,45 @@ function rjdMuatPeran(apiUrl, idToken) {
 /** Halaman -> area yang dibutuhkan. Halaman tanpa entri = boleh semua. */
 var RJD_AREA_HALAMAN = {
   "/p/invoice.html":       "keuangan",
-  "/p/laporan-omset.html": "pajak"
+  "/p/laporan-omset.html": "pajak",
+  // Dashboard Operasional memang tertutup penuh untuk peran Produksi -- itu
+  // penjaga LAMA di doPost (bukan dari sistem peran ini), dan masuk akal:
+  // isinya omset, aging piutang, konsentrasi risiko. Tautannya ikut
+  // disembunyikan supaya mereka tidak mengklik sesuatu yang pasti berakhir
+  // di layar error.
+  "/p/dashboard.html":     "keuangan"
   // Dashboard, Orderan, Produksi, QC, Pengiriman SENGAJA tidak didaftarkan:
   // halaman-halaman itu tetap berguna untuk peran Produksi, yang tertutup cuma
   // sebagian tab di dalamnya (Order Masuk, Edit PO) -- dan itu ditangani JS
   // halaman masing-masing, bukan dari sini.
 };
+
+/**
+ * API URL untuk keperluan menu. SENGAJA tidak memakai lpApiUrlUniversal_():
+ * helper itu cuma mengenal DB_/LP_/OF_ (tiga cabang yang ada saat ia dibuat),
+ * sedangkan menu ada di SEMUA halaman staff -- Produksi pakai SP_, Pengiriman
+ * KR_, Invoice IV_, Daftar Order OL_, QC QC_, Laporan Omset LO_.
+ *
+ * Akibat kelalaian ini pada versi pertama: di halaman-halaman itu fungsi
+ * penerap peran berhenti diam-diam sebelum sempat memanggil server, sehingga
+ * menu tetap tampil utuh untuk semua peran.
+ *
+ * lpApiUrlUniversal_ sendiri TIDAK diubah -- dia dipakai fungsi lain yang
+ * memang cuma jalan di tiga cabang itu, dan memperluasnya menambah risiko
+ * tanpa manfaat di sini.
+ */
+function rjdApiUrlMenu_() {
+  if (typeof DB_API_URL !== "undefined") return DB_API_URL;
+  if (typeof SP_API_URL !== "undefined") return SP_API_URL;
+  if (typeof KR_API_URL !== "undefined") return KR_API_URL;
+  if (typeof IV_API_URL !== "undefined") return IV_API_URL;
+  if (typeof OL_API_URL !== "undefined") return OL_API_URL;
+  if (typeof QC_API_URL !== "undefined") return QC_API_URL;
+  if (typeof LO_API_URL !== "undefined") return LO_API_URL;
+  if (typeof LP_API_URL !== "undefined") return LP_API_URL;
+  if (typeof OF_API_URL !== "undefined") return OF_API_URL;
+  return null;
+}
 
 function rjdBacaTokenStaff_() {
   try {
@@ -3019,7 +3052,7 @@ function rjdBacaTokenStaff_() {
  * permintaan gagal.
  */
 function rjdTerapkanPeranKeMenu() {
-  var api = (typeof lpApiUrlUniversal_ === "function") ? lpApiUrlUniversal_() : null;
+  var api = rjdApiUrlMenu_();
   var token = rjdBacaTokenStaff_();
   if (!api || !token) return;
 
