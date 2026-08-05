@@ -79,3 +79,94 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   .kr-kartu { flex: 1 1 100%; }
   .kr-alat select { flex: 1 1 100%; }
 }
+
+/* ============================================================
+ * TAB "BUAT SURAT JALAN"
+ * ============================================================
+ * Pola tab meniru .iv-tabs / .qc-tabs -- sengaja sama supaya tidak ada bahasa
+ * visual baru yang harus dipelajari.
+ * ============================================================ */
+.kr-tabs { display: flex; gap: 6px; margin-bottom: 16px; background: var(--paper-2, var(--cream-deep));
+  border-radius: 12px; padding: 4px; }
+.kr-tab { flex: 1; padding: 10px 12px; border-radius: 9px; font-size: 13px; font-weight: 600;
+  color: var(--ink-soft); background: transparent; border: none; cursor: pointer; transition: all .15s; }
+.kr-tab:hover { color: var(--ink); }
+.kr-tab.active { background: var(--white); color: var(--ink); box-shadow: var(--shadow-sm); }
+
+.kr-buat-card { background: var(--white); border: 1px solid var(--line-soft); border-radius: 16px;
+  padding: 20px; box-shadow: var(--shadow-sm); margin-bottom: 16px; }
+.kr-buat-judul { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 15px;
+  color: var(--ink); margin: 0 0 4px; }
+.kr-buat-info { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 14px; }
+.kr-buat-galat { font-size: 12.5px; color: var(--thread); background: #FDECEA;
+  border: 1px solid #E8A49C; border-radius: 9px; padding: 10px 12px; }
+
+/* Pemilih PO: kotak cari + dropdown, bukan select native -- daftar PO bisa
+   ratusan baris dan scroll dropdown native jelek dipakai di HP. */
+.kr-po-field { position: relative; }
+.kr-po-field input { width: 100%; padding: 11px 13px; background: var(--white);
+  border: 1px solid var(--line-soft); border-radius: 9px; font-family: 'Inter', sans-serif;
+  font-size: 14px; color: var(--ink); }
+#kr-buat-dropdown { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; right: 0;
+  background: var(--white); border: 1px solid var(--line-soft); border-radius: 10px;
+  box-shadow: var(--shadow-md); max-height: 280px; overflow-y: auto; }
+.kr-po-opsi { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--line-soft); }
+.kr-po-opsi:last-child { border-bottom: none; }
+.kr-po-opsi:hover { background: var(--cream); }
+.kr-po-opsi-id { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.kr-po-opsi-sub { font-size: 11.5px; color: var(--ink-soft); margin-top: 1px; }
+.kr-po-kosong { padding: 12px 14px; font-size: 12.5px; color: var(--ink-soft); font-style: italic; }
+
+.kr-buat-ringkas { background: var(--cream); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+.kr-buat-klien { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 15px; color: var(--ink); }
+.kr-buat-angka { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 6px; font-size: 12.5px;
+  color: var(--ink-soft); }
+.kr-buat-angka b { color: var(--ink); font-size: 14px; }
+/* Sumber batas ditampilkan terang-terangan: admin perlu tahu angka "sisa" itu
+   berdasarkan qty lolos QC atau baru berdasarkan qty order. */
+.kr-buat-sumber { font-size: 11.5px; color: #8A5D1F; margin-top: 8px;
+  border-top: 1px solid var(--line-soft); padding-top: 8px; }
+.kr-buat-sumber.ok { color: #2C6B3F; }
+
+.kr-buat-grup td { background: var(--cream); font-size: 12.5px; }
+.kr-buat-size { padding-left: 22px !important; font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
+.kr-buat-tanda { color: #8A5D1F; font-weight: 800; cursor: help; }
+.kr-habis td { opacity: .5; }
+.kr-buat-kosong { font-size: 11px; color: var(--ink-soft); font-style: italic; }
+
+.kr-kirim-qty { width: 66px; padding: 6px 6px; border: 1px solid var(--line-soft); border-radius: 7px;
+  font-family: 'Inter', sans-serif; font-size: 13px; text-align: center; color: var(--ink); }
+.kr-kirim-qty:focus { outline: none; border-color: var(--ink); }
+.kr-kirim-qty.kr-lebih { border-color: var(--thread); background: #FDECEA; color: #8F2C22; }
+
+.kr-buat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px; margin: 18px 0 0; }
+.kr-buat-field2 label { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink-soft);
+  margin-bottom: 5px; }
+.kr-buat-field2 input, .kr-buat-field2 select { width: 100%; padding: 9px 11px; background: var(--white);
+  border: 1px solid var(--line-soft); border-radius: 9px; font-family: 'Inter', sans-serif;
+  font-size: 13px; color: var(--ink); }
+
+.kr-buat-total-kotak { display: flex; justify-content: space-between; align-items: center;
+  background: var(--cream); border-radius: 10px; padding: 12px 16px; margin-top: 16px; }
+.kr-buat-total-kotak span { font-size: 13px; color: var(--ink-soft); }
+.kr-buat-total-kotak b { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 22px; color: var(--ink); }
+
+.kr-buat-simpan-btn { width: 100%; padding: 13px 0; background: var(--ink); color: var(--white);
+  border: none; border-radius: 10px; font-size: 14.5px; font-weight: 700; cursor: pointer;
+  margin-top: 14px; transition: opacity .15s; }
+.kr-buat-simpan-btn:hover { opacity: .88; }
+.kr-buat-simpan-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+.kr-buat-sukses { background: #EAF4EC; border: 1px solid #9FCBA9; border-radius: 12px;
+  padding: 14px 16px; margin-top: 14px; }
+.kr-sukses-isi { font-size: 13px; color: #2C6B3F; }
+.kr-sukses-catat { font-size: 11.5px; color: #8A5D1F; margin-top: 6px; }
+.kr-cetak-btn { display: inline-block; margin-top: 10px; font-size: 13px; font-weight: 700;
+  color: var(--white); background: var(--ink); border-radius: 9px; padding: 9px 16px; text-decoration: none; }
+.kr-cetak-btn:hover { opacity: .88; }
+
+@media (max-width: 640px) {
+  .kr-kirim-qty { width: 54px; }
+  .kr-buat-size { padding-left: 14px !important; }
+}

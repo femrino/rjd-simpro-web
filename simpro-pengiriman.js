@@ -66,6 +66,11 @@ function krLogout(){
 }
 
 function krMulai(){
+  // Sesuaikan menu dengan peran -- item yang memang akan ditolak server
+  // tidak perlu ditampilkan. Lihat catatan di simpro-global.js:
+  // ini KENYAMANAN, bukan pengaman.
+  if (typeof rjdMuatPeran === "function") rjdMuatPeran(KR_API_URL, KR_ID_TOKEN);
+
   krShow("kr-loading");
   ["kr-nav-logout", "kr-nav-refresh"].forEach(function(id){
     const el = document.getElementById(id);
@@ -208,6 +213,241 @@ function krToggleRincian(i){
   if(el) el.classList.toggle("hidden");
 }
 
+/* ============================================================
+ * TAB "BUAT SURAT JALAN"
+ * ============================================================
+ * Melengkapi rantai terakhir yang masih dikerjakan di AppSheet.
+ *
+ * BATAS QTY BERTINGKAT (ditentukan backend, lihat buat-pengiriman.gs):
+ *   - PO sudah punya catatan QC Finishing -> batas = qty LOLOS QC
+ *   - belum -> batas = qty order
+ * Layar menampilkan sumber batasnya terang-terangan supaya admin tahu angka
+ * yang dia lihat itu berdasarkan apa.
+ * ============================================================ */
+
+function krSwitchTab(tab) {
+  document.querySelectorAll(".kr-tab").forEach(function (b) {
+    b.classList.toggle("active", b.dataset.tab === tab);
+  });
+  document.getElementById("kr-panel-daftar").classList.toggle("hidden", tab !== "daftar");
+  document.getElementById("kr-panel-buat").classList.toggle("hidden", tab !== "buat");
+  if (tab === "buat" && !window.KR_DAFTAR_PO) krMuatDaftarPO();
+}
+
+function krMuatDaftarPO() {
+  fetch(KR_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: KR_ID_TOKEN, action: "getDaftarPO" })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) return;
+    // Order yang sudah Selesai tidak perlu surat jalan baru.
+    window.KR_DAFTAR_PO = (d.daftar || []).filter(function (p) {
+      return String(p.status || "").toLowerCase() !== "selesai";
+    });
+  })
+  .catch(function () { /* pencarian PO gagal -- kotak cari tetap ada */ });
+}
+
+function krCariPO() {
+  const q = (document.getElementById("kr-buat-cari").value || "").trim().toLowerCase();
+  const dd = document.getElementById("kr-buat-dropdown");
+  if (!dd) return;
+  if (!q) { dd.classList.add("hidden"); return; }
+
+  const hasil = (window.KR_DAFTAR_PO || []).filter(function (p) {
+    return [p.idPurchaseOrder, p.noSO, p.namaKlien, (p.artikel || []).join(" ")]
+      .join(" ").toLowerCase().indexOf(q) !== -1;
+  }).slice(0, 25);
+
+  dd.classList.remove("hidden");
+  if (!hasil.length) {
+    dd.innerHTML = '<div class="kr-po-kosong">Tidak ada PO yang cocok.</div>';
+    return;
+  }
+  dd.innerHTML = hasil.map(function (p) {
+    return '<div class="kr-po-opsi" data-id="' + rjdEscapeHtml_(p.idPurchaseOrder) +
+      '" onclick="krPilihPO(this.dataset.id)">' +
+      '<div class="kr-po-opsi-id">' + rjdEscapeHtml_(p.idPurchaseOrder) + '</div>' +
+      '<div class="kr-po-opsi-sub">' + rjdEscapeHtml_(p.namaKlien) +
+        ' &#183; ' + (p.jumlah || 0) + ' pcs' +
+        (p.deadline ? ' &#183; deadline ' + rjdEscapeHtml_(p.deadline) : '') + '</div>' +
+    '</div>';
+  }).join("");
+}
+
+function krPilihPO(idPO) {
+  document.getElementById("kr-buat-dropdown").classList.add("hidden");
+  document.getElementById("kr-buat-cari").value = idPO;
+  const wadah = document.getElementById("kr-buat-tabel");
+  wadah.innerHTML = '<p class="kr-buat-info">Memuat rincian...</p>';
+
+  fetch(KR_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: KR_ID_TOKEN, action: "getPOUntukPengiriman", idPurchaseOrder: idPO })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) {
+      wadah.innerHTML = '<p class="kr-buat-galat">' +
+        rjdEscapeHtml_((d && d.error) || "Gagal memuat rincian PO.") + '</p>';
+      return;
+    }
+    window.KR_BUAT = d;
+    krRenderFormKirim();
+  })
+  .catch(function () {
+    wadah.innerHTML = '<p class="kr-buat-galat">Gagal menghubungi server.</p>';
+  });
+}
+
+function krRenderFormKirim() {
+  const d = window.KR_BUAT;
+  if (!d) return;
+
+  document.getElementById("kr-buat-ringkas").innerHTML =
+    '<div class="kr-buat-klien">' + rjdEscapeHtml_(d.namaKlien) + '</div>' +
+    '<div class="kr-buat-angka">' +
+      '<span>order <b>' + d.totalOrder + '</b></span>' +
+      '<span>terkirim <b>' + d.totalTerkirim + '</b></span>' +
+      '<span>sisa <b>' + d.totalSisa + '</b></span>' +
+    '</div>' +
+    // Sumber batas ditampilkan terang-terangan: admin perlu tahu angka "sisa"
+    // itu berdasarkan qty yang lolos QC atau baru berdasarkan qty order.
+    '<div class="kr-buat-sumber' + (d.adaCatatanQC ? ' ok' : '') + '">' +
+      (d.adaCatatanQC
+        ? 'Batas kirim mengikuti qty yang LOLOS QC Finishing.'
+        : 'PO ini belum punya catatan QC Finishing &#8212; batas kirim masih memakai qty order.') +
+    '</div>';
+  document.getElementById("kr-buat-ringkas").classList.remove("hidden");
+
+  // Dikelompokkan per Warna supaya sejalan dengan cara orang gudang menghitung
+  // (per bundel warna), bukan daftar panjang warna-size bercampur.
+  const grup = {};
+  const urut = [];
+  d.baris.forEach(function (b, i) {
+    const k = [b.brand, b.artikel, b.style, b.warna].join("||");
+    if (!grup[k]) { grup[k] = []; urut.push(k); }
+    grup[k].push({ b: b, i: i });
+  });
+
+  document.getElementById("kr-buat-tabel").innerHTML =
+    '<div class="kr-tabelwrap"><table class="kr-tabel"><thead><tr>' +
+      '<th>Warna / Size</th><th class="num">Order</th><th class="num">Terkirim</th>' +
+      '<th class="num">Sisa</th><th class="num">Kirim sekarang</th>' +
+    '</tr></thead><tbody>' +
+    urut.map(function (k) {
+      const bagian = k.split("||");
+      const rows = grup[k];
+      let head = '<tr class="kr-buat-grup"><td colspan="5">' +
+        '<b>' + rjdEscapeHtml_(bagian[3] || "-") + '</b> &#183; ' +
+        rjdEscapeHtml_([bagian[1], bagian[2]].filter(Boolean).join(" / ")) + '</td></tr>';
+      return head + rows.map(function (x) {
+        const b = x.b, i = x.i;
+        const habis = b.sisa <= 0;
+        return '<tr' + (habis ? ' class="kr-habis"' : '') + '>' +
+          '<td class="kr-buat-size">' + rjdEscapeHtml_(b.size || "-") +
+            (b.idDetailOrder ? '' : ' <span class="kr-buat-tanda" title="tanpa ID Detail Order, harga di invoice perlu diisi manual">!</span>') + '</td>' +
+          '<td class="num">' + b.qtyOrder + '</td>' +
+          '<td class="num">' + b.terkirim + '</td>' +
+          '<td class="num">' + b.sisa + '</td>' +
+          '<td class="num">' + (habis ? '<span class="kr-buat-kosong">selesai</span>'
+            : '<input class="kr-kirim-qty" type="number" min="0" max="' + b.sisa + '"' +
+              ' data-i="' + i + '" oninput="krHitungTotalKirim()" placeholder="0"/>') + '</td>' +
+        '</tr>';
+      }).join("");
+    }).join("") +
+    '</tbody></table></div>';
+
+  const t = new Date();
+  const inp = document.getElementById("kr-buat-tanggal");
+  if (inp && !inp.value) {
+    inp.value = t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") +
+      "-" + String(t.getDate()).padStart(2, "0");
+  }
+  krHitungTotalKirim();
+}
+
+function krHitungTotalKirim() {
+  let total = 0;
+  document.querySelectorAll(".kr-kirim-qty").forEach(function (inp) {
+    const v = Number(inp.value) || 0;
+    const maks = Number(inp.max) || 0;
+    inp.classList.toggle("kr-lebih", v > maks);
+    total += v;
+  });
+  const el = document.getElementById("kr-buat-total");
+  if (el) el.textContent = total;
+  const btn = document.getElementById("kr-buat-simpan-btn");
+  if (btn) btn.disabled = (total <= 0);
+}
+
+function krSimpanPengiriman() {
+  const d = window.KR_BUAT;
+  if (!d) return;
+
+  const baris = [];
+  document.querySelectorAll(".kr-kirim-qty").forEach(function (inp) {
+    const v = Number(inp.value) || 0;
+    if (v <= 0) return;
+    const b = d.baris[Number(inp.dataset.i)];
+    baris.push({
+      idDetailOrder: b.idDetailOrder, brand: b.brand, artikel: b.artikel,
+      style: b.style, warna: b.warna, size: b.size, jumlah: v
+    });
+  });
+  if (!baris.length) { alert("Belum ada qty yang diisi."); return; }
+
+  const btn = document.getElementById("kr-buat-simpan-btn");
+  btn.disabled = true;
+  btn.textContent = "Menyimpan...";
+
+  fetch(KR_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: KR_ID_TOKEN, action: "simpanPengiriman",
+      payload: {
+        idPurchaseOrder: d.idPurchaseOrder,
+        tanggal: (document.getElementById("kr-buat-tanggal") || {}).value || "",
+        jenisPengiriman: (document.getElementById("kr-buat-jenis") || {}).value || "Produksi",
+        metodePengiriman: (document.getElementById("kr-buat-metode") || {}).value || "",
+        noResi: (document.getElementById("kr-buat-resi") || {}).value || "",
+        catatan: (document.getElementById("kr-buat-catatan") || {}).value || "",
+        baris: baris
+      }
+    })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (h) {
+    btn.disabled = false;
+    btn.textContent = "Simpan Surat Jalan";
+    if (!h || !h.success) { alert((h && h.error) || "Gagal menyimpan surat jalan."); return; }
+
+    document.getElementById("kr-buat-sukses").innerHTML =
+      '<div class="kr-sukses-isi">' +
+        '<b>' + rjdEscapeHtml_(h.idPengiriman) + '</b> tersimpan &#183; ' +
+        h.totalQty + ' pcs (' + h.jumlahBaris + ' baris). Sisa kirim: <b>' + h.sisaSetelahIni + '</b>.' +
+        (h.barisTanpaIdDetailOrder
+          ? '<div class="kr-sukses-catat">' + h.barisTanpaIdDetailOrder +
+            ' baris tidak punya ID Detail Order &#8212; harga di invoice nanti perlu diisi manual.</div>'
+          : '') +
+        '<a class="kr-cetak-btn" target="_blank" href="/p/cetak.html?jenis=suratjalan&amp;id=' +
+          encodeURIComponent(h.idPengiriman) + '">Cetak Surat Jalan</a>' +
+      '</div>';
+    document.getElementById("kr-buat-sukses").classList.remove("hidden");
+    // Daftar & rincian dua-duanya berubah -- dikosongkan supaya tidak
+    // menampilkan sisa kirim yang sudah basi.
+    window.KR_DAFTAR = null;
+    krPilihPO(d.idPurchaseOrder);
+  })
+  .catch(function () {
+    btn.disabled = false;
+    btn.textContent = "Simpan Surat Jalan";
+    alert("Gagal menghubungi server.");
+  });
+}
+
 function krSetupTombolGoogle(){
   if(typeof google === "undefined" || !google.accounts) return;
   google.accounts.id.initialize({
@@ -220,6 +460,11 @@ function krSetupTombolGoogle(){
 
 window.onload = function(){
   krSetupTombolGoogle();
+  document.addEventListener("click", function (e) {
+    const wrap = document.getElementById("kr-buat-field");
+    const dd = document.getElementById("kr-buat-dropdown");
+    if (wrap && dd && !wrap.contains(e.target)) dd.classList.add("hidden");
+  });
   const token = krBacaSesi_();
   if(token){
     KR_ID_TOKEN = token;
