@@ -3000,7 +3000,19 @@ var RJD_AREA_HALAMAN = {
   // isinya omset, aging piutang, konsentrasi risiko. Tautannya ikut
   // disembunyikan supaya mereka tidak mengklik sesuatu yang pasti berakhir
   // di layar error.
-  "/p/dashboard.html":     "keuangan"
+  "/p/dashboard.html":     "keuangan",
+  // Portal Klien (mode internal) membuka daftar SELURUH klien beserta order,
+  // pengiriman & profil mereka. Form Order mode staff = mengajukan order ATAS
+  // NAMA klien. Dua-duanya pekerjaan CS/admin, bukan lantai produksi.
+  //
+  // CATATAN: ini cuma menyembunyikan tautannya. Penolakan sesungguhnya ada di
+  // backend -- blok internal Portal Klien di doPost, dan cekStaffFormOrder yang
+  // masuk area "order".
+  //
+  // KLIEN tidak terkena: rjdTerapkanPeranKeMenu berhenti kalau peran kosong
+  // (bukan staff), jadi menu ringkas di dua halaman itu tetap utuh buat mereka.
+  "/p/tracking.html":      "order",
+  "/p/order.html":         "order"
   // Dashboard, Orderan, Produksi, QC, Pengiriman SENGAJA tidak didaftarkan:
   // halaman-halaman itu tetap berguna untuk peran Produksi, yang tertutup cuma
   // sebagian tab di dalamnya (Order Masuk, Edit PO) -- dan itu ditangani JS
