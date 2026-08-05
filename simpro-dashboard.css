@@ -1142,3 +1142,27 @@ body {
 /* ---------- form profil ---------- */
 .lp-profil-label input, .lp-profil-label textarea { border-radius: 10px; transition: border-color .18s ease; }
 .lp-profil-label input:focus, .lp-profil-label textarea:focus { outline: none; border-color: var(--terra); }
+
+/* ============================================================
+ * PENYESUAIAN TAMPILAN PER PERAN
+ * ============================================================
+ * body[data-area] diisi rjdTerapkanPeranKeMenu() di simpro-global.js setelah
+ * server memberi tahu area yang boleh. Ini KENYAMANAN, bukan keamanan --
+ * penolakan sesungguhnya ada di pastikanBoleh_ (akses-role.gs). Tab yang
+ * disembunyikan di sini tetap akan ditolak server kalau dipanggil langsung.
+ *
+ * Dipakai selektor "tidak mengandung area X" supaya default-nya AMAN: selama
+ * atribut belum terisi (permintaan peran belum selesai / gagal), tidak ada
+ * yang disembunyikan -- tampilan berlebih jauh lebih ringan akibatnya daripada
+ * tab yang hilang karena satu permintaan gagal.
+ * ============================================================ */
+body[data-area]:not([data-area~="order"]) .lp-section-tab[data-section="ordermasuk"],
+body[data-area]:not([data-area~="order"]) .lp-section-panel[data-panel="ordermasuk"] { display: none !important; }
+
+/* Kartu ringkasan & alarm yang memuat nilai rupiah -- tidak relevan (dan tidak
+   pantas) untuk peran yang tidak berhak atas data keuangan. */
+body[data-area]:not([data-area~="keuangan"]) #db-concentration-alert,
+body[data-area]:not([data-area~="keuangan"]) .lp-section-tab[data-section="aging"],
+body[data-area]:not([data-area~="keuangan"]) .lp-section-panel[data-panel="aging"],
+body[data-area]:not([data-area~="keuangan"]) .lp-section-tab[data-section="omset"],
+body[data-area]:not([data-area~="keuangan"]) .lp-section-panel[data-panel="omset"] { display: none !important; }

@@ -2869,3 +2869,188 @@ async function lpSimpanEditOrder(idOrderRequest){
 // backend (tanpa "All Size" yang jarang & bikin baris kepanjangan; kalau perlu
 // All Size / ukuran non-standar, klien tulis di "Catatan item ini").
 var LP_ORDER_EDIT_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
+
+/* ============================================================
+ * PENYESUAIAN MENU MENURUT PERAN
+ * ============================================================
+ * Menyembunyikan item menu yang memang akan ditolak server, supaya staff
+ * produksi tidak mengklik Invoice lalu bertemu pesan "tidak punya akses" --
+ * pengalaman yang bukan cuma mengganggu, tapi terasa seperti sistemnya rusak.
+ *
+ * INI MURNI KENYAMANAN, BUKAN PENGAMAN. Penolakan sebenarnya ada di
+ * pastikanBoleh_() di backend (akses-role.gs). Kalau skrip ini gagal jalan,
+ * tidak ada data yang bocor -- menu cuma tampil lalu halamannya menolak,
+ * persis seperti sebelum penyesuaian ini ada.
+ *
+ * Menyembunyikan menu TIDAK PERNAH boleh dijadikan satu-satunya pembatas:
+ * siapa pun yang pernah melihat URL-nya tetap bisa mengetiknya langsung.
+ * ============================================================ */
+
+/** Item menu yang disembunyikan per area yang TIDAK dimiliki. */
+var RJD_MENU_PER_AREA = {
+  keuangan: ["/p/invoice.html"],
+  pajak: ["/p/laporan-omset.html"]
+  // Catatan: /p/order-list.html SENGAJA tidak disembunyikan untuk peran
+  // produksi. Daftar order itu sendiri boleh dilihat (area "produksi") --
+  // yang ditolak cuma tab Edit PO di dalamnya, karena di situ ada harga.
+};
+
+function rjdSesuaikanMenuPeran_(peran) {
+  if (!peran || !peran.staff) return;
+  var punya = peran.area || [];
+  Object.keys(RJD_MENU_PER_AREA).forEach(function (area) {
+    if (punya.indexOf(area) !== -1) return;   // punya aksesnya -> biarkan
+    RJD_MENU_PER_AREA[area].forEach(function (href) {
+      document.querySelectorAll(".rjd-menu-panel a[href='" + href + "']").forEach(function (a) {
+        a.style.display = "none";
+      });
+    });
+  });
+  // Ditandai di <body> supaya CSS halaman bisa ikut menyesuaikan kalau perlu,
+  // tanpa harus memanggil rute ini lagi.
+  document.body.setAttribute("data-peran", peran.peran || "");
+}
+
+/**
+ * Panggil sekali setelah token tersedia. Aman dipanggil berkali-kali --
+ * hasilnya disimpan supaya tidak menembak server tiap ganti tab.
+ */
+function rjdMuatPeran(apiUrl, idToken) {
+  if (!apiUrl || !idToken) return;
+  if (window.RJD_PERAN) { rjdSesuaikanMenuPeran_(window.RJD_PERAN); return; }
+  fetch(apiUrl, {
+    method: "POST",
+    body: JSON.stringify({ idToken: idToken, action: "getPeranSaya" })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) return;   // gagal -> menu tampil apa adanya, tidak fatal
+    window.RJD_PERAN = d;
+    rjdSesuaikanMenuPeran_(d);
+  })
+  .catch(function () { /* diamkan -- ini kenyamanan, bukan fondasi */ });
+}
+
+/**
+ * Deteksi otomatis: begitu ada sesi tersimpan, sesuaikan menunya.
+ *
+ * SENGAJA di sini, bukan disisipkan ke tiap halaman. Tiap halaman punya pola
+ * login yang berbeda (login manual, auto-login dari cache, sesi bersama), dan
+ * menempelkan panggilan di tiap jalur berarti cepat atau lambat ada jalur yang
+ * terlewat -- lalu menunya tidak tersesuaikan tanpa ada yang sadar.
+ *
+ * "db_session" dipakai bersama Dashboard, Orderan, Pengiriman, Invoice, QC,
+ * dan Produksi. Portal Klien memakai "lp_session" dan memang tidak perlu
+ * penyesuaian ini (menunya sudah versi ringkas untuk klien).
+ *
+ * Dijalankan berulang sebentar di awal karena sebagian halaman baru menulis
+ * sesinya setelah tombol Google diklik -- lebih andal daripada menebak kapan
+ * tiap halaman selesai login. Berhenti begitu dapat, atau setelah 30 detik.
+ */
+(function rjdPantauSesiUntukMenu_() {
+  var API = "https://script.google.com/macros/s/AKfycbwIe9qIookHaaYNEyQ0OdX5mtIVXXwQThMKnvKBOslSxlstZaPjvqmiTeC9pz_FMpfLig/exec";
+  var percobaan = 0;
+
+  function coba() {
+    percobaan++;
+    if (window.RJD_PERAN) return;              // sudah dapat -> berhenti
+    if (percobaan > 15) return;                // ~30 detik -> menyerah diam-diam
+    var token = null;
+    try {
+      var raw = localStorage.getItem("db_session");
+      if (raw) {
+        var data = JSON.parse(raw);
+        if (data && data.token && data.exp && data.exp * 1000 > Date.now()) token = data.token;
+      }
+    } catch (e) { /* localStorage diblokir -> lewati, menu tampil apa adanya */ }
+
+    if (token) { rjdMuatPeran(API, token); return; }
+    setTimeout(coba, 2000);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () { setTimeout(coba, 300); });
+  } else {
+    setTimeout(coba, 300);
+  }
+})();
+
+/* ============================================================
+ * PERAN -> MENU (kenyamanan, BUKAN keamanan)
+ * ============================================================
+ * Menyembunyikan tautan menu yang memang akan ditolak server. Penolakan
+ * sesungguhnya tetap di backend (pastikanBoleh_ di akses-role.gs) -- fungsi di
+ * sini murni supaya orang tidak mengklik sesuatu yang pasti gagal.
+ *
+ * JANGAN PERNAH memindahkan pembatasan akses ke sini. Apa pun yang cuma
+ * disembunyikan di layar tetap bisa dibuka lewat URL langsung, dan datanya
+ * tetap keluar kalau backend-nya tidak menolak.
+ *
+ * Dijalankan OTOMATIS saat halaman dimuat, memakai token sesi staff yang
+ * dipakai bersama (localStorage "db_session"). Kalau tidak ada token (belum
+ * login / halaman klien), fungsi ini diam saja -- menu tetap apa adanya.
+ * ============================================================ */
+
+/** Halaman -> area yang dibutuhkan. Halaman tanpa entri = boleh semua. */
+var RJD_AREA_HALAMAN = {
+  "/p/invoice.html":       "keuangan",
+  "/p/laporan-omset.html": "pajak"
+  // Dashboard, Orderan, Produksi, QC, Pengiriman SENGAJA tidak didaftarkan:
+  // halaman-halaman itu tetap berguna untuk peran Produksi, yang tertutup cuma
+  // sebagian tab di dalamnya (Order Masuk, Edit PO) -- dan itu ditangani JS
+  // halaman masing-masing, bukan dari sini.
+};
+
+function rjdBacaTokenStaff_() {
+  try {
+    var raw = localStorage.getItem("db_session");
+    if (!raw) return null;
+    var d = JSON.parse(raw);
+    if (!d || !d.token) return null;
+    if (!d.exp || d.exp * 1000 <= Date.now()) return null;
+    return d.token;
+  } catch (e) { return null; }
+}
+
+/**
+ * Ambil peran pemanggil, lalu sembunyikan tautan menu yang tidak berhak.
+ * Gagal diam-diam kalau apa pun bermasalah -- menu yang tampil berlebih jauh
+ * lebih ringan akibatnya daripada menu yang hilang seluruhnya karena satu
+ * permintaan gagal.
+ */
+function rjdTerapkanPeranKeMenu() {
+  var api = (typeof lpApiUrlUniversal_ === "function") ? lpApiUrlUniversal_() : null;
+  var token = rjdBacaTokenStaff_();
+  if (!api || !token) return;
+
+  fetch(api, {
+    method: "POST",
+    body: JSON.stringify({ idToken: token, action: "getPeranSaya" })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) return;
+    var area = d.area || [];
+    // Bukan staff (klien biasa) -> jangan sentuh apa pun. Menu mereka memang
+    // tidak punya tautan staff, dan menyembunyikan berdasarkan area kosong
+    // justru akan menghapus menu yang sah.
+    if (!d.peran) return;
+
+    Object.keys(RJD_AREA_HALAMAN).forEach(function (href) {
+      if (area.indexOf(RJD_AREA_HALAMAN[href]) !== -1) return;
+      document.querySelectorAll(".rjd-menu-panel a[href='" + href + "']")
+        .forEach(function (a) { a.style.display = "none"; });
+    });
+    // Ditandai di <body> supaya CSS/JS halaman bisa ikut menyesuaikan tanpa
+    // memanggil server lagi (mis. menyembunyikan tab Order Masuk di Dashboard).
+    document.body.setAttribute("data-peran", d.peran);
+    document.body.setAttribute("data-area", area.join(" "));
+  })
+  .catch(function () { /* gagal diam-diam -- lihat catatan di atas */ });
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  // Ditunda sebentar: sebagian halaman baru menyisipkan headernya setelah
+  // login sukses, jadi menjalankan ini terlalu awal tidak menemukan apa pun.
+  setTimeout(rjdTerapkanPeranKeMenu, 1200);
+});
