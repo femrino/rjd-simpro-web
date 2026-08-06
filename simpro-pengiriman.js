@@ -66,11 +66,14 @@ function krLogout(){
 }
 
 function krMulai(){
-  // Sesuaikan menu dengan peran -- item yang memang akan ditolak server
-  // tidak perlu ditampilkan. Lihat catatan di simpro-global.js:
-  // ini KENYAMANAN, bukan pengaman.
-  if (typeof rjdMuatPeran === "function") rjdMuatPeran(KR_API_URL, KR_ID_TOKEN);
-
+  // [DIHAPUS 6 Agustus 2026] Dulu di sini ada panggilan rjdMuatPeran(). Fungsi
+  // itu sudah dihapus dari simpro-global.js karena tidak pernah bekerja sekali
+  // pun -- lihat tombstone lengkapnya di sana. Penyesuaian menu menurut peran
+  // sudah ditangani rjdTerapkanPeranKeMenu(), yang berjalan OTOMATIS di
+  // DOMContentLoaded untuk semua halaman, jadi halaman ini tidak perlu
+  // memanggil apa pun. Baris lamanya dijaga `typeof ... === "function"`,
+  // sehingga penghapusannya tidak mengubah perilaku apa pun -- pemeriksaan itu
+  // sudah gagal diam-diam sejak file JS baru diunggah.
   krShow("kr-loading");
   ["kr-nav-logout", "kr-nav-refresh"].forEach(function(id){
     const el = document.getElementById(id);

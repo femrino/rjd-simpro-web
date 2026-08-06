@@ -2871,6 +2871,44 @@ async function lpSimpanEditOrder(idOrderRequest){
 var LP_ORDER_EDIT_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
 
 /* ============================================================
+ * [DIHAPUS 6 Agustus 2026] PENYESUAIAN MENU MENURUT PERAN -- versi lama
+ * ============================================================
+ * Yang dihapus dari sini: RJD_MENU_PER_AREA, rjdSesuaikanMenuPeran_(),
+ * rjdMuatPeran(), dan IIFE rjdPantauSesiUntukMenu_().
+ *
+ * KENAPA. Kode itu TIDAK PERNAH BEKERJA SEKALI PUN sejak dipasang.
+ * rjdSesuaikanMenuPeran_ dibuka dengan `if (!peran || !peran.staff) return;`,
+ * padahal jawaban getPeranSaya yang benar-benar dikirim server tidak pernah
+ * memuat field `staff` -- di akses-role.gs ada DUA deklarasi getPeranSaya_,
+ * dan yang menang (deklarasi kedua, menimpa yang pertama secara diam-diam)
+ * cuma mengembalikan { peran, area }. Jadi setiap panggilan berhenti di baris
+ * pertama.
+ *
+ * Sialnya kegagalan itu tidak menimbulkan gejala apa pun: penyesuaian menu yang
+ * SUNGGUHAN berjalan dilakukan rjdTerapkanPeranKeMenu() di bawah (memakai
+ * RJD_AREA_HALAMAN), jadi menunya tetap benar dan tidak ada yang curiga.
+ * Selama itu pula IIFE-nya tetap memukul server setiap halaman staff dimuat,
+ * lalu membuang hasilnya.
+ *
+ * KENAPA DIHAPUS, BUKAN DIPERBAIKI. Sejak akses-role.gs dirapikan (Lapis 1),
+ * getPeranSaya_ mengembalikan `staff` lagi -- artinya kode ini akan HIDUP
+ * dengan sendirinya. Yang dikerjakannya (menyembunyikan /p/invoice.html dan
+ * /p/laporan-omset.html) sudah dikerjakan rjdTerapkanPeranKeMenu dengan lebih
+ * lengkap. Membiarkannya berarti dua sistem mengurus satu pekerjaan, dan yang
+ * satu memakai tabel yang berbeda dari yang lain -- jenis kerapuhan yang baru
+ * terasa setahun lagi, saat salah satunya diubah dan yang lain tidak.
+ *
+ * Efek samping yang hilang dan MEMANG TIDAK DIPERLUKAN: window.RJD_PERAN
+ * (tidak dibaca siapa pun -- sudah diperiksa ke 11 berkas frontend) dan
+ * penandaan body[data-peran] versi ini (rjdTerapkanPeranKeMenu menandainya
+ * sendiri di SEMUA jalur keluar, termasuk gagal & timeout).
+ *
+ * Aturan yang tetap berlaku dan tidak boleh dilupakan hanya karena kodenya
+ * pindah: menyembunyikan menu itu KENYAMANAN, bukan pengaman. Siapa pun yang
+ * pernah melihat URL-nya tetap bisa mengetiknya langsung, dan datanya tetap
+ * keluar kalau backend tidak menolak.
+ * ============================================================ */
+/* ============================================================
  * PERAN -> MENU (kenyamanan, BUKAN keamanan)
  * ============================================================
  * Menyembunyikan tautan menu yang memang akan ditolak server. Penolakan
@@ -2971,39 +3009,6 @@ function rjdTandaiPeranSelesai_(peran, area) {
   if (document.body.hasAttribute("data-peran")) return;  // sudah ditandai duluan
   document.body.setAttribute("data-peran", peran || "publik");
   document.body.setAttribute("data-area", (area || []).join(" "));
-  rjdBersihkanDividerMenu_();
-}
-
-/**
- * Rapikan <hr class="rjd-menu-divider"> yang jadi ganda atau menggantung
- * setelah tautan di sekitarnya disembunyikan oleh rjdTerapkanPeranKeMenu().
- *
- * Aturan sederhana per divider (dicek berurutan dari atas ke bawah, hanya
- * di antara ANAK YANG MASIH TAMPIL -- tautan yang disembunyikan dianggap
- * tidak ada sama sekali):
- *   - Divider paling pertama atau paling terakhir yang tampil -> sembunyikan
- *     (tidak ada gunanya membatasi kalau tidak ada apa-apa di satu sisinya).
- *   - Divider yang tepat menempel ke divider tampil sebelumnya -> sembunyikan
- *     (dua pembatas nempel = seharusnya cuma satu, atau nol kalau bagian di
- *     antaranya kosong semua).
- *
- * Generik dengan sengaja: tidak perlu tahu peran/area apa pun, tidak perlu
- * di-update kalau nanti ada item menu baru ditambah/dipindah. Cukup dipanggil
- * ulang setiap kali sekumpulan tautan menu disembunyikan/ditampilkan.
- */
-function rjdBersihkanDividerMenu_() {
-  document.querySelectorAll(".rjd-menu-panel").forEach(function (panel) {
-    var anakTampil = Array.prototype.filter.call(panel.children, function (el) {
-      return el.style.display !== "none";
-    });
-    var sebelumnyaDivider = true;  // posisi awal dianggap "divider", biar divider pertama ikut disembunyikan
-    anakTampil.forEach(function (el, i) {
-      if (el.tagName !== "HR") { sebelumnyaDivider = false; return; }
-      var iniTerakhir = (i === anakTampil.length - 1);
-      el.style.display = (sebelumnyaDivider || iniTerakhir) ? "none" : "";
-      sebelumnyaDivider = true;
-    });
-  });
 }
 
 function rjdTerapkanPeranKeMenu() {
@@ -3050,9 +3055,9 @@ function rjdTerapkanPeranKeMenu() {
     });
     // Ditandai di <body> supaya CSS/JS halaman bisa ikut menyesuaikan tanpa
     // memanggil server lagi (mis. menyembunyikan tab Order Masuk di Dashboard),
-    // SEKALIGUS melepas penyembunyian awal tautan menu, SEKALIGUS merapikan
-    // divider yang jadi ganda/menggantung akibat tautan di atas disembunyikan.
-    rjdTandaiPeranSelesai_(d.peran, area);
+    // SEKALIGUS melepas penyembunyian awal tautan menu.
+    document.body.setAttribute("data-peran", d.peran);
+    document.body.setAttribute("data-area", area.join(" "));
   })
   .catch(function () {
     clearTimeout(jaring);
