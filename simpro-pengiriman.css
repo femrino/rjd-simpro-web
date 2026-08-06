@@ -170,3 +170,19 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   .kr-kirim-qty { width: 54px; }
   .kr-buat-size { padding-left: 14px !important; }
 }
+
+/* Rantai kuantitas per size: order -> potong -> QC, di bawah label size-nya.
+   Sengaja kecil & abu-abu -- ini konteks untuk menelusuri selisih, bukan angka
+   yang dibaca tiap hari. Angka utama tetap kolom Sisa di kanan. */
+.kr-rantai { font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+  color: var(--ink-soft); margin-top: 3px; line-height: 1.5; font-weight: 400; }
+.kr-rantai b { color: var(--ink); font-weight: 700; }
+/* "belum dicatat" dibedakan dari angka: kosong bukan nol. */
+.kr-rantai i { font-style: italic; opacity: .7; }
+.kr-rantai-plafon { color: #8A5D1F; font-weight: 700; }
+
+@media (max-width: 640px) {
+  /* Di HP kolom size sempit; rantai dibiarkan membungkus daripada memaksa
+     tabelnya melebar dan bikin seluruh baris harus digeser horizontal. */
+  .kr-rantai { font-size: 9.5px; }
+}

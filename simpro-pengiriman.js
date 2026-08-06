@@ -323,6 +323,54 @@ function krPilihPO(idPO) {
   });
 }
 
+/* ============================================================
+ * RANTAI KUANTITAS DI FORM SURAT JALAN
+ * ============================================================
+ * Batas kirim diambil dari tingkat TERENDAH di rantai yang punya angka per
+ * size (lihat buat-pengiriman.gs). Angka "sisa" saja tidak cukup diberikan ke
+ * admin: 89 itu sisa dari apa? Dari order, dari hasil potong, atau dari QC?
+ * Tanpa itu, selisih yang muncul cuma bisa dilaporkan, tidak bisa ditelusuri.
+ *
+ * Jadi tiap baris size membawa rantainya sendiri di bawah angkanya:
+ *
+ *     S    order 103 -> potong 98 -> QC 90    ... sisa 89
+ *
+ * Tahap yang belum ada datanya SENGAJA ditulis "belum dicatat", bukan
+ * dihilangkan atau ditulis 0. Kosong dan nol itu dua hal yang sangat berbeda
+ * di sini: nol berarti tidak ada yang lolos, kosong berarti belum ada yang
+ * memeriksa -- dan menampilkan 0 untuk yang kedua akan membuat admin mengira
+ * barangnya bermasalah padahal cuma catatannya yang belum masuk.
+ * ============================================================ */
+
+var KR_SUMBER_BATAS_TEKS = {
+  qc: 'Batas kirim mengikuti qty yang LOLOS QC Finishing.',
+  cutting: 'Batas kirim mengikuti qty HASIL POTONG &#8212; PO ini belum punya ' +
+    'catatan QC Finishing per size. Panel yang sudah dipotong belum tentu sudah ' +
+    'dijahit, jadi pastikan barangnya memang siap sebelum surat jalan dibuat.',
+  order: 'PO ini belum punya catatan potong maupun QC Finishing &#8212; ' +
+    'batas kirim masih memakai qty order.'
+};
+
+/** Baris rantai kecil di bawah tiap size. Mengembalikan HTML, boleh kosong. */
+function krRantaiBaris_(b) {
+  var bagian = ['order <b>' + (b.qtyOrder || 0) + '</b>'];
+
+  // null = belum ada catatan sama sekali. Angka 0 tetap ditampilkan sebagai 0.
+  bagian.push(b.qtyPotong === null || b.qtyPotong === undefined
+    ? 'potong <i>belum dicatat</i>'
+    : 'potong <b>' + b.qtyPotong + '</b>');
+
+  bagian.push(b.siapKirim === null || b.siapKirim === undefined
+    ? 'QC <i>belum dicatat</i>'
+    : 'QC <b>' + b.siapKirim + '</b>');
+
+  // Tanda tingkat mana yang sedang membatasi baris ini -- bisa BERBEDA dari
+  // tingkat PO secara keseluruhan kalau ada baris yang kena plafon order.
+  var tanda = b.dibatasiOrder ? ' &#183; <span class="kr-rantai-plafon">dibatasi qty order</span>' : '';
+
+  return '<div class="kr-rantai">' + bagian.join(' &#8594; ') + tanda + '</div>';
+}
+
 function krRenderFormKirim() {
   const d = window.KR_BUAT;
   if (!d) return;
@@ -335,11 +383,23 @@ function krRenderFormKirim() {
       '<span>sisa <b>' + d.totalSisa + '</b></span>' +
     '</div>' +
     // Sumber batas ditampilkan terang-terangan: admin perlu tahu angka "sisa"
-    // itu berdasarkan qty yang lolos QC atau baru berdasarkan qty order.
-    '<div class="kr-buat-sumber' + (d.adaCatatanQC ? ' ok' : '') + '">' +
-      (d.adaCatatanQC
-        ? 'Batas kirim mengikuti qty yang LOLOS QC Finishing.'
-        : 'PO ini belum punya catatan QC Finishing &#8212; batas kirim masih memakai qty order.') +
+    // itu berdasarkan qty lolos QC, hasil potong, atau baru qty order.
+    // KR_SUMBER_BATAS_TEKS memetakan tingkat rantai -> kalimatnya.
+    '<div class="kr-buat-sumber' + (d.sumberBatas === "qc" ? ' ok' : '') + '">' +
+      (KR_SUMBER_BATAS_TEKS[d.sumberBatas] || KR_SUMBER_BATAS_TEKS.order) +
+      // Kasus khusus yang dulu MEMBLOKIR pembuatan surat jalan tanpa penjelasan:
+      // PO punya sesi QC Finishing, tapi semuanya baris format lama yang belum
+      // mengenal size. Angkanya masuk ke total, tidak ke rincian per size.
+      // Sekarang sistem turun ke tingkat berikutnya -- dan mengatakannya, supaya
+      // "kok batasnya bukan QC padahal QC sudah diisi" tidak jadi teka-teki.
+      (d.adaCatatanQC && !d.qcPerSizeDipakai
+        ? '<br/>PO ini punya catatan QC Finishing, tapi tanpa rincian per size ' +
+          '(format lama), jadi tidak bisa dipakai sebagai batas per baris.'
+        : '') +
+      (d.jumlahDibatasiOrder
+        ? '<br/>' + d.jumlahDibatasiOrder + ' baris dipotong ke qty order &#8212; ' +
+          'hasil produksinya melebihi pesanan (cadangan).'
+        : '') +
     '</div>';
   document.getElementById("kr-buat-ringkas").classList.remove("hidden");
 
@@ -369,7 +429,8 @@ function krRenderFormKirim() {
         const habis = b.sisa <= 0;
         return '<tr' + (habis ? ' class="kr-habis"' : '') + '>' +
           '<td class="kr-buat-size">' + rjdEscapeHtml_(b.size || "-") +
-            (b.idDetailOrder ? '' : ' <span class="kr-buat-tanda" title="tanpa ID Detail Order, harga di invoice perlu diisi manual">!</span>') + '</td>' +
+            (b.idDetailOrder ? '' : ' <span class="kr-buat-tanda" title="tanpa ID Detail Order, harga di invoice perlu diisi manual">!</span>') +
+            krRantaiBaris_(b) + '</td>' +
           '<td class="num">' + b.qtyOrder + '</td>' +
           '<td class="num">' + b.terkirim + '</td>' +
           '<td class="num">' + b.sisa + '</td>' +
