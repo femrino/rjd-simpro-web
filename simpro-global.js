@@ -3232,6 +3232,11 @@ function rjdPasangMenuPeran_(d) {
       .forEach(function (a) { a.style.display = "none"; });
   });
 
+  // Menyembunyikan tautan bisa membuat seluruh kelompok jadi kosong dan
+  // menyisakan garis pemisahnya berderet. Dirapikan SESUDAH penyembunyian,
+  // karena fungsi itu membaca keadaan akhir -- bukan menebak dari daftar peran.
+  rjdRapikanPemisahMenu_();
+
   // Ditandai di <body> supaya CSS/JS halaman bisa ikut menyesuaikan tanpa
   // memanggil server lagi (mis. menyembunyikan tab Order Masuk di Dashboard),
   // SEKALIGUS melepas penyembunyian awal tautan menu.
@@ -3241,6 +3246,52 @@ function rjdPasangMenuPeran_(d) {
   // diinginkan (nilai dari server lebih benar daripada nilai sementara).
   document.body.setAttribute("data-peran", d.peran || "publik");
   document.body.setAttribute("data-area", area.join(" "));
+}
+
+/**
+ * Sembunyikan pemisah <hr> yang jadi yatim setelah tautan di sekitarnya
+ * disembunyikan.
+ *
+ * Menu ditulis berkelompok dengan pemisah di antaranya. Begitu penyesuaian
+ * peran menyembunyikan tautan, ada kelompok yang isinya habis -- dan
+ * pemisahnya tetap tinggal. Untuk peran "produksi" di halaman Produksi,
+ * kelompok "Laporan SPT" dan kelompok "Form Order / Portal Klien" dua-duanya
+ * kosong, menyisakan TIGA garis berderet tanpa apa pun di antaranya.
+ *
+ * SENGAJA UMUM, bukan tambalan per halaman. Tiap halaman menyusun menunya
+ * dengan urutan yang berbeda, dan tiap peran menyisakan pola yatim yang
+ * berbeda pula -- daftar "hr mana yang harus disembunyikan" akan salah begitu
+ * ada satu tautan ditambah di mana pun. Yang dikerjakan di sini cuma membaca
+ * keadaan akhir: pemisah disembunyikan kalau (a) tidak ada isi sebelumnya,
+ * (b) yang sebelumnya juga pemisah, atau (c) tidak ada isi lagi sesudahnya.
+ *
+ * Idempoten: pemisah yang sudah disembunyikan tidak ikut terbaca pada
+ * pemanggilan berikutnya, jadi aman dipanggil berkali-kali.
+ */
+function rjdRapikanPemisahMenu_() {
+  document.querySelectorAll(".rjd-menu-panel").forEach(function (panel) {
+    var tampak = Array.prototype.slice.call(panel.children).filter(function (el) {
+      return el.style.display !== "none" && !el.classList.contains("hidden");
+    });
+    var pemisah = function (el) { return el.classList.contains("rjd-menu-divider"); };
+
+    // Isi terakhir yang bukan pemisah -- apa pun sesudahnya pasti yatim.
+    var isiTerakhir = -1;
+    for (var i = tampak.length - 1; i >= 0; i--) {
+      if (!pemisah(tampak[i])) { isiTerakhir = i; break; }
+    }
+
+    // Diawali true supaya pemisah yang muncul paling atas ikut dianggap yatim.
+    var sebelumnyaPemisah = true;
+    tampak.forEach(function (el, idx) {
+      if (!pemisah(el)) { sebelumnyaPemisah = false; return; }
+      if (sebelumnyaPemisah || idx > isiTerakhir) {
+        el.style.display = "none";
+        return;   // sudah hilang -> jangan dihitung sebagai "pemisah sebelumnya"
+      }
+      sebelumnyaPemisah = true;
+    });
+  });
 }
 
 /** Layar penolakan. Disuntik dari JS supaya markup Blogger tidak perlu disentuh. */
