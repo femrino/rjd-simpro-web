@@ -3015,8 +3015,27 @@ function rjdTerapkanPeranKeMenu() {
   var api = rjdApiUrlMenu_();
   var token = rjdBacaTokenStaff_();
   if (!api || !token) {
-    // Bukan staff (klien di Portal/Form Order) atau belum login. Menu mereka
-    // memang tidak memuat tautan staff, jadi cukup lepaskan penyembunyian.
+    // ---------- BELUM ADA TOKEN ----------
+    // BUG YANG DIPERBAIKI 6 Agustus 2026 (dilaporkan dari lapangan): fungsi ini
+    // berjalan di DOMContentLoaded, yaitu SEBELUM orang sempat mengklik tombol
+    // Google. Di halaman staff, token belum ada saat itu, jalur ini dulu
+    // menandai body "publik" DENGAN SEMUA AREA -- dan penandaan itulah yang
+    // melepas penyembunyian CSS, jadi SELURUH menu staff muncul. Setelah login,
+    // fungsi ini tidak pernah dipanggil lagi, sehingga menu penuh itu bertahan
+    // sampai halaman diganti. Gejalanya: staff peran Produksi melihat menu
+    // lengkap (Dashboard, Invoice, Laporan SPT) di login pertama, lalu menunya
+    // "benar sendiri" begitu pindah halaman.
+    //
+    // Sekarang: di halaman staff yang dijaga, JANGAN ditandai sama sekali.
+    // Biarkan CSS tetap menyembunyikan sampai satpam (rjdJagaHalaman) memanggil
+    // rjdPasangMenuPeran_ dengan peran yang SUDAH diketahui, tepat setelah
+    // login berhasil. Menu tersembunyi sebelum login memang yang benar --
+    // hamburger-nya sendiri baru muncul setelah tombol Keluar di-unhide.
+    if (RJD_JAGA_HALAMAN[window.location.pathname]) return;
+
+    // Halaman klien (Portal, Form Order) & halaman tak terdaftar: menu mereka
+    // memang versi ringkas tanpa tautan staff, jadi tidak ada yang perlu
+    // disembunyikan -- lepaskan penyembunyian awal supaya menunya tidak hilang.
     rjdTandaiPeranSelesai_("publik", ["keuangan", "order", "produksi", "pajak"]);
     return;
   }
@@ -3038,25 +3057,7 @@ function rjdTerapkanPeranKeMenu() {
   rjdAmbilPeran_(api, token)
   .then(function (d) {
     clearTimeout(jaring);
-    var area = d.area || [];
-    // Bukan staff (klien biasa) -> jangan sentuh apa pun. Menu mereka memang
-    // tidak punya tautan staff, dan menyembunyikan berdasarkan area kosong
-    // justru akan menghapus menu yang sah.
-    if (!d.peran) {
-      rjdTandaiPeranSelesai_("publik", ["keuangan", "order", "produksi", "pajak"]);
-      return;
-    }
-
-    Object.keys(RJD_AREA_HALAMAN).forEach(function (href) {
-      if (area.indexOf(RJD_AREA_HALAMAN[href]) !== -1) return;
-      document.querySelectorAll(".rjd-menu-panel a[href='" + href + "']")
-        .forEach(function (a) { a.style.display = "none"; });
-    });
-    // Ditandai di <body> supaya CSS/JS halaman bisa ikut menyesuaikan tanpa
-    // memanggil server lagi (mis. menyembunyikan tab Order Masuk di Dashboard),
-    // SEKALIGUS melepas penyembunyian awal tautan menu.
-    document.body.setAttribute("data-peran", d.peran);
-    document.body.setAttribute("data-area", area.join(" "));
+    rjdPasangMenuPeran_(d);
   })
   .catch(function () {
     clearTimeout(jaring);
@@ -3194,6 +3195,54 @@ function rjdAmbilPeran_(apiUrl, idToken) {
   return janji;
 }
 
+/**
+ * Pasang penyesuaian menu dari jawaban getPeranSaya.
+ *
+ * DIPANGGIL DARI DUA TEMPAT dan itu memang perlu:
+ *   1. rjdTerapkanPeranKeMenu() -- saat halaman dimuat DAN sesi sudah ada
+ *      (orang membuka halaman kedua, ketiga, dst).
+ *   2. rjdJagaHalaman() -- tepat setelah login berhasil, saat sesi BARU ada.
+ *
+ * Tanpa pemanggil kedua, menu di halaman pertama setelah login tidak pernah
+ * tersesuaikan -- itu bug yang dilaporkan 6 Agustus 2026. Lihat catatan
+ * lengkapnya di jalur "belum ada token" di rjdTerapkanPeranKeMenu.
+ *
+ * Aman dipanggil berkali-kali: menyembunyikan yang sudah tersembunyi tidak
+ * berakibat apa-apa, dan setAttribute menimpa nilai lama alih-alih menumpuk.
+ */
+function rjdPasangMenuPeran_(d) {
+  var area = (d && d.area) || [];
+
+  // Klien biasa: bukan staff DAN tanpa area khusus. Menu mereka memang versi
+  // ringkas tanpa tautan staff, jadi tidak ada yang perlu disembunyikan.
+  //
+  // Syaratnya SENGAJA dua-duanya, bukan cuma `!d.peran`. Orang yang terdaftar
+  // di "SD Akses Laporan Omset" (konsultan pajak) bukan staff -- peran kosong --
+  // tapi punya area "pajak". Kalau diperiksa dengan `!d.peran` saja, mereka
+  // jatuh ke cabang ini dan mendapat menu penuh, termasuk tautan ke halaman
+  // yang pasti menolak mereka.
+  if (!d.peran && !area.length) {
+    rjdTandaiPeranSelesai_("publik", ["keuangan", "order", "produksi", "pajak"]);
+    return;
+  }
+
+  Object.keys(RJD_AREA_HALAMAN).forEach(function (href) {
+    if (area.indexOf(RJD_AREA_HALAMAN[href]) !== -1) return;
+    document.querySelectorAll(".rjd-menu-panel a[href='" + href + "']")
+      .forEach(function (a) { a.style.display = "none"; });
+  });
+
+  // Ditandai di <body> supaya CSS/JS halaman bisa ikut menyesuaikan tanpa
+  // memanggil server lagi (mis. menyembunyikan tab Order Masuk di Dashboard),
+  // SEKALIGUS melepas penyembunyian awal tautan menu.
+  //
+  // setAttribute langsung, BUKAN rjdTandaiPeranSelesai_ -- fungsi itu menolak
+  // menimpa penandaan yang sudah ada, dan di sini menimpa justru yang
+  // diinginkan (nilai dari server lebih benar daripada nilai sementara).
+  document.body.setAttribute("data-peran", d.peran || "publik");
+  document.body.setAttribute("data-area", area.join(" "));
+}
+
 /** Layar penolakan. Disuntik dari JS supaya markup Blogger tidak perlu disentuh. */
 function rjdLayarTolak_(judul, pesan, tombol) {
   var lama = document.getElementById("rjd-jaga-layar");
@@ -3290,6 +3339,24 @@ function rjdJagaHalaman(idToken, apiUrl, saatLolos) {
       clearTimeout(jaring);
 
       var area = d.area || [];
+
+      // Pasang menu SEKARANG, sebelum bercabang. Di titik inilah peran pertama
+      // kali diketahui pada login pertama -- rjdTerapkanPeranKeMenu sudah
+      // berjalan dan menyerah lebih dulu karena waktu itu sesinya belum ada.
+      // Tanpa baris ini, staff peran terbatas melihat menu penuh sampai dia
+      // pindah halaman. Ditaruh sebelum percabangan supaya ikut terpasang juga
+      // di jalur penolakan -- layarnya memang menutupi, tapi meninggalkan body
+      // tanpa data-peran bikin keadaan halaman jadi tidak konsisten.
+      //
+      // DIBUNGKUS try/catch DENGAN SENGAJA. Penyesuaian menu itu KOSMETIK;
+      // keputusan boleh-masuk di bawah ini BUKAN. Tanpa pagar ini, satu error
+      // di urusan menu (markup berubah, konstanta hilang) akan dilempar ke
+      // .catch di bawah dan menahan SELURUH halaman dengan pesan "gagal
+      // memeriksa akses" -- padahal aksesnya baik-baik saja dan sudah diketahui.
+      // Kegagalan kosmetik tidak boleh punya kuasa mengunci orang dari
+      // pekerjaannya.
+      try { rjdPasangMenuPeran_(d); }
+      catch (eMenu) { /* menu tampil apa adanya -- keputusan akses di bawah tetap jalan */ }
 
       // ---------- PUNYA AREANYA -> JALAN ----------
       // Yang menentukan izin adalah AREA, bukan flag `staff`. Bedanya penting
