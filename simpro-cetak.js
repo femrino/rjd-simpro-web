@@ -15,6 +15,52 @@
 const CK_OAUTH_CLIENT_ID = "1004242498410-6g4palcfo8p4kifmpkhnu1b9eaq424nl.apps.googleusercontent.com";
 const CK_API_URL = "https://script.google.com/macros/s/AKfycbwIe9qIookHaaYNEyQ0OdX5mtIVXXwQThMKnvKBOslSxlstZaPjvqmiTeC9pz_FMpfLig/exec";
 
+/**
+ * ============================================================
+ * REKENING PEMBAYARAN
+ * ============================================================
+ * Ditaruh sebagai SATU konstanta bernama, bukan disebar sebagai teks di dalam
+ * fungsi render. Kalau nanti ganti bank atau tambah rekening kedua, yang
+ * diubah cuma satu tempat yang jelas -- bukan berburu string di tengah HTML
+ * dokumen tagihan, tempat salah ketik paling mahal akibatnya.
+ *
+ * JALUR NAIK KELAS kalau nanti perlu: dikirim backend bersama data dokumen
+ * (cetak-dokumen.gs), supaya ganti rekening tidak perlu unggah ulang berkas
+ * ini + tag baru + pasang template. Untuk satu rekening yang jarang berubah,
+ * konstanta di sini sudah proporsional.
+ * ============================================================
+ */
+const CK_REKENING = {
+  bank: "BCA",
+  nomor: "8465068988",
+  atasNama: "Femri Noviawan"
+};
+
+/**
+ * Blok rekening pembayaran, ditaruh di ruang kosong KIRI kotak ringkasan.
+ *
+ * Urutan bacanya disengaja: mata turun ke angka tagihan di kanan, lalu
+ * bergeser ke kiri dan menemukan ke mana uangnya dikirim. Ditaruh di footer
+ * dekat tanda tangan, orang harus mencarinya.
+ *
+ * SENGAJA TIDAK MENYEBUT NOMINAL. Invoice bisa punya "Sisa Tagihan" DAN
+ * "Nilai Transfer" (Total Tagihan dikurangi PPh) yang nilainya berbeda.
+ * Mengulang salah satunya di sini berarti suatu saat dokumen ini akan
+ * menyebut dua angka berbeda untuk hal yang sama, dan yang membaca tidak
+ * tahu mana yang benar. Angka tetap satu sumber: kotak ringkasan.
+ */
+function ckRekeningHtml_(){
+  return '<div class="ck-rekening">' +
+      '<div class="ck-rekening-lbl">Pembayaran Transfer</div>' +
+      '<div class="ck-rekening-bank">' + rjdEscapeHtml_(CK_REKENING.bank) + '</div>' +
+      '<div class="ck-rekening-no">' + rjdEscapeHtml_(CK_REKENING.nomor) + '</div>' +
+      '<div class="ck-rekening-an">a.n. ' + rjdEscapeHtml_(CK_REKENING.atasNama) + '</div>' +
+      '<div class="ck-rekening-nb">Rekening resmi RJD Apparel. ' +
+        'Mohon konfirmasi bukti transfer ke WA 0856-292-1464.</div>' +
+    '</div>';
+}
+
+
 function ckGetQueryParam(nama){
   const params = new URLSearchParams(window.location.search);
   return params.get(nama);
@@ -251,7 +297,21 @@ function ckRenderInvoice(d){
       '<table class="ck-dok-tabel"><thead><tr>' +
         '<th>Deskripsi</th><th class="num">Qty</th><th class="num">Harga Satuan</th><th class="num">Subtotal</th>' +
       '</tr></thead><tbody>' + barisItem + '</tbody></table>' +
-      '<div class="ck-dok-ringkasan"><div class="ck-dok-ringkasan-box">' + ringkasanBaris.join("") + '</div></div>' +
+      '<div class="ck-dok-ringkasan">' +
+        // Rekening HANYA muncul kalau masih ada yang harus dibayar.
+        //
+        // Invoice yang sudah Lunas tapi tetap memajang "silakan transfer ke
+        // rekening ini" mengundang PEMBAYARAN DOBEL -- dokumen tagihan sering
+        // disimpan lalu dibuka lagi berbulan-bulan kemudian, kadang oleh staf
+        // keuangan klien yang berbeda dari yang membayar pertama kali. Waktu
+        // itu terjadi, yang repot bukan cuma klien: RJD harus mengembalikan
+        // uang dan menjelaskan.
+        //
+        // `lunas` di atas didefinisikan sebagai !(d.outstanding > 0), jadi
+        // invoice DP Diterima yang masih bersisa TETAP menampilkannya.
+        (lunas ? '' : ckRekeningHtml_()) +
+        '<div class="ck-dok-ringkasan-box">' + ringkasanBaris.join("") + '</div>' +
+      '</div>' +
       '<div class="ck-dok-ttd">' +
         '<div class="kolom">Hormat kami,<div class="garis"></div><div class="nama-ttd">RJD Apparel</div></div>' +
         '<div class="kolom">Diterima oleh,<div class="garis"></div><div class="nama-ttd">' + d.klien.nama + '</div></div>' +
@@ -333,7 +393,16 @@ function ckRenderKonfirmasiOrder(d){
       itemsHtml +
       ckKainKlienHtml_(d.kainDariKlien) +
       ckJadwalKirimHtml_(d.jadwalKirim) +
-      '<div class="ck-dok-ringkasan"><div class="ck-dok-ringkasan-box">' +
+      '<div class="ck-dok-ringkasan">' +
+        // Di Konfirmasi Order rekening SELALU tampil -- beda dari invoice.
+        // Dokumen ini belum punya konsep "lunas": justru di titik inilah DP
+        // diminta, dan klien butuh nomor rekening tepat saat membacanya.
+        //
+        // Tetap tampil juga waktu d.adaHargaKosong (Grand Total masih
+        // sementara), karena blok ini tidak menyebut nominal sama sekali --
+        // cuma ke mana uangnya dikirim. Nominalnya urusan kotak di kanan.
+        ckRekeningHtml_() +
+        '<div class="ck-dok-ringkasan-box">' +
         '<div class="ck-dok-ringkasan-row"><span>Total Qty</span><span>' + d.totalQtyKeseluruhan + ' pcs</span></div>' +
         '<div class="ck-dok-ringkasan-row total"><span>Grand Total' + (d.adaHargaKosong ? ' (sementara)' : '') + '</span><span>' + formatRupiah(d.grandTotal) + '</span></div>' +
       '</div></div>' +

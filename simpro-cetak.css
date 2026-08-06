@@ -215,6 +215,51 @@ body { padding-top: 0; }
   .ck-spk-matrix th,.ck-spk-matrix td{padding:5px 4px}
   .ck-spk-meta{grid-template-columns:repeat(2,1fr)}
 }
+/* ============================================================
+ * BLOK REKENING PEMBAYARAN
+ * ============================================================
+ * Ditaruh di ruang kosong KIRI kotak ringkasan, sebagai anak kedua di dalam
+ * .ck-dok-ringkasan. Muncul di Invoice (hanya kalau masih ada sisa tagihan)
+ * dan Konfirmasi Order (selalu).
+ *
+ * KENAPA margin-right:auto, BUKAN mengubah .ck-dok-ringkasan
+ * .ck-dok-ringkasan memakai justify-content:flex-end. Menambah anak kedua
+ * begitu saja akan mendorong KEDUANYA ke kanan dan menempel. Menggantinya
+ * jadi space-between memang menyelesaikan itu, tapi .ck-dok-ringkasan juga
+ * dipakai Surat Jalan & SPK yang cuma punya satu anak -- di sana space-between
+ * tidak berpengaruh sekarang, tapi jadi jebakan diam untuk siapa pun yang
+ * menambah elemen di dokumen itu nanti. margin-right:auto menyelesaikannya
+ * dari sisi anak, tanpa menyentuh wadah yang dipakai bersama.
+ *
+ * KENAPA TANPA WARNA LATAR
+ * Browser MEMBUANG warna latar saat mencetak kecuali dipaksa dengan
+ * print-color-adjust (lihat daftar panjang di @media print di bawah). Blok
+ * ini memakai garis tepi kiri sebagai penanda visual, bukan latar -- jadi dia
+ * tercetak sama di semua browser & printer tanpa bergantung pada dukungan
+ * properti itu. Untuk dokumen yang PASTI dicetak dan dikirim ke klien,
+ * bergantung pada properti yang bisa diabaikan bukan pilihan yang baik.
+ * ============================================================ */
+.ck-rekening { margin-right: auto; max-width: 300px; padding-left: 14px;
+  border-left: 2.5px solid var(--ink); align-self: flex-start; }
+.ck-rekening-lbl { font-family: 'IBM Plex Mono', monospace; font-size: 9.5px;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--thread); margin-bottom: 7px; }
+.ck-rekening-bank { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 15px;
+  color: var(--ink); line-height: 1.2; }
+/* Nomor rekening: mono + jarak huruf sedikit, supaya digitnya mudah disalin
+   ulang dengan benar. Ini angka yang paling mahal kalau salah baca. */
+.ck-rekening-no { font-family: 'IBM Plex Mono', monospace; font-size: 17px; font-weight: 600;
+  letter-spacing: .04em; color: var(--ink); margin-top: 2px; }
+.ck-rekening-an { font-size: 13px; color: var(--ink); margin-top: 3px; }
+.ck-rekening-nb { font-size: 11px; line-height: 1.5; color: var(--ink-soft); margin-top: 8px; }
+
+@media (max-width: 640px) {
+  /* Di layar sempit, .ck-dok-ringkasan tetap flex satu baris dan blok ini
+     akan menggencet kotak total. Dibuat menumpuk: rekening di atas, total
+     di bawah -- urutan yang sama dengan urutan bacanya. */
+  .ck-dok-ringkasan { flex-wrap: wrap; }
+  .ck-rekening { margin-right: 0; margin-bottom: 18px; max-width: 100%; flex: 1 1 100%; }
+}
+
 @media print{
   .ck-no-print,nav,footer{display:none !important}
   body{padding-top:0 !important;background:var(--white) !important}
@@ -240,6 +285,10 @@ body { padding-top: 0; }
   .ck-spk-matrix tfoot{display:table-footer-group}
   .ck-spk-matrix tr,.ck-spk-galeri .sel,.ck-spk-catatan{page-break-inside:avoid;break-inside:avoid}
   .ck-spk-wm{position:fixed;font-size:120px}
+  /* Nomor rekening TIDAK BOLEH terbelah dua halaman -- separuh digit di
+     kaki halaman 1 dan separuhnya di kepala halaman 2 adalah cara paling
+     mudah membuat klien salah transfer. */
+  .ck-rekening{page-break-inside:avoid;break-inside:avoid}
 }
 
 /* ============================================================
