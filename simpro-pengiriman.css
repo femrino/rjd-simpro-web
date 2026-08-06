@@ -186,3 +186,15 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
      tabelnya melebar dan bikin seluruh baris harus digeser horizontal. */
   .kr-rantai { font-size: 9.5px; }
 }
+
+/* Nomor surat jalan + tautan cetak di rincian pengiriman.
+   Nomornya sendiri BARU ditampilkan di sini -- sebelumnya rincian cuma memuat
+   tanggal & artikel, sehingga nomor SJ yang dipakai klien saat bertanya lewat
+   WhatsApp justru tidak kelihatan di halaman staff. */
+.kr-sj-nomor { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px;
+  color: var(--ink); white-space: nowrap; }
+.kr-cetak-link { display: inline-block; margin-top: 4px; font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px; font-weight: 700; color: var(--ink-soft); text-decoration: none;
+  border: 1px solid var(--line-soft); border-radius: 6px; padding: 2px 7px;
+  white-space: nowrap; transition: border-color .15s, color .15s; }
+.kr-cetak-link:hover { color: var(--ink); border-color: var(--ink); }

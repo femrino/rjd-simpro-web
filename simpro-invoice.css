@@ -156,3 +156,35 @@ body { padding-top: 0; }
   .iv-harga-input { width: 90px; }
   .iv-kirim-daftar { max-height: 320px; }
 }
+
+/* ============================================================
+ * TAUTAN CETAK + PERBAIKAN KOLOM KLIEN TERPENGGAL
+ * ============================================================
+ * KENAPA NAMA KLIEN PECAH DI TENGAH KATA ("PT Baha / gia / Bervi / si / Muli / a"):
+ * .iv-tabel dipaksa `width: 100%`, sementara TUJUH dari sembilan kolomnya
+ * nowrap (th, .num, .iv-nomor, .iv-sub, .iv-status). Satu-satunya kolom yang
+ * bisa mengalah adalah Klien -- jadi browser menyempitkannya sampai di bawah
+ * lebar kata terpendeknya, lalu terpaksa memenggal kata.
+ *
+ * Penyebabnya BUKAN word-break di kolom itu; kolomnya memang tidak punya
+ * aturan apa pun. Jadi menambahkan `word-break: normal` tidak akan menolong.
+ * Yang harus diperbaiki adalah tabelnya diberi lebar minimum, supaya
+ * `overflow-x: auto` di .iv-tabelwrap benar-benar bekerja (menggeser) alih-alih
+ * menggencet. Gulir horizontal di tabel sembilan kolom itu wajar; nama klien
+ * yang tidak terbaca tidak.
+ * ============================================================ */
+.iv-tabel { min-width: 900px; }
+.iv-klien { min-width: 150px; overflow-wrap: break-word; word-break: normal; hyphens: none; }
+
+/* Tautan cetak: sengaja kecil & di dalam sel nomor, BUKAN kolom sendiri --
+   menambah kolom ke-10 akan memperparah gencetan yang baru saja diperbaiki. */
+.iv-cetak-link { display: inline-block; margin-top: 5px; font-family: 'IBM Plex Mono', monospace;
+  font-size: 10.5px; font-weight: 700; color: var(--ink-soft); text-decoration: none;
+  border: 1px solid var(--line-soft); border-radius: 6px; padding: 2px 7px;
+  white-space: nowrap; transition: border-color .15s, color .15s; }
+.iv-cetak-link:hover { color: var(--ink); border-color: var(--ink); }
+
+@media (max-width: 640px) {
+  /* Di HP tabelnya memang digulir; jangan naikkan min-width lebih jauh. */
+  .iv-tabel { min-width: 820px; }
+}

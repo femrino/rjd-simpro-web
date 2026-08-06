@@ -67,25 +67,7 @@ function ivLogout(){
   ivShow("iv-login-box");
 }
 
-function ivMulai() {
-  // ---------- SATPAM HALAMAN (Lapis 2, 6 Agustus 2026) ----------
-  // Isi lama fungsi ini dipindah UTUH ke ivMulaiIsi_ di bawah; yang berubah cuma
-  // ada gerbang di depannya. Login Google berhasil untuk email siapa pun --
-  // itu bukti kepemilikan email, bukan bukti hak masuk. Tanpa gerbang ini,
-  // klien yang tahu URL halaman ini melihat seluruh kerangkanya.
-  //
-  // Dibungkus `typeof`: kalau simpro-global.js gagal dimuat (jsDelivr mati),
-  // halaman WAJIB tetap jalan. Kehilangan satpam jauh lebih ringan daripada
-  // seluruh halaman staff mati serentak -- dan backend (pastikanBoleh_ di
-  // akses-role.gs) tetap menolak datanya, jadi tidak ada yang bocor.
-  if (typeof rjdJagaHalaman === "function") {
-    rjdJagaHalaman(IV_ID_TOKEN, IV_API_URL, ivMulaiIsi_);
-  } else {
-    ivMulaiIsi_();
-  }
-}
-
-function ivMulaiIsi_() {
+function ivMulai(){
   ivShow("iv-loading");
   ["iv-nav-logout", "iv-nav-refresh"].forEach(function(id){
     const el = document.getElementById(id);
@@ -183,10 +165,22 @@ function ivRender(){
     '</tr></thead><tbody>' +
     hasil.map(function(p){
       const kelas = p.lunas ? "lunas" : (p.bucket === "61-90" || p.bucket === "90+" ? "bahaya" : "belum");
+      const idInv = String(p.idInvoice || "").trim();
       return '<tr>' +
+        // Tautan cetak DITARUH DI DALAM sel nomor, bukan jadi kolom ke-10.
+        // Tabel ini sudah kehabisan ruang: sembilan kolom, dan tujuh di
+        // antaranya nowrap, sehingga kolom Klien yang jadi korban -- nama
+        // panjang terpenggal di tengah kata ("PT Baha / gia / Bervi / si").
+        // Menambah kolom akan memperparah persis masalah itu. Portal Klien
+        // menempatkannya di dalam kartu dengan alasan yang sama.
         '<td><b class="iv-nomor">' + rjdEscapeHtml_(p.idInvoice) + '</b>' +
-          (p.artikel ? '<div class="iv-sub">' + rjdEscapeHtml_(p.artikel) + '</div>' : '') + '</td>' +
-        '<td>' + rjdEscapeHtml_(p.namaKlien) + '</td>' +
+          (p.artikel ? '<div class="iv-sub">' + rjdEscapeHtml_(p.artikel) + '</div>' : '') +
+          (idInv
+            ? '<a class="iv-cetak-link" target="_blank" rel="noopener"' +
+              ' href="/p/cetak.html?jenis=invoice&amp;id=' + encodeURIComponent(idInv) + '">' +
+              '&#128424; Cetak</a>'
+            : '') + '</td>' +
+        '<td class="iv-klien">' + rjdEscapeHtml_(p.namaKlien) + '</td>' +
         '<td class="iv-sub">' + rjdEscapeHtml_(p.idPurchaseOrder || "-") + '</td>' +
         '<td class="num">' + ivFormatRupiah_(p.total) + '</td>' +
         '<td class="num">' + ivFormatRupiah_(p.dibayar) + '</td>' +

@@ -211,12 +211,34 @@ function krRincianHtml_(p){
   if(!p.rincian || !p.rincian.length){
     return '<div class="kr-rincian-kosong">Belum ada pengiriman untuk order ini.</div>';
   }
+  // Kolom "Surat Jalan" BARU. Selain jadi tempat tombol cetak, ini menutup
+  // kekurangan yang sudah lama ada: nomor surat jalannya sendiri tidak pernah
+  // ditampilkan di halaman staff. Admin melihat "9 Januari 2025 - Nabella -
+  // 1 pcs" tanpa tahu itu SJ nomor berapa, padahal itu nomor yang dipakai klien
+  // waktu menanyakan kiriman lewat WhatsApp.
+  //
+  // Datanya sudah ada sejak awal -- getDaftarPengiriman_ (daftar-pengiriman.js)
+  // selalu mengirim idPengiriman di tiap baris rincian, cuma tidak pernah
+  // dipakai layar. Tidak ada perubahan backend untuk ini.
+  //
+  // Tautan cetak TIDAK perlu stopPropagation: onclick buka-tutup dipasang di
+  // <tr class="kr-baris">, sedangkan tabel ini ada di <tr class="kr-rincian">
+  // yang terpisah, jadi kliknya tidak menyebar ke mana-mana.
   return '<table class="kr-subtabel"><thead><tr>' +
-      '<th>Tanggal</th><th>Artikel</th><th class="num">Jumlah</th>' +
+      '<th>Surat Jalan</th><th>Tanggal</th><th>Artikel</th><th class="num">Jumlah</th>' +
       '<th>Jenis</th><th>Metode</th><th>Resi</th><th>Catatan</th>' +
     '</tr></thead><tbody>' +
     p.rincian.map(function(k){
+      const idSj = String(k.idPengiriman || "").trim();
       return '<tr>' +
+        '<td>' + (idSj
+          ? '<b class="kr-sj-nomor">' + rjdEscapeHtml_(idSj) + '</b>' +
+            '<a class="kr-cetak-link" target="_blank" rel="noopener"' +
+            ' href="/p/cetak.html?jenis=suratjalan&amp;id=' + encodeURIComponent(idSj) + '">' +
+            '&#128424; Cetak</a>'
+          // Baris pengiriman lama bisa tidak punya ID (data warisan AppSheet).
+          // Ditulis apa adanya, bukan diberi tautan yang pasti gagal dibuka.
+          : '<span class="kr-buat-kosong">tanpa nomor</span>') + '</td>' +
         '<td>' + rjdEscapeHtml_(k.tanggal || "-") + '</td>' +
         '<td>' + rjdEscapeHtml_(k.artikel || "-") + '</td>' +
         '<td class="num">' + (k.jumlah || 0) + '</td>' +
