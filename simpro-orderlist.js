@@ -255,26 +255,36 @@ function dbBukaEditPO(idPO){
   const lama = document.getElementById("db-editpo-overlay");
   if(lama) lama.remove();
 
-  // Kelas modal MENGIKUTI modal proofing yang sudah ada (lp-edit-overlay /
-  // lp-edit-modal-head / lp-edit-modal-foot / om-btn). Sempat kupakai nama
-  // karangan (lp-modal-overlay dst) yang tidak punya CSS sama sekali --
-  // modalnya akan tampil tanpa gaya, melayang di tengah halaman.
+  // Kelas modal memakai komponen BERSAMA .rjd-modal-* yang didefinisikan di
+  // simpro-global.css -- satu-satunya berkas CSS yang dimuat di SEMUA halaman.
+  //
+  // Sebelumnya dipakai .lp-edit-* dan .om-btn, mengikuti modal proofing di
+  // Portal Klien. Kelasnya benar ada, tapi cuma di simpro-tracking.css dan
+  // simpro-omset.css -- dua berkas yang TIDAK dimuat di order-list.html.
+  // Cabang <b:if> Blogger terisolasi penuh secara CSS, jadi meminjam nama
+  // kelas dari halaman lain berarti meminjam sesuatu yang tidak ada di sini.
+  //
+  // Akibatnya modal ini tetap dibuat dan ditempel ke <body>, tapi tanpa
+  // position:fixed -- mendarat di bawah ratusan baris tabel, sementara
+  // body.style.overflow = "hidden" di bawah bikin halamannya membeku. Dari
+  // sisi pemakai: tombol Edit terlihat mati. Tidak ada error, tidak ada
+  // gejala, jadi tidak ada yang melaporkannya sampai 6 Agustus 2026.
   const overlay = document.createElement("div");
-  overlay.className = "lp-edit-overlay";
+  overlay.className = "rjd-modal-overlay";
   overlay.id = "db-editpo-overlay";
   overlay.innerHTML =
-    '<div class="lp-edit-modal">' +
-      '<div class="lp-edit-modal-head">' +
-        '<div><div class="lp-edit-modal-title">Edit Order</div>' +
-        '<div class="lp-edit-modal-sub">' + rjdEscapeHtml_(idPO) + '</div></div>' +
-        '<button class="lp-edit-close" onclick="dbTutupEditPO()" type="button">&#10005;</button>' +
+    '<div class="rjd-modal">' +
+      '<div class="rjd-modal-head">' +
+        '<div><div class="rjd-modal-title">Edit Order</div>' +
+        '<div class="rjd-modal-sub">' + rjdEscapeHtml_(idPO) + '</div></div>' +
+        '<button class="rjd-modal-close" onclick="dbTutupEditPO()" type="button">&#10005;</button>' +
       '</div>' +
-      '<div class="lp-edit-modal-body" id="db-editpo-body">' +
+      '<div class="rjd-modal-body" id="db-editpo-body">' +
         '<p style="font-size:12.5px;color:var(--ink-soft)">Memuat...</p>' +
       '</div>' +
-      '<div class="lp-edit-modal-foot">' +
-        '<button class="om-btn" onclick="dbTutupEditPO()" type="button">Tutup</button>' +
-        '<button class="om-btn om-btn-primary" id="db-editpo-simpan" onclick="dbSimpanEditPO()" type="button">Simpan Perubahan</button>' +
+      '<div class="rjd-modal-foot">' +
+        '<button class="rjd-btn" onclick="dbTutupEditPO()" type="button">Tutup</button>' +
+        '<button class="rjd-btn rjd-btn-primary" id="db-editpo-simpan" onclick="dbSimpanEditPO()" type="button">Simpan Perubahan</button>' +
         '<span id="db-editpo-status" style="margin-left:10px;font-size:12.5px;color:var(--ink-soft)"></span>' +
       '</div>' +
     '</div>';

@@ -741,3 +741,87 @@ footer{padding:28px 0;background:var(--ink)}
    Keyframes nav-icon-spin tetap dipakai dari CSS global. */
 .db-nav-icon-btn svg.spinning { animation: nav-icon-spin .7s linear infinite; }
 .db-nav-icon-btn:disabled { opacity: .55; cursor: default; }
+
+/* ============================================================
+ * MODAL BERSAMA (rjd-modal-*) -- 6 Agustus 2026
+ * ============================================================
+ * BUG YANG DISELESAIKAN
+ * Tombol "Edit" di order-list.html diam-diam tidak berfungsi. Modalnya
+ * sebenarnya DIBUAT dan ditempel ke <body>, tapi kelas yang dipakainya
+ * (.lp-edit-overlay, .lp-edit-modal, .om-btn) cuma didefinisikan di
+ * simpro-tracking.css dan simpro-omset.css -- dua berkas yang TIDAK dimuat
+ * di halaman itu. Hasilnya position tetap `static`, jadi modalnya mendarat
+ * di paling bawah halaman, di bawah ratusan baris tabel. Ditambah
+ * document.body.style.overflow = "hidden" yang ikut dijalankan, halamannya
+ * malah membeku -- terlihat seperti "tombolnya mati".
+ *
+ * Cabang <b:if> Blogger terisolasi penuh secara CSS. Prefiks lp- (Portal
+ * Klien) dan om- (Laporan Omset) pada komponen yang sebenarnya BERSAMA itu
+ * sendiri sudah jadi tanda bahaya: nama yang menyiratkan pemilik, dipakai
+ * lintas halaman.
+ *
+ * KENAPA NAMA BARU, BUKAN MEMINDAHKAN ATURAN lp-edit-* KE SINI
+ * Memindahkannya berarti menyentuh simpro-tracking.css & simpro-omset.css,
+ * dan modal proofing di Portal Klien yang sudah lama jalan ikut dipertaruhkan
+ * demi memperbaiki halaman lain. Nama netral di berkas global -- satu-satunya
+ * berkas yang TIDAK terisolasi per cabang -- memberi komponen bersama tanpa
+ * menyentuh apa pun yang sedang bekerja. Yang lama boleh menyusul kapan saja,
+ * atau tidak sama sekali.
+ *
+ * DIPAKAI DI : order-list.html (modal Edit PO)
+ * Kandidat berikutnya: dashboard.html, yang memakai kelas lp-edit-* 21 kali
+ * dengan susunan CSS yang sama persis -- periksa dulu sebelum diubah.
+ * ============================================================ */
+
+.rjd-modal-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px; background: rgba(15, 22, 35, .48);
+  overflow-y: auto;
+}
+.rjd-modal {
+  background: var(--white); border-radius: 16px; box-shadow: var(--shadow-lg);
+  width: 100%; max-width: 880px; max-height: 88vh;
+  display: flex; flex-direction: column; overflow: hidden;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* Kepala & kaki TIDAK ikut menggulung; isinya saja. Di tabel Edit PO yang
+   panjang, tombol Simpan yang ikut hilang ke bawah bikin orang mengira
+   perubahannya tidak bisa disimpan. */
+.rjd-modal-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 18px 20px; border-bottom: 1px solid var(--line-soft); flex-shrink: 0;
+}
+.rjd-modal-title { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 16px; color: var(--ink); }
+.rjd-modal-sub { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; }
+.rjd-modal-close {
+  flex-shrink: 0; background: transparent; border: none; cursor: pointer;
+  font-size: 17px; line-height: 1; color: var(--ink-soft); padding: 4px 6px;
+  border-radius: 7px; transition: background .15s, color .15s;
+}
+.rjd-modal-close:hover { background: var(--cream); color: var(--ink); }
+
+.rjd-modal-body { padding: 18px 20px; overflow-y: auto; flex: 1 1 auto; }
+.rjd-modal-foot {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 14px 20px; border-top: 1px solid var(--line-soft);
+  background: var(--cream); flex-shrink: 0;
+}
+
+.rjd-btn {
+  padding: 9px 16px; border-radius: 9px; border: 1px solid var(--line-soft);
+  background: var(--white); color: var(--ink);
+  font-family: 'Inter', system-ui, sans-serif; font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: border-color .15s, opacity .15s;
+}
+.rjd-btn:hover { border-color: var(--ink); }
+.rjd-btn-primary { background: var(--ink); border-color: var(--ink); color: var(--white); }
+.rjd-btn-primary:hover { opacity: .88; border-color: var(--ink); }
+.rjd-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+@media (max-width: 640px) {
+  .rjd-modal-overlay { padding: 12px; }
+  .rjd-modal { max-height: 92vh; }
+  .rjd-modal-head, .rjd-modal-body, .rjd-modal-foot { padding-left: 14px; padding-right: 14px; }
+}
