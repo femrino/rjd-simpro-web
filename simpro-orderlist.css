@@ -105,3 +105,34 @@ body { padding-top: 0; }
 /* Baris berselang-seling -- membantu mata mengikuti baris di tabel selebar ini. */
 .db-po-tabel tbody tr:nth-child(even) td { background: rgba(0,0,0,.015); }
 .db-po-tabel tbody tr:hover td { background: var(--cream); }
+
+/* ============================================================
+ * KOLOM PROFORMA
+ * ============================================================
+ * Kolom ke-8, disisipkan SEBELUM kolom Cetak. Aturan nowrap di atas memakai
+ * nth-child, jadi menyisipkan kolom di tengah menggeser semua nomornya --
+ * itu sebabnya blok nth-child di bawah ditulis ulang lengkap, bukan
+ * ditambahi. Kolom Cetak yang dulu ke-8 sekarang ke-9.
+ * ============================================================ */
+
+.db-po-tabel td:nth-child(9),
+.db-po-tabel th:nth-child(9) { white-space: nowrap; }
+
+/* Tombol Terbitkan/Revisi: sengaja BUKAN tombol besar. Ini aksi yang
+   membuat nomor dokumen permanen -- tampilannya harus setara tautan lain di
+   kolom itu, supaya tidak mengundang klik karena kelihatan menonjol. */
+.db-po-terbit {
+  font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; font-weight: 700;
+  color: var(--thread); text-decoration: none;
+  border: 1px solid var(--terra-light, #E8A49C); border-radius: 6px;
+  padding: 2px 7px; white-space: nowrap;
+  transition: background .15s, color .15s;
+}
+.db-po-terbit:hover { background: var(--thread); color: var(--white); }
+
+/* Lebar minimum tabel dinaikkan mengikuti kolom baru (~130px). Tanpa ini,
+   kolom Artikel & Klien yang paling lentur akan tergencet sampai memenggal
+   kata -- gejala yang sama persis dengan yang sudah pernah diperbaiki di
+   simpro-invoice.css. */
+.db-po-tabel { min-width: 1180px; }
+.db-po-tabel th:nth-child(8), .db-po-tabel td:nth-child(8) { min-width: 124px; }

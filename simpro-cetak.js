@@ -65,7 +65,7 @@ function ckGetQueryParam(nama){
   const params = new URLSearchParams(window.location.search);
   return params.get(nama);
 }
-const CK_JENIS = ckGetQueryParam("jenis"); // "invoice" | "suratjalan" | "konfirmasiorder" | "spk"
+const CK_JENIS = ckGetQueryParam("jenis"); // "invoice" | "proforma" | "suratjalan" | "konfirmasiorder" | "spk"
 // Khusus SPK: ?item=N (0-based) -> cetak CUMA ITEM ke-N. Tanpa parameter ini
 // SPK memuat semua item dalam 1 dokumen. Pemilihannya juga bisa diganti lewat
 // tombol di layar (ckSPKPilihItem) tanpa reload.
@@ -122,7 +122,7 @@ function ckHandleLogin(response){
 }
 
 function ckFetchData(){
-  const jenisValid = ["invoice", "suratjalan", "konfirmasiorder", "spk", "rekapline"];
+  const jenisValid = ["invoice", "proforma", "suratjalan", "konfirmasiorder", "spk", "rekapline"];
   // "rekapline" identitasnya di ?line=, BUKAN ?id= -- dokumennya milik LINE,
   // bukan milik satu order. Jadi syarat CK_ID sengaja dilonggarkan khusus dia.
   const punyaIdentitas = CK_JENIS === "rekapline" ? !!CK_LINE : !!CK_ID;
@@ -130,7 +130,7 @@ function ckFetchData(){
     ckTampilkanError("Link tidak lengkap/valid -- buka halaman ini lewat tombol Cetak di Portal Klien atau Dashboard, bukan diketik manual.");
     return;
   }
-  const CK_ACTION_MAP = { invoice: "getInvoiceCetak", suratjalan: "getSuratJalanCetak", konfirmasiorder: "getKonfirmasiOrderCetak", spk: "getSPKCetak", rekapline: "getRekapLineCetak" };
+  const CK_ACTION_MAP = { invoice: "getInvoiceCetak", proforma: "getProformaCetak", suratjalan: "getSuratJalanCetak", konfirmasiorder: "getKonfirmasiOrderCetak", spk: "getSPKCetak", rekapline: "getRekapLineCetak" };
   const action = CK_ACTION_MAP[CK_JENIS];
   fetch(CK_API_URL, {
     method: "POST",
@@ -150,6 +150,7 @@ function ckFetchData(){
     // pencarian terus mengarah ke backend & deployment, bukan ke frontend.
     try{
       if(CK_JENIS === "invoice") ckRenderInvoice(data.data);
+      else if(CK_JENIS === "proforma") ckRenderProforma(data.data);
       else if(CK_JENIS === "suratjalan") ckRenderSuratJalan(data.data);
       else if(CK_JENIS === "konfirmasiorder") ckRenderKonfirmasiOrder(data.data);
       else if(CK_JENIS === "rekapline") ckRenderRekapLine(data.data);
@@ -1182,3 +1183,167 @@ window.onload = function(){
   // auto-login gagal / tokennya ditolak server.
   ckCobaAutoLogin_();
 };
+
+/**
+ * ============================================================
+ * PROFORMA INVOICE
+ * ============================================================
+ * Dokumen TAGIHAN SEMENTARA, terbit saat order jadi PO -- jauh sebelum ada
+ * barang yang dikirim. Klien memakainya untuk mencairkan DP atau membuat PO
+ * internal. Backend: cetak-proforma.gs.
+ *
+ * ============================================================
+ * KENAPA PUNYA RENDERER SENDIRI, BUKAN MEMAKAI ULANG ckRenderInvoice
+ * ============================================================
+ * Rencana awal memang memecah ckRenderInvoice jadi satu fungsi bersama.
+ * Setelah dibaca ulang, seam-nya ternyata bukan di situ: yang benar-benar
+ * sama cuma header, blok pihak, tabel item, rekening, dan tanda tangan --
+ * dan kelimanya SUDAH berupa fungsi terpisah yang dipakai ulang di bawah.
+ *
+ * Yang berbeda justru bagian terpentingnya: kotak ringkasan invoice bercerita
+ * tentang PEMBAYARAN YANG SUDAH MASUK (dp, outstanding, status lunas),
+ * sementara proforma bercerita tentang PEMBAYARAN YANG DIMINTA (termin, DP,
+ * jatuh tempo). Memaksa keduanya ke satu fungsi berarti fungsi itu penuh
+ * percabangan `if (proforma)` -- dan fungsi semacam itu selalu berakhir
+ * dengan salah satu dokumen rusak diam-diam saat yang lain diperbaiki.
+ *
+ * BEDA TEGAS DARI INVOICE, dan semuanya disengaja:
+ *   - TIDAK ada badge status pembayaran (belum ada apa pun untuk dibayar)
+ *   - TIDAK ada baris "Sisa Tagihan" (itu milik invoice)
+ *   - ADA masa berlaku, termin, dan DP yang diminta
+ *   - ADA watermark + kalimat penyangkal: ini BUKAN invoice final
+ */
+function ckRenderProforma(d){
+  const t = d.termin || {};
+
+  const barisItem = d.items.map(function(it){
+    // Rincian size ditaruh sebagai baris kecil di bawah deskripsi, BUKAN kolom
+    // sendiri. Bagian keuangan klien membaca dokumen ini untuk menyetujui
+    // nominal, bukan memeriksa kurva ukuran -- tapi menghilangkannya sama
+    // sekali membuat qty tidak bisa diverifikasi.
+    const sub = [it.warna, it.rincianSize].filter(function(v){ return v && v !== "-"; }).join(" &#183; ");
+    return '<tr>' +
+      '<td>' + rjdEscapeHtml_(it.deskripsi) +
+        (sub ? '<div style="font-size:11px;color:var(--ink-soft)">' + rjdEscapeHtml_(sub) + '</div>' : '') + '</td>' +
+      '<td class="num">' + it.jumlah + '</td>' +
+      '<td class="num">' + formatRupiah(it.hargaSatuan) + '</td>' +
+      '<td class="num">' + formatRupiah(it.subtotal) + '</td>' +
+    '</tr>';
+  }).join("");
+
+  // ---------- Kotak ringkasan ----------
+  const ringkasan = [];
+  ringkasan.push('<div class="ck-dok-ringkasan-row"><span>Total Qty</span><span>' + d.jumlah + ' pcs</span></div>');
+  ringkasan.push('<div class="ck-dok-ringkasan-row"><span>Subtotal</span><span>' + formatRupiah(d.subtotal) + '</span></div>');
+  ringkasan.push('<div class="ck-dok-ringkasan-row total"><span>Nilai Order</span><span>' + formatRupiah(d.totalTagihan) + '</span></div>');
+  if(t.nilaiDP > 0){
+    ringkasan.push('<div class="ck-dok-ringkasan-row dp"><span>DP Dibayar Sekarang' +
+      (t.persenDPTampil ? ' (' + t.persenDPTampil + '%)' : '') +
+      '</span><span>' + formatRupiah(t.nilaiDP) + '</span></div>');
+    ringkasan.push('<div class="ck-dok-ringkasan-row"><span>Sisa (dibayar kemudian)</span><span>' +
+      formatRupiah(t.sisaSetelahDP) + '</span></div>');
+  }
+
+  // ---------- Blok termin ----------
+  // Ditaruh MENONJOL, bukan di catatan kaki: inilah alasan dokumen ini ada.
+  // Klien membukanya untuk menjawab satu pertanyaan -- "berapa yang harus
+  // saya transfer, dan kapan".
+  const jatuhTempo = t.jatuhTempoDP ? ckTanggalPendek_(t.jatuhTempoDP) : "";
+  const terminHtml =
+    '<div class="ck-pro-termin">' +
+      '<div class="ck-pro-termin-lbl">Syarat Pembayaran</div>' +
+      '<div class="ck-pro-termin-nama">' + rjdEscapeHtml_(t.nama || "-") + '</div>' +
+      (t.teks ? '<div class="ck-pro-termin-teks">' + rjdEscapeHtml_(t.teks) + '</div>' : '') +
+      '<div class="ck-pro-termin-grid">' +
+        (t.nilaiDP > 0
+          ? '<div><span>DP yang diminta</span><b>' + formatRupiah(t.nilaiDP) + '</b></div>'
+          : '') +
+        (jatuhTempo
+          ? '<div><span>Jatuh tempo DP</span><b>' + rjdEscapeHtml_(jatuhTempo) + '</b></div>'
+          : '') +
+        (d.estimasiKirim
+          ? '<div><span>Estimasi kirim</span><b>' + rjdEscapeHtml_(d.estimasiKirim) + '</b></div>'
+          : '') +
+      '</div>' +
+    '</div>';
+
+  // ---------- Peringatan ----------
+  // Tiga keadaan yang HARUS terlihat, bukan didiamkan. Ketiganya memakai gaya
+  // yang sama supaya mata menangkapnya sebagai satu jenis informasi: "ada yang
+  // perlu Anda ketahui sebelum membayar".
+  const peringatan = [];
+  if(d.nilaiBerubah){
+    peringatan.push('<div class="ck-pro-warn"><b>Nilai order berubah sejak proforma ini diterbitkan.</b> ' +
+      'Saat terbit: ' + formatRupiah(d.nilaiSaatTerbit) + ' &#183; sekarang: ' + formatRupiah(d.nilaiSekarang) + '. ' +
+      'Mohon konfirmasi ke RJD Apparel sebelum melakukan pembayaran.</div>');
+  }
+  if(d.kedaluwarsa){
+    peringatan.push('<div class="ck-pro-warn"><b>Masa berlaku proforma ini sudah lewat</b> (' +
+      rjdEscapeHtml_(d.berlakuSampai) + '). Harga perlu dikonfirmasi ulang sebelum order diproses.</div>');
+  }
+  if(d.catatan){
+    peringatan.push('<div class="ck-dok-catatan"><b>Catatan:</b><div class="isi">' +
+      rjdEscapeHtml_(d.catatan) + '</div></div>');
+  }
+
+  const html =
+    '<div class="ck-dok ck-pro">' +
+      '<div class="ck-pro-wm">PROFORMA</div>' +
+      ckHeaderHtml("PROFORMA INVOICE", rjdEscapeHtml_(d.idProforma) +
+        (d.versi > 1 ? ' <span class="ck-pro-versi">revisi ' + d.versi + '</span>' : ''), d.tanggal) +
+      ckPihakHtml(d, "Referensi Order",
+        "Kode Order: " + rjdEscapeHtml_(d.kodeOrder) +
+        '<br/>Produk: ' + rjdEscapeHtml_(d.namaProduk || "-") +
+        '<br/>Berlaku sampai: <b>' + rjdEscapeHtml_(d.berlakuSampai || "-") + '</b>') +
+      '<table class="ck-dok-tabel"><thead><tr>' +
+        '<th>Deskripsi</th><th class="num">Qty</th><th class="num">Harga Satuan</th><th class="num">Subtotal</th>' +
+      '</tr></thead><tbody>' + barisItem + '</tbody></table>' +
+      '<div class="ck-dok-ringkasan">' +
+        // Rekening SELALU tampil di proforma -- sama seperti Konfirmasi Order,
+        // beda dari invoice. Dokumen ini justru diterbitkan UNTUK meminta DP;
+        // klien butuh nomor rekening tepat saat membacanya.
+        ckRekeningHtml_() +
+        '<div class="ck-dok-ringkasan-box">' + ringkasan.join("") + '</div>' +
+      '</div>' +
+      terminHtml +
+      peringatan.join("") +
+      // Penyangkal WAJIB, dan sengaja tidak dibuat samar. Tanpa kalimat ini
+      // sebuah dokumen bernomor & bernilai bisa diperlakukan sebagai faktur
+      // final oleh bagian keuangan klien -- lalu dibukukan dua kali ketika
+      // invoice yang sesungguhnya menyusul saat pengiriman.
+      '<div class="ck-pro-disclaimer">' +
+        'Dokumen ini adalah <b>proforma invoice</b> dan <b>bukan</b> invoice/faktur final. ' +
+        'Invoice resmi diterbitkan bersamaan dengan pengiriman barang, dan nilainya ' +
+        'menyesuaikan jumlah yang benar-benar dikirim. Potongan pajak (PPh), bila ada, ' +
+        'diperhitungkan pada invoice final.' +
+      '</div>' +
+      '<div class="ck-dok-ttd">' +
+        '<div class="kolom">Hormat kami,<div class="garis"></div><div class="nama-ttd">RJD Apparel</div></div>' +
+        // "Disetujui oleh", BUKAN "Diterima oleh": belum ada barang yang
+        // diterima. Yang diminta di titik ini adalah persetujuan atas nilai
+        // dan syarat pembayarannya.
+        '<div class="kolom">Disetujui oleh,<div class="garis"></div><div class="nama-ttd">' +
+          rjdEscapeHtml_(d.klien.nama) + '</div></div>' +
+      '</div>' +
+    '</div>';
+
+  document.getElementById("ck-isi").innerHTML = html;
+  document.title = "Proforma " + d.idProforma + " -- RJD Apparel";
+}
+
+/**
+ * Tanggal dari backend jadi "12 Agu 2026".
+ *
+ * Backend mengirim jatuh tempo sebagai nilai tanggal mentah (bukan hasil
+ * formatTanggal), karena angka itu juga dipakai untuk perbandingan di sisi
+ * server. Kalau nilainya ternyata sudah berupa teks -- misalnya dari baris
+ * lama yang tersimpan sebagai string -- dikembalikan apa adanya, bukan
+ * dipaksa jadi "Invalid Date".
+ */
+function ckTanggalPendek_(nilai){
+  if(!nilai) return "";
+  const d = new Date(nilai);
+  if(isNaN(d.getTime())) return String(nilai);
+  const bulan = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+  return d.getDate() + " " + bulan[d.getMonth()] + " " + d.getFullYear();
+}

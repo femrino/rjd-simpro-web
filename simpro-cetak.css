@@ -361,3 +361,97 @@ body { padding-top: 0; }
   text-align: center; padding: 30px 0; }
 .ck-rl-catatan { font-size: 10.5px; color: var(--ink-soft, #6B7280); margin-top: 14px;
   border-top: 1px solid var(--line-soft, #E5E0D6); padding-top: 8px; line-height: 1.6; }
+
+/* ============================================================
+ * PROFORMA INVOICE
+ * ============================================================
+ * Semuanya berprefiks .ck-pro- dan dipakai HANYA oleh ckRenderProforma.
+ * Sengaja tidak menumpang kelas invoice: dua dokumen tagihan yang berbagi
+ * kelas akan saling merusak diam-diam saat salah satunya dipoles.
+ *
+ * CATATAN CABANG <b:if>: berkas ini dimuat di cetak.html saja, jadi seluruh
+ * aturan di bawah aman berada di sini. Kalau suatu saat ada elemen proforma
+ * yang perlu muncul di halaman lain, CSS-nya WAJIB dipindah ke
+ * simpro-global.css -- cabang <b:if> mengisolasi CSS per halaman.
+ * ============================================================ */
+
+.ck-pro { position: relative; }
+
+/* Watermark. Pola & sudutnya meniru .ck-spk-wm (watermark DRAFT di SPK)
+   supaya bahasa visualnya konsisten, tapi position:absolute -- bukan fixed
+   seperti SPK. Watermark fixed hanya tercetak di halaman PERTAMA; proforma
+   dengan banyak item bisa lebih dari satu halaman, dan halaman kedua yang
+   polos justru bagian yang paling mungkin difoto & diedarkan terpisah. */
+.ck-pro-wm {
+  position: absolute; top: 44%; left: 50%;
+  transform: translate(-50%, -50%) rotate(-26deg);
+  font-family: 'Archivo', sans-serif; font-weight: 900;
+  font-size: 104px; letter-spacing: .1em;
+  color: rgba(190, 60, 45, .09);
+  pointer-events: none; z-index: 0; white-space: nowrap;
+}
+/* Isi dokumen HARUS di atas watermark, kalau tidak teksnya ikut buram. */
+.ck-pro > *:not(.ck-pro-wm) { position: relative; z-index: 1; }
+
+.ck-pro-versi {
+  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700;
+  color: var(--thread); background: #FDECEA;
+  border-radius: 20px; padding: 2px 9px; margin-left: 6px;
+  vertical-align: middle; letter-spacing: 0;
+}
+
+/* Baris DP ditebalkan di dalam kotak ringkasan: dari seluruh angka di dokumen
+   ini, itulah satu-satunya yang harus ditransfer sekarang. */
+.ck-dok-ringkasan-row.dp { color: var(--thread); font-weight: 700; }
+
+/* ---- Blok syarat pembayaran ---- */
+.ck-pro-termin {
+  border: 1px solid var(--line); border-left: 3px solid var(--thread);
+  border-radius: 10px; padding: 16px 18px; margin-bottom: 24px;
+  background: var(--paper-2);
+}
+.ck-pro-termin-lbl {
+  font-family: 'IBM Plex Mono', monospace; font-size: 10.5px;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: var(--thread); margin-bottom: 8px;
+}
+.ck-pro-termin-nama { font-weight: 700; font-size: 14px; color: var(--ink); }
+.ck-pro-termin-teks { font-size: 12.5px; color: var(--ink-soft); line-height: 1.6; margin-top: 5px; }
+.ck-pro-termin-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);
+}
+.ck-pro-termin-grid span {
+  display: block; font-size: 10.5px; color: var(--ink-soft);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px;
+}
+.ck-pro-termin-grid b { font-size: 14px; color: var(--ink); }
+
+/* ---- Peringatan ---- */
+.ck-pro-warn {
+  background: #FCF3E3; border: 1px solid #EBCFA0; border-radius: 10px;
+  padding: 12px 16px; font-size: 12.5px; color: #6B4310;
+  line-height: 1.6; margin-bottom: 16px;
+}
+
+/* ---- Penyangkal ----
+   Kecil, tapi TIDAK abu-abu pucat. Ini kalimat yang mencegah dokumen dibukukan
+   dua kali oleh keuangan klien; kalau sampai tidak terbaca, gunanya hilang. */
+.ck-pro-disclaimer {
+  font-size: 11.5px; line-height: 1.65; color: var(--ink-soft);
+  border-top: 1px solid var(--line); padding-top: 14px; margin-top: 8px;
+}
+.ck-pro-disclaimer b { color: var(--ink); }
+
+@media print {
+  /* Warna latar peringatan & blok termin WAJIB ikut tercetak. Tanpa ini,
+     browser membuang latar belakang saat mencetak dan blok syarat pembayaran
+     jadi tidak terbedakan dari paragraf biasa. */
+  .ck-pro-termin, .ck-pro-warn { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .ck-pro-wm { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+@media (max-width: 640px) {
+  .ck-pro-wm { font-size: 58px; }
+  .ck-pro-termin-grid { grid-template-columns: 1fr 1fr; }
+}

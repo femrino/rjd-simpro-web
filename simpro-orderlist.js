@@ -198,7 +198,7 @@ function dbRenderDaftarPO(){
     '<div class="db-po-jumlah">' + hasil.length + ' dari ' + semua.length + ' PO</div>' +
     '<div class="db-po-tabelwrap"><table class="db-po-tabel"><thead><tr>' +
       '<th>PO</th><th>Klien</th><th>Artikel</th><th class="num">Qty</th>' +
-      '<th>Deadline</th><th>Status</th><th>Asal</th><th>Cetak</th>' +
+      '<th>Deadline</th><th>Status</th><th>Asal</th><th>Proforma</th><th>Cetak</th>' +
     '</tr></thead><tbody>' +
     hasil.map(function(p){
       const artikel = (p.artikel || []).length
@@ -212,6 +212,41 @@ function dbRenderDaftarPO(){
             ? ' &#183; <a href="/p/cetak.html?jenis=konfirmasiorder&amp;id=' + encodeURIComponent(p.idOrderRequest) + '" rel="noopener" target="_blank">Konfirmasi</a>'
             : '')
         : '<span class="db-po-kosong" title="PO ini belum punya baris di SD Rincian Sales Order">-</span>';
+
+      // ---- Proforma ----
+      // TIGA keadaan, dan ketiganya menampilkan hal yang berbeda. Tanpa
+      // pembedaan ini, staf akan mengklik tautan cetak untuk PO yang belum
+      // punya proforma dan melihat pesan galat -- jenis kegagalan yang
+      // seharusnya tidak pernah sampai ke pengguna karena datanya sudah
+      // diketahui sejak di daftar.
+      //
+      //   belum siap  -> tanda hubung (Rincian SO masih kosong)
+      //   belum terbit-> tombol Terbitkan
+      //   sudah terbit-> tautan cetak + nomornya
+      let proforma;
+      if (!p.siapCetakProforma) {
+        proforma = '<span class="db-po-kosong" title="Isi dulu rincian warna &amp; size di SD Rincian Sales Order">-</span>';
+      } else if (!p.idProforma) {
+        proforma = '<a href="#" class="db-po-terbit" onclick="olTerbitkanProforma(\'' +
+          rjdEscapeHtml_(p.idPurchaseOrder).replace(/'/g, "") + '\', false); return false;">Terbitkan</a>';
+      } else {
+        // TIDAK menampilkan indikator "nilai berubah" di sini, walau datanya
+        // menggoda untuk ditambahkan. Perbandingannya butuh nilai order
+        // SEKARANG, dan menghitungnya di daftar berarti aturan "berapa nilai
+        // sebuah PO" hidup di dua tempat -- di sini dan di
+        // bacaItemProformaDariRincianSO_. Dua tempat berarti suatu saat dua
+        // jawaban. Peringatannya tetap ada, di dokumennya sendiri, tempat
+        // angkanya memang dihitung.
+        proforma = '<a href="/p/cetak.html?jenis=proforma&amp;id=' +
+            encodeURIComponent(p.idProforma) + '" rel="noopener" target="_blank">Proforma</a>' +
+          '<div class="db-po-sub"' +
+            (p.kodeTerminProforma ? ' title="Termin ' + rjdEscapeHtml_(p.kodeTerminProforma) + '"' : '') + '>' +
+            rjdEscapeHtml_(p.idProforma) +
+            (p.versiProforma > 1 ? ' v' + p.versiProforma : '') +
+          '</div>' +
+          ' &#183; <a href="#" class="db-po-terbit" onclick="olTerbitkanProforma(\'' +
+            rjdEscapeHtml_(p.idPurchaseOrder).replace(/'/g, "") + '\', true); return false;">Revisi</a>';
+      }
       return '<tr>' +
         // ID PO sering berbentuk "260731/Pashmina Oval Bandana" -- nomor lalu
         // nama pesanan. Ditampilkan utuh dalam satu baris, kolomnya jadi sempit
@@ -233,6 +268,7 @@ function dbRenderDaftarPO(){
         '<td>' + rjdEscapeHtml_(p.status || "-") + '</td>' +
         '<td><span class="db-po-asal ' + (p.sumber === "form" ? "form" : "") + '">' +
           (p.sumber === "form" ? "Form Order" : "Langsung") + '</span></td>' +
+        '<td class="db-po-cetak">' + proforma + '</td>' +
         '<td class="db-po-cetak">' + cetak +
           (p.siapCetakSPK
             ? ' &#183; <a href="#" onclick="dbBukaEditPO(\'' + rjdEscapeHtml_(p.idPurchaseOrder).replace(/'/g, "") + '\'); return false;">Edit</a>'
@@ -577,5 +613,70 @@ function dbSimpanEditPO(){
   .catch(function(){
     btn.disabled = false;
     statusEl.textContent = "Gagal menghubungi server.";
+  });
+}
+
+
+/**
+ * ============================================================
+ * TERBITKAN / REVISI PROFORMA
+ * ============================================================
+ * Satu-satunya tempat di frontend yang MEMBUAT nomor dokumen. Karena itu
+ * dua hal ditegakkan di sini:
+ *
+ * 1. KONFIRMASI DULU. Nomor proforma tidak bisa ditarik kembali begitu
+ *    dokumennya dikirim ke klien -- berbeda dari tombol lain di halaman ini
+ *    yang efeknya bisa diperbaiki dengan mengedit ulang.
+ *
+ * 2. REVISI diberi peringatan yang BERBEDA & lebih tegas: dia menonaktifkan
+ *    proforma lama. Kalau klien sudah memakai nomor lama untuk pencairan
+ *    internal, itu perlu dikabari -- dan yang menekan tombol harus tahu itu
+ *    sebelum menekannya, bukan sesudah.
+ *
+ * Backend (terbitkanProforma_) tetap punya penjaganya sendiri: staff-only,
+ * LockService, dan penolakan kalau masih ada harga kosong. Konfirmasi di sini
+ * murni supaya orang tidak menerbitkan karena salah klik.
+ */
+function olTerbitkanProforma(idPO, revisi){
+  if(!idPO) return;
+
+  const pesan = revisi
+    ? "Terbitkan REVISI proforma untuk PO " + idPO + "?\n\n" +
+      "Proforma yang lama akan ditandai \"Digantikan\" dan tidak bisa dicetak lagi.\n" +
+      "Kalau klien sudah memakai nomor lama untuk pencairan, beri tahu mereka nomor barunya."
+    : "Terbitkan proforma untuk PO " + idPO + "?\n\n" +
+      "Nomor dokumen akan dibuat dan tidak bisa dibatalkan.";
+  if(!window.confirm(pesan)) return;
+
+  fetch(OL_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: OL_ID_TOKEN,
+      action: "terbitkanProforma",
+      idPurchaseOrder: idPO,
+      revisi: !!revisi
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if(!d || !d.success){
+      // Pesan galat backend ditampilkan APA ADANYA, tidak diganti kalimat
+      // umum. Penyebab tersering -- "sebagian item belum punya harga" --
+      // justru sudah menyebutkan langkah perbaikannya; menggantinya dengan
+      // "Gagal menerbitkan" akan membuang satu-satunya petunjuk yang berguna.
+      window.alert((d && d.error) || "Gagal menerbitkan proforma.");
+      return;
+    }
+    const hasil = d.data || {};
+    if(hasil.baru === false){
+      window.alert("PO ini sudah punya proforma " + hasil.idProforma +
+        ".\nPakai tautan Proforma untuk mencetaknya, atau Revisi kalau nilainya berubah.");
+    }
+    // Daftar dimuat ulang supaya kolom Proforma langsung menampilkan nomornya.
+    window.OL_DAFTAR_PO = null;
+    dbMuatDaftarPO();
+  })
+  .catch(function(){
+    window.alert("Gagal menghubungi server.");
   });
 }
