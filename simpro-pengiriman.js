@@ -65,7 +65,25 @@ function krLogout(){
   krShow("kr-login-box");
 }
 
-function krMulai(){
+function krMulai() {
+  // ---------- SATPAM HALAMAN (Lapis 2, 6 Agustus 2026) ----------
+  // Isi lama fungsi ini dipindah UTUH ke krMulaiIsi_ di bawah; yang berubah cuma
+  // ada gerbang di depannya. Login Google berhasil untuk email siapa pun --
+  // itu bukti kepemilikan email, bukan bukti hak masuk. Tanpa gerbang ini,
+  // klien yang tahu URL halaman ini melihat seluruh kerangkanya.
+  //
+  // Dibungkus `typeof`: kalau simpro-global.js gagal dimuat (jsDelivr mati),
+  // halaman WAJIB tetap jalan. Kehilangan satpam jauh lebih ringan daripada
+  // seluruh halaman staff mati serentak -- dan backend (pastikanBoleh_ di
+  // akses-role.gs) tetap menolak datanya, jadi tidak ada yang bocor.
+  if (typeof rjdJagaHalaman === "function") {
+    rjdJagaHalaman(KR_ID_TOKEN, KR_API_URL, krMulaiIsi_);
+  } else {
+    krMulaiIsi_();
+  }
+}
+
+function krMulaiIsi_() {
   // [DIHAPUS 6 Agustus 2026] Dulu di sini ada panggilan rjdMuatPeran(). Fungsi
   // itu sudah dihapus dari simpro-global.js karena tidak pernah bekerja sekali
   // pun -- lihat tombstone lengkapnya di sana. Penyesuaian menu menurut peran

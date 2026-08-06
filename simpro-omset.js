@@ -37,7 +37,25 @@ function loHandleLogin(response){
   loFetchData();
 }
 
-function loFetchData(){
+function loFetchData() {
+  // ---------- SATPAM HALAMAN (Lapis 2, 6 Agustus 2026) ----------
+  // Isi lama fungsi ini dipindah UTUH ke loFetchDataIsi_ di bawah; yang berubah cuma
+  // ada gerbang di depannya. Login Google berhasil untuk email siapa pun --
+  // itu bukti kepemilikan email, bukan bukti hak masuk. Tanpa gerbang ini,
+  // klien yang tahu URL halaman ini melihat seluruh kerangkanya.
+  //
+  // Dibungkus `typeof`: kalau simpro-global.js gagal dimuat (jsDelivr mati),
+  // halaman WAJIB tetap jalan. Kehilangan satpam jauh lebih ringan daripada
+  // seluruh halaman staff mati serentak -- dan backend (pastikanBoleh_ di
+  // akses-role.gs) tetap menolak datanya, jadi tidak ada yang bocor.
+  if (typeof rjdJagaHalaman === "function") {
+    rjdJagaHalaman(LO_ID_TOKEN, LO_API_URL, loFetchDataIsi_);
+  } else {
+    loFetchDataIsi_();
+  }
+}
+
+function loFetchDataIsi_() {
   fetch(LO_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: LO_ID_TOKEN, action: "getLaporanOmsetPajak" })

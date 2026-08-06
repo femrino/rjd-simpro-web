@@ -89,6 +89,24 @@ function spLogout() {
 }
 
 function spMulai() {
+  // ---------- SATPAM HALAMAN (Lapis 2, 6 Agustus 2026) ----------
+  // Isi lama fungsi ini dipindah UTUH ke spMulaiIsi_ di bawah; yang berubah cuma
+  // ada gerbang di depannya. Login Google berhasil untuk email siapa pun --
+  // itu bukti kepemilikan email, bukan bukti hak masuk. Tanpa gerbang ini,
+  // klien yang tahu URL halaman ini melihat seluruh kerangkanya.
+  //
+  // Dibungkus `typeof`: kalau simpro-global.js gagal dimuat (jsDelivr mati),
+  // halaman WAJIB tetap jalan. Kehilangan satpam jauh lebih ringan daripada
+  // seluruh halaman staff mati serentak -- dan backend (pastikanBoleh_ di
+  // akses-role.gs) tetap menolak datanya, jadi tidak ada yang bocor.
+  if (typeof rjdJagaHalaman === "function") {
+    rjdJagaHalaman(SP_ID_TOKEN, SP_API_URL, spMulaiIsi_);
+  } else {
+    spMulaiIsi_();
+  }
+}
+
+function spMulaiIsi_() {
   spShow("sp-isi");
   const el = document.getElementById("sp-nav-logout");
   if (el) el.classList.remove("hidden");

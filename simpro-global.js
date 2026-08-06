@@ -3024,21 +3024,20 @@ function rjdTerapkanPeranKeMenu() {
   // Jaring pengaman: kalau server tidak menjawab dalam 6 detik, tampilkan menu
   // apa adanya. Menu berlebih akibatnya jauh lebih ringan daripada menu yang
   // hilang seluruhnya -- dan penolakan sesungguhnya tetap ada di backend.
+  //
+  // CATATAN: jaring 6 detik di sini SENGAJA lebih pendek dari 8 detik milik
+  // rjdJagaHalaman. Menyerah cepat di sini murahnya: paling-paling menu tampil
+  // berlebih sebentar. Menyerah cepat di satpam mahal: seluruh halaman tertahan.
   var jaring = setTimeout(function () {
     rjdTandaiPeranSelesai_("tidak-diketahui", ["keuangan", "order", "produksi", "pajak"]);
   }, 6000);
 
-  fetch(api, {
-    method: "POST",
-    body: JSON.stringify({ idToken: token, action: "getPeranSaya" })
-  })
-  .then(function (r) { return r.json(); })
+  // Lewat rjdAmbilPeran_ supaya satu kali muat halaman cuma menembak
+  // getPeranSaya SEKALI, dipakai bersama satpam halaman. Lihat catatannya di
+  // definisi rjdAmbilPeran_.
+  rjdAmbilPeran_(api, token)
   .then(function (d) {
     clearTimeout(jaring);
-    if (!d || !d.success) {
-      rjdTandaiPeranSelesai_("tidak-diketahui", ["keuangan", "order", "produksi", "pajak"]);
-      return;
-    }
     var area = d.area || [];
     // Bukan staff (klien biasa) -> jangan sentuh apa pun. Menu mereka memang
     // tidak punya tautan staff, dan menyembunyikan berdasarkan area kosong
@@ -3075,3 +3074,279 @@ document.addEventListener("DOMContentLoaded", function () {
   // JS cukup melepasnya begitu peran diketahui.
   rjdTerapkanPeranKeMenu();
 });
+
+/* ============================================================
+ * SATPAM HALAMAN (Lapis 2) -- 6 Agustus 2026
+ * ============================================================
+ * MASALAH YANG DISELESAIKAN
+ * ------------------------------------------------------------
+ * Login Google berhasil untuk email SIAPA PUN di dunia. Itu bukti bahwa orang
+ * ini benar pemilik emailnya -- BUKAN bukti dia berhak masuk. Sampai sebelum
+ * ini, halaman staff memperlakukan keduanya sebagai hal yang sama:
+ *
+ *     function spMulai() {
+ *       spShow("sp-isi");     // seluruh kerangka muncul, tanpa pernah
+ *                             // bertanya "orang ini staff bukan?"
+ *
+ * Akibatnya klien yang tahu URL-nya melihat seluruh kerangka Lantai Produksi:
+ * nama tab, struktur menu, nama fitur internal. DATANYA memang tidak keluar
+ * (tiap rute punya findStaffByEmail, dan sejak Lapis 1 pastikanBoleh_ menolak
+ * non-staff), tapi peta ruangannya terlihat. Ditemukan lewat uji coba login
+ * dengan akun klien, bukan lewat laporan -- artinya sudah berapa lama begitu
+ * tidak ada yang tahu.
+ *
+ * ============================================================
+ * INI KENYAMANAN + KERAPIAN, TETAP BUKAN FONDASI
+ * ============================================================
+ * Yang benar-benar menjaga data ada di backend (pastikanBoleh_ di
+ * akses-role.gs). Satpam ini menutup KEBOCORAN TAMPILAN, bukan kebocoran data.
+ * Siapa pun yang mematikan JavaScript di browsernya bisa melewati seluruh
+ * berkas ini -- dan tetap tidak akan mendapat satu baris data pun.
+ *
+ * JANGAN PERNAH memindahkan pembatasan akses ke sini.
+ *
+ * ============================================================
+ * KENAPA DIPASANG DI xxMulai(), BUKAN DI TIAP JALUR LOGIN
+ * ============================================================
+ * Tiap halaman staff punya DUA jalur masuk: login Google baru, dan auto-login
+ * dari sesi tersimpan (localStorage "db_session"). Dua-duanya bermuara di satu
+ * fungsi -- spMulai / krMulai / qcMulai / ivMulai / olMulai / dbFetch /
+ * loFetchData. Menyisipkan penjagaan di tiap jalur berarti cepat atau lambat
+ * ada jalur baru yang terlewat, dan kelalaian itu tidak menimbulkan error --
+ * cuma diam-diam membuka kerangka lagi. Satu titik cangkok per halaman.
+ *
+ * EFEK SAMPING YANG DISENGAJA: karena satpam menahan SEBELUM xxShow("xx-isi"),
+ * kerangkanya tidak pernah sempat tampil -- bukan "tampil lalu ditutup".
+ * Tombol Keluar juga tidak pernah di-unhide, dan hamburger menu digate ke
+ * tombol itu lewat CSS (#sp-nav-logout:not(.hidden)~details.rjd-menu), jadi
+ * menunya ikut tidak muncul tanpa perlu kode tambahan.
+ *
+ * ============================================================
+ * HALAMAN YANG SENGAJA TIDAK DIJAGA
+ * ============================================================
+ * cetak.html  : menerima sesi KLIEN ("lp_session") -- klien mencetak invoice &
+ *               surat jalan miliknya sendiri dari Portal. Memasang satpam
+ *               staff di sana mematikan fitur yang dipakai puluhan klien.
+ *               Penjaganya cekAksesDokumen_ di backend, per dokumen.
+ * tracking.html, order.html : memang halaman klien.
+ *
+ * Halaman yang TIDAK terdaftar di RJD_JAGA_HALAMAN lolos tanpa diperiksa. Itu
+ * disengaja: halaman baru tidak boleh mati hanya karena lupa didaftarkan.
+ * Konsekuensinya harus disadari -- halaman staff BARU tidak terjaga sampai
+ * ditambahkan ke peta di bawah.
+ * ============================================================ */
+
+/** Halaman -> area yang diwajibkan. Tidak terdaftar = tidak dijaga. */
+var RJD_JAGA_HALAMAN = {
+  "/p/produksi.html":     "produksi",
+  "/p/spk.html":          "produksi",
+  "/p/pengiriman.html":   "produksi",
+  "/p/qc.html":           "produksi",
+  // Daftar PO boleh dilihat peran produksi; yang ditolak cuma tab Edit PO di
+  // dalamnya (area keuangan), dan itu sudah ditegakkan backend per-action.
+  "/p/order-list.html":   "produksi",
+  "/p/invoice.html":      "keuangan",
+  // Dashboard Operasional memuat omset, aging piutang & konsentrasi risiko --
+  // tertutup untuk peran produksi. Ini penjaga LAMA di doPost, bukan hal baru.
+  "/p/dashboard.html":    "keuangan",
+  // Laporan omset: peran "pajak", ATAU email yang terdaftar di
+  // "SD Akses Laporan Omset" (konsultan pajak dsb). getPeranSaya_ sudah
+  // menambahkan area "pajak" untuk mereka, jadi tidak perlu pengecualian di sini.
+  "/p/laporan-omset.html": "pajak"
+};
+
+/**
+ * Ambil peran SEKALI per halaman, hasilnya dipakai bersama.
+ *
+ * Tanpa ini, satu kali muat halaman staff menembak getPeranSaya DUA KALI:
+ * sekali oleh rjdTerapkanPeranKeMenu (saat DOMContentLoaded) dan sekali oleh
+ * satpam (saat login selesai) -- dua panggilan yang jawabannya pasti sama.
+ * Yang disimpan adalah PROMISE-nya, bukan hasilnya, supaya pemanggil kedua yang
+ * datang saat permintaan pertama masih terbang ikut menunggu jawaban yang sama
+ * alih-alih memulai permintaan baru.
+ *
+ * Di-key ke token: kalau orangnya ganti akun, cache-nya tidak ikut terbawa.
+ */
+var RJD_PERAN_CACHE = { token: null, janji: null };
+
+function rjdAmbilPeran_(apiUrl, idToken) {
+  if (!apiUrl || !idToken) return Promise.reject(new Error("apiUrl/idToken kosong"));
+  if (RJD_PERAN_CACHE.token === idToken && RJD_PERAN_CACHE.janji) {
+    return RJD_PERAN_CACHE.janji;
+  }
+  var janji = fetch(apiUrl, {
+    method: "POST",
+    body: JSON.stringify({ idToken: idToken, action: "getPeranSaya" })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) throw new Error((d && d.error) || "getPeranSaya gagal");
+    return d;
+  })
+  .catch(function (e) {
+    // Jangan simpan kegagalan. Kalau disimpan, satu hiccup jaringan mengunci
+    // halaman itu sampai dimuat ulang -- padahal tombol "Coba lagi" seharusnya
+    // benar-benar mencoba lagi, bukan mengulang jawaban gagal yang sama.
+    if (RJD_PERAN_CACHE.token === idToken) RJD_PERAN_CACHE = { token: null, janji: null };
+    throw e;
+  });
+  RJD_PERAN_CACHE = { token: idToken, janji: janji };
+  return janji;
+}
+
+/** Layar penolakan. Disuntik dari JS supaya markup Blogger tidak perlu disentuh. */
+function rjdLayarTolak_(judul, pesan, tombol) {
+  var lama = document.getElementById("rjd-jaga-layar");
+  if (lama) lama.remove();
+
+  var bungkus = document.createElement("div");
+  bungkus.id = "rjd-jaga-layar";
+  bungkus.setAttribute("role", "alert");
+  bungkus.style.cssText = "position:fixed;inset:0;z-index:9999;display:flex;" +
+    "align-items:center;justify-content:center;padding:24px;" +
+    "background:var(--cream,#FAF7F2);overflow-y:auto;";
+
+  var kartu = document.createElement("div");
+  kartu.style.cssText = "max-width:420px;width:100%;background:var(--white,#fff);" +
+    "border:1px solid var(--line-soft,#E5E0D8);border-radius:14px;padding:28px 24px;" +
+    "text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06);" +
+    "font-family:'Inter',system-ui,sans-serif;";
+
+  var h = document.createElement("div");
+  h.style.cssText = "font-family:'Archivo',sans-serif;font-weight:800;font-size:17px;" +
+    "color:var(--ink,#1C1B19);margin-bottom:8px;";
+  h.textContent = judul;
+
+  var p = document.createElement("p");
+  p.style.cssText = "font-size:13px;line-height:1.55;color:var(--ink-soft,#6B6459);margin:0;";
+  p.textContent = pesan;
+
+  kartu.appendChild(h);
+  kartu.appendChild(p);
+
+  if (tombol) {
+    var b = document.createElement(tombol.href ? "a" : "button");
+    if (tombol.href) b.href = tombol.href; else b.type = "button";
+    b.style.cssText = "display:inline-block;margin-top:18px;padding:11px 20px;" +
+      "background:var(--ink,#1C1B19);color:var(--white,#fff);border:none;border-radius:9px;" +
+      "font-size:13.5px;font-weight:700;cursor:pointer;text-decoration:none;" +
+      "font-family:'Inter',system-ui,sans-serif;";
+    b.textContent = tombol.teks;
+    if (tombol.saatKlik) b.addEventListener("click", tombol.saatKlik);
+    kartu.appendChild(b);
+  }
+
+  bungkus.appendChild(kartu);
+  document.body.appendChild(bungkus);
+}
+
+/**
+ * Penjaga halaman. Panggil sebagai baris PERTAMA di fungsi "mulai" tiap halaman
+ * staff, dan JALANKAN SISA FUNGSINYA HANYA lewat callback saatLolos.
+ *
+ *   function spMulai() {
+ *     rjdJagaHalaman(SP_ID_TOKEN, SP_API_URL, function () {
+ *       ... isi lama spMulai ...
+ *     });
+ *   }
+ *
+ * Kalau berkas ini gagal dimuat (jsDelivr mati dsb), halaman WAJIB tetap
+ * jalan -- itu sebabnya tiap pemanggil membungkusnya dengan
+ * `typeof rjdJagaHalaman === "function"`. Kehilangan satpam jauh lebih ringan
+ * akibatnya daripada seluruh halaman staff mati serentak, dan backend tetap
+ * menolak datanya.
+ */
+function rjdJagaHalaman(idToken, apiUrl, saatLolos) {
+  var jalan = typeof saatLolos === "function" ? saatLolos : function () {};
+  var perlu = RJD_JAGA_HALAMAN[window.location.pathname];
+
+  // Halaman tidak terdaftar -> tidak dijaga. Lihat catatan di kepala blok.
+  if (!perlu) { jalan(); return; }
+
+  if (!idToken) {
+    rjdLayarTolak_("Belum masuk",
+      "Sesi Anda tidak ditemukan atau sudah berakhir. Muat ulang halaman ini lalu masuk kembali.",
+      { teks: "Muat ulang", saatKlik: function () { window.location.reload(); } });
+    return;
+  }
+
+  // Jaring waktu. 8 detik dipilih lebih longgar dari 6 detik milik
+  // rjdTerapkanPeranKeMenu: yang di sana boleh menyerah cepat (paling-paling
+  // menu tampil berlebih), yang di sini menahan seluruh halaman -- menyerah
+  // kecepatan bikin staff dengan sinyal jelek terpental padahal tidak salah apa-apa.
+  var selesai = false;
+  var jaring = setTimeout(function () {
+    if (selesai) return;
+    selesai = true;
+    rjdLayarTolak_("Gagal memeriksa akses",
+      "Sambungan ke server terlalu lama menjawab. Ini biasanya masalah jaringan sesaat, bukan soal hak akses Anda.",
+      { teks: "Coba lagi", saatKlik: function () { window.location.reload(); } });
+  }, 8000);
+
+  rjdAmbilPeran_(apiUrl, idToken)
+    .then(function (d) {
+      if (selesai) return;
+      selesai = true;
+      clearTimeout(jaring);
+
+      var area = d.area || [];
+
+      // ---------- PUNYA AREANYA -> JALAN ----------
+      // Yang menentukan izin adalah AREA, bukan flag `staff`. Bedanya penting
+      // dan pernah salah sekali: orang yang terdaftar di "SD Akses Laporan
+      // Omset" (konsultan pajak, staf keuangan luar) BUKAN staff -- getPeranSaya_
+      // mengembalikan staff:false untuk mereka -- tapi tetap diberi area "pajak".
+      // Versi pertama satpam ini mensyaratkan `d.staff && area cocok`, dan
+      // akibatnya mereka tertahan di layar "Akun belum terdaftar" padahal
+      // backend mengizinkan (pengecualian pajak di pastikanBoleh_). Fitur yang
+      // hidup jadi mati, dan cuma ketahuan lewat simulasi.
+      //
+      // Aturannya sekarang sejalan dengan backend: area yang berwenang, `staff`
+      // cuma dipakai untuk memilih KATA-KATA di layar penolakan.
+      if (area.indexOf(perlu) !== -1) { jalan(); return; }
+
+      // ---------- STAFF, tapi area tidak cocok ----------
+      // Sengaja TIDAK menyebut nama peran atau daftar area di layar. Buat orang
+      // yang kena, informasi itu tidak menolong; buat yang iseng, itu peta.
+      if (d.staff) {
+        rjdLayarTolak_("Halaman ini di luar akses Anda",
+          "Akun Anda terdaftar sebagai staff RJD Apparel, tapi bagian ini bukan " +
+          "bagian Anda. Hubungi admin kalau seharusnya bisa.",
+          d.tujuan ? { teks: "Ke halaman Anda", href: d.tujuan } : null);
+        return;
+      }
+
+      // ---------- KLIEN TERDAFTAR ----------
+      if (d.klien) {
+        rjdLayarTolak_("Sepertinya salah pintu",
+          "Ini halaman kerja internal RJD Apparel. Untuk melacak order & produksi Anda, " +
+          "masuk lewat Portal Klien.",
+          { teks: "Buka Portal Klien", href: d.tujuan || "/p/tracking.html" });
+        return;
+      }
+
+      // ---------- BUKAN SIAPA-SIAPA ----------
+      // Tidak diberi tombol ke mana pun: tidak ada halaman yang jadi haknya,
+      // dan tombol yang mengarah ke layar penolakan lain cuma memperpanjang
+      // rasa bingung.
+      rjdLayarTolak_("Akun belum terdaftar",
+        "Email yang Anda gunakan belum terdaftar di sistem RJD Apparel, baik sebagai " +
+        "staff maupun sebagai klien. Hubungi tim RJD Apparel untuk didaftarkan.", null);
+    })
+    .catch(function () {
+      if (selesai) return;
+      selesai = true;
+      clearTimeout(jaring);
+      // Gagal -> TAHAN, jangan diteruskan. Dulu pola di berkas ini adalah
+      // "gagal -> tampilkan apa adanya", dan itu benar untuk penyembunyian menu.
+      // Di sini tidak: kegagalan yang membuka kerangka mengembalikan persis bug
+      // yang mau ditutup, dan kegagalan jaringan justru KEADAAN YANG PALING
+      // MUNGKIN terjadi di lantai produksi dengan sinyal seadanya.
+      // Tombolnya menolong staff (coba lagi -> masuk) dan tidak menolong yang
+      // tidak berhak (coba lagi -> ditolak lagi).
+      rjdLayarTolak_("Gagal memeriksa akses",
+        "Tidak berhasil menghubungi server untuk memeriksa hak akses. Periksa " +
+        "sambungan internet Anda lalu coba lagi.",
+        { teks: "Coba lagi", saatKlik: function () { window.location.reload(); } });
+    });
+}

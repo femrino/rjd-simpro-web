@@ -67,7 +67,25 @@ function ivLogout(){
   ivShow("iv-login-box");
 }
 
-function ivMulai(){
+function ivMulai() {
+  // ---------- SATPAM HALAMAN (Lapis 2, 6 Agustus 2026) ----------
+  // Isi lama fungsi ini dipindah UTUH ke ivMulaiIsi_ di bawah; yang berubah cuma
+  // ada gerbang di depannya. Login Google berhasil untuk email siapa pun --
+  // itu bukti kepemilikan email, bukan bukti hak masuk. Tanpa gerbang ini,
+  // klien yang tahu URL halaman ini melihat seluruh kerangkanya.
+  //
+  // Dibungkus `typeof`: kalau simpro-global.js gagal dimuat (jsDelivr mati),
+  // halaman WAJIB tetap jalan. Kehilangan satpam jauh lebih ringan daripada
+  // seluruh halaman staff mati serentak -- dan backend (pastikanBoleh_ di
+  // akses-role.gs) tetap menolak datanya, jadi tidak ada yang bocor.
+  if (typeof rjdJagaHalaman === "function") {
+    rjdJagaHalaman(IV_ID_TOKEN, IV_API_URL, ivMulaiIsi_);
+  } else {
+    ivMulaiIsi_();
+  }
+}
+
+function ivMulaiIsi_() {
   ivShow("iv-loading");
   ["iv-nav-logout", "iv-nav-refresh"].forEach(function(id){
     const el = document.getElementById(id);

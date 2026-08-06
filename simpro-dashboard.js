@@ -1478,7 +1478,25 @@ function dbRenderPerhatian(perlu, filter){
   perhatianEl.innerHTML = filtered.map(kartuPerhatian).join("");
 }
 
-function dbFetch(){
+function dbFetch() {
+  // ---------- SATPAM HALAMAN (Lapis 2, 6 Agustus 2026) ----------
+  // Isi lama fungsi ini dipindah UTUH ke dbFetchIsi_ di bawah; yang berubah cuma
+  // ada gerbang di depannya. Login Google berhasil untuk email siapa pun --
+  // itu bukti kepemilikan email, bukan bukti hak masuk. Tanpa gerbang ini,
+  // klien yang tahu URL halaman ini melihat seluruh kerangkanya.
+  //
+  // Dibungkus `typeof`: kalau simpro-global.js gagal dimuat (jsDelivr mati),
+  // halaman WAJIB tetap jalan. Kehilangan satpam jauh lebih ringan daripada
+  // seluruh halaman staff mati serentak -- dan backend (pastikanBoleh_ di
+  // akses-role.gs) tetap menolak datanya, jadi tidak ada yang bocor.
+  if (typeof rjdJagaHalaman === "function") {
+    rjdJagaHalaman(DB_ID_TOKEN, DB_API_URL, dbFetchIsi_);
+  } else {
+    dbFetchIsi_();
+  }
+}
+
+function dbFetchIsi_() {
   fetch(DB_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: DB_ID_TOKEN, page: "dashboard" })
