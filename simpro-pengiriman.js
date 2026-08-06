@@ -185,7 +185,7 @@ function krRender(){
       return '<tr class="kr-baris" onclick="krToggleRincian(' + i + ')">' +
         '<td><b class="kr-nomor">' + rjdEscapeHtml_(no) + '</b>' +
           (nama ? '<div class="kr-nama">' + rjdEscapeHtml_(nama) + '</div>' : '') + '</td>' +
-        '<td>' + rjdEscapeHtml_(p.namaKlien) + '</td>' +
+        '<td class="kr-klien">' + rjdEscapeHtml_(p.namaKlien) + '</td>' +
         '<td class="num">' + (p.qtyOrder || 0) + '</td>' +
         '<td class="num">' + (p.terkirim || 0) + '</td>' +
         // Sisa NEGATIF berarti terkirim melebihi qty order -- bisa jadi kelebihan
@@ -194,7 +194,7 @@ function krRender(){
           (p.sisa === 0 ? '-' : (p.sisa > 0 ? p.sisa : '+' + Math.abs(p.sisa))) + '</td>' +
         '<td><div class="kr-bar"><div class="kr-bar-isi ' + kelasStatus + '" style="width:' + p.persen + '%"/></div>' +
           '<div class="kr-persen">' + p.persen + '%</div></td>' +
-        '<td>' + rjdEscapeHtml_(p.deadline || "-") +
+        '<td class="kr-deadline">' + rjdEscapeHtml_(p.deadline || "-") +
           (p.telatHari ? '<div class="kr-telat">telat ' + p.telatHari + " hari" + '</div>' : '') + '</td>' +
         '<td><span class="kr-status ' + kelasStatus + '">' + rjdEscapeHtml_(p.statusKirim) + '</span></td>' +
         '<td class="kr-panah">' + (p.jumlahPengiriman ? '&#9662;' : '') + '</td>' +

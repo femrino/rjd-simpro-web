@@ -185,8 +185,8 @@ function ivRender(){
         '<td class="num">' + ivFormatRupiah_(p.total) + '</td>' +
         '<td class="num">' + ivFormatRupiah_(p.dibayar) + '</td>' +
         '<td class="num ' + (p.sisa > 0 ? "kurang" : "") + '">' + (p.sisa > 0 ? ivFormatRupiah_(p.sisa) : "-") + '</td>' +
-        '<td>' + rjdEscapeHtml_(p.tanggalInvoice || "-") + '</td>' +
-        '<td>' + (p.lunas ? '-' : (p.umurHari + ' hari')) + '</td>' +
+        '<td class="iv-tgl">' + rjdEscapeHtml_(p.tanggalInvoice || "-") + '</td>' +
+        '<td class="iv-tgl">' + (p.lunas ? '-' : (p.umurHari + ' hari')) + '</td>' +
         '<td><span class="iv-status ' + kelas + '">' + rjdEscapeHtml_(p.status) + '</span></td>' +
       '</tr>';
     }).join("") +

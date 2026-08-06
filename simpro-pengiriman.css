@@ -198,3 +198,45 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   border: 1px solid var(--line-soft); border-radius: 6px; padding: 2px 7px;
   white-space: nowrap; transition: border-color .15s, color .15s; }
 .kr-cetak-link:hover { color: var(--ink); border-color: var(--ink); }
+
+/* ============================================================
+ * KOLOM KLIEN & DEADLINE TERGENCET
+ * ============================================================
+ * Gejala: "BESHE Collection" jadi "BESH / E / Collec / tion", dan
+ * "12 Maret 2026" pecah jadi tiga baris.
+ *
+ * Penyebabnya SAMA PERSIS dengan yang diperbaiki di simpro-invoice.css, dan
+ * memang satu penyakit: .kr-tabel dipaksa `width: 100%`, sementara sebagian
+ * besar kolomnya nowrap (th, .num, .kr-nomor, .kr-status, .kr-telat). Kolom
+ * yang tidak punya aturan -- Klien & Deadline -- jadi satu-satunya yang bisa
+ * mengalah, lalu digencet sampai di bawah lebar kata terpendeknya dan terpaksa
+ * memenggal kata di tengah.
+ *
+ * Jadi bukan salah kolomnya (kolom itu tidak punya word-break apa pun);
+ * memberi `word-break: normal` saja tidak akan menolong. Yang harus diperbaiki
+ * adalah tabelnya diberi lebar minimum, supaya `overflow-x: auto` di
+ * .kr-tabelwrap benar-benar menggeser alih-alih menggencet. Selama tabelnya
+ * selalu dipaksa muat, aturan overflow itu tidak pernah punya kesempatan jalan.
+ *
+ * Kalau nanti ada kolom baru ditambahkan ke tabel ini, min-width-nya perlu
+ * ikut naik -- kalau tidak, gejala yang sama akan muncul lagi di kolom yang
+ * paling lemah.
+ * ============================================================ */
+.kr-tabel { min-width: 880px; }
+.kr-klien { min-width: 140px; overflow-wrap: break-word; word-break: normal; hyphens: none; }
+/* Tanggal tidak boleh pecah sama sekali -- "12 Maret 2026" di tiga baris
+   membuat tinggi barisnya melar dan tabelnya jadi susah dipindai. */
+.kr-deadline { white-space: nowrap; }
+.kr-deadline .kr-telat { white-space: nowrap; }
+
+/* TOMBSTONE: sempat ditulis `.kr-subtabel { min-width: 880px }` di sini.
+   Dihapus karena TIDAK PERNAH AKTIF: sub-tabel berada di dalam <td> tabel luar
+   yang sudah punya min-width sendiri, jadi lebar tersedianya selalu di atas
+   ambang itu dan aturannya tidak pernah tercapai. Aturan CSS yang tidak pernah
+   jalan lebih buruk daripada tidak ada -- dia memberi kesan sub-tabelnya sudah
+   dijaga. Kalau nanti sub-tabel dapat kolom lagi, yang perlu dinaikkan adalah
+   min-width .kr-tabel di atas. */
+
+@media (max-width: 640px) {
+  .kr-tabel { min-width: 840px; }
+}

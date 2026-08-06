@@ -173,8 +173,11 @@ body { padding-top: 0; }
  * menggencet. Gulir horizontal di tabel sembilan kolom itu wajar; nama klien
  * yang tidak terbaca tidak.
  * ============================================================ */
-.iv-tabel { min-width: 900px; }
+.iv-tabel { min-width: 1020px; }
 .iv-klien { min-width: 150px; overflow-wrap: break-word; word-break: normal; hyphens: none; }
+/* Tanggal & Umur: "7 Maret 2026" pecah jadi tiga baris kalau dibiarkan, dan
+   itu memelarkan tinggi SELURUH baris sehingga tabelnya susah dipindai. */
+.iv-tgl { white-space: nowrap; }
 
 /* Tautan cetak: sengaja kecil & di dalam sel nomor, BUKAN kolom sendiri --
    menambah kolom ke-10 akan memperparah gencetan yang baru saja diperbaiki. */
@@ -184,7 +187,17 @@ body { padding-top: 0; }
   white-space: nowrap; transition: border-color .15s, color .15s; }
 .iv-cetak-link:hover { color: var(--ink); border-color: var(--ink); }
 
+/* CATATAN LEBAR: 1020px bukan angka karangan. Dijumlah dari kebutuhan tiap
+   kolom pada font 12.5px: Invoice ~109, Klien ~136, PO ~136, Total/Dibayar/Sisa
+   ~104 masing-masing, Tanggal ~98, Umur ~73, Status ~120 -- totalnya ~984,
+   dibulatkan ke atas untuk nama klien & nomor PO yang lebih panjang.
+   Versi pertama perbaikan ini dipasang 900px dan itu MASIH KURANG: kolom
+   Tanggal & Umur tetap pecah. Kalau nanti ada kolom ditambahkan, angka ini
+   harus ikut naik -- kalau tidak, gejalanya balik lagi di kolom terlemah. */
+
 @media (max-width: 640px) {
-  /* Di HP tabelnya memang digulir; jangan naikkan min-width lebih jauh. */
-  .iv-tabel { min-width: 820px; }
+  /* Di HP tabelnya memang digulir. Diturunkan sedikit supaya gulirannya tidak
+     lebih panjang dari perlunya, tapi tetap di atas ambang yang bikin kolom
+     Klien tergencet. */
+  .iv-tabel { min-width: 960px; }
 }
