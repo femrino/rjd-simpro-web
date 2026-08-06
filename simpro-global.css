@@ -755,22 +755,16 @@ footer{padding:28px 0;background:var(--ink)}
  * document.body.style.overflow = "hidden" yang ikut dijalankan, halamannya
  * malah membeku -- terlihat seperti "tombolnya mati".
  *
- * Cabang <b:if> Blogger terisolasi penuh secara CSS. Prefiks lp- (Portal
- * Klien) dan om- (Laporan Omset) pada komponen yang sebenarnya BERSAMA itu
- * sendiri sudah jadi tanda bahaya: nama yang menyiratkan pemilik, dipakai
- * lintas halaman.
- *
  * KENAPA NAMA BARU, BUKAN MEMINDAHKAN ATURAN lp-edit-* KE SINI
  * Memindahkannya berarti menyentuh simpro-tracking.css & simpro-omset.css,
  * dan modal proofing di Portal Klien yang sudah lama jalan ikut dipertaruhkan
  * demi memperbaiki halaman lain. Nama netral di berkas global -- satu-satunya
- * berkas yang TIDAK terisolasi per cabang -- memberi komponen bersama tanpa
- * menyentuh apa pun yang sedang bekerja. Yang lama boleh menyusul kapan saja,
- * atau tidak sama sekali.
+ * berkas CSS yang dimuat di SEMUA halaman -- memberi komponen bersama tanpa
+ * menyentuh apa pun yang sedang bekerja.
  *
  * DIPAKAI DI : order-list.html (modal Edit PO)
- * Kandidat berikutnya: dashboard.html, yang memakai kelas lp-edit-* 21 kali
- * dengan susunan CSS yang sama persis -- periksa dulu sebelum diubah.
+ * Kandidat berikutnya: dashboard.html, yang memakai lp-edit-* 21 kali dengan
+ * susunan CSS yang sama persis -- periksa dulu sebelum diubah.
  * ============================================================ */
 
 .rjd-modal-overlay {
@@ -824,4 +818,100 @@ footer{padding:28px 0;background:var(--ink)}
   .rjd-modal-overlay { padding: 12px; }
   .rjd-modal { max-height: 92vh; }
   .rjd-modal-head, .rjd-modal-body, .rjd-modal-foot { padding-left: 14px; padding-right: 14px; }
+}
+
+/* ============================================================
+ * KOMPONEN MATRIKS FORM ORDER (of-*) -- varian MODAL
+ * ============================================================
+ * JS perakitnya sudah lama global (simpro-global.js), tapi CSS-nya tidak
+ * pernah ikut. Akibatnya modal Edit PO di order-list.html tampil sebagai
+ * tabel telanjang: kolom tergencet sampai "Warna" terbaca menurun satu huruf
+ * per baris.
+ *
+ * DISALIN DARI simpro-tracking.css, BUKAN simpro-order.css. Dua berkas itu
+ * memang punya nilai yang BERBEDA, dan bedanya disengaja:
+ *   order.css    = varian HALAMAN PENUH (radius 10px, kolom size 70px, font
+ *                  14.5px) -- untuk Form Order yang punya seluruh layar.
+ *   tracking.css = varian MODAL (radius 9px, kolom size 62px, font 13.5px,
+ *                  grid lebih rapat) -- untuk modal Edit di Portal Klien.
+ * Modal Edit PO di order-list adalah konteks MODAL, jadi varian kedua yang
+ * benar. (Catatan: komentar di simpro-tracking.css menulis nilainya
+ * "disamakan persis dengan cabang order" -- itu sudah tidak akurat, 19
+ * selektor berbeda isinya. Yang berlaku adalah apa yang benar-benar tertulis.)
+ *
+ * SEMUA SELEKTOR DI BAWAH DIBATASI KE DALAM .rjd-modal. Itu BUKAN kerapian --
+ * itu pengaman, dan versi pertama blok ini tidak punya. Mengandalkan urutan
+ * muat saja (global di <head>, CSS cabang sesudahnya) memang cukup untuk 109
+ * selektor yang juga dimiliki order.css. Tapi ADA 8 selektor yang cuma ada di
+ * tracking.css -- di antaranya `.of-form-section input` dan `.of-item-card
+ * label` -- dan kalau ditaruh polos di global, kedelapannya akan MULAI
+ * BERLAKU di order.html yang selama ini tidak punya penimpanya. Form Order
+ * menghadap klien; tampilannya bisa bergeser tanpa ada yang menyadari.
+ *
+ * Dengan pembatasan .rjd-modal: order.html dan tracking.html tidak memakai
+ * kelas itu sama sekali (modal Portal Klien memakai .lp-edit-modal), jadi
+ * NOL aturan di bawah yang bisa menyentuh keduanya. Yang terpengaruh hanya
+ * modal Edit PO di order-list.html.
+ *
+ * JANGAN menghapus salinan di order.css / tracking.css karena "sudah ada di
+ * global" -- nilainya berbeda, dan menghapusnya akan menggeser tampilan
+ * Form Order maupun Portal Klien.
+ * ============================================================ */.rjd-modal .of-item-card { background: var(--white); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; margin-bottom: 14px; position: relative; box-shadow: var(--shadow-sm); }.rjd-modal .of-item-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }.rjd-modal .of-item-head b { font-size: 12.5px; font-family: 'IBM Plex Mono', monospace; letter-spacing: .04em; color: var(--terra); }.rjd-modal .of-item-remove { background: none; border: none; color: var(--ink-soft); cursor: pointer; font-size: 17px; line-height: 1; padding: 2px 6px; border-radius: 6px; transition: all .15s; }.rjd-modal .of-item-remove:hover { color: #8f2c22; background: #FDECEA; }.rjd-modal .of-item-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }.rjd-modal .of-item-card label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }.rjd-modal .of-item-card input, .rjd-modal .of-item-card select, .rjd-modal .of-item-card textarea { font-family: 'Inter', sans-serif; font-size: 13.5px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--cream); color: var(--navy); width: 100%; box-sizing: border-box; transition: border-color .18s ease, box-shadow .18s ease; }.rjd-modal .of-item-card input:focus, .rjd-modal .of-item-card select:focus, .rjd-modal .of-item-card textarea:focus { outline: none; border-color: var(--terra); box-shadow: 0 0 0 3px rgba(189,67,53,.10); background: var(--white); }.rjd-modal .of-item-card textarea { resize: vertical; font-weight: 400; }.rjd-modal .of-size-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 7px; margin-top: 8px; }.rjd-modal .of-size-cell { display: flex; flex-direction: column; gap: 4px; align-items: center; }.rjd-modal .of-size-cell span { font-size: 10px; font-family: 'IBM Plex Mono', monospace; color: var(--ink-soft); }.rjd-modal .of-size-cell input { text-align: center; padding: 7px 3px; }.rjd-modal .of-matrix-wrap { overflow-x:auto;margin-top:16px }.rjd-modal .of-matrix { width:100%;border-collapse:collapse;font-size:13px }.rjd-modal .of-matrix th { background:transparent;border:none;border-bottom:1.5px solid var(--line);padding:4px 6px 9px;font-size:10.5px;font-family:'IBM Plex Mono',monospace;color:var(--ink-soft);font-weight:700;text-align:center;white-space:nowrap }.rjd-modal .of-matrix th.of-th-warna { text-align:left;min-width:168px }.rjd-modal .of-matrix td { border:none;border-bottom:1px solid var(--line-soft);padding:5px 4px;vertical-align:middle;background:transparent }.rjd-modal .of-matrix tbody tr:last-child td { border-bottom:none }.rjd-modal .of-matrix tbody.of-warna-blok { background:transparent;border:none;border-left:3px solid var(--terra-light);border-radius:0;padding:0 }.rjd-modal .of-matrix .of-td-warna input, .rjd-modal .of-matrix .of-td-size input, .rjd-modal .of-matrix .of-td-harga input { width:100%;margin:0;padding:7px 6px }.rjd-modal .of-matrix .of-td-size input { text-align:center;min-width:56px }.rjd-modal .of-matrix th.of-th-size { white-space:nowrap }.rjd-modal .of-matrix .of-td-harga input { min-width:88px;text-align:right }.rjd-modal .of-matrix .of-td-total { text-align:center;font-weight:800;background:var(--cream);min-width:44px }.rjd-modal .of-matrix .of-td-aksi { white-space:nowrap;text-align:center;width:1% }.rjd-modal .of-matrix .of-warna-remove { background:none;border:1px solid var(--line-soft);border-radius:6px;width:26px;height:26px;padding:0;margin:0;cursor:pointer;color:var(--ink-soft);font-size:11px;line-height:1 }.rjd-modal .of-matrix th.of-th-kain { text-align:left;min-width:86px;max-width:112px;white-space:normal;line-height:1.25;word-break:break-word }.rjd-modal .of-matrix .of-td-kain input { width:100%;margin:0;padding:7px 7px;min-width:86px }.rjd-modal .of-komposisi-wrap { margin-top:14px;padding:12px 14px;background:var(--cream);border-radius:10px }.rjd-modal .of-kmp-tabel, .rjd-modal .of-sc-tabel { margin-top:2px }.rjd-modal .of-matrix th.of-th-kmp-kons { min-width:78px }.rjd-modal .of-matrix th.of-th-kmp-satuan { min-width:72px }.rjd-modal .of-matrix .of-td-kmp-nama input, .rjd-modal .of-matrix .of-td-sc-nama input { width:100%;margin:0;padding:7px 9px;min-width:168px }.rjd-modal .of-matrix .of-td-kmp-kons input { width:100%;margin:0;padding:7px 6px;text-align:center;min-width:72px }.rjd-modal .of-matrix .of-td-kmp-satuan select { width:100%;margin:0;padding:7px 4px;min-width:68px;font-size:12px }.rjd-modal .of-matrix .of-td-kmp-sz input, .rjd-modal .of-matrix .of-td-sc-nilai input { width:100%;margin:0;padding:7px 4px;text-align:center;min-width:48px }.rjd-modal .of-matrix input, .rjd-modal .of-matrix select { background:var(--white);border:1px solid var(--line-soft);border-radius:7px }.rjd-modal .of-matrix input:focus, .rjd-modal .of-matrix select:focus { border-color:var(--thread);outline:none;box-shadow:0 0 0 2px rgba(178,58,42,.10) }.rjd-modal .of-matrix input::placeholder { color:var(--ink-soft);opacity:.5 }.rjd-modal .of-size-pilih { margin-bottom:4px }.rjd-modal .of-size-preset { display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px }.rjd-modal .of-size-preset-btn { border:1px solid var(--line);background:var(--white);color:var(--ink);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit }.rjd-modal .of-size-preset-btn:hover { border-color:var(--thread);color:var(--thread) }.rjd-modal .of-size-preset-btn.aktif { background:var(--ink);color:var(--white);border-color:var(--ink) }.rjd-modal .of-size-cek { display:flex;flex-wrap:wrap;gap:6px }.rjd-modal .of-size-cek-item { display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line-soft);border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;background:var(--white);margin:0 }.rjd-modal .of-size-cek-item input { margin:0;width:auto;cursor:pointer }.rjd-modal .of-size-cek-item:has(input:checked) { border-color:var(--thread);background:var(--paper-2);color:var(--thread) }.rjd-modal .of-size-mode-angka { font-size:12px;color:var(--ink-soft);background:var(--cream);border-radius:8px;padding:8px 12px }.rjd-modal .of-size-kembali { background:none;border:none;color:var(--thread);font-weight:700;cursor:pointer;text-decoration:underline;font-family:inherit;font-size:12px;padding:0 }.rjd-modal .of-pilihartikel-wrap { margin-top:14px;padding:10px 14px;background:var(--cream);border-radius:10px }.rjd-modal .of-pilihartikel-wrap select { width:100%;margin-top:4px }.rjd-modal .of-pilihartikel-status { font-size:11px;color:var(--thread);margin-top:5px;font-weight:600 }.rjd-modal .of-komposisi-lbl { font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:8px }.rjd-modal .of-komposisi-hint { font-size:11px;color:var(--ink-soft);margin-top:6px }.rjd-modal .of-aks-wrap { margin-top:14px;padding:12px 14px;background:var(--cream);border-radius:10px }.rjd-modal .of-kaink-baris { display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--line-soft) }.rjd-modal .of-kaink-baris:last-of-type { border-bottom:none }.rjd-modal .of-kaink-baris input, .rjd-modal .of-kaink-baris select { margin:0;padding:7px 8px;min-width:0 }.rjd-modal .of-f-kk-nama { flex:1 1 150px }.rjd-modal .of-f-kk-jml { flex:0 1 88px }.rjd-modal .of-f-kk-satuan { flex:0 1 66px }.rjd-modal .of-f-kk-tgl { flex:0 1 140px }.rjd-modal .of-f-kk-ket { flex:1 1 150px }.rjd-modal .of-kaink-baris .of-jadwal-hapus { flex:0 0 28px }.rjd-modal .of-matrix th.of-th-aks-ket { text-align:left;min-width:150px }.rjd-modal .of-matrix .of-td-aks-ket input { width:100%;margin:0;padding:7px 9px;min-width:150px }.rjd-modal .of-warna-wrap { background:transparent;border:1px dashed var(--line-soft) }.rjd-modal .of-warna-lbl-baris { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap }.rjd-modal .of-toggle-kain { background:none;border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:11.5px;font-weight:600;color:var(--ink-soft);cursor:pointer;font-family:inherit;white-space:nowrap }.rjd-modal .of-toggle-kain:hover { border-color:var(--thread);color:var(--thread) }.rjd-modal .of-matrix.of-sembunyi-kain .of-th-kain, .rjd-modal .of-matrix.of-sembunyi-kain .of-td-kain { display:none }.rjd-modal .of-jadwal-wrap, .rjd-modal .of-aks-wrap, .rjd-modal .of-komposisi-wrap { grid-column:1/-1 }.rjd-modal .of-jadwal-wrap { margin-top:14px;padding-top:14px;border-top:1px dashed var(--line-soft) }.rjd-modal .of-jadwal-lbl { font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:8px }.rjd-modal .of-hint-akhir { font-size:11px;font-weight:400;color:var(--ink-soft) }.rjd-modal .of-jadwal-baris { display:grid;grid-template-columns:150px 84px 1fr 30px;gap:8px;align-items:center;margin-bottom:8px }.rjd-modal .of-jadwal-baris input { margin:0;padding:7px 8px }.rjd-modal .of-jadwal-hapus { background:none;border:1px solid var(--line-soft);border-radius:6px;width:28px;height:28px;padding:0;cursor:pointer;color:var(--ink-soft);font-size:11px;line-height:1 }.rjd-modal .of-jadwal-add { width:100%;background:none;border:1px dashed var(--line);border-radius:10px;padding:9px;font-size:12.5px;font-weight:600;color:var(--thread);cursor:pointer;font-family:inherit }
+@media (max-width:640px){.rjd-modal .of-jadwal-baris { grid-template-columns:1fr 1fr;gap:6px }.rjd-modal .of-jadwal-baris .of-f-jadwal-ket { grid-column:1/-1 }
+}.rjd-modal .of-foto-grid { display:flex;flex-wrap:wrap;gap:8px;margin-top:6px }.rjd-modal .of-foto-item { position:relative;width:72px }.rjd-modal .of-foto-item img { width:72px;height:72px;object-fit:cover;border:1px solid var(--line-soft);border-radius:8px;display:block;background:var(--white) }.rjd-modal .of-foto-nolink { display:flex;align-items:center;justify-content:center;width:72px;height:72px;border:1px dashed var(--line-soft);border-radius:8px;font-size:10px;color:var(--ink-soft) }.rjd-modal .of-foto-hapus { position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:1px solid var(--line);background:var(--white);color:var(--ink-soft);font-size:10px;line-height:1;padding:0;cursor:pointer;box-shadow:var(--shadow-sm) }.rjd-modal .of-foto-hapus:hover { background:var(--terra-light);border-color:var(--terra-light);color:var(--white) }.rjd-modal .of-item-detail { margin-top:14px;padding-top:14px;border-top:1px dashed var(--line-soft) }.rjd-modal .of-warna-blok { background: var(--cream); border: 1px solid var(--line-soft); border-left: 3px solid var(--terra-light); border-radius: 12px; padding: 13px 15px; }.rjd-modal .of-warna-remove { background: none; border: none; color: var(--ink-soft); cursor: pointer; font-size: 15px; line-height: 1; padding: 8px; border-radius: 6px; transition: all .15s; flex-shrink: 0; }.rjd-modal .of-warna-remove:hover { color: #8f2c22; background: #FDECEA; }.rjd-modal .of-add-warna-btn { width: 100%; margin-top: 12px; padding: 9px; border: 1px dashed var(--terra-light); border-radius: 10px; background: none; color: var(--terra); font-family: 'Inter', sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all .18s ease; }.rjd-modal .of-add-warna-btn:hover { background: rgba(189,67,53,.05); border-color: var(--terra); }.rjd-modal .of-add-item-btn { width: 100%; padding: 13px; border: 1.5px dashed var(--line); border-radius: 12px; background: none; color: var(--terra); font-weight: 700; font-size: 13px; cursor: pointer; margin-bottom: 14px; font-family: inherit; transition: all .18s ease; }.rjd-modal .of-add-item-btn:hover { border-color: var(--terra); background: rgba(189,67,53,.05); }.rjd-modal .of-form-section { background: var(--white); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }.rjd-modal .of-form-section h4 { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13.5px; margin-bottom: 12px; color: var(--navy); }.rjd-modal .of-form-section label { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }.rjd-modal .of-form-section input, .rjd-modal .of-form-section textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 5px; font-family: 'Inter', sans-serif; font-size: 13.5px; color: var(--navy); padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--cream); }.rjd-modal .of-form-section input:focus, .rjd-modal .of-form-section textarea:focus { outline: none; border-color: var(--terra); box-shadow: 0 0 0 3px rgba(189,67,53,.10); background: var(--white); }.rjd-modal .of-form-section textarea.rjd-autogrow { resize: none; min-height: 60px; overflow-y: hidden; line-height: 1.55; }
+@media (max-width: 640px) {.rjd-modal .of-item-grid { grid-template-columns: 1fr; }
+}.rjd-modal .of-foto-lama { margin-top: 10px; padding: 10px 12px; background: var(--white); border: 1px solid var(--line-soft); border-radius: 10px; }.rjd-modal .of-foto-lama-lbl { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 6px; }.rjd-modal .of-f-gambar-lbl { display: block; }
+
+/* ============================================================
+ * TABEL EDIT PO (dbep-*) -- BARU, sebelumnya tidak pernah ada
+ * ============================================================
+ * Sembilan kelas ini dipakai dbRenderEditPO / dbTambahWarnaBaris di
+ * simpro-orderlist.js sejak fitur Edit PO dibuat, tapi TIDAK PERNAH
+ * didefinisikan di berkas CSS mana pun -- sudah dicek ke seluruh berkas .css
+ * yang ada. Berbeda dari of-* dan lp-edit-* yang cuma nyasar cabang, yang ini
+ * memang belum ditulis. (Yang sempat ada hanya .dbep-dihapus di
+ * simpro-orderlist.css, dan itu tetap di sana.)
+ *
+ * SELEKTORNYA DISUSUN DARI PEMAKAIAN NYATA DI JS, BUKAN DARI NAMANYA.
+ * Versi pertama blok ini saya tulis dengan menebak dari nama, dan salah dua:
+ *   .dbep-warna  ternyata <input>, bukan sel kolom warna
+ *   .dbep-kunci  ternyata <span> berisi ikon gembok/jam pasir, bukan
+ *                pembungkus input yang terkunci
+ * Aturan yang salah sasaran tidak menimbulkan error -- dia cuma tidak
+ * berlaku, dan itu justru yang paling lama tidak ketahuan.
+ *
+ * Peta sebenarnya:
+ *   tr    -> .dbep-baris, .dbep-baru, .dbep-dihapus
+ *   input -> .dbep-warna, .dbep-kain, .dbep-qty, .dbep-harga
+ *   td    -> .dbep-total, .dbep-aksi
+ *   span  -> .dbep-kunci
+ *
+ * Bahasa visualnya mengikuti tabel lain di sistem ini (.db-po-tabel,
+ * .of-size-cell): isian berlatar cream, angka rata kanan tabular, garis tipis.
+ * ============================================================ */.rjd-modal .dbep-baris td, .rjd-modal .dbep-baris th { border-bottom: 1px solid var(--line-soft); padding: 6px 7px; vertical-align: middle; }.rjd-modal .dbep-baris:last-child td, .rjd-modal .dbep-baris:last-child th { border-bottom: none; }
+
+/* Isian di dalam matriks. Empat-empatnya <input>, bukan sel. */.rjd-modal .dbep-warna, .rjd-modal .dbep-kain, .rjd-modal .dbep-qty, .rjd-modal .dbep-harga {
+  box-sizing: border-box; padding: 6px 7px;
+  background: var(--cream); border: 1px solid var(--line); border-radius: 8px;
+  font-family: 'Inter', system-ui, sans-serif; font-size: 12.5px; color: var(--ink);
+}.rjd-modal .dbep-warna:focus, .rjd-modal .dbep-kain:focus, .rjd-modal .dbep-qty:focus, .rjd-modal .dbep-harga:focus {
+  outline: none; border-color: var(--terra); background: var(--white);
+}.rjd-modal .dbep-warna { width: 100%; min-width: 104px; }.rjd-modal .dbep-kain { width: 100%; min-width: 68px; text-align: center; }.rjd-modal .dbep-qty { width: 100%; min-width: 46px; text-align: center; }
+/* Harga: rata kanan & tabular supaya digit rupiah sejajar antar baris. */.rjd-modal .dbep-harga { width: 100%; min-width: 96px; text-align: right; font-variant-numeric: tabular-nums; }.rjd-modal .dbep-total {
+  text-align: right; white-space: nowrap; font-weight: 700; font-size: 12.5px;
+  color: var(--ink); font-variant-numeric: tabular-nums;
+}.rjd-modal .dbep-aksi { text-align: center; white-space: nowrap; }.rjd-modal .dbep-aksi button {
+  background: none; border: none; cursor: pointer; padding: 3px 6px;
+  border-radius: 6px; color: var(--ink-soft); font-size: 15px; line-height: 1;
+  transition: background .15s, color .15s;
+}.rjd-modal .dbep-aksi button:hover { background: #FDECEA; color: #8F2C22; }
+
+/* Ikon gembok / jam pasir di sel yang tidak bisa diubah. Diberi bantuan
+   kursor karena title-nya memuat ALASAN penguncian ("sekian pcs sudah
+   dikerjakan produksi") -- itu informasi yang perlu, bukan sekadar hiasan. */.rjd-modal .dbep-kunci { display: inline-block; font-size: 13px; opacity: .6; cursor: help; }
+
+/* Baris warna BARU yang belum tersimpan -- dibedakan supaya tidak tertukar
+   dengan baris yang sudah ada di PO waktu memeriksa ulang sebelum Simpan. */.rjd-modal .dbep-baru td, .rjd-modal .dbep-baru th { background: #F4F9F5; }
+
+@media (max-width: 640px) {.rjd-modal .dbep-warna { min-width: 88px; }.rjd-modal .dbep-kain { min-width: 56px; }.rjd-modal .dbep-qty { min-width: 40px; padding: 5px 3px; }.rjd-modal .dbep-harga { min-width: 82px; }
 }
