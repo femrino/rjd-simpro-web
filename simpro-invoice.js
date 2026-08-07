@@ -235,7 +235,9 @@ function ivSwitchTab(tab) {
   });
   document.getElementById("iv-panel-daftar").classList.toggle("hidden", tab !== "daftar");
   document.getElementById("iv-panel-buat").classList.toggle("hidden", tab !== "buat");
+  document.getElementById("iv-panel-bayar").classList.toggle("hidden", tab !== "bayar");
   if (tab === "buat" && !window.IV_PENGIRIMAN) ivMuatPengiriman();
+  if (tab === "bayar" && !window.IV_TUJUAN) ivMuatPembayaran();
 }
 
 function ivMuatPengiriman() {
@@ -589,3 +591,309 @@ window.onload = function(){
     ivShow("iv-login-box");
   }
 };
+
+/* ============================================================
+ * TAB PEMBAYARAN -- catat uang masuk dari klien
+ * ============================================================
+ * Menggantikan pencatatan lewat AppSheet. Backend: input-pembayaran.gs.
+ *
+ * DUA TUJUAN, satu formulir:
+ *   Invoice     -> pembayaran atas tagihan yang sudah terbit (perilaku lama)
+ *   Order (DP)  -> uang muka atas proforma, SEBELUM invoice ada
+ *
+ * Kenapa satu formulir dan bukan dua halaman: dari sudut pandang staf yang
+ * memegang bukti transfer, keduanya adalah pekerjaan yang sama persis --
+ * "ada uang masuk, catat". Yang berbeda cuma ke mana uang itu ditempelkan,
+ * dan itu satu pilihan, bukan alur kerja terpisah.
+ *
+ * TIDAK ADA input "Total Dibayar" di mana pun di layar ini. Angka itu SELALU
+ * hasil penjumlahan SD Pelunasan oleh backend; kalau bisa diketik, dua sumber
+ * kebenaran lahir seketika dan salah satunya pasti salah.
+ * ============================================================ */
+
+function ivMuatPembayaran(){
+  const wadah = document.getElementById("iv-bayar-tujuan");
+  if(wadah) wadah.innerHTML = '<p class="iv-buat-info">Memuat daftar tagihan...</p>';
+  fetch(IV_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: IV_ID_TOKEN, action: "getTujuanPembayaran" })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if(!d || !d.success){
+      if(wadah) wadah.innerHTML = '<div class="iv-buat-galat">' +
+        rjdEscapeHtml_((d && d.error) || "Gagal memuat daftar tagihan.") + '</div>';
+      return;
+    }
+    window.IV_TUJUAN = d.data;
+    ivRenderTujuan();
+    ivMuatRiwayat();
+  })
+  .catch(function(){
+    if(wadah) wadah.innerHTML = '<div class="iv-buat-galat">Gagal menghubungi server.</div>';
+  });
+}
+
+/** Ganti mode tujuan. Pilihan sebelumnya SENGAJA dikosongkan -- membiarkan
+ *  pilihan lama tersimpan diam-diam adalah cara paling mudah mencatat uang ke
+ *  tujuan yang salah. */
+function ivGantiTujuanBayar(mode){
+  window.IV_MODE_BAYAR = mode;
+  window.IV_PILIH_BAYAR = null;
+  document.querySelectorAll(".iv-bayar-mode").forEach(function(b){
+    b.classList.toggle("active", b.dataset.mode === mode);
+  });
+  document.getElementById("iv-bayar-cari").value = "";
+  ivRenderTujuan();
+  ivHitungUlangBayar();
+}
+
+function ivRenderTujuan(){
+  const wadah = document.getElementById("iv-bayar-tujuan");
+  if(!wadah || !window.IV_TUJUAN) return;
+  const mode = window.IV_MODE_BAYAR || "invoice";
+  const cari = (document.getElementById("iv-bayar-cari").value || "").toLowerCase().trim();
+
+  let baris;
+  if(mode === "invoice"){
+    const daftar = (window.IV_TUJUAN.invoice || []).filter(function(v){
+      if(!cari) return true;
+      return (v.id + " " + v.idPurchaseOrder + " " + v.namaKlien).toLowerCase().indexOf(cari) !== -1;
+    });
+    if(!daftar.length){
+      wadah.innerHTML = '<p class="iv-buat-info">' +
+        (cari ? "Tidak ada invoice yang cocok." : "Semua invoice sudah lunas.") + '</p>';
+      return;
+    }
+    baris = daftar.map(function(v){
+      const dipilih = window.IV_PILIH_BAYAR === v.id;
+      return '<label class="iv-kirim-baris' + (dipilih ? " dipilih" : "") + '">' +
+        '<input type="radio" name="iv-bayar-tujuan-r" value="' + rjdEscapeHtml_(v.id) + '"' +
+          (dipilih ? " checked" : "") + ' onchange="ivPilihTujuan(this.value)"/>' +
+        '<span class="iv-kirim-isi">' +
+          '<span class="iv-kirim-id">' + rjdEscapeHtml_(v.id) + '</span>' +
+          '<span class="iv-kirim-sub">' + rjdEscapeHtml_(v.namaKlien) + ' &#183; ' +
+            rjdEscapeHtml_(v.tanggal) + '</span>' +
+        '</span>' +
+        '<span class="iv-kirim-qty">' + formatRupiah(v.sisa) +
+          '<span class="iv-bayar-ket">sisa</span></span>' +
+      '</label>';
+    }).join("");
+  } else {
+    const daftar = (window.IV_TUJUAN.order || []).filter(function(v){
+      if(!cari) return true;
+      return (v.idPurchaseOrder + " " + v.idProforma + " " + v.namaKlien).toLowerCase().indexOf(cari) !== -1;
+    });
+    if(!daftar.length){
+      wadah.innerHTML = '<p class="iv-buat-info">' +
+        (cari ? "Tidak ada order yang cocok."
+              : "Belum ada order dengan proforma aktif. Terbitkan proforma dulu di halaman Daftar Order.") +
+        '</p>';
+      return;
+    }
+    baris = daftar.map(function(v){
+      const dipilih = window.IV_PILIH_BAYAR === v.idPurchaseOrder;
+      // Yang ditonjolkan adalah KURANG DP, bukan nilai order: itu angka yang
+      // sedang ditunggu masuk. Nilai order lengkap ada di dokumen proformanya.
+      const kurang = v.kurangDP > 0
+        ? formatRupiah(v.kurangDP) + '<span class="iv-bayar-ket">kurang DP</span>'
+        : '<span class="iv-bayar-ok">DP lengkap</span>';
+      return '<label class="iv-kirim-baris' + (dipilih ? " dipilih" : "") + '">' +
+        '<input type="radio" name="iv-bayar-tujuan-r" value="' + rjdEscapeHtml_(v.idPurchaseOrder) + '"' +
+          (dipilih ? " checked" : "") + ' onchange="ivPilihTujuan(this.value)"/>' +
+        '<span class="iv-kirim-isi">' +
+          '<span class="iv-kirim-id">' + rjdEscapeHtml_(v.idProforma) +
+            (v.versi > 1 ? ' v' + v.versi : '') + '</span>' +
+          '<span class="iv-kirim-sub">' + rjdEscapeHtml_(v.namaKlien) + ' &#183; ' +
+            rjdEscapeHtml_(v.idPurchaseOrder) +
+            (v.kodeTermin ? ' &#183; ' + rjdEscapeHtml_(v.kodeTermin) : '') + '</span>' +
+        '</span>' +
+        '<span class="iv-kirim-qty">' + kurang + '</span>' +
+      '</label>';
+    }).join("");
+  }
+  wadah.innerHTML = baris;
+}
+
+function ivPilihTujuan(nilai){
+  window.IV_PILIH_BAYAR = nilai;
+  ivRenderTujuan();
+  ivHitungUlangBayar();
+}
+
+/** Isi otomatis jumlah dengan angka yang PALING MUNGKIN benar, lalu tampilkan
+ *  konteksnya. Tetap bisa diubah -- bukti transfer selalu lebih benar daripada
+ *  tebakan sistem. */
+function ivHitungUlangBayar(){
+  const mode = window.IV_MODE_BAYAR || "invoice";
+  const pilih = window.IV_PILIH_BAYAR;
+  const info = document.getElementById("iv-bayar-info");
+  const input = document.getElementById("iv-bayar-jumlah");
+  const btn = document.getElementById("iv-bayar-simpan");
+
+  if(!pilih || !window.IV_TUJUAN){
+    if(info) info.innerHTML = "";
+    if(btn){ btn.disabled = true; btn.textContent = "Pilih tujuan pembayaran dulu"; }
+    return;
+  }
+  if(btn){ btn.disabled = false; btn.textContent = "Catat Pembayaran"; }
+
+  let saran = 0, teks = "";
+  if(mode === "invoice"){
+    const v = (window.IV_TUJUAN.invoice || []).filter(function(x){ return x.id === pilih; })[0];
+    if(!v) return;
+    saran = v.sisa;
+    teks = '<b>' + rjdEscapeHtml_(v.id) + '</b> &#183; ' + rjdEscapeHtml_(v.namaKlien) +
+      '<br/>Nilai transfer ' + formatRupiah(v.nilaiTransfer) +
+      ' &#183; sudah dibayar ' + formatRupiah(v.sudahDibayar) +
+      ' &#183; <b>sisa ' + formatRupiah(v.sisa) + '</b>';
+  } else {
+    const v = (window.IV_TUJUAN.order || []).filter(function(x){ return x.idPurchaseOrder === pilih; })[0];
+    if(!v) return;
+    saran = v.kurangDP;
+    teks = '<b>' + rjdEscapeHtml_(v.idProforma) + '</b> &#183; ' + rjdEscapeHtml_(v.namaKlien) +
+      '<br/>Nilai order ' + formatRupiah(v.nilaiProforma) +
+      ' &#183; DP diminta ' + formatRupiah(v.nilaiDPDiminta) +
+      ' &#183; sudah masuk ' + formatRupiah(v.uangMukaMasuk) +
+      (v.kurangDP > 0 ? ' &#183; <b>kurang ' + formatRupiah(v.kurangDP) + '</b>' : '') +
+      (v.jatuhTempoDP ? '<br/>Jatuh tempo DP: ' + rjdEscapeHtml_(v.jatuhTempoDP) : '');
+  }
+  if(info) info.innerHTML = teks;
+  // Hanya diisikan kalau kolomnya masih kosong -- kalau staf sudah mengetik
+  // angka dari bukti transfer, menimpanya adalah cara cepat mencatat angka
+  // yang salah.
+  if(input && !input.value && saran > 0) input.value = saran;
+}
+
+function ivSimpanPembayaran(){
+  const mode = window.IV_MODE_BAYAR || "invoice";
+  const pilih = window.IV_PILIH_BAYAR;
+  const status = document.getElementById("iv-bayar-status");
+  const btn = document.getElementById("iv-bayar-simpan");
+  if(!pilih){ status.textContent = "Pilih tujuan pembayaran dulu."; return; }
+
+  const jumlah = Number(document.getElementById("iv-bayar-jumlah").value) || 0;
+  const tanggal = document.getElementById("iv-bayar-tanggal").value;
+  if(jumlah <= 0){ status.textContent = "Jumlah dibayar harus lebih besar dari nol."; return; }
+  if(!tanggal){ status.textContent = "Tanggal bayar wajib diisi."; return; }
+
+  const payload = {
+    tujuan: mode,
+    jumlahDibayar: jumlah,
+    tanggalBayar: tanggal,
+    metodeBayar: document.getElementById("iv-bayar-metode").value || "",
+    catatan: document.getElementById("iv-bayar-catatan").value || ""
+  };
+  if(mode === "invoice") payload.idInvoice = pilih; else payload.idPurchaseOrder = pilih;
+
+  btn.disabled = true;
+  status.textContent = "Menyimpan...";
+
+  fetch(IV_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: IV_ID_TOKEN, action: "simpanPembayaran", payload: payload })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    btn.disabled = false;
+    if(!d || !d.success){
+      status.innerHTML = '<span class="iv-bayar-galat">' +
+        rjdEscapeHtml_((d && d.error) || "Gagal menyimpan pembayaran.") + '</span>';
+      return;
+    }
+    const h = d.data || {};
+    let pesan = "Tersimpan sebagai " + h.idPelunasan + ".";
+    if(h.statusInvoice) pesan += " Status invoice sekarang: " + h.statusInvoice +
+      " (sisa " + formatRupiah(h.sisaInvoice || 0) + ").";
+    if(h.saldoUangMuka !== undefined) pesan += " Uang muka order: " + formatRupiah(h.uangMukaTotal || 0) +
+      ", belum tertagih " + formatRupiah(h.saldoUangMuka || 0) + ".";
+    // Peringatan backend ditampilkan UTUH, tidak diringkas: isinya justru hal
+    // yang perlu diperiksa manusia (kelebihan bayar, proforma belum terbit).
+    const warn = (h.peringatan || []).map(function(w){
+      return '<div class="iv-bayar-warn">' + rjdEscapeHtml_(w) + '</div>';
+    }).join("");
+    status.innerHTML = '<span class="iv-bayar-ok">' + rjdEscapeHtml_(pesan) + '</span>' + warn;
+
+    document.getElementById("iv-bayar-jumlah").value = "";
+    document.getElementById("iv-bayar-catatan").value = "";
+    window.IV_PILIH_BAYAR = null;
+    // Daftar tujuan & daftar piutang sama-sama dimuat ulang: angka sisa di
+    // keduanya baru saja berubah, dan daftar yang basi di layar keuangan lebih
+    // berbahaya daripada layar yang berkedip sebentar.
+    window.IV_TUJUAN = null;
+    window.IV_DATA = null;
+    ivMuatPembayaran();
+    ivMuat();
+  })
+  .catch(function(){
+    btn.disabled = false;
+    status.innerHTML = '<span class="iv-bayar-galat">Gagal menghubungi server.</span>';
+  });
+}
+
+function ivMuatRiwayat(){
+  const wadah = document.getElementById("iv-bayar-riwayat");
+  if(!wadah) return;
+  wadah.innerHTML = '<p class="iv-buat-info">Memuat riwayat...</p>';
+  fetch(IV_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: IV_ID_TOKEN, action: "getRiwayatPembayaran", batas: 30 })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if(!d || !d.success){
+      wadah.innerHTML = '<div class="iv-buat-galat">' +
+        rjdEscapeHtml_((d && d.error) || "Gagal memuat riwayat.") + '</div>';
+      return;
+    }
+    const daftar = (d.data && d.data.daftar) || [];
+    if(!daftar.length){ wadah.innerHTML = '<p class="iv-buat-info">Belum ada pembayaran tercatat.</p>'; return; }
+    wadah.innerHTML =
+      '<div class="iv-tabelwrap"><table class="iv-tabel iv-riwayat-tabel"><thead><tr>' +
+        '<th>ID</th><th>Tanggal</th><th>Tujuan</th><th class="num">Jumlah</th><th>Metode</th><th/>' +
+      '</tr></thead><tbody>' +
+      daftar.map(function(v){
+        const tujuan = v.tujuan === "order"
+          ? '<span class="iv-status bahaya">Uang Muka</span><div class="iv-sub">' + rjdEscapeHtml_(v.idPurchaseOrder) + '</div>'
+          : '<span class="iv-status belum">Invoice</span><div class="iv-sub">' + rjdEscapeHtml_(v.idInvoice) + '</div>';
+        return '<tr>' +
+          '<td class="iv-nomor">' + rjdEscapeHtml_(v.idPelunasan || "-") + '</td>' +
+          '<td class="iv-tgl">' + rjdEscapeHtml_(v.tanggal || "-") + '</td>' +
+          '<td>' + tujuan + '</td>' +
+          '<td class="num">' + formatRupiah(v.jumlah) + '</td>' +
+          '<td>' + rjdEscapeHtml_(v.metode || "-") + '</td>' +
+          '<td>' + (v.bisaDihapus
+            ? '<a href="#" class="iv-hapus-link" onclick="ivHapusPembayaran(\'' +
+                rjdEscapeHtml_(v.idPelunasan).replace(/'/g, "") + '\'); return false;">Hapus</a>'
+            : '') + '</td>' +
+        '</tr>';
+      }).join("") +
+      '</tbody></table></div>';
+  })
+  .catch(function(){ wadah.innerHTML = '<div class="iv-buat-galat">Gagal menghubungi server.</div>'; });
+}
+
+/** Penghapusan diberi peringatan yang menyebut AKIBATNYA, bukan sekadar
+ *  "yakin?". Menghapus baris menurunkan Total Dibayar dan bisa mengembalikan
+ *  invoice yang sudah Lunas jadi piutang -- itu yang perlu diketahui sebelum
+ *  menekan, bukan sesudah. */
+function ivHapusPembayaran(id){
+  if(!id) return;
+  if(!window.confirm("Hapus catatan pembayaran " + id + "?\n\n" +
+    "Total Dibayar akan TURUN sebesar jumlah ini, dan status invoice terkait bisa " +
+    "berubah dari Lunas kembali jadi belum lunas.\n\nLakukan hanya untuk memperbaiki salah input.")) return;
+
+  fetch(IV_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: IV_ID_TOKEN, action: "hapusPembayaran", idPelunasan: id })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if(!d || !d.success){ window.alert((d && d.error) || "Gagal menghapus."); return; }
+    window.IV_TUJUAN = null;
+    window.IV_DATA = null;
+    ivMuatPembayaran();
+    ivMuat();
+  })
+  .catch(function(){ window.alert("Gagal menghubungi server."); });
+}
