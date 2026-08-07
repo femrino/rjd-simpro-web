@@ -626,7 +626,10 @@ function ivMuatPembayaran(){
       return;
     }
     window.IV_TUJUAN = d.data;
-    ivRenderTujuan();
+    // Layar split ikut digambar ulang kalau dia yang sedang terbuka -- kalau
+    // tidak, sesudah menyimpan daftar tujuannya kosong sampai tab dipindah
+    // bolak-balik.
+    if(window.IV_MODE_BAYAR === "split") ivRenderSplit(); else ivRenderTujuan();
     ivMuatRiwayat();
   })
   .catch(function(){
@@ -643,6 +646,18 @@ function ivGantiTujuanBayar(mode){
   document.querySelectorAll(".iv-bayar-mode").forEach(function(b){
     b.classList.toggle("active", b.dataset.mode === mode);
   });
+  // Mode "split" punya bentuk formulir yang berbeda: bukan MEMILIH satu tujuan,
+  // melainkan MEMBAGI satu jumlah ke banyak tujuan. Dipisah jadi dua panel
+  // alih-alih dipaksa ke satu -- formulir yang separuh fieldnya berganti arti
+  // tergantung mode adalah formulir yang salah diisi.
+  const split = (mode === "split");
+  document.getElementById("iv-bayar-tunggal").classList.toggle("hidden", split);
+  document.getElementById("iv-bayar-split").classList.toggle("hidden", !split);
+  if(split){
+    if(!window.IV_ALOKASI) window.IV_ALOKASI = {};
+    ivRenderSplit();
+    return;
+  }
   document.getElementById("iv-bayar-cari").value = "";
   ivRenderTujuan();
   ivHitungUlangBayar();
@@ -861,7 +876,8 @@ function ivMuatRiwayat(){
           '<td class="iv-tgl">' + rjdEscapeHtml_(v.tanggal || "-") + '</td>' +
           '<td>' + tujuan + '</td>' +
           '<td class="num">' + formatRupiah(v.jumlah) + '</td>' +
-          '<td>' + rjdEscapeHtml_(v.metode || "-") + '</td>' +
+          '<td>' + rjdEscapeHtml_(v.metode || "-") +
+          (v.noReferensi ? '<div class="iv-sub">' + rjdEscapeHtml_(v.noReferensi) + '</div>' : '') + '</td>' +
           '<td>' + (v.bisaDihapus
             ? '<a href="#" class="iv-hapus-link" onclick="ivHapusPembayaran(\'' +
                 rjdEscapeHtml_(v.idPelunasan).replace(/'/g, "") + '\'); return false;">Hapus</a>'
@@ -896,4 +912,237 @@ function ivHapusPembayaran(id){
     ivMuat();
   })
   .catch(function(){ window.alert("Gagal menghubungi server."); });
+}
+
+/* ============================================================
+ * MODE SPLIT -- satu transfer, banyak tujuan
+ * ============================================================
+ * Kasus nyata yang melahirkannya: PT Bahagia Bervisi Mulia mentransfer
+ * Rp 27.600.000 sekaligus, sementara ada tujuh invoice terbuka dan kolom
+ * Berita di bukti transfernya kosong. Tidak ada kombinasi invoice yang
+ * berjumlah persis segitu -- artinya itu pembayaran sebagian yang nilainya
+ * ditentukan klien, dan RJD yang harus memutuskan alokasinya.
+ *
+ * ============================================================
+ * ATURAN YANG DITEGAKKAN DI LAYAR INI
+ * ============================================================
+ * Tombol simpan TIDAK AKTIF sampai sisa yang belum dialokasikan PERSIS NOL.
+ * Bukan sekadar galak: kalau sebagian dana boleh dibiarkan menggantung, uang
+ * itu ada di rekening tapi tidak ada di sistem mana pun -- dan uang yang tidak
+ * bisa ditunjukkan ada di mana adalah masalah yang jauh lebih besar daripada
+ * satu formulir yang rewel.
+ *
+ * Kalau memang ada sisa yang belum ada tagihannya, sisa itu dialokasikan
+ * sebagai UANG MUKA ke ordernya -- daftar di layar ini memuat invoice DAN
+ * order, justru supaya jalan keluar itu selalu tersedia.
+ * ============================================================ */
+
+/** Isi otomatis FIFO: invoice TERTUA lebih dulu, sampai dana habis.
+ *  Aturan yang sama dengan alokasi uang muka di backend & dengan urutan aging
+ *  piutang -- supaya "kenapa invoice ini yang dibayar duluan" selalu punya
+ *  jawaban yang sama di seluruh sistem. Hasilnya tetap bisa diubah tangan. */
+function ivSplitOtomatis(){
+  const total = Number(document.getElementById("iv-split-total").value) || 0;
+  if(total <= 0){ document.getElementById("iv-split-status").textContent =
+    "Isi total transfer dulu."; return; }
+  window.IV_ALOKASI = {};
+  let sisa = total;
+  ((window.IV_TUJUAN && window.IV_TUJUAN.invoice) || []).forEach(function(v){
+    if(sisa <= 0) return;
+    const pakai = Math.min(v.sisa, sisa);
+    if(pakai > 0){ window.IV_ALOKASI["INV:" + v.id] = pakai; sisa -= pakai; }
+  });
+  ivRenderSplit();
+}
+
+function ivSplitKosongkan(){
+  window.IV_ALOKASI = {};
+  ivRenderSplit();
+}
+
+function ivSetAlokasi(kunci, nilai){
+  const n = Number(nilai) || 0;
+  if(!window.IV_ALOKASI) window.IV_ALOKASI = {};
+  if(n > 0) window.IV_ALOKASI[kunci] = n; else delete window.IV_ALOKASI[kunci];
+  ivHitungSisaSplit();
+}
+
+/** Hitung ulang sisa TANPA menggambar ulang daftar. Dipisah dari ivRenderSplit
+ *  karena menggambar ulang saat orang sedang mengetik akan merebut fokus dari
+ *  kolom yang sedang diisi -- angka jadi terpotong di tengah pengetikan. */
+function ivHitungSisaSplit(){
+  const total = Number(document.getElementById("iv-split-total").value) || 0;
+  const alokasi = window.IV_ALOKASI || {};
+  let dipakai = 0;
+  Object.keys(alokasi).forEach(function(k){ dipakai += Number(alokasi[k]) || 0; });
+  const sisa = total - dipakai;
+
+  const el = document.getElementById("iv-split-sisa");
+  const btn = document.getElementById("iv-split-simpan");
+  const jml = Object.keys(alokasi).length;
+
+  let kelas = "iv-split-sisa", teks;
+  if(total <= 0){
+    teks = "Isi total transfer, lalu bagikan ke tujuan di bawah.";
+  } else if(sisa === 0 && jml > 0){
+    kelas += " pas";
+    teks = "Pas. " + jml + " tujuan, total " + formatRupiah(total) + ".";
+  } else if(sisa > 0){
+    kelas += " kurang";
+    teks = "Belum teralokasi: " + formatRupiah(sisa) + " dari " + formatRupiah(total) + ".";
+  } else {
+    kelas += " lebih";
+    teks = "Kelebihan alokasi " + formatRupiah(Math.abs(sisa)) + " dari total transfer.";
+  }
+  el.className = kelas;
+  el.textContent = teks;
+
+  const boleh = (total > 0 && sisa === 0 && jml > 0);
+  btn.disabled = !boleh;
+  btn.textContent = boleh
+    ? "Catat " + jml + " Pembayaran (" + formatRupiah(total) + ")"
+    : "Alokasi harus pas dulu";
+}
+
+function ivRenderSplit(){
+  const wadah = document.getElementById("iv-split-daftar");
+  if(!wadah) return;
+  if(!window.IV_TUJUAN){ wadah.innerHTML = '<p class="iv-buat-info">Memuat...</p>'; return; }
+
+  const alokasi = window.IV_ALOKASI || {};
+  const cari = (document.getElementById("iv-split-cari").value || "").toLowerCase().trim();
+  const cocok = function(teks){ return !cari || teks.toLowerCase().indexOf(cari) !== -1; };
+
+  const barisInvoice = (window.IV_TUJUAN.invoice || [])
+    .filter(function(v){ return cocok(v.id + " " + v.idPurchaseOrder + " " + v.namaKlien); })
+    .map(function(v){
+      const kunci = "INV:" + v.id;
+      const nilai = alokasi[kunci] || "";
+      return '<div class="iv-split-baris' + (nilai ? " terisi" : "") + '">' +
+        '<div class="iv-split-isi">' +
+          '<span class="iv-kirim-id">' + rjdEscapeHtml_(v.id) + '</span>' +
+          '<span class="iv-kirim-sub">' + rjdEscapeHtml_(v.namaKlien) + ' &#183; ' +
+            rjdEscapeHtml_(v.tanggal) + ' &#183; sisa ' + formatRupiah(v.sisa) + '</span>' +
+        '</div>' +
+        '<input class="iv-split-input" type="number" min="0" placeholder="0" value="' + nilai + '"' +
+          ' oninput="ivSetAlokasi(\'' + kunci + '\', this.value)"/>' +
+        '<button class="iv-split-penuh" type="button" title="Isi sebesar sisa tagihan"' +
+          ' onclick="ivIsiPenuh(\'' + kunci + '\', ' + v.sisa + ')">Sisa</button>' +
+      '</div>';
+    }).join("");
+
+  const barisOrder = (window.IV_TUJUAN.order || [])
+    .filter(function(v){ return cocok(v.idPurchaseOrder + " " + v.idProforma + " " + v.namaKlien); })
+    .map(function(v){
+      const kunci = "PO:" + v.idPurchaseOrder;
+      const nilai = alokasi[kunci] || "";
+      return '<div class="iv-split-baris' + (nilai ? " terisi" : "") + '">' +
+        '<div class="iv-split-isi">' +
+          '<span class="iv-kirim-id">' + rjdEscapeHtml_(v.idProforma) + '</span>' +
+          '<span class="iv-kirim-sub">' + rjdEscapeHtml_(v.namaKlien) + ' &#183; ' +
+            rjdEscapeHtml_(v.idPurchaseOrder) +
+            (v.kurangDP > 0 ? ' &#183; kurang DP ' + formatRupiah(v.kurangDP) : ' &#183; DP lengkap') +
+          '</span>' +
+        '</div>' +
+        '<input class="iv-split-input" type="number" min="0" placeholder="0" value="' + nilai + '"' +
+          ' oninput="ivSetAlokasi(\'' + kunci + '\', this.value)"/>' +
+        '<button class="iv-split-penuh" type="button" title="Isi sebesar kekurangan DP"' +
+          ' onclick="ivIsiPenuh(\'' + kunci + '\', ' + (v.kurangDP || 0) + ')">DP</button>' +
+      '</div>';
+    }).join("");
+
+  wadah.innerHTML =
+    (barisInvoice ? '<div class="iv-split-grup">Invoice belum lunas</div>' + barisInvoice : '') +
+    (barisOrder ? '<div class="iv-split-grup">Uang muka order (proforma)</div>' + barisOrder : '') +
+    ((!barisInvoice && !barisOrder) ? '<p class="iv-buat-info">Tidak ada tujuan yang cocok.</p>' : '');
+
+  ivHitungSisaSplit();
+}
+
+function ivIsiPenuh(kunci, nilai){
+  if(!nilai || nilai <= 0) return;
+  if(!window.IV_ALOKASI) window.IV_ALOKASI = {};
+  window.IV_ALOKASI[kunci] = nilai;
+  ivRenderSplit();
+}
+
+function ivSimpanSplit(){
+  const status = document.getElementById("iv-split-status");
+  const btn = document.getElementById("iv-split-simpan");
+  const total = Number(document.getElementById("iv-split-total").value) || 0;
+  const tanggal = document.getElementById("iv-split-tanggal").value;
+  const alokasi = window.IV_ALOKASI || {};
+
+  if(!tanggal){ status.textContent = "Tanggal bayar wajib diisi."; return; }
+
+  const daftar = Object.keys(alokasi).map(function(k){
+    const isInv = k.indexOf("INV:") === 0;
+    return {
+      tujuan: isInv ? "invoice" : "order",
+      idInvoice: isInv ? k.slice(4) : "",
+      idPurchaseOrder: isInv ? "" : k.slice(3),
+      jumlah: Number(alokasi[k]) || 0
+    };
+  });
+  if(!daftar.length){ status.textContent = "Belum ada alokasi."; return; }
+
+  btn.disabled = true;
+  status.textContent = "Menyimpan " + daftar.length + " baris...";
+
+  fetch(IV_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: IV_ID_TOKEN,
+      action: "simpanPembayaranSplit",
+      payload: {
+        tanggalBayar: tanggal,
+        metodeBayar: document.getElementById("iv-split-metode").value || "",
+        noReferensi: document.getElementById("iv-split-ref").value || "",
+        catatan: document.getElementById("iv-split-catatan").value || "",
+        totalTransfer: total,
+        alokasi: daftar
+      }
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    btn.disabled = false;
+    if(!d || !d.success){
+      status.innerHTML = '<span class="iv-bayar-galat">' +
+        rjdEscapeHtml_((d && d.error) || "Gagal menyimpan pembayaran.") + '</span>';
+      return;
+    }
+    const h = d.data || {};
+    // Hasil per tujuan ditampilkan SATU-SATU, bukan diringkas jadi "tersimpan".
+    // Inilah momen staf bisa memastikan alokasinya jatuh seperti yang dimaksud;
+    // sesudah layar ini tertutup, memeriksanya berarti membuka SD Pelunasan.
+    const rincian = (h.rincian || []).map(function(r){
+      const hasil = r.tujuan === "invoice"
+        ? (r.status || "-") + (r.sisa !== undefined ? ", sisa " + formatRupiah(r.sisa) : "")
+        : "uang muka " + formatRupiah(r.uangMukaTotal || 0) +
+          ", belum tertagih " + formatRupiah(r.saldoUangMuka || 0);
+      return '<div class="iv-split-hasil"><b>' + rjdEscapeHtml_(r.id) + '</b> &#183; ' +
+        formatRupiah(r.jumlah) + ' &#8594; ' + rjdEscapeHtml_(hasil) + '</div>';
+    }).join("");
+    const warn = (h.peringatan || []).map(function(w){
+      return '<div class="iv-bayar-warn">' + rjdEscapeHtml_(w) + '</div>';
+    }).join("");
+    status.innerHTML = '<span class="iv-bayar-ok">' + h.jumlahBaris +
+      ' baris tersimpan, total ' + formatRupiah(h.totalDicatat) +
+      (h.noReferensi ? ' (ref ' + rjdEscapeHtml_(h.noReferensi) + ')' : '') + '.</span>' +
+      rincian + warn;
+
+    window.IV_ALOKASI = {};
+    document.getElementById("iv-split-total").value = "";
+    document.getElementById("iv-split-ref").value = "";
+    document.getElementById("iv-split-catatan").value = "";
+    window.IV_TUJUAN = null;
+    window.IV_DATA = null;
+    ivMuatPembayaran();
+    ivMuat();
+  })
+  .catch(function(){
+    btn.disabled = false;
+    status.innerHTML = '<span class="iv-bayar-galat">Gagal menghubungi server.</span>';
+  });
 }
