@@ -154,6 +154,20 @@ nav{
 .lp-step.current .lp-step-label{color:var(--thread);font-weight:700}
 .lp-step:not(:last-child)::after{content:"";position:absolute;top:11px;left:50%;width:100%;height:2px;background:var(--line);z-index:-1}
 .lp-step.done:not(:last-child)::after{background:var(--ink)}
+/* ---- Stepper: keadaan tambahan (dibaca dari kolom "Progres Tahap") ----
+   "skipped" = tahap Dilewati ATAU Tidak Tercatat. Sengaja SATU tampilan untuk
+   dua keadaan: klien tidak perlu tahu bedanya "artikel ini memang tidak butuh
+   tahap itu" dan "kami lupa mencatat". Yang penting keduanya tidak terlihat
+   seperti sudah selesai. Garis putus-putus dipilih supaya jelas "tidak ada
+   yang terjadi di sini", tanpa terkesan gagal/merah. */
+.lp-step.skipped .lp-step-dot{background:var(--paper-2);border-style:dashed;border-color:var(--line);color:var(--ink-soft);opacity:.65}
+.lp-step.skipped .lp-step-label{color:var(--ink-soft);opacity:.65}
+.lp-step.skipped:not(:last-child)::after{background:transparent;border-top:2px dashed var(--line);height:0}
+/* Persen cuma muncul di tahap yang sedang berjalan -- lihat buildStepperHtml.
+   position:absolute supaya munculnya angka TIDAK menggeser tinggi baris dan
+   bikin kartu-kartu order jadi tidak rata tingginya. */
+.lp-step{padding-bottom:14px}
+.lp-step-pct{position:absolute;left:0;right:0;font-size:10px;font-weight:700;color:var(--thread);margin-top:2px}
 
 /* Matrix Warna x Size per Divisi -- expand di dalam .lp-order-card, di bawah stepper.
    Sengaja collapsed by default (lp-matrix-section display:none) karena bisa lumayan

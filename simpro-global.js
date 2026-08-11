@@ -290,12 +290,7 @@ function renderOrderList(orders, filter){
     const card = document.createElement("div");
     card.className = "lp-order-card";
 
-    const stepsHtml = window.LP_TAHAP_PRODUKSI.map(function(tahap, idx){
-      let cls = "lp-step";
-      if(idx < order.tahapIndex) cls += " done";
-      else if(idx === order.tahapIndex) cls += " current";
-      return '<div class="' + cls + '"><div class="lp-step-dot">' + (idx+1) + '</div><div class="lp-step-label">' + tahap + '</div></div>';
-    }).join("");
+    const stepsHtml = buildStepperHtml(order);
 
     const badgeHtml = order.dibatalkan
       ? '<div class="lp-order-badge-wrap"><span class="lp-badge lp-badge-batal">Dibatalkan</span></div>'
@@ -319,6 +314,81 @@ function renderOrderList(orders, filter){
     list.appendChild(card);
     wireWarnaSizeSection(card);
   });
+}
+
+/**
+ * ============================================================
+ * STEPPER PRODUKSI -- Portal Klien
+ * ============================================================
+ * DULU: semua tahap sebelum tahap saat ini otomatis ditandai SELESAI
+ * (`idx < order.tahapIndex`). Itu tebakan posisi, bukan bukti -- dan tebakannya
+ * salah. Contoh nyata (12 Agustus 2026): order ARUZA berlabel "Sampel", jadi
+ * "Pola & Marker" tampil hitam-selesai di layar klien padahal TIDAK ADA satu
+ * pun catatan pola untuk order itu. Kita mengklaim pekerjaan sudah beres
+ * berdasarkan urutan nomor.
+ *
+ * SEKARANG: status tiap tahap dibaca dari `order.progresTahap`, yang ditulis
+ * sinkron-tahap.gs dari bukti nyata (form produksi, cache, laporan harian).
+ * Format: [{t: "Cutting", s: "Selesai", p: 100}, ...]
+ *
+ * Lima keadaan backend dipetakan jadi TIGA tampilan. Klien tidak perlu tahu
+ * bedanya "Dilewati" (artikelnya memang tidak butuh tahap itu) dan "Tidak
+ * Tercatat" (kami lupa mencatat) -- itu urusan internal, dan menampilkannya
+ * cuma memancing pertanyaan yang tidak produktif. Yang penting: keduanya TIDAK
+ * BOLEH diklaim selesai.
+ *
+ *   Selesai         -> hitam penuh, centang
+ *   Berjalan        -> merah, + persen kalau ada
+ *   Belum           -> abu polos
+ *   Dilewati        -> abu, garis putus-putus
+ *   Tidak Tercatat  -> abu, garis putus-putus (sama seperti Dilewati)
+ *
+ * JALUR CADANGAN: kalau `progresTahap` kosong (sync belum pernah jalan untuk
+ * order itu), kembali ke cara lama supaya layar tidak pernah blank. Cara lama
+ * tetap kurang akurat -- makanya cuma cadangan, bukan pilihan utama.
+ */
+function buildStepperHtml(order){
+  const progres = order.progresTahap;
+
+  // ---------- Jalur cadangan: cara lama ----------
+  if(!progres || !progres.length){
+    return (window.LP_TAHAP_PRODUKSI || []).map(function(tahap, idx){
+      let cls = "lp-step";
+      if(idx < order.tahapIndex) cls += " done";
+      else if(idx === order.tahapIndex) cls += " current";
+      return '<div class="' + cls + '"><div class="lp-step-dot">' + (idx+1) +
+        '</div><div class="lp-step-label">' + tahap + '</div></div>';
+    }).join("");
+  }
+
+  // ---------- Jalur utama: dari bukti ----------
+  return progres.map(function(d, idx){
+    const status = String(d.s || "");
+    let cls = "lp-step";
+    let isi = String(idx + 1);
+
+    if(status === "Selesai"){
+      cls += " done";
+      isi = "&#10003;"; // centang -- lebih cepat dibaca daripada nomor
+    } else if(status === "Berjalan"){
+      cls += " current";
+    } else if(status === "Dilewati" || status === "Tidak Tercatat"){
+      cls += " skipped";
+    }
+
+    // Persen cuma ditampilkan untuk tahap yang SEDANG berjalan. Di tahap yang
+    // sudah selesai angkanya cuma bising (sudah 100% atau mendekati), dan di
+    // tahap yang belum jalan angkanya tidak ada.
+    const persen = (status === "Berjalan" && d.p !== null && d.p !== undefined)
+      ? '<div class="lp-step-pct">' + Math.min(100, Math.round(d.p)) + '%</div>'
+      : '';
+
+    return '<div class="' + cls + '">' +
+      '<div class="lp-step-dot">' + isi + '</div>' +
+      '<div class="lp-step-label">' + (d.t || '') + '</div>' +
+      persen +
+    '</div>';
+  }).join("");
 }
 
 function renderInvoices(invoices, filter){
