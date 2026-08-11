@@ -322,3 +322,15 @@ body { padding-top: 0; }
   .iv-split-input { width: 100px; }
   .iv-split-penuh { display: none; }
 }
+
+/* Penyaring klien di layar split. Ditaruh SEBARIS dengan tombol isi otomatis,
+   bukan di grid field di atas: urutan bacanya memang "pilih klien, lalu isi
+   otomatis" -- menjauhkannya dari tombol itu memutus hubungan sebab-akibat
+   yang justru ingin ditunjukkan. */
+.iv-split-alat select {
+  flex: 1 1 200px; min-width: 0; padding: 7px 10px; font-size: 12px;
+  background: var(--white); border: 1px solid var(--line-soft); border-radius: 8px;
+  color: var(--ink);
+}
+.iv-split-alat { flex-wrap: wrap; align-items: center; }
+.iv-split-alat button { flex: 0 0 auto; }

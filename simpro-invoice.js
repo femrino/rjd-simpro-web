@@ -943,15 +943,84 @@ function ivHapusPembayaran(id){
  *  jawaban yang sama di seluruh sistem. Hasilnya tetap bisa diubah tangan. */
 function ivSplitOtomatis(){
   const total = Number(document.getElementById("iv-split-total").value) || 0;
-  if(total <= 0){ document.getElementById("iv-split-status").textContent =
-    "Isi total transfer dulu."; return; }
+  const status = document.getElementById("iv-split-status");
+  if(total <= 0){ status.textContent = "Isi total transfer dulu."; return; }
+
+  // KLIEN WAJIB DIPILIH sebelum isi otomatis boleh jalan.
+  //
+  // Versi pertama fitur ini mengisi dari invoice tertua LINTAS SEMUA KLIEN --
+  // dan itu lubang serius: transfer dari klien A bisa terisi otomatis ke
+  // invoice klien B hanya karena invoice B kebetulan lebih tua. Uangnya
+  // menutup piutang yang salah, dan tidak ada gejala apa pun sampai salah satu
+  // klien menagih rekap.
+  //
+  // Menolak jalan (bukan diam-diam memakai klien pertama) disengaja: menebak
+  // di tempat yang menentukan ke mana uang jatuh adalah persis kesalahan yang
+  // sedang ditutup.
+  const klien = document.getElementById("iv-split-klien").value;
+  if(!klien){
+    status.innerHTML = '<span class="iv-bayar-galat">Pilih klien dulu. ' +
+      'Isi otomatis mengurutkan invoice dari yang tertua, dan tanpa klien ' +
+      'urutan itu bisa mencampur invoice milik klien lain.</span>';
+    return;
+  }
+
   window.IV_ALOKASI = {};
   let sisa = total;
   ((window.IV_TUJUAN && window.IV_TUJUAN.invoice) || []).forEach(function(v){
     if(sisa <= 0) return;
+    if(v.idKlien !== klien) return;
     const pakai = Math.min(v.sisa, sisa);
     if(pakai > 0){ window.IV_ALOKASI["INV:" + v.id] = pakai; sisa -= pakai; }
   });
+
+  ivRenderSplit();
+  if(sisa > 0){
+    // Sisa BUKAN kegagalan -- itu keadaan yang harus dilihat: dana klien ini
+    // melebihi seluruh tagihannya yang terbuka. Jalan keluarnya mengalokasikan
+    // sisa itu sebagai uang muka ke ordernya, dan kalimat ini yang menunjukkan
+    // jalan itu.
+    status.innerHTML = '<span class="iv-bayar-warn">Sisa ' + formatRupiah(sisa) +
+      ' belum teralokasi &#8212; seluruh invoice terbuka klien ini sudah tertutup. ' +
+      'Alokasikan sisanya sebagai uang muka order di bawah.</span>';
+  } else {
+    status.textContent = "";
+  }
+}
+
+/** Daftar klien untuk penyaring, dari invoice DAN order sekaligus. Pilihan
+ *  yang sedang aktif dipertahankan supaya penyaring tidak lompat balik ke
+ *  "semua" tiap kali daftarnya digambar ulang. */
+function ivIsiPilihanKlienSplit(){
+  const sel = document.getElementById("iv-split-klien");
+  if(!sel || !window.IV_TUJUAN) return;
+  const peta = {};
+  (window.IV_TUJUAN.invoice || []).forEach(function(v){ if(v.idKlien) peta[v.idKlien] = v.namaKlien || v.idKlien; });
+  (window.IV_TUJUAN.order || []).forEach(function(v){ if(v.idKlien) peta[v.idKlien] = v.namaKlien || v.idKlien; });
+
+  const terpilih = sel.value;
+  const kunci = Object.keys(peta).sort(function(a, b){
+    return String(peta[a]).localeCompare(String(peta[b]));
+  });
+  sel.innerHTML = '<option value="">Semua klien (isi manual)</option>' +
+    kunci.map(function(k){
+      return '<option value="' + rjdEscapeHtml_(k) + '"' + (k === terpilih ? " selected" : "") +
+        '>' + rjdEscapeHtml_(peta[k]) + '</option>';
+    }).join("");
+}
+
+/** Ganti klien MENGOSONGKAN alokasi yang sudah diisi. Alokasi milik klien
+ *  sebelumnya yang tertinggal di layar baru adalah cara paling halus membuat
+ *  transfer lintas klien tanpa sadar -- backend akan menolaknya, tapi jauh
+ *  lebih baik tidak sampai terbentuk. */
+function ivGantiKlienSplit(){
+  const adaIsi = Object.keys(window.IV_ALOKASI || {}).length > 0;
+  if(adaIsi && !window.confirm("Ganti klien akan mengosongkan alokasi yang sudah diisi. Lanjutkan?")){
+    ivIsiPilihanKlienSplit(); // kembalikan tampilan penyaring ke pilihan lama
+    return;
+  }
+  window.IV_ALOKASI = {};
+  document.getElementById("iv-split-status").textContent = "";
   ivRenderSplit();
 }
 
@@ -1009,11 +1078,19 @@ function ivRenderSplit(){
   if(!wadah) return;
   if(!window.IV_TUJUAN){ wadah.innerHTML = '<p class="iv-buat-info">Memuat...</p>'; return; }
 
+  ivIsiPilihanKlienSplit();
+
   const alokasi = window.IV_ALOKASI || {};
   const cari = (document.getElementById("iv-split-cari").value || "").toLowerCase().trim();
+  const klien = document.getElementById("iv-split-klien").value;
   const cocok = function(teks){ return !cari || teks.toLowerCase().indexOf(cari) !== -1; };
+  // Penyaring klien berlaku ke SELURUH daftar, bukan cuma ke isi otomatis.
+  // Menyembunyikan baris milik klien lain menutup lubangnya sejak di mata,
+  // bukan cuma di tombol -- pengisian manual sama rawannya.
+  const klienCocok = function(v){ return !klien || v.idKlien === klien; };
 
   const barisInvoice = (window.IV_TUJUAN.invoice || [])
+    .filter(klienCocok)
     .filter(function(v){ return cocok(v.id + " " + v.idPurchaseOrder + " " + v.namaKlien); })
     .map(function(v){
       const kunci = "INV:" + v.id;
@@ -1032,6 +1109,7 @@ function ivRenderSplit(){
     }).join("");
 
   const barisOrder = (window.IV_TUJUAN.order || [])
+    .filter(klienCocok)
     .filter(function(v){ return cocok(v.idPurchaseOrder + " " + v.idProforma + " " + v.namaKlien); })
     .map(function(v){
       const kunci = "PO:" + v.idPurchaseOrder;
@@ -1086,6 +1164,26 @@ function ivSimpanSplit(){
   });
   if(!daftar.length){ status.textContent = "Belum ada alokasi."; return; }
 
+  // Deteksi lintas klien DI SINI juga, bukan cuma di backend. Backend tetap
+  // penjaga terakhirnya -- tapi kalau satu-satunya penolakan datang dari sana,
+  // staf sudah menekan Simpan dan baru melihat kegagalan, tanpa tahu baris
+  // mana yang menyimpang. Konfirmasi di layar menyebut nama kliennya.
+  const klienSet = {};
+  daftar.forEach(function(a){
+    const k = ivKlienDariAlokasi_(a);
+    if(k) klienSet[k] = true;
+  });
+  const namaKlien = Object.keys(klienSet);
+  let izinkanLintasKlien = false;
+  if(namaKlien.length > 1){
+    if(!window.confirm("Alokasi ini menyentuh " + namaKlien.length + " klien berbeda:\n\n  " +
+      namaKlien.join("\n  ") +
+      "\n\nSatu transfer bank berasal dari satu rekening. Kalau ini bukan kasus " +
+      "satu pembayar yang menanggung tagihan beberapa klien, batalkan dan periksa " +
+      "lagi pilihannya.\n\nLanjutkan?")) return;
+    izinkanLintasKlien = true;
+  }
+
   btn.disabled = true;
   status.textContent = "Menyimpan " + daftar.length + " baris...";
 
@@ -1100,7 +1198,10 @@ function ivSimpanSplit(){
         noReferensi: document.getElementById("iv-split-ref").value || "",
         catatan: document.getElementById("iv-split-catatan").value || "",
         totalTransfer: total,
-        alokasi: daftar
+        alokasi: daftar,
+        // Hanya bernilai true kalau pengguna menyetujui konfirmasi di atas.
+        // Backend menolak alokasi lintas klien tanpa bendera ini.
+        izinkanLintasKlien: izinkanLintasKlien
       }
     })
   })
@@ -1145,4 +1246,18 @@ function ivSimpanSplit(){
     btn.disabled = false;
     status.innerHTML = '<span class="iv-bayar-galat">Gagal menghubungi server.</span>';
   });
+}
+
+/** Nama klien pemilik satu alokasi, dicari dari data yang sudah ada di layar.
+ *  Dipakai konfirmasi lintas klien sebelum permintaan dikirim. */
+function ivKlienDariAlokasi_(a){
+  if(!window.IV_TUJUAN) return "";
+  if(a.tujuan === "invoice"){
+    const v = (window.IV_TUJUAN.invoice || []).filter(function(x){ return x.id === a.idInvoice; })[0];
+    return v ? (v.namaKlien || v.idKlien || "") : "";
+  }
+  const v = (window.IV_TUJUAN.order || []).filter(function(x){
+    return x.idPurchaseOrder === a.idPurchaseOrder;
+  })[0];
+  return v ? (v.namaKlien || v.idKlien || "") : "";
 }
