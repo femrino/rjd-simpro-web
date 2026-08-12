@@ -379,8 +379,19 @@ function buildStepperHtml(order){
     // Persen cuma ditampilkan untuk tahap yang SEDANG berjalan. Di tahap yang
     // sudah selesai angkanya cuma bising (sudah 100% atau mendekati), dan di
     // tahap yang belum jalan angkanya tidak ada.
+    //
+    // Math.floor + plafon 99, BUKAN Math.round. Dengan round, 99,5%-99,9%
+    // dibulatkan jadi "100%" -- dan tahap itu tetap merah karena statusnya
+    // masih "Berjalan" (sumbernya estimasi cache, belum ada pencatatan tegas).
+    // Klien lalu melihat "100% tapi belum selesai": kontradiksi yang persis
+    // sama dengan yang baru saja kita bereskan, cuma pindah tempat.
+    //
+    // Dengan floor + plafon 99, aturannya jadi bisa dibaca tanpa penjelasan:
+    // ANGKA 100% SELALU BERARTI CENTANG, angka merah selalu di bawah 100%.
+    // Pola yang sama sudah dipakai di matriks per warna & ukuran
+    // (Math.floor(wip.outputWIP)) -- stepper tinggal menyusul.
     const persen = (status === "Berjalan" && d.p !== null && d.p !== undefined)
-      ? '<div class="lp-step-pct">' + Math.min(100, Math.round(d.p)) + '%</div>'
+      ? '<div class="lp-step-pct">' + Math.min(99, Math.floor(d.p)) + '%</div>'
       : '';
 
     return '<div class="' + cls + '">' +
