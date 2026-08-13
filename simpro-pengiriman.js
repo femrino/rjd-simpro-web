@@ -320,15 +320,21 @@ function krCariPO() {
   }).join("");
 }
 
-function krPilihPO(idPO) {
+function krPilihPO(idPO, izinkanLebih) {
   document.getElementById("kr-buat-dropdown").classList.add("hidden");
   document.getElementById("kr-buat-cari").value = idPO;
   const wadah = document.getElementById("kr-buat-tabel");
   wadah.innerHTML = '<p class="kr-buat-info">Memuat rincian...</p>';
 
+  // Diingat supaya centang "izinkan lebih" bertahan saat rincian dimuat ulang.
+  window.KR_IZIN_LEBIH = !!izinkanLebih;
+
   fetch(KR_API_URL, {
     method: "POST",
-    body: JSON.stringify({ idToken: KR_ID_TOKEN, action: "getPOUntukPengiriman", idPurchaseOrder: idPO })
+    body: JSON.stringify({
+      idToken: KR_ID_TOKEN, action: "getPOUntukPengiriman", idPurchaseOrder: idPO,
+      izinkanLebihDariOrder: !!izinkanLebih
+    })
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
@@ -422,8 +428,46 @@ function krRenderFormKirim() {
         ? '<br/>' + d.jumlahDibatasiOrder + ' baris dipotong ke qty order &#8212; ' +
           'hasil produksinya melebihi pesanan (cadangan).'
         : '') +
-    '</div>';
+      (d.izinkanLebihDariOrder
+        ? '<br/><b>Plafon qty order DIMATIKAN.</b> Batasnya sekarang qty hasil produksi. ' +
+          'Klien akan ditagih sesuai yang dikirim.'
+        : '') +
+    '</div>' +
+    // Panel bypass hanya muncul kalau MEMANG ada baris yang terpotong, atau
+    // bypass-nya sedang aktif. Kalau produksi pas dengan order, opsi ini tidak
+    // perlu ada -- tombol yang jarang relevan justru rawan salah klik.
+    ((d.jumlahDibatasiOrder || d.izinkanLebihDariOrder)
+      ? '<div class="kr-buat-bypass">' +
+          '<label><input type="checkbox" id="kr-buat-izin-lebih"' +
+            (d.izinkanLebihDariOrder ? ' checked' : '') + '/> ' +
+            'Izinkan kirim melebihi qty order</label>' +
+          '<div class="kr-buat-bypass-ket">Dipakai kalau klien minta cadangan ikut dikirim. ' +
+            'Tagihan akan mengikuti jumlah yang dikirim, bukan qty order.</div>' +
+          (d.izinkanLebihDariOrder
+            ? '<input type="text" id="kr-buat-alasan-lebih" class="kr-buat-alasan" ' +
+              'placeholder="Alasan (wajib) &#8212; mis. klien minta cadangan ikut dikirim" ' +
+              'value="' + rjdEscapeHtml_(window.KR_ALASAN_LEBIH || "") + '"/>'
+            : '') +
+        '</div>'
+      : '');
   document.getElementById("kr-buat-ringkas").classList.remove("hidden");
+
+  // Mencentang = muat ulang rincian dengan plafon dimatikan, supaya kolom Sisa
+  // langsung menunjukkan batas yang sebenarnya. Kalau cuma mengubah validasi
+  // saat simpan, admin akan mengetik angka yang menurut layar melanggar batas
+  // -- membingungkan, dan mengundang dugaan sistemnya rusak.
+  const cbIzin = document.getElementById("kr-buat-izin-lebih");
+  if (cbIzin) {
+    cbIzin.addEventListener("change", function () {
+      const alasanEl = document.getElementById("kr-buat-alasan-lebih");
+      window.KR_ALASAN_LEBIH = alasanEl ? alasanEl.value : "";
+      krPilihPO(d.idPurchaseOrder, cbIzin.checked);
+    });
+  }
+  const alasanEl2 = document.getElementById("kr-buat-alasan-lebih");
+  if (alasanEl2) {
+    alasanEl2.addEventListener("input", function () { window.KR_ALASAN_LEBIH = alasanEl2.value; });
+  }
 
   // Dikelompokkan per Warna supaya sejalan dengan cara orang gudang menghitung
   // (per bundel warna), bukan daftar panjang warna-size bercampur.
@@ -503,6 +547,18 @@ function krSimpanPengiriman() {
   });
   if (!baris.length) { alert("Belum ada qty yang diisi."); return; }
 
+  // Diperiksa di sini JUGA, bukan cuma di backend -- supaya admin tidak
+  // kehilangan isian yang sudah diketik gara-gara ditolak server.
+  const cbIzinSimpan = document.getElementById("kr-buat-izin-lebih");
+  if (cbIzinSimpan && cbIzinSimpan.checked) {
+    const alasan = ((document.getElementById("kr-buat-alasan-lebih") || {}).value || "").trim();
+    if (alasan.length < 5) {
+      alert("Mengirim melebihi qty order wajib disertai alasan (minimal 5 karakter).\n\n" +
+        "Contoh: klien minta cadangan ikut dikirim");
+      return;
+    }
+  }
+
   const btn = document.getElementById("kr-buat-simpan-btn");
   btn.disabled = true;
   btn.textContent = "Menyimpan...";
@@ -518,6 +574,8 @@ function krSimpanPengiriman() {
         metodePengiriman: (document.getElementById("kr-buat-metode") || {}).value || "",
         noResi: (document.getElementById("kr-buat-resi") || {}).value || "",
         catatan: (document.getElementById("kr-buat-catatan") || {}).value || "",
+        izinkanLebihDariOrder: !!(document.getElementById("kr-buat-izin-lebih") || {}).checked,
+        alasanLebihDariOrder: (document.getElementById("kr-buat-alasan-lebih") || {}).value || "",
         baris: baris
       }
     })

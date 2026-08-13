@@ -128,6 +128,20 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   border-top: 1px solid var(--line-soft); padding-top: 8px; }
 .kr-buat-sumber.ok { color: #2C6B3F; }
 
+/* ---- Bypass "kirim melebihi qty order" ----
+   Sengaja TIDAK dibuat mencolok. Ini jalan keluar untuk kasus sesekali, bukan
+   tombol yang perlu dipertimbangkan setiap kali membuat surat jalan. Warna
+   amber dipakai konsisten dengan .kr-buat-sumber (peringatan, bukan galat). */
+.kr-buat-bypass { margin-top: 10px; padding: 10px 12px; border: 1px dashed #D8C9A8;
+  border-radius: 8px; background: #FCFAF5; }
+.kr-buat-bypass label { font-size: 12.5px; font-weight: 600; color: #8A5D1F;
+  display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.kr-buat-bypass input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; }
+.kr-buat-bypass-ket { font-size: 11px; color: #7A7A72; margin-top: 5px; padding-left: 23px; }
+.kr-buat-alasan { width: 100%; margin-top: 8px; padding: 7px 10px; font-size: 12.5px;
+  border: 1px solid #D8C9A8; border-radius: 6px; background: #fff; }
+.kr-buat-alasan:focus { outline: none; border-color: #8A5D1F; }
+
 .kr-buat-grup td { background: var(--cream); font-size: 12.5px; }
 .kr-buat-size { padding-left: 22px !important; font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
 .kr-buat-tanda { color: #8A5D1F; font-weight: 800; cursor: help; }
