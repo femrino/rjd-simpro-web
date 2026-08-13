@@ -1313,18 +1313,16 @@ window.onload = function () {
    MARKER (bagian: pola)
    ============================================================ */
 
-/** Ukuran yang bisa dipakai di susunan marker. Diisi dari data PO saat dimuat. */
+/**
+ * Ukuran yang bisa dipakai di susunan marker.
+ *
+ * Diambil dari jawaban getMarkerPO (backend membacanya dari Rincian SO), BUKAN
+ * dari window.SP_CUT. Versi pertama memakai SP_CUT -- yang cuma dimuat di tab
+ * Hasil Cutting -- sehingga di tab Marker daftarnya selalu kosong, tidak ada
+ * kotak yang bisa diisi, dan pcs per lapis tetap 0 berapa kali pun dicoba.
+ */
 function spSizePO_() {
-  const cut = window.SP_CUT;
-  if (!cut || !cut.baris) return [];
-  const set = {};
-  cut.baris.forEach(function (b) {
-    Object.keys(b.sizeQty || b.qtyPerSize || {}).forEach(function (sz) { set[sz] = true; });
-  });
-  const ada = Object.keys(set);
-  // Cadangan: kalau bentuk datanya tidak seperti dugaan, pakai preset umum
-  // supaya form tetap bisa dipakai -- bukan kosong tanpa penjelasan.
-  return ada.length ? ada : ["S", "M", "L", "XL", "2XL", "3XL"];
+  return window.SP_PO_SIZE || [];
 }
 
 function spMuatMarker() {
@@ -1344,6 +1342,9 @@ function spMuatMarker() {
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal memuat marker.");
     window.SP_MARKER = d.marker || [];
+    window.SP_PO_SIZE = d.sizeTersedia || [];
+    window.SP_PO_WARNA = d.warna || [];
+    window.SP_PO_ITEM = d.item || {};
     spRenderMarker_();
   })
   .catch(function (e) {
@@ -1389,6 +1390,15 @@ function spRenderMarker_() {
 function spRenderFormMarker_(asal) {
   const sizes = spSizePO_();
   const a = asal || {};
+  if (!sizes.length) {
+    // Tanpa ini, form tampil dengan bagian susunan KOSONG dan tombol simpan
+    // yang selalu ditolak -- terlihat seperti sistemnya rusak, padahal
+    // penyebabnya ada di data order.
+    document.getElementById("sp-marker-form").innerHTML =
+      '<p class="sp-info">PO ini belum punya rincian ukuran di Rincian Sales Order, ' +
+      'jadi susunan marker belum bisa diisi. Lengkapi qty per size di order dulu.</p>';
+    return;
+  }
   document.getElementById("sp-marker-form").innerHTML =
     '<h4 class="sp-subjudul">' + (asal ? "Revisi marker " + spEsc_(a.kodeMarker) : "Marker baru") + '</h4>' +
     (asal ? '<p class="sp-info">Marker lama tetap tersimpan. Yang ini jadi baris baru berstatus Revisi.</p>' : '') +
@@ -1410,9 +1420,11 @@ function spRenderFormMarker_(asal) {
       }).join("") +
     '</div>' +
     '<p class="sp-info" id="sp-mk-hitung">Pcs per lapis: <b>0</b></p>' +
-    '<label class="sp-lbl">Catatan<input id="sp-mk-catatan" placeholder="opsional" type="text"/></label>' +
+    '<div class="sp-grid3" style="margin-top:14px">' +
+      '<label>Catatan<input id="sp-mk-catatan" placeholder="opsional" type="text"/></label>' +
+    '</div>' +
     '<input id="sp-mk-asal" type="hidden" value="' + spEsc_(a.idMarker || "") + '"/>' +
-    '<button class="sp-btn" onclick="spSimpanMarker()" type="button">Simpan Marker</button>';
+    '<button class="sp-simpan-btn" onclick="spSimpanMarker()" type="button">Simpan Marker</button>';
   spHitungMarker_();
 }
 
@@ -1441,8 +1453,7 @@ function spSimpanMarker() {
   if (panjang <= 0) { alert("Panjang marker wajib diisi."); return; }
 
   const asal = (document.getElementById("sp-mk-asal") || {}).value || "";
-  const cut = window.SP_CUT || {};
-  const b0 = (cut.baris || [])[0] || {};
+  const item = window.SP_PO_ITEM || {};
 
   const btn = event && event.target ? event.target : null;
   if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
@@ -1453,7 +1464,7 @@ function spSimpanMarker() {
       idToken: SP_ID_TOKEN, action: "simpanMarker",
       payload: {
         idPurchaseOrder: window.SP_PO_AKTIF,
-        brand: b0.brand || "", artikel: b0.artikel || "", style: b0.style || "",
+        brand: item.brand || "", artikel: item.artikel || "", style: item.style || "",
         kodeMarker: (document.getElementById("sp-mk-kode") || {}).value || "",
         lebarKain: Number((document.getElementById("sp-mk-lebar") || {}).value) || 0,
         panjangMarker: panjang,
@@ -1512,6 +1523,9 @@ function spMuatGelaran() {
   ])
   .then(function (hasil) {
     window.SP_MARKER = (hasil[0] && hasil[0].marker) || [];
+    window.SP_PO_SIZE = (hasil[0] && hasil[0].sizeTersedia) || [];
+    window.SP_PO_WARNA = (hasil[0] && hasil[0].warna) || [];
+    window.SP_PO_ITEM = (hasil[0] && hasil[0].item) || {};
     window.SP_KAIN = (hasil[1] && hasil[1].kain) || [];
     window.SP_KAIN_AMBANG = hasil[1] || {};
     spRenderFormGelaran_();
@@ -1533,9 +1547,7 @@ function spRenderFormGelaran_() {
       'di tab Marker.</p>';
     return;
   }
-  const cut = window.SP_CUT || {};
-  const warna = (cut.baris || []).map(function (b) { return b.warna; })
-    .filter(function (w, i, a) { return w && a.indexOf(w) === i; });
+  const warna = window.SP_PO_WARNA || [];
   const kain = (window.SP_KAIN || []).map(function (k) { return k.jenis; });
 
   document.getElementById("sp-gelar-form").innerHTML =
@@ -1567,7 +1579,7 @@ function spRenderFormGelaran_() {
       '<label>Catatan<input id="sp-gl-catatan" placeholder="opsional" type="text"/></label>' +
     '</div>' +
     '<div class="sp-hitung" id="sp-gl-hasil"/>' +
-    '<button class="sp-btn" onclick="spSimpanGelaran()" type="button">Simpan Gelaran</button>';
+    '<button class="sp-simpan-btn" onclick="spSimpanGelaran()" type="button">Simpan Gelaran</button>';
   spHitungGelaran_();
 }
 
@@ -1612,8 +1624,7 @@ function spSimpanGelaran() {
   const warna = (document.getElementById("sp-gl-warna") || {}).value || "";
   if (!warna) { alert("Warna wajib dipilih."); return; }
 
-  const cut = window.SP_CUT || {};
-  const b0 = (cut.baris || []).filter(function (b) { return b.warna === warna; })[0] || {};
+  const item = window.SP_PO_ITEM || {};
   const btn = event && event.target ? event.target : null;
   if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
 
@@ -1629,8 +1640,8 @@ function spSimpanGelaran() {
         jumlahLapis: lapis,
         tanggalPotong: (document.getElementById("sp-gl-tanggal") || {}).value || "",
         catatan: (document.getElementById("sp-gl-catatan") || {}).value || "",
-        noSO: b0.noSO || "", brand: b0.brand || "",
-        artikel: b0.artikel || "", style: b0.style || ""
+        noSO: item.noSO || "", brand: item.brand || "",
+        artikel: item.artikel || "", style: item.style || ""
       }
     })
   })
@@ -1670,7 +1681,7 @@ function spRenderRekapKain_() {
             : (k.selisih + " (" + k.persenSelisih + "%) " + k.tanda)) + '</td></tr>';
       }).join("") +
     '</tbody></table></div>' +
-    '<button class="sp-btn" onclick="spSimpanSisaKain()" type="button">Simpan Hasil Ukur</button>' +
+    '<button class="sp-simpan-btn" onclick="spSimpanSisaKain()" type="button">Simpan Hasil Ukur</button>' +
     '<p class="sp-info">Selisih wajar sampai ' + (window.SP_KAIN_AMBANG.ambangWajar || 3) +
       '%. Di atas ' + (window.SP_KAIN_AMBANG.ambangPeriksa || 7) + '% perlu diperiksa. ' +
       'Selisih memang selalu ada &#8212; penyusutan kain dan potongan yang tidak utuh.</p>';
