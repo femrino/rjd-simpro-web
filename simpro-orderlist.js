@@ -489,13 +489,12 @@ function dbPanelArtikelHtml_(it, n){
     '<div class="of-jadwal-wrap" style="margin-top:14px">' +
       '<div class="of-jadwal-lbl">Gambar Desain</div>' +
       (a.urlGambarDesain
-        ? '<div class="dbep-desain-lama">' +
+        ? '<div class="dbep-desain-grid">' +
             (String(a.urlGambarDesain).split(";").map(function(u){
               u = u.trim();
               if(!u) return "";
-              return '<a href="' + rjdEscapeHtml_(u) + '" rel="noopener" target="_blank">' +
-                'Lihat gambar tersimpan</a>';
-            }).filter(function(x){ return x; }).join(" &#183; ")) +
+              return dbThumbDesainHtml_(u);
+            }).filter(function(x){ return x; }).join("")) +
           '</div>'
         : '<div class="of-komposisi-hint">Belum ada gambar desain.</div>') +
       '<input accept="image/*" class="dbep-desain-file" multiple="multiple" type="file" style="margin-top:8px"/>' +
@@ -519,6 +518,38 @@ function dbOpsiSatuan_(terpilih, daftar){
     return '<option' + (String(terpilih || "").toLowerCase() === x ? ' selected="selected"' : '') +
       ' value="' + x + '">' + x + '</option>';
   }).join("");
+}
+
+/**
+ * Thumbnail 1 gambar desain.
+ *
+ * Tautan Drive biasa (".../file/d/ID/view") TIDAK bisa dipakai langsung di
+ * <img> -- yang keluar halaman HTML, bukan gambar. Perlu bentuk thumbnail:
+ * https://drive.google.com/thumbnail?id=ID&sz=w400
+ *
+ * Kalau URL-nya bukan Drive (mis. tautan gambar biasa), dipakai apa adanya.
+ * Kalau gambarnya gagal dimuat -- file dihapus, atau izin berubah jadi
+ * terbatas -- onerror menggantinya dengan tautan teks, bukan ikon rusak.
+ */
+function dbThumbDesainHtml_(url){
+  var idDrive = "";
+  var m = String(url).match(/\/file\/d\/([^/]+)/) || String(url).match(/[?&]id=([^&]+)/);
+  if(m) idDrive = m[1];
+  var src = idDrive
+    ? ("https://drive.google.com/thumbnail?id=" + encodeURIComponent(idDrive) + "&sz=w400")
+    : url;
+  return '<a class="dbep-thumb" href="' + rjdEscapeHtml_(url) + '" rel="noopener" target="_blank" ' +
+      'title="Buka gambar di tab baru">' +
+    '<img alt="desain" loading="lazy" onerror="dbThumbGagal_(this)" src="' + rjdEscapeHtml_(src) + '"/>' +
+  '</a>';
+}
+
+/** Gambar tidak bisa dimuat -> ganti jadi tautan teks supaya tetap bisa dibuka. */
+function dbThumbGagal_(img){
+  var a = img.closest(".dbep-thumb");
+  if(!a) return;
+  a.classList.add("dbep-thumb-gagal");
+  a.innerHTML = '<span>Gambar tidak bisa ditampilkan &#183; buka tautan</span>';
 }
 
 function dbBarisKomposisiHtml_(k, sizes){
@@ -583,6 +614,70 @@ function dbBarisAksesorisHtml_(a){
   '</tr>';
 }
 
+/**
+ * Centang ukuran diubah -> tambah/hapus kolom size di tabel Warna item ini.
+ *
+ * Kolom ditambah dengan qty KOSONG, bukan langsung diisi: menambah ukuran
+ * berarti "ukuran ini ada di order", bukan "ukuran ini sudah dipesan sekian".
+ * Admin yang mengisi angkanya.
+ *
+ * Melepas centang MENGHAPUS kolomnya dari tabel -- qty-nya otomatis terkirim 0,
+ * dan backend memeriksa keterikatan sebelum benar-benar menghapusnya.
+ */
+function dbUbahSize(cb){
+  const kartu = cb.closest(".of-item-card");
+  if(!kartu) return;
+  const size = cb.dataset.size;
+  const tabel = kartu.querySelector(".of-matrix");
+  if(!tabel) return;
+
+  if(cb.checked){
+    // Sisipkan kolom BARU tepat sebelum kolom Total, mengikuti urutan
+    // DBEP_SIZE_TERSEDIA supaya S/M/L/XL tetap berurutan.
+    const urut = window.DBEP_SIZE_TERSEDIA || [];
+    const posBaru = urut.indexOf(size);
+    const thAda = Array.prototype.slice.call(
+      tabel.querySelectorAll("thead th.of-th-size:not(.dbep-th-total)"));
+    let sesudah = null;
+    for(let i = 0; i < thAda.length; i++){
+      if(urut.indexOf(thAda[i].textContent.trim()) > posBaru){ sesudah = thAda[i]; break; }
+    }
+    const th = document.createElement("th");
+    th.className = "of-th-size";
+    th.textContent = size;
+    if(sesudah) sesudah.parentNode.insertBefore(th, sesudah);
+    else {
+      const thTotal = tabel.querySelector("thead th.dbep-th-total");
+      if(thTotal) thTotal.parentNode.insertBefore(th, thTotal);
+      else tabel.querySelector("thead tr").appendChild(th);
+    }
+    const idxKolom = Array.prototype.slice.call(tabel.querySelectorAll("thead th")).indexOf(th);
+    tabel.querySelectorAll("tbody tr.dbep-baris").forEach(function(tr){
+      const td = document.createElement("td");
+      td.className = "of-td-size";
+      td.innerHTML = '<input class="dbep-qty" data-size="' + size +
+        '" min="0" oninput="dbHitungTotalBarisPO(this)" placeholder="0" type="number"/>';
+      const anak = tr.children;
+      if(idxKolom < anak.length) tr.insertBefore(td, anak[idxKolom]);
+      else tr.appendChild(td);
+    });
+  } else {
+    const thAda = Array.prototype.slice.call(tabel.querySelectorAll("thead th"));
+    let idxKolom = -1;
+    thAda.forEach(function(th, i){
+      if(th.classList.contains("of-th-size") && !th.classList.contains("dbep-th-total") &&
+         th.textContent.trim() === size) idxKolom = i;
+    });
+    if(idxKolom === -1) return;
+    thAda[idxKolom].remove();
+    tabel.querySelectorAll("tbody tr.dbep-baris").forEach(function(tr){
+      if(tr.children[idxKolom]) tr.children[idxKolom].remove();
+      const sisa = tr.querySelector(".dbep-qty");
+      if(sisa) dbHitungTotalBarisPO(sisa);
+    });
+  }
+}
+
 function dbTambahKomposisi(btn){
   var wrap = btn.closest(".of-komposisi-wrap");
   var tb = wrap.querySelector(".dbep-kmp");
@@ -613,14 +708,24 @@ function dbHapusBarisPanel(btn){
   if(tr) tr.remove();
 }
 
+/**
+ * Daftar ukuran yang boleh dipilih. Diambil dari backend (RINCIAN_SO_SIZE_KOLOM)
+ * supaya persis sama dengan kolom yang benar-benar ada di SD Rincian Sales
+ * Order -- mengarang daftar sendiri di frontend akan menghasilkan ukuran yang
+ * tidak punya kolom untuk ditulis.
+ */
 function dbRenderEditPO(d){
+  window.DBEP_SIZE_TERSEDIA = d.sizeTersedia || [];
   const itemHtml = (d.itemGroups || []).map(function(it, n){
     const slot = it.slotKain || [];
     const sizeCols = it.sizeColumns || [];
     const kepala = '<tr><th class="of-th-warna">Warna</th>' +
       slot.map(function(sz){ return '<th class="of-th-kain">' + rjdEscapeHtml_(sz) + '</th>'; }).join("") +
       sizeCols.map(function(sz){ return '<th class="of-th-size">' + rjdEscapeHtml_(sz) + '</th>'; }).join("") +
-      '<th class="of-th-size">Total</th>' +
+      // Kelas dbep-th-total dipakai dbUbahSize untuk MEMBEDAKAN kolom Total dari
+      // kolom ukuran -- keduanya memakai of-th-size, dan tanpa penanda ini
+      // kolom Total ikut terhitung sebagai ukuran lalu tersisipi/terhapus.
+      '<th class="of-th-size dbep-th-total">Total</th>' +
       '<th class="of-th-kmp-kons">Harga/pcs</th><th></th></tr>';
     const badan = (it.warnaList || []).map(function(w){
       const kain = slot.map(function(namaSlot){
@@ -659,33 +764,49 @@ function dbRenderEditPO(d){
     // meminjam sesuatu yang tidak ada di sini. simpro-global.css aman karena
     // dimuat di semua cabang.)
     //
-    // Brand/Artikel/Style ditampilkan sebagai field DINONAKTIFKAN, bukan
-    // disembunyikan: susunannya jadi sejajar dengan Form Order, dan admin bisa
-    // memastikan sedang menyunting item yang benar. Dinonaktifkan karena
-    // simpanEditPO_ bekerja per nomorBaris di SD Rincian Sales Order -- mengubah
-    // artikel berarti memutus tautan ID Detail Order yang dipakai invoice dan
-    // surat jalan untuk menarik harga.
-    const sizeAktifHtml = sizeCols.length
-      ? '<div class="of-size-cek" style="pointer-events:none;opacity:.75">' +
-          sizeCols.map(function(sz){
-            return '<label class="of-size-cek-item"><input checked="checked" disabled="disabled" type="checkbox"/><span>' +
-              rjdEscapeHtml_(sz) + '</span></label>';
-          }).join("") +
-        '</div>'
-      : '';
+    // Brand/Artikel/Style BISA DIEDIT (sejak v31).
+    //
+    // Dulu dikunci karena dikira mengubahnya memutus tautan ID Detail Order.
+    // Ternyata tidak: ID Detail Order = No SO + "-" + Size (lihat
+    // generateDetailPurchaseOrderDariRincian_) -- tidak mengandung brand,
+    // artikel, maupun style sama sekali. Detail PO punya kolom Brand/Artikel/
+    // Style tersendiri yang tinggal diperbarui di baris yang sama, dan invoice
+    // maupun surat jalan tetap menemukan barisnya.
+    //
+    // Yang MASIH dikunci: daftar ukuran. Menghapus size berarti menyatakan
+    // barang yang mungkin sudah dijahit, ditagih, atau dikirim itu tidak pernah
+    // dipesan -- dan itu perlu pengaman berlapis yang belum ada.
+    // Ukuran: yang SUDAH dipakai bisa dilepas centangnya (= qty jadi 0), dan
+    // ukuran lain bisa ditambahkan. Penguncian per (warna, size) menyusul lewat
+    // dbMuatProgresWarna_ -- sampai datanya tiba, semua centang DIKUNCI. Aman
+    // sebagai keadaan awal: lebih baik menolak perubahan yang sah daripada
+    // mengizinkan yang berbahaya.
+    const sizeAktifHtml =
+      '<div class="of-size-cek dbep-size-cek" data-item="' + n + '">' +
+        (window.DBEP_SIZE_TERSEDIA || []).map(function(sz){
+          const dipakai = sizeCols.indexOf(sz) !== -1;
+          return '<label class="of-size-cek-item"><input class="dbep-size-cb" ' +
+            'data-size="' + rjdEscapeHtml_(sz) + '"' + (dipakai ? ' checked="checked"' : '') +
+            ' disabled="disabled" onchange="dbUbahSize(this)" type="checkbox"/><span>' +
+            rjdEscapeHtml_(sz) + '</span></label>';
+        }).join("") +
+      '</div>';
 
     return '<div class="of-item-card" style="margin-top:14px">' +
       '<div class="of-item-head"><b>ITEM #' + (n + 1) + '</b></div>' +
-      '<div class="of-item-grid">' +
-        '<label>Brand<input disabled="disabled" type="text" value="' + rjdEscapeHtml_(it.brand || "") + '"/></label>' +
-        '<label>Artikel<input disabled="disabled" type="text" value="' + rjdEscapeHtml_(it.artikel || "") + '"/></label>' +
-        '<label>Style<input disabled="disabled" type="text" value="' + rjdEscapeHtml_(it.style || "") + '"/></label>' +
+      '<div class="of-item-grid dbep-identitas" data-item="' + n + '" ' +
+          'data-brand-awal="' + rjdEscapeHtml_(it.brand || "") + '" ' +
+          'data-artikel-awal="' + rjdEscapeHtml_(it.artikel || "") + '" ' +
+          'data-style-awal="' + rjdEscapeHtml_(it.style || "") + '">' +
+        '<label>Brand<input class="dbep-brand" type="text" value="' + rjdEscapeHtml_(it.brand || "") + '"/></label>' +
+        '<label>Artikel<input class="dbep-artikel" type="text" value="' + rjdEscapeHtml_(it.artikel || "") + '"/></label>' +
+        '<label>Style<input class="dbep-style" type="text" value="' + rjdEscapeHtml_(it.style || "") + '"/></label>' +
       '</div>' +
-      (sizeAktifHtml
-        ? '<label style="display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);margin:14px 0 6px">Ukuran</label>' +
-          sizeAktifHtml +
-          '<div class="of-komposisi-hint">Ukuran mengikuti yang sudah dipesan. Menambah ukuran baru belum bisa dari sini.</div>'
-        : '') +
+      '<div class="of-komposisi-hint">Mengubah Brand/Artikel/Style memperbarui semua baris item ini, ' +
+        'termasuk Detail PO. Nomor tagihan &amp; surat jalan tidak terpengaruh.</div>' +
+      '<label style="display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);margin:14px 0 6px">Ukuran</label>' +
+      sizeAktifHtml +
+      '<div class="of-komposisi-hint dbep-size-hint">Memeriksa keterikatan ukuran...</div>' +
       '<div class="of-aks-wrap of-warna-wrap">' +
         '<div class="of-warna-lbl-baris">' +
           '<div class="of-komposisi-lbl">Warna &amp; Jumlah Order</div>' +
@@ -728,8 +849,8 @@ function dbRenderEditPO(d){
     '</div>' +
     '<p style="font-size:11.5px;color:var(--ink-soft);margin-top:14px">' +
       'Mengubah qty otomatis memperbarui Detail PO untuk order ini saja -- order lain tidak tersentuh. ' +
-      'Brand, Artikel, Style, dan daftar ukuran tidak bisa diubah dari sini: PO ini sudah punya ' +
-      'ID Detail Order yang dipakai invoice &amp; surat jalan untuk menarik harga.' +
+      'Daftar ukuran belum bisa diubah dari sini &#8212; menghapus ukuran perlu pemeriksaan ' +
+      'invoice &amp; surat jalan yang belum tersedia.' +
     '</p>';
 
   ofRenderJadwalKirim_("db-editpo-jadwal", d.jadwalKirim);
@@ -763,7 +884,49 @@ function dbMuatProgresWarna_(idPO){
       return;
     }
     const progres = d.progres || {};
+    const ikat = d.keterikatanSize || {};
     const rapikan = function(x){ return String(x || "").trim().toLowerCase().replace(/\s+/g, " "); };
+
+    // ---- Buka kunci centang ukuran, per (warna, size) ----
+    // Sebuah ukuran boleh dilepas hanya kalau TIDAK ADA satu warna pun yang
+    // sudah terikat pada ukuran itu. Cukup satu warna terikat, ukurannya
+    // dikunci -- melepasnya akan menghapus baris Detail PO untuk warna itu juga.
+    if (ikat.__gagalBaca) {
+      document.querySelectorAll(".dbep-size-hint").forEach(function(el){
+        el.textContent = "Keterikatan ukuran tidak bisa dipastikan, jadi ukuran dikunci.";
+      });
+    } else {
+      document.querySelectorAll(".dbep-size-cek").forEach(function(grup){
+        const kartu = grup.closest(".of-item-card");
+        const warnaItem = kartu
+          ? Array.prototype.slice.call(kartu.querySelectorAll(".dbep-aksi"))
+              .map(function(td){ return rapikan(td.dataset.warna || ""); })
+              .filter(function(x){ return x; })
+          : [];
+        grup.querySelectorAll(".dbep-size-cb").forEach(function(cb){
+          const sz = rapikan(cb.dataset.size);
+          const alasan = [];
+          warnaItem.forEach(function(w){
+            const r = ikat[w + "|" + sz];
+            if (r && r.terkunci) alasan.push(w + ": " + r.alasan);
+          });
+          if (cb.checked && alasan.length) {
+            // Tetap disabled, tapi diberi tahu KENAPA -- "tidak bisa diklik"
+            // tanpa alasan adalah cara tercepat membuat orang menduga sistemnya
+            // rusak lalu mencari jalan pintas di spreadsheet.
+            cb.title = "Tidak bisa dilepas: " + alasan.join("; ");
+            cb.closest(".of-size-cek-item").classList.add("dbep-size-terkunci");
+          } else {
+            cb.disabled = false;
+          }
+        });
+        const hint = kartu ? kartu.querySelector(".dbep-size-hint") : null;
+        if (hint) {
+          hint.textContent = "Centang untuk menambah ukuran, lepas untuk menghapusnya. " +
+            "Ukuran yang sudah diproduksi, ditagih, atau dikirim tidak bisa dilepas.";
+        }
+      });
+    }
     document.querySelectorAll(".dbep-aksi").forEach(function(td){
       if(td.dataset.warna === undefined) return; // baris baru -> lewati
       const p = progres[rapikan(td.dataset.warna)] || 0;
@@ -835,14 +998,33 @@ function dbHitungTotalBarisPO(inp){
 }
 
 async function dbSimpanEditPO(){
+  if (identitas.length) {
+    const rincian = identitas.map(function(x){
+      return "  " + (x.artikelLama || "-") + " / " + (x.styleLama || "-") +
+        "\n  menjadi: " + x.artikel + " / " + (x.style || "-");
+    }).join("\n\n");
+    if (!confirm("Identitas item akan diubah:\n\n" + rincian +
+        "\n\nSemua baris item ini ikut berubah, termasuk Detail PO. Lanjutkan?")) {
+      return;
+    }
+  }
+
   const btn = document.getElementById("db-editpo-simpan");
   const statusEl = document.getElementById("db-editpo-status");
   btn.disabled = true;
   statusEl.textContent = "Menyimpan...";
 
   const bacaSize = function(tr){
+    // SEMUA ukuran yang tersedia dikirim, bukan cuma kolom yang tampil.
+    // Ukuran yang centangnya dilepas dikirim EKSPLISIT sebagai 0 supaya
+    // maksudnya jelas: "ukuran ini dihapus", bukan "ukuran ini kebetulan tidak
+    // terbaca". Kalau hanya kolom yang tampil yang dikirim, satu bug render
+    // saja sudah cukup untuk menghapus ukuran tanpa ada yang menyadari.
     const o = {};
-    tr.querySelectorAll(".dbep-qty").forEach(function(inp){ o[inp.dataset.size] = Number(inp.value) || 0; });
+    (window.DBEP_SIZE_TERSEDIA || []).forEach(function(sz){ o[sz] = 0; });
+    tr.querySelectorAll(".dbep-qty").forEach(function(inp){
+      o[inp.dataset.size] = Number(inp.value) || 0;
+    });
     return o;
   };
   const bacaKain = function(tr){
@@ -862,6 +1044,35 @@ async function dbSimpanEditPO(){
       sizeChart: dbBacaSizeChart_(p, ".dbep-sc-order")
     };
   });
+
+  // ---- Identitas item (Brand/Artikel/Style) ----
+  // Hanya dikirim kalau BERUBAH. Kalau semua item dikirim apa adanya, backend
+  // akan menulis ulang ratusan sel dengan nilai yang sama persis -- lambat, dan
+  // membuat "Diedit Oleh" tercatat padahal tidak ada yang berubah.
+  const identitas = [];
+  document.querySelectorAll(".dbep-identitas").forEach(function(g){
+    const brand = (g.querySelector(".dbep-brand").value || "").trim();
+    const artikel = (g.querySelector(".dbep-artikel").value || "").trim();
+    const style = (g.querySelector(".dbep-style").value || "").trim();
+    if(brand === (g.dataset.brandAwal || "") &&
+       artikel === (g.dataset.artikelAwal || "") &&
+       style === (g.dataset.styleAwal || "")) return;
+    identitas.push({
+      item: g.dataset.item,
+      brandLama: g.dataset.brandAwal || "", artikelLama: g.dataset.artikelAwal || "",
+      styleLama: g.dataset.styleAwal || "",
+      brand: brand, artikel: artikel, style: style
+    });
+  });
+
+  // Artikel kosong = baris kehilangan identitasnya. Ditolak di sini supaya
+  // isian yang sudah diketik tidak hilang gara-gara ditolak server.
+  for (let i = 0; i < identitas.length; i++) {
+    if (!identitas[i].artikel) {
+      alert("Artikel tidak boleh kosong.");
+      return;
+    }
+  }
 
   // ---- Data ARTIKEL (lintas order) ----
   // Hanya dikirim untuk artikel yang SUDAH terdaftar di Master Artikel.
@@ -939,8 +1150,15 @@ async function dbSimpanEditPO(){
       const kartu = tr.closest(".of-item-card");
       const pan = kartu ? panelOrder[(kartu.querySelector(".dbep-panel-order") || {}).dataset ?
         kartu.querySelector(".dbep-panel-order").dataset.item : ""] : null;
+      // Identitas ditempelkan ke tiap baris warna item ini -- di sheet,
+      // Brand/Artikel/Style memang tersimpan per baris.
+      const gid = kartu ? (kartu.querySelector(".dbep-identitas") || {}).dataset : null;
+      const idn = gid ? identitas.filter(function(x){ return x.item === gid.item; })[0] : null;
       return {
         nomorBaris: Number(tr.dataset.baris) || 0,
+        brand: idn ? idn.brand : undefined,
+        artikel: idn ? idn.artikel : undefined,
+        style: idn ? idn.style : undefined,
         harga: Number(tr.querySelector(".dbep-harga").value) || 0,
         sizeQty: bacaSize(tr),
         bahan: bacaKain(tr),

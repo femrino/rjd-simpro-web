@@ -160,10 +160,33 @@ body { padding-top: 0; }
 .rjd-modal .dbep-warn { font-size: 12px; color: #8A5D1F; background: #FCF6E8;
   border: 1px solid #E8D8AE; border-radius: 8px; padding: 9px 12px; margin-bottom: 12px; }
 
-/* Tautan gambar desain yang sudah tersimpan. Ditampilkan sebagai tautan, bukan
-   pratinjau: gambar desain sering besar dan modal ini sudah panjang. */
-.rjd-modal .dbep-desain-lama { font-size: 12.5px; margin-bottom: 4px; }
-.rjd-modal .dbep-desain-lama a { color: var(--thread); font-weight: 600; text-decoration: underline; }
+/* Thumbnail gambar desain. Ukuran kecil & tetap supaya modal tidak memanjang
+   walau gambarnya banyak -- klik untuk membuka ukuran penuh di tab baru. */
+.rjd-modal .dbep-desain-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.rjd-modal .dbep-thumb { display: block; width: 84px; height: 84px; border-radius: 9px;
+  overflow: hidden; border: 1px solid var(--line); background: var(--white); flex: 0 0 auto; }
+.rjd-modal .dbep-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rjd-modal .dbep-thumb:hover { border-color: var(--thread); }
+/* Gambar gagal dimuat (file dihapus / izin berubah) -> jadi kotak teks,
+   bukan ikon rusak yang tidak memberi tahu apa-apa. */
+.rjd-modal .dbep-thumb-gagal { width: auto; height: auto; padding: 8px 11px;
+  border-style: dashed; display: inline-flex; align-items: center; }
+.rjd-modal .dbep-thumb-gagal span { font-size: 11px; color: var(--ink-soft); line-height: 1.3; }
 .rjd-modal .dbep-desain-file { font-size: 12px; padding: 7px; background: var(--white);
   border: 1px dashed var(--line); border-radius: 8px; width: 100%; box-sizing: border-box; }
+
+/* Identitas item (Brand/Artikel/Style) kini bisa disunting. Diberi penanda
+   halus saat diubah supaya perubahan tidak lolos tanpa disadari sebelum
+   tombol Simpan ditekan. */
+.rjd-modal .dbep-identitas input:focus { border-color: var(--terra); }
+
+/* Ukuran yang tidak boleh dilepas (sudah diproduksi/ditagih/dikirim).
+   Diberi gembok, bukan sekadar diredupkan -- "tidak bisa diklik" tanpa alasan
+   adalah cara tercepat membuat orang menduga sistemnya rusak lalu mencari
+   jalan pintas di spreadsheet. Alasannya ada di tooltip. */
+.rjd-modal .of-size-cek-item.dbep-size-terkunci { opacity: .6; cursor: not-allowed;
+  border-style: dashed; }
+.rjd-modal .of-size-cek-item.dbep-size-terkunci::after { content: "\1F512"; font-size: 9px;
+  margin-left: 2px; }
+.rjd-modal .dbep-size-hint { font-style: italic; }
 
