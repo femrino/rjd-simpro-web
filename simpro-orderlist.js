@@ -355,6 +355,151 @@ function dbTutupEditPO(){
   document.body.style.overflow = "";
 }
 
+/**
+ * Panel data yang berlaku UNTUK ORDER INI SAJA.
+ * Rumahnya SD Rincian Sales Order, per baris warna. Diisi per ITEM lalu
+ * ditulis ke semua baris warna item itu -- di lapangan catatan model & size
+ * chart memang milik style, bukan milik warna.
+ */
+function dbPanelOrderHtml_(it, n){
+  var w0 = (it.warnaList || [])[0] || {};
+  return '<div class="of-form-section dbep-panel dbep-panel-order" data-item="' + n + '">' +
+    '<h4>Berlaku untuk ORDER INI saja</h4>' +
+    '<label style="display:block">Catatan Item / Detail Model' +
+      '<textarea class="rjd-autogrow dbep-catatan-item" rows="2" placeholder="misal: kerah tegak, saku bobok, jahitan rantai">' +
+        rjdEscapeHtml_(w0.catatanItem || "") + '</textarea></label>' +
+    '<label style="display:block;margin-top:14px">Size Chart Custom' +
+      '<textarea class="rjd-autogrow dbep-sizechart" rows="2" placeholder="misal: M = LD 100, PB 70">' +
+        rjdEscapeHtml_(dbSizeChartKeTeks_(w0.sizeChart)) + '</textarea></label>' +
+    '<div class="of-komposisi-hint">Kode kain per warna diisi di tabel Warna di atas &#8212; itu juga milik order ini.</div>' +
+  '</div>';
+}
+
+/**
+ * Panel data yang berlaku untuk ARTIKEL -- LINTAS ORDER.
+ *
+ * Dipisah secara visual dari panel di atasnya karena akibatnya berbeda:
+ * mengubah aksesoris di sini ikut ke semua order yang memakai artikel yang
+ * sama. Tanpa pemisahan, orang akan menyunting satu order dan tanpa sadar
+ * mengubah artikel yang dipakai order lain.
+ *
+ * Peringatan HANYA muncul kalau artikel dipakai lebih dari satu order.
+ * Mayoritas artikel cuma dipakai sekali -- memperingatkan di situ hanya
+ * melatih orang mengabaikan peringatan.
+ */
+function dbPanelArtikelHtml_(it, n){
+  var a = it.artikelData || {};
+  var dipakai = Number(it.jumlahOrderPakaiArtikel) || 1;
+
+  var peringatan = dipakai > 1
+    ? '<div class="dbep-warn">Artikel ini dipakai <b>' + dipakai + ' order</b>. ' +
+      'Perubahan di panel ini ikut ke semuanya, termasuk order yang sudah selesai.</div>'
+    : '';
+
+  var belumTerdaftar = !a.adaMaster
+    ? '<div class="of-komposisi-hint">Artikel ini belum terdaftar di Master Artikel, ' +
+      'jadi isian di sini belum bisa disimpan. Setujui order lewat Form Order untuk mendaftarkannya.</div>'
+    : '';
+
+  var kmpBaris = (a.komposisiKain || []).map(function(k){ return dbBarisKomposisiHtml_(k); }).join("");
+  var aksBaris = (a.aksesoris || []).map(function(x){ return dbBarisAksesorisHtml_(x); }).join("");
+
+  return '<div class="of-form-section dbep-panel dbep-panel-artikel" data-item="' + n + '" ' +
+      'data-idartikel="' + rjdEscapeHtml_(it.idArtikel || "") + '">' +
+    '<h4>Berlaku untuk ARTIKEL &#183; semua order</h4>' +
+    peringatan + belumTerdaftar +
+    '<div class="of-komposisi-wrap">' +
+      '<div class="of-komposisi-lbl">Komposisi Kain</div>' +
+      '<div class="of-matrix-wrap"><table class="of-matrix of-kmp-tabel">' +
+        '<thead><tr><th class="of-th-kmp-nama">Nama Kain</th><th class="of-th-kmp-kons">Konsumsi/pcs</th>' +
+          '<th class="of-th-kmp-satuan">Satuan</th><th></th></tr></thead>' +
+        '<tbody class="dbep-kmp">' + kmpBaris + '</tbody>' +
+      '</table></div>' +
+      '<button class="of-jadwal-add" onclick="dbTambahKomposisi(this)" type="button">+ Tambah Kain</button>' +
+      '<div class="of-komposisi-hint">Nama kain di sini jadi kolom kode kain di tabel Warna, ' +
+        'setelah modal dibuka ulang.</div>' +
+    '</div>' +
+    '<div class="of-aks-wrap" style="margin-top:14px">' +
+      '<div class="of-komposisi-lbl">Aksesoris</div>' +
+      '<div class="of-matrix-wrap"><table class="of-matrix">' +
+        '<thead><tr><th class="of-th-kmp-nama">Nama</th><th class="of-th-kmp-kons">Qty/pcs</th>' +
+          '<th class="of-th-kmp-satuan">Satuan</th><th class="of-th-kmp-nama">Keterangan</th><th></th></tr></thead>' +
+        '<tbody class="dbep-aks">' + aksBaris + '</tbody>' +
+      '</table></div>' +
+      '<button class="of-jadwal-add" onclick="dbTambahAksesoris(this)" type="button">+ Tambah Aksesoris</button>' +
+    '</div>' +
+    '<label style="display:block;margin-top:14px">Catatan Produksi' +
+      '<textarea class="rjd-autogrow dbep-catatan-produksi" rows="2" placeholder="instruksi tetap untuk artikel ini">' +
+        rjdEscapeHtml_(a.catatanProduksi || "") + '</textarea></label>' +
+    '<label style="display:block;margin-top:14px">URL Gambar Desain' +
+      '<input class="dbep-url-desain" placeholder="tempel tautan gambar (Drive/foto)" type="text" value="' +
+        rjdEscapeHtml_(a.urlGambarDesain || "") + '"/></label>' +
+  '</div>';
+}
+
+function dbBarisKomposisiHtml_(k){
+  k = k || {};
+  return '<tr class="dbep-kmp-baris">' +
+    '<td class="of-td-kmp-nama"><input class="dbep-kmp-nama" placeholder="mis. Brokat" type="text" value="' +
+      rjdEscapeHtml_(k.nama || "") + '"/></td>' +
+    '<td class="of-td-kmp-kons"><input class="dbep-kmp-kons" min="0" placeholder="0" step="0.01" type="number" value="' +
+      (k.konsumsi ? k.konsumsi : "") + '"/></td>' +
+    '<td class="of-td-kmp-satuan"><input class="dbep-kmp-satuan" placeholder="yds" type="text" value="' +
+      rjdEscapeHtml_(k.satuan || "yds") + '"/></td>' +
+    '<td class="of-td-aksi"><button class="of-warna-remove" onclick="dbHapusBarisPanel(this)" type="button">&#10005;</button></td>' +
+  '</tr>';
+}
+
+function dbBarisAksesorisHtml_(a){
+  a = a || {};
+  return '<tr class="dbep-aks-baris">' +
+    '<td class="of-td-kmp-nama"><input class="dbep-aks-nama" placeholder="mis. Kancing" type="text" value="' +
+      rjdEscapeHtml_(a.nama || "") + '"/></td>' +
+    '<td class="of-td-kmp-kons"><input class="dbep-aks-qty" min="0" placeholder="0" step="0.01" type="number" value="' +
+      (a.qtyPerPcs ? a.qtyPerPcs : "") + '"/></td>' +
+    '<td class="of-td-kmp-satuan"><input class="dbep-aks-satuan" placeholder="pcs" type="text" value="' +
+      rjdEscapeHtml_(a.satuan || "pcs") + '"/></td>' +
+    '<td class="of-td-kmp-nama"><input class="dbep-aks-ket" placeholder="opsional" type="text" value="' +
+      rjdEscapeHtml_(a.keterangan || "") + '"/></td>' +
+    '<td class="of-td-aksi"><button class="of-warna-remove" onclick="dbHapusBarisPanel(this)" type="button">&#10005;</button></td>' +
+  '</tr>';
+}
+
+function dbTambahKomposisi(btn){
+  var tb = btn.closest(".of-komposisi-wrap").querySelector(".dbep-kmp");
+  if(tb) tb.insertAdjacentHTML("beforeend", dbBarisKomposisiHtml_({}));
+}
+
+function dbTambahAksesoris(btn){
+  var tb = btn.closest(".of-aks-wrap").querySelector(".dbep-aks");
+  if(tb) tb.insertAdjacentHTML("beforeend", dbBarisAksesorisHtml_({}));
+}
+
+function dbHapusBarisPanel(btn){
+  var tr = btn.closest("tr");
+  if(tr) tr.remove();
+}
+
+/** Size chart tersimpan sebagai array {size, keterangan}; ditampilkan sebagai teks per baris. */
+function dbSizeChartKeTeks_(daftar){
+  if(!daftar || !daftar.length) return "";
+  return daftar.map(function(x){
+    return (x.size || "") + (x.keterangan ? " = " + x.keterangan : "");
+  }).join("\n");
+}
+
+function dbTeksKeSizeChart_(teks){
+  return String(teks || "").split("\n")
+    .map(function(b){ return b.trim(); })
+    .filter(function(b){ return b; })
+    .map(function(b){
+      var i = b.indexOf("=");
+      return i === -1
+        ? { size: b, keterangan: "" }
+        : { size: b.slice(0, i).trim(), keterangan: b.slice(i + 1).trim() };
+    });
+}
+
 function dbRenderEditPO(d){
   const itemHtml = (d.itemGroups || []).map(function(it, n){
     const slot = it.slotKain || [];
@@ -436,6 +581,8 @@ function dbRenderEditPO(d){
         '<button class="of-add-warna-btn" onclick="dbTambahWarnaPO(this, ' + n + ')" type="button">+ Tambah Warna</button>' +
       '</div>' +
       (slot.length ? '' : '<div class="of-komposisi-hint">Artikel ini belum punya komposisi kain di Master Artikel, jadi kolom kode kain tidak muncul.</div>') +
+      dbPanelOrderHtml_(it, n) +
+      dbPanelArtikelHtml_(it, n) +
     '</div>';
   }).join("");
 
@@ -591,17 +738,68 @@ function dbSimpanEditPO(){
       .filter(function(b){ return b.slot && b.kode; });
   };
 
+  // ---- Data panel per ITEM ----
+  // Catatan Item & Size Chart diisi sekali per item, lalu ditempelkan ke SEMUA
+  // baris warna item itu -- di sheet rumahnya memang per baris, tapi di
+  // lapangan isinya milik style, bukan milik warna.
+  const panelOrder = {};
+  document.querySelectorAll(".dbep-panel-order").forEach(function(p){
+    panelOrder[p.dataset.item] = {
+      catatanItem: (p.querySelector(".dbep-catatan-item") || {}).value || "",
+      sizeChart: dbTeksKeSizeChart_((p.querySelector(".dbep-sizechart") || {}).value || "")
+    };
+  });
+
+  // ---- Data ARTIKEL (lintas order) ----
+  // Hanya dikirim untuk artikel yang SUDAH terdaftar di Master Artikel.
+  // Backend memperlakukan field yang tidak dikirim sebagai "jangan disentuh".
+  const artikel = [];
+  document.querySelectorAll(".dbep-panel-artikel").forEach(function(p){
+    const idArtikel = p.dataset.idartikel || "";
+    if(!idArtikel) return;
+    artikel.push({
+      idArtikel: idArtikel,
+      komposisiKain: Array.prototype.slice.call(p.querySelectorAll(".dbep-kmp-baris"))
+        .map(function(tr){
+          return {
+            nama: (tr.querySelector(".dbep-kmp-nama").value || "").trim(),
+            konsumsi: Number(tr.querySelector(".dbep-kmp-kons").value) || 0,
+            satuan: (tr.querySelector(".dbep-kmp-satuan").value || "yds").trim()
+          };
+        })
+        .filter(function(k){ return k.nama; }),
+      aksesoris: Array.prototype.slice.call(p.querySelectorAll(".dbep-aks-baris"))
+        .map(function(tr){
+          return {
+            nama: (tr.querySelector(".dbep-aks-nama").value || "").trim(),
+            qtyPerPcs: Number(tr.querySelector(".dbep-aks-qty").value) || 0,
+            satuan: (tr.querySelector(".dbep-aks-satuan").value || "pcs").trim(),
+            keterangan: (tr.querySelector(".dbep-aks-ket").value || "").trim()
+          };
+        })
+        .filter(function(a){ return a.nama; }),
+      catatanProduksi: (p.querySelector(".dbep-catatan-produksi") || {}).value || "",
+      urlGambarDesain: (p.querySelector(".dbep-url-desain") || {}).value || ""
+    });
+  });
+
   const semua = Array.prototype.slice.call(document.querySelectorAll(".dbep-baris"));
   // Baris yang DITANDAI hapus tidak ikut dikirim sebagai perubahan biasa --
   // kalau ikut, backend akan menulis nilainya dulu lalu menghapus barisnya.
   const baris = semua
     .filter(function(tr){ return tr.dataset.baru !== "1" && !tr.classList.contains("dbep-dihapus"); })
     .map(function(tr){
+      // Panel item dicari dari kartu ITEM tempat baris ini berada.
+      const kartu = tr.closest(".of-item-card");
+      const pan = kartu ? panelOrder[(kartu.querySelector(".dbep-panel-order") || {}).dataset ?
+        kartu.querySelector(".dbep-panel-order").dataset.item : ""] : null;
       return {
         nomorBaris: Number(tr.dataset.baris) || 0,
         harga: Number(tr.querySelector(".dbep-harga").value) || 0,
         sizeQty: bacaSize(tr),
-        bahan: bacaKain(tr)
+        bahan: bacaKain(tr),
+        catatanItem: pan ? pan.catatanItem : undefined,
+        sizeChart: pan ? pan.sizeChart : undefined
       };
     });
   const hapusBaris = semua
@@ -639,7 +837,8 @@ function dbSimpanEditPO(){
         jadwalKirim: ofKumpulkanJadwalKirim_("db-editpo-jadwal"),
         baris: baris,
         hapusBaris: hapusBaris,
-        warnaBaru: warnaBaru
+        warnaBaru: warnaBaru,
+        artikel: artikel
       }
     })
   })
