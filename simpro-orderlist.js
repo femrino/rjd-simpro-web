@@ -393,37 +393,83 @@ function dbRenderEditPO(d){
         '</td>' +
       '</tr>';
     }).join("");
-    return '<div class="of-aks-wrap" style="margin-top:14px">' +
-      '<div class="of-komposisi-lbl">ITEM ' + (n + 1) + ': ' + rjdEscapeHtml_(it.artikel) +
-        (it.style ? ' &#183; ' + rjdEscapeHtml_(it.style) : '') + '</div>' +
-      '<div class="of-matrix-wrap"><table class="of-matrix"><thead>' + kepala + '</thead><tbody>' + badan + '</tbody></table></div>' +
-      '<button class="of-jadwal-add" onclick="dbTambahWarnaPO(this, ' + n + ')" type="button">+ Tambah Warna</button>' +
+    // ---- Kartu ITEM: struktur SAMA PERSIS dengan ofTambahItem ----
+    // Kelas of-item-card / of-item-head / of-item-grid / of-warna-wrap /
+    // of-add-warna-btn semuanya sudah ada di simpro-global.css, jadi tersedia
+    // di halaman ini tanpa menambah CSS. (Cabang <b:if> Blogger terisolasi
+    // penuh secara CSS -- meminjam kelas dari file CSS halaman lain berarti
+    // meminjam sesuatu yang tidak ada di sini. simpro-global.css aman karena
+    // dimuat di semua cabang.)
+    //
+    // Brand/Artikel/Style ditampilkan sebagai field DINONAKTIFKAN, bukan
+    // disembunyikan: susunannya jadi sejajar dengan Form Order, dan admin bisa
+    // memastikan sedang menyunting item yang benar. Dinonaktifkan karena
+    // simpanEditPO_ bekerja per nomorBaris di SD Rincian Sales Order -- mengubah
+    // artikel berarti memutus tautan ID Detail Order yang dipakai invoice dan
+    // surat jalan untuk menarik harga.
+    const sizeAktifHtml = sizeCols.length
+      ? '<div class="of-size-cek" style="pointer-events:none;opacity:.75">' +
+          sizeCols.map(function(sz){
+            return '<label class="of-size-cek-item"><input checked="checked" disabled="disabled" type="checkbox"/><span>' +
+              rjdEscapeHtml_(sz) + '</span></label>';
+          }).join("") +
+        '</div>'
+      : '';
+
+    return '<div class="of-item-card" style="margin-top:14px">' +
+      '<div class="of-item-head"><b>ITEM #' + (n + 1) + '</b></div>' +
+      '<div class="of-item-grid">' +
+        '<label>Brand<input disabled="disabled" type="text" value="' + rjdEscapeHtml_(it.brand || "") + '"/></label>' +
+        '<label>Artikel<input disabled="disabled" type="text" value="' + rjdEscapeHtml_(it.artikel || "") + '"/></label>' +
+        '<label>Style<input disabled="disabled" type="text" value="' + rjdEscapeHtml_(it.style || "") + '"/></label>' +
+      '</div>' +
+      (sizeAktifHtml
+        ? '<label style="display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);margin:14px 0 6px">Ukuran</label>' +
+          sizeAktifHtml +
+          '<div class="of-komposisi-hint">Ukuran mengikuti yang sudah dipesan. Menambah ukuran baru belum bisa dari sini.</div>'
+        : '') +
+      '<div class="of-aks-wrap of-warna-wrap">' +
+        '<div class="of-warna-lbl-baris">' +
+          '<div class="of-komposisi-lbl">Warna &amp; Jumlah Order</div>' +
+        '</div>' +
+        '<div class="of-matrix-wrap"><table class="of-matrix"><thead>' + kepala + '</thead><tbody>' + badan + '</tbody></table></div>' +
+        '<button class="of-add-warna-btn" onclick="dbTambahWarnaPO(this, ' + n + ')" type="button">+ Tambah Warna</button>' +
+      '</div>' +
       (slot.length ? '' : '<div class="of-komposisi-hint">Artikel ini belum punya komposisi kain di Master Artikel, jadi kolom kode kain tidak muncul.</div>') +
     '</div>';
   }).join("");
 
+  // URUTAN DISAMAKAN dengan modal Edit Order Request & Proofing: ITEM dulu,
+  // Detail Pengiriman di bawahnya. Sebelumnya terbalik -- dan itu satu-satunya
+  // form di sistem yang urutannya berbeda, jadi orang yang terbiasa dengan Form
+  // Order harus menyesuaikan diri tiap kali membuka modal ini.
+  //
+  // Label & teks bantuan juga disamakan kata per kata ("Jadwal Kirim Bertahap
+  // (opsional -- ...)", "Kain Dari Klien (opsional -- ...)") supaya tidak
+  // terbaca sebagai form yang berbeda.
   document.getElementById("db-editpo-body").innerHTML =
-    '<div class="of-form-section">' +
+    itemHtml +
+    '<div class="of-form-section" style="margin-top:4px">' +
       '<h4>Detail Pengiriman</h4>' +
       '<label style="display:block">Target Tanggal Kirim' +
         '<input id="db-editpo-deadline" type="date" value="' + rjdEscapeHtml_(d.deadlineIso || "") + '"/></label>' +
       '<div class="of-jadwal-wrap">' +
-        '<div class="of-jadwal-lbl">Jadwal Kirim Bertahap</div>' +
-        '<div id="db-editpo-jadwal"></div>' +
+        '<div class="of-jadwal-lbl">Jadwal Kirim Bertahap (opsional -- isi kalau pengiriman dipecah)</div>' +
+        '<div class="of-jadwal" id="db-editpo-jadwal"></div>' +
         '<button class="of-jadwal-add" onclick="ofTambahBarisJadwal_(\'db-editpo-jadwal\')" type="button">+ Tambah Tahap</button>' +
       '</div>' +
       '<div class="of-jadwal-wrap">' +
-        '<div class="of-jadwal-lbl">Kain Dari Klien</div>' +
+        '<div class="of-jadwal-lbl">Kain Dari Klien (opsional -- kain yang klien kirim ke RJD)</div>' +
         '<div id="db-editpo-kaink"></div>' +
         '<button class="of-jadwal-add" onclick="ofTambahBarisKainKlien_(\'db-editpo-kaink\')" type="button">+ Tambah Kain</button>' +
       '</div>' +
-      '<label style="display:block;margin-top:14px">Catatan Klien' +
-        '<textarea class="rjd-autogrow" id="db-editpo-catatan" rows="3">' + rjdEscapeHtml_(d.catatanKlien || "") + '</textarea></label>' +
+      '<label style="display:block;margin-top:14px">Catatan Tambahan' +
+        '<textarea class="rjd-autogrow" id="db-editpo-catatan" rows="2">' + rjdEscapeHtml_(d.catatanKlien || "") + '</textarea></label>' +
     '</div>' +
-    itemHtml +
     '<p style="font-size:11.5px;color:var(--ink-soft);margin-top:14px">' +
       'Mengubah qty otomatis memperbarui Detail PO untuk order ini saja -- order lain tidak tersentuh. ' +
-      'Menambah atau menghapus warna belum bisa dari sini; gunakan AppSheet, karena warna yang sudah punya catatan progres produksi perlu diperiksa dulu.' +
+      'Brand, Artikel, Style, dan daftar ukuran tidak bisa diubah dari sini: PO ini sudah punya ' +
+      'ID Detail Order yang dipakai invoice &amp; surat jalan untuk menarik harga.' +
     '</p>';
 
   ofRenderJadwalKirim_("db-editpo-jadwal", d.jadwalKirim);
