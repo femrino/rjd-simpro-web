@@ -112,6 +112,18 @@ function spMulaiIsi_() {
   if (el) el.classList.remove("hidden");
   spMuatDaftarPO();
   spMuatDaftarLine_();
+
+  // Saring tab per bagian. Memakai rjdAmbilPeran_ yang SUDAH di-cache oleh
+  // satpam halaman -- jadi tidak menembak getPeranSaya untuk kedua kalinya.
+  //
+  // Dibungkus typeof: kalau simpro-global.js gagal dimuat, halaman tetap jalan
+  // dengan semua tab terlihat. Backend tetap menolak yang bukan bagiannya, jadi
+  // yang hilang cuma kenyamanan -- bukan pengamannya.
+  if (typeof rjdAmbilPeran_ === "function") {
+    rjdAmbilPeran_(SP_API_URL, SP_ID_TOKEN)
+      .then(function (d) { spTerapkanBagian_(d); })
+      .catch(function () { /* gagal -> semua tab tampil, backend tetap menjaga */ });
+  }
 }
 
 /** Daftar line untuk filter di tab Konfirmasi. */
@@ -455,6 +467,78 @@ function spSimpan() {
  * ============================================================ */
 
 /** Pindah tab. Data tiap tab dimuat MALAS -- baru diambil saat tabnya dibuka. */
+/**
+ * ============================================================
+ * PENYARINGAN TAB PER BAGIAN
+ * ============================================================
+ * Tab yang bukan bagiannya TIDAK ditampilkan. Ini menyelesaikan sebagian besar
+ * masalah, karena penyebab data dobel/kosong biasanya kebingungan siapa yang
+ * bertanggung jawab -- bukan niat mengisi punya orang lain.
+ *
+ * MURNI KENYAMANAN. Penolakan sebenarnya ada di pastikanBagianBoleh_
+ * (akses-role.gs): siapa pun yang tahu nama rutenya bisa memanggilnya
+ * langsung, dan menyembunyikan tombol tidak menghalangi itu.
+ *
+ * Tab "Riwayat" TIDAK pernah disembunyikan -- melihat catatan bagian lain itu
+ * justru yang membuat serah terima antar bagian bisa diperiksa.
+ */
+const SP_BAGIAN_TAB = {
+  cutting: "cutting",
+  bagi:    "loading",
+  setor:   "sewing",
+  konf:    "sewing",   // yang MENERIMA potongan adalah line jahit
+  riw:     null        // selalu tampil
+};
+
+/**
+ * Sembunyikan tab yang bukan bagian pemakai.
+ * Dipanggil sekali saat halaman dimuat, memakai rjdAmbilPeran_ yang sudah
+ * di-cache -- tidak menambah permintaan ke server.
+ */
+function spTerapkanBagian_(d) {
+  const bagian = (d && d.bagian) ? d.bagian : [];
+  const lintas = !!(d && d.lintasBagian);
+
+  // Kosong = semua bagian (staf lama yang kolomnya belum diisi).
+  // Lintas = peran full/admin.
+  const semua = lintas || !bagian.length ||
+    bagian.some(function (b) { return b === "produksi" || b === "semua" || b === "all"; });
+
+  window.SP_BAGIAN = bagian;
+  window.SP_BAGIAN_SEMUA = semua;
+  if (semua) return;
+
+  let pertamaTampil = null;
+  document.querySelectorAll(".sp-tab").forEach(function (btn) {
+    const tab = btn.dataset.tab;
+    const perlu = SP_BAGIAN_TAB[tab];
+    const boleh = !perlu || bagian.indexOf(perlu) !== -1;
+    btn.classList.toggle("hidden", !boleh);
+    if (boleh && !pertamaTampil) pertamaTampil = tab;
+  });
+
+  // Kalau tab yang sedang aktif ternyata disembunyikan, pindah ke tab pertama
+  // yang boleh. Tanpa ini, pemakai melihat panel kosong tanpa tab aktif --
+  // terlihat seperti halaman rusak.
+  const aktif = window.SP_TAB || "cutting";
+  const perluAktif = SP_BAGIAN_TAB[aktif];
+  if (perluAktif && bagian.indexOf(perluAktif) === -1 && pertamaTampil) {
+    spSwitchTab(pertamaTampil);
+  }
+
+  // Beri tahu kenapa tabnya sedikit -- kalau tidak, orang akan mengira
+  // fiturnya hilang lalu menanyakannya, atau lebih buruk: mencari jalan lain.
+  const wadah = document.getElementById("sp-tabs");
+  if (wadah && !document.getElementById("sp-bagian-info")) {
+    const info = document.createElement("div");
+    info.id = "sp-bagian-info";
+    info.className = "sp-bagian-info";
+    info.textContent = "Anda terdaftar di bagian: " + bagian.join(", ") +
+      ". Form bagian lain disembunyikan.";
+    wadah.parentNode.insertBefore(info, wadah.nextSibling);
+  }
+}
+
 function spSwitchTab(tab) {
   window.SP_TAB = tab;
   document.querySelectorAll(".sp-tab").forEach(function (b) {

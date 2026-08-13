@@ -252,3 +252,11 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   .sp-setor-qty { width: 48px; }
   .sp-tab { flex: 1 1 45%; font-size: 12px; padding: 9px 6px; }
 }
+
+/* Keterangan bagian, muncul HANYA kalau tab disaring.
+   Tanpa ini, orang yang tabnya tinggal dua akan mengira fiturnya hilang lalu
+   menanyakannya -- atau lebih buruk, mencari jalan lain untuk mengisi. */
+.sp-bagian-info { font-size: 11.5px; color: var(--ink-soft); margin: 8px 0 0;
+  padding: 7px 12px; background: var(--cream); border-radius: 8px;
+  border-left: 3px solid var(--line); }
+
