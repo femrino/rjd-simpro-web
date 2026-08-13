@@ -190,3 +190,51 @@ body { padding-top: 0; }
   margin-left: 2px; }
 .rjd-modal .dbep-size-hint { font-style: italic; }
 
+/* ============================================================
+   KONTRAS FIELD di panel Edit PO
+   ============================================================
+   Latar wrapper (of-komposisi-wrap / of-aks-wrap) memakai --cream, dan field
+   putih di atasnya kurang tegas -- batas antara "kotak isian" dan "latar"
+   jadi kabur, terutama di kolom yang masih kosong.
+
+   Diperjelas dengan: latar putih penuh + border lebih tegas. Selektor dibuat
+   lebih spesifik daripada .rjd-modal .of-matrix input supaya menang tanpa
+   !important. */
+.rjd-modal .dbep-panel .of-matrix input,
+.rjd-modal .dbep-panel .of-matrix select {
+  background: var(--white);
+  border: 1px solid #D9D2C4;
+}
+.rjd-modal .dbep-panel .of-matrix input:hover,
+.rjd-modal .dbep-panel .of-matrix select:hover { border-color: #B9AF9C; }
+.rjd-modal .dbep-panel .of-matrix input:focus,
+.rjd-modal .dbep-panel .of-matrix select:focus {
+  border-color: var(--thread);
+  box-shadow: 0 0 0 2px rgba(178,58,42,.12);
+}
+/* Sel kosong dibedakan dari yang terisi: latar sedikit redup supaya mata
+   langsung tahu mana yang masih perlu diisi tanpa harus membacanya. */
+.rjd-modal .dbep-panel .of-matrix input:placeholder-shown { background: #FBFAF7; }
+
+/* Latar wrapper dibuat sedikit lebih terang -- selisihnya dengan field putih
+   jadi cukup terlihat, tanpa kehilangan pemisahan visual antar blok. */
+.rjd-modal .dbep-panel .of-komposisi-wrap,
+.rjd-modal .dbep-panel .of-aks-wrap { background: #FAF7F1; }
+
+/* Tabel di modal jauh lebih sempit daripada di halaman Form Order, jadi
+   min-width bawaan membuat kolom ukuran terdorong keluar dan tabelnya
+   ter-scroll. Dikecilkan khusus di panel ini. */
+.rjd-modal .dbep-panel .of-matrix .of-td-kmp-nama input,
+.rjd-modal .dbep-panel .of-matrix .of-td-sc-nama input { min-width: 120px; }
+.rjd-modal .dbep-panel .of-matrix .of-td-kmp-kons input { min-width: 58px; }
+.rjd-modal .dbep-panel .of-matrix .of-td-kmp-satuan select { min-width: 60px; }
+.rjd-modal .dbep-panel .of-matrix .of-td-kmp-sz input,
+.rjd-modal .dbep-panel .of-matrix .of-td-sc-nilai input { min-width: 44px; }
+.rjd-modal .dbep-panel .of-matrix th { padding: 4px 4px 8px; }
+.rjd-modal .dbep-panel .of-matrix td { padding: 4px 3px; }
+
+/* Textarea catatan ikut dibuat kontras -- kalau tidak, dua panel yang
+   bersebelahan terlihat seperti blok teks yang sama. */
+.rjd-modal .dbep-panel textarea,
+.rjd-modal .dbep-panel > label input { background: var(--white); border: 1px solid #D9D2C4; }
+

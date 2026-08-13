@@ -371,8 +371,11 @@ function dbPanelOrderHtml_(it, n){
   return '<div class="of-form-section dbep-panel dbep-panel-order" data-item="' + n + '">' +
     '<h4>Berlaku untuk ORDER INI saja</h4>' +
     '<label style="display:block">Catatan Item / Detail Model' +
-      '<textarea class="rjd-autogrow dbep-catatan-item" rows="2" placeholder="misal: kerah tegak, saku bobok, jahitan rantai">' +
+      '<textarea class="rjd-autogrow dbep-catatan-item" rows="2" ' +
+        'placeholder="hal yang KHUSUS order ini &#8212; mis. kali ini kancing diganti gelap">' +
         rjdEscapeHtml_(w0.catatanItem || "") + '</textarea></label>' +
+    '<div class="of-komposisi-hint">Untuk instruksi yang SELALU berlaku tiap artikel ini dibuat, ' +
+      'tulis di Catatan Produksi (panel bawah) &#8212; bukan di sini.</div>' +
     '<div class="of-komposisi-wrap" style="margin-top:14px">' +
       '<div class="of-komposisi-lbl">Size Chart Custom</div>' +
       '<div class="of-matrix-wrap"><table class="of-matrix of-sc-tabel">' +
@@ -484,8 +487,11 @@ function dbPanelArtikelHtml_(it, n){
         'berbeda dari standar, isi di panel ORDER INI di atas.</div>' +
     '</div>' +
     '<label style="display:block;margin-top:14px">Catatan Produksi' +
-      '<textarea class="rjd-autogrow dbep-catatan-produksi" rows="2" placeholder="instruksi tetap untuk artikel ini">' +
+      '<textarea class="rjd-autogrow dbep-catatan-produksi" rows="2" ' +
+        'placeholder="instruksi yang SELALU berlaku &#8212; mis. jahitan rantai, kampuh 1cm">' +
         rjdEscapeHtml_(a.catatanProduksi || "") + '</textarea></label>' +
+    '<div class="of-komposisi-hint">Uji cepat: kalau order ini diulang tahun depan, ' +
+      'catatan ini masih berlaku? Kalau tidak &#8212; tulis di Catatan Item (panel atas).</div>' +
     '<div class="of-jadwal-wrap" style="margin-top:14px">' +
       '<div class="of-jadwal-lbl">Gambar Desain</div>' +
       (a.urlGambarDesain
@@ -845,7 +851,10 @@ function dbRenderEditPO(d){
         '<button class="of-jadwal-add" onclick="ofTambahBarisKainKlien_(\'db-editpo-kaink\')" type="button">+ Tambah Kain</button>' +
       '</div>' +
       '<label style="display:block;margin-top:14px">Catatan Tambahan' +
-        '<textarea class="rjd-autogrow" id="db-editpo-catatan" rows="2">' + rjdEscapeHtml_(d.catatanKlien || "") + '</textarea></label>' +
+        '<textarea class="rjd-autogrow" id="db-editpo-catatan" rows="2" ' +
+          'placeholder="hal yang bukan soal jahit &#8212; mis. kirim ke gudang cabang">' +
+          rjdEscapeHtml_(d.catatanKlien || "") + '</textarea></label>' +
+      '<div class="of-komposisi-hint">Berlaku untuk seluruh order ini, lintas item.</div>' +
     '</div>' +
     '<p style="font-size:11.5px;color:var(--ink-soft);margin-top:14px">' +
       'Mengubah qty otomatis memperbarui Detail PO untuk order ini saja -- order lain tidak tersentuh. ' +
