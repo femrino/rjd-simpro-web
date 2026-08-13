@@ -201,30 +201,64 @@ function buildWarnaSizeSectionHtml(order){
     : '';
 
   const matricesHtml = groups.map(function(g, i){
-    const warnaList = [];
-    const sizeSet = {};
+    // ---- Kelompokkan per STYLE ----
+    // Satu sel Warna+Size bisa berisi beberapa style dengan target dan progres
+    // yang berbeda. Sebelumnya semuanya digabung jadi satu angka, sehingga style
+    // yang tertinggal tersamarkan oleh style yang sudah tuntas -- padahal justru
+    // itu yang menentukan tindakan.
+    //
+    // Sub-header style hanya muncul kalau order ini PUNYA lebih dari satu style.
+    // Mayoritas order cuma satu; menampilkan header di situ cuma menambah baris
+    // tanpa informasi baru.
+    const perStyle = {};
+    const urutanStyle = [];
     g.matrix.forEach(function(cell){
-      if(warnaList.indexOf(cell.warna) === -1) warnaList.push(cell.warna);
-      sizeSet[cell.size] = true;
+      const st = cell.style || "";
+      if(!perStyle[st]){ perStyle[st] = []; urutanStyle.push(st); }
+      perStyle[st].push(cell);
     });
-    warnaList.sort(); // ascending alfabetis (permintaan Femri)
-    const sizeList = sortSizeLabels(Object.keys(sizeSet));
+    urutanStyle.sort();
 
-    const cellMap = {};
-    g.matrix.forEach(function(cell){ cellMap[cell.warna + "|" + cell.size] = cell; });
+    const tampilkanHeaderStyle = (g.jumlahStyle > 1) && urutanStyle.length > 1;
 
+    // Kolom size DISAMAKAN untuk semua style dalam satu divisi, supaya tabelnya
+    // tetap sejajar dan mudah dibandingkan antar style.
+    const sizeSetSemua = {};
+    g.matrix.forEach(function(cell){ sizeSetSemua[cell.size] = true; });
+    const sizeList = sortSizeLabels(Object.keys(sizeSetSemua));
     const headRow = '<tr><th></th>' + sizeList.map(function(s){ return '<th>' + s + '</th>'; }).join('') + '</tr>';
-    const bodyRows = warnaList.map(function(w){
-      const cells = sizeList.map(function(s){
-        const cell = cellMap[w + "|" + s];
-        if(!cell) return '<td class="lp-matrix-cell-empty">&#8212;</td>';
-        const persenHtml = (cell.persen === null) ? '' : '<div class="lp-matrix-persen">' + cell.persen + '%</div>';
-        return '<td class="' + matrixCellClass(cell.persen) + '" title="' + w + ' &#183; Size ' + s + '">' +
-          '<div class="lp-matrix-out">' + cell.output + (cell.qtyTarget ? ('/' + cell.qtyTarget) : '') + '</div>' +
-          persenHtml +
-          '</td>';
+
+    const bodyRows = urutanStyle.map(function(st){
+      const cellsStyle = perStyle[st];
+
+      const warnaList = [];
+      cellsStyle.forEach(function(cell){
+        if(warnaList.indexOf(cell.warna) === -1) warnaList.push(cell.warna);
+      });
+      warnaList.sort(); // ascending alfabetis (permintaan Femri)
+
+      const cellMap = {};
+      cellsStyle.forEach(function(cell){ cellMap[cell.warna + "|" + cell.size] = cell; });
+
+      const headerStyleHtml = tampilkanHeaderStyle
+        ? '<tr class="lp-matrix-style-row"><th colspan="' + (sizeList.length + 1) + '">' + st + '</th></tr>'
+        : '';
+
+      const barisWarna = warnaList.map(function(w){
+        const cells = sizeList.map(function(s){
+          const cell = cellMap[w + "|" + s];
+          if(!cell) return '<td class="lp-matrix-cell-empty">&#8212;</td>';
+          const persenHtml = (cell.persen === null) ? '' : '<div class="lp-matrix-persen">' + cell.persen + '%</div>';
+          const judul = (st ? st + ' &#183; ' : '') + w + ' &#183; Size ' + s;
+          return '<td class="' + matrixCellClass(cell.persen) + '" title="' + judul + '">' +
+            '<div class="lp-matrix-out">' + cell.output + (cell.qtyTarget ? ('/' + cell.qtyTarget) : '') + '</div>' +
+            persenHtml +
+            '</td>';
+        }).join('');
+        return '<tr><th>' + w + '</th>' + cells + '</tr>';
       }).join('');
-      return '<tr><th>' + w + '</th>' + cells + '</tr>';
+
+      return headerStyleHtml + barisWarna;
     }).join('');
 
     return '<div class="lp-matrix-wrap" data-divisi-idx="' + i + '" style="' + (i === groups.length - 1 ? '' : 'display:none') + '">' +

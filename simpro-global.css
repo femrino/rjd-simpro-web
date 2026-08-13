@@ -185,6 +185,13 @@ nav{
 .lp-matrix{border-collapse:collapse;width:100%;font-size:12px;margin-bottom:4px}
 .lp-matrix th,.lp-matrix td{border:1px solid var(--line);padding:8px 10px;text-align:center;white-space:nowrap}
 .lp-matrix thead th{background:var(--paper-2);font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.02em;color:var(--ink-soft);font-weight:600}
+/* ---- Sub-header STYLE dalam matriks ----
+   Muncul HANYA kalau order punya lebih dari satu style (lihat
+   tampilkanHeaderStyle di buildWarnaSizeSectionHtml). Satu sel Warna+Size bisa
+   berisi beberapa style dengan progres berbeda; tanpa pemisahan ini, style yang
+   tertinggal tersamarkan oleh style yang sudah tuntas.
+   text-align kiri supaya jelas ini judul kelompok, bukan sel data. */
+.lp-matrix-style-row th{background:var(--ink);color:var(--white);text-align:left;font-weight:700;font-size:11.5px;letter-spacing:.01em;padding:7px 10px}
 .lp-matrix tbody th{background:var(--paper-2);text-align:left;font-size:12px;font-weight:700;color:var(--ink)}
 .lp-matrix-out{font-weight:700;font-family:'IBM Plex Mono',monospace;font-size:12px}
 .lp-matrix-persen{font-size:10px;margin-top:2px;font-weight:600}
