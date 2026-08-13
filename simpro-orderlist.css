@@ -160,3 +160,10 @@ body { padding-top: 0; }
 .rjd-modal .dbep-warn { font-size: 12px; color: #8A5D1F; background: #FCF6E8;
   border: 1px solid #E8D8AE; border-radius: 8px; padding: 9px 12px; margin-bottom: 12px; }
 
+/* Tautan gambar desain yang sudah tersimpan. Ditampilkan sebagai tautan, bukan
+   pratinjau: gambar desain sering besar dan modal ini sudah panjang. */
+.rjd-modal .dbep-desain-lama { font-size: 12.5px; margin-bottom: 4px; }
+.rjd-modal .dbep-desain-lama a { color: var(--thread); font-weight: 600; text-decoration: underline; }
+.rjd-modal .dbep-desain-file { font-size: 12px; padding: 7px; background: var(--white);
+  border: 1px dashed var(--line); border-radius: 8px; width: 100%; box-sizing: border-box; }
+
