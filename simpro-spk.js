@@ -1378,6 +1378,7 @@ function spMuatMarker() {
     window.SP_PO_SIZE = d.sizeTersedia || [];
     window.SP_PO_WARNA = d.warna || [];
     window.SP_PO_ITEM = d.item || {};
+    window.SP_PO_KAIN = d.jenisKain || [];
     spRenderMarker_();
   })
   .catch(function (e) {
@@ -1561,6 +1562,7 @@ function spMuatGelaran() {
     window.SP_PO_SIZE = (hasil[0] && hasil[0].sizeTersedia) || [];
     window.SP_PO_WARNA = (hasil[0] && hasil[0].warna) || [];
     window.SP_PO_ITEM = (hasil[0] && hasil[0].item) || {};
+    window.SP_PO_KAIN = (hasil[0] && hasil[0].jenisKain) || [];
     window.SP_KAIN = (hasil[1] && hasil[1].kain) || [];
     window.SP_KAIN_AMBANG = hasil[1] || {};
     spRenderFormGelaran_();
@@ -1590,7 +1592,15 @@ function spRenderFormGelaran_() {
     warna = window.SP_CUT.baris.map(function (b) { return b.warna; })
       .filter(function (w, i, a) { return w && a.indexOf(w) === i; });
   }
-  const kain = (window.SP_KAIN || []).map(function (k) { return k.jenis; });
+  // Jenis kain dari konteks PO (komposisi artikel + kain klien). Versi pertama
+  // mengambilnya dari REKAP -- yang isinya cuma kain yang sudah ada
+  // penerimaannya. Untuk PO tanpa catatan kain klien, satu-satunya pilihan jadi
+  // "(tanpa nama)" dan tidak ada yang bisa dipilih.
+  let kain = window.SP_PO_KAIN || [];
+  if (!kain.length) {
+    kain = (window.SP_KAIN || []).map(function (k) { return k.jenis; })
+      .filter(function (x) { return x && x !== "(tanpa nama)"; });
+  }
 
   document.getElementById("sp-gelar-form").innerHTML =
     '<div class="sp-grid3">' +
@@ -1616,6 +1626,10 @@ function spRenderFormGelaran_() {
             }).join("") + '</select>'
           : '<input id="sp-gl-kain" placeholder="ketik jenis kain" type="text"/>') +
       '</label>' +
+    (kain.length ? '' :
+      '<p class="sp-info sp-size-catatan">Daftar kain kosong. Isi Komposisi Kain di ' +
+      'Edit Order (panel ARTIKEL) atau Kain Dari Klien di order &#8212; setelah itu ' +
+      'pilihannya muncul di sini. Sementara boleh diketik manual.</p>') +
     '</div>' +
     '<div class="sp-grid3">' +
       '<label>Jumlah Lapis<input id="sp-gl-lapis" min="1" oninput="spHitungGelaran_()" ' +
