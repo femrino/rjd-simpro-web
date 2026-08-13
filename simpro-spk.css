@@ -311,3 +311,8 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 #sp-marker-form .sp-simpan-btn, #sp-gelar-form .sp-simpan-btn,
 #sp-kain-rekap .sp-simpan-btn { margin-top: 16px; }
 
+/* Catatan sumber ukuran. Muncul hanya kalau daftar ukuran TIDAK berasal dari
+   rincian order -- kalau selalu muncul, pesannya berhenti dibaca. */
+.sp-size-catatan { background: #FCF6E8; border-left: 3px solid #E8D8AE;
+  padding: 8px 12px; border-radius: 8px; margin: 10px 0; }
+

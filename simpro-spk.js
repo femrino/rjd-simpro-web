@@ -1313,16 +1313,49 @@ window.onload = function () {
    MARKER (bagian: pola)
    ============================================================ */
 
+/** Ukuran standar, dipakai kalau sumber lain tidak memberi jawaban. */
+const SP_SIZE_STANDAR = ["S", "M", "L", "XL", "2XL", "3XL", "4XL", "All Size"];
+
 /**
- * Ukuran yang bisa dipakai di susunan marker.
+ * Ukuran yang bisa dipakai di susunan marker. TIGA sumber, dicoba berurutan.
  *
- * Diambil dari jawaban getMarkerPO (backend membacanya dari Rincian SO), BUKAN
- * dari window.SP_CUT. Versi pertama memakai SP_CUT -- yang cuma dimuat di tab
- * Hasil Cutting -- sehingga di tab Marker daftarnya selalu kosong, tidak ada
- * kotak yang bisa diisi, dan pcs per lapis tetap 0 berapa kali pun dicoba.
+ * Sumber utamanya jawaban getMarkerPO (backend membacanya dari Rincian SO).
+ * Tapi form ini TIDAK BOLEH hilang cuma karena satu sumber kosong: tim pola
+ * yang membuka halaman lalu tidak menemukan apa pun akan menyimpulkan sistemnya
+ * rusak, dan kembali mencatat marker di kertas.
+ *
+ * Dua kejadian yang sudah terbukti membuatnya kosong:
+ *   1. window.SP_CUT dipakai sebagai sumber, padahal cuma dimuat di tab
+ *      Hasil Cutting -- di tab Marker selalu kosong.
+ *   2. Backend belum di-deploy ulang, jadi sizeTersedia tidak dikirim sama
+ *      sekali dan `d.sizeTersedia || []` menghasilkan array kosong.
+ *
+ * Keduanya menghasilkan gejala yang sama persis. Karena itu sekarang ada
+ * cadangan berlapis, dan sumber mana yang terpakai diberitahukan ke pemakai --
+ * bukan disembunyikan.
  */
 function spSizePO_() {
-  return window.SP_PO_SIZE || [];
+  const dariBackend = window.SP_PO_SIZE || [];
+  if (dariBackend.length) { window.SP_SIZE_SUMBER = "order"; return dariBackend; }
+
+  // Cadangan 1: data tab Hasil Cutting, kalau kebetulan sudah dimuat.
+  const cut = window.SP_CUT;
+  if (cut && cut.baris && cut.baris.length) {
+    const set = {};
+    cut.baris.forEach(function (b) {
+      Object.keys(b.sizeQty || {}).forEach(function (sz) {
+        if (Number(b.sizeQty[sz]) > 0) set[sz] = true;
+      });
+    });
+    const ada = SP_SIZE_STANDAR.filter(function (sz) { return set[sz]; })
+      .concat(Object.keys(set).filter(function (sz) { return SP_SIZE_STANDAR.indexOf(sz) === -1; }));
+    if (ada.length) { window.SP_SIZE_SUMBER = "cutting"; return ada; }
+  }
+
+  // Cadangan 2: daftar standar. Lebih banyak pilihan daripada yang perlu, tapi
+  // form tetap bisa dipakai -- dan itu jauh lebih baik daripada tidak ada form.
+  window.SP_SIZE_SUMBER = "standar";
+  return SP_SIZE_STANDAR;
 }
 
 function spMuatMarker() {
@@ -1390,15 +1423,16 @@ function spRenderMarker_() {
 function spRenderFormMarker_(asal) {
   const sizes = spSizePO_();
   const a = asal || {};
-  if (!sizes.length) {
-    // Tanpa ini, form tampil dengan bagian susunan KOSONG dan tombol simpan
-    // yang selalu ditolak -- terlihat seperti sistemnya rusak, padahal
-    // penyebabnya ada di data order.
-    document.getElementById("sp-marker-form").innerHTML =
-      '<p class="sp-info">PO ini belum punya rincian ukuran di Rincian Sales Order, ' +
-      'jadi susunan marker belum bisa diisi. Lengkapi qty per size di order dulu.</p>';
-    return;
-  }
+  // Catatan sumber ukuran. Muncul HANYA kalau bukan dari order -- kalau selalu
+  // muncul, pesannya berhenti dibaca dan justru menutupi kasus yang benar-benar
+  // perlu diperhatikan.
+  const catatanSumber = (window.SP_SIZE_SUMBER === "order") ? "" :
+    '<p class="sp-info sp-size-catatan">' +
+      (window.SP_SIZE_SUMBER === "cutting"
+        ? "Ukuran diambil dari data cutting karena rincian order tidak terbaca."
+        : "Rincian ukuran order tidak terbaca, jadi ditampilkan daftar ukuran standar. " +
+          "Isi hanya ukuran yang memang ada di order ini.") +
+    '</p>';
   document.getElementById("sp-marker-form").innerHTML =
     '<h4 class="sp-subjudul">' + (asal ? "Revisi marker " + spEsc_(a.kodeMarker) : "Marker baru") + '</h4>' +
     (asal ? '<p class="sp-info">Marker lama tetap tersimpan. Yang ini jadi baris baru berstatus Revisi.</p>' : '') +
@@ -1410,6 +1444,7 @@ function spRenderFormMarker_(asal) {
       '<label>Panjang Marker<input id="sp-mk-panjang" min="0" placeholder="6.2" step="0.01" type="number" value="' +
         (a.panjangMarker || "") + '"/></label>' +
     '</div>' +
+    catatanSumber +
     '<label class="sp-lbl">Susunan Size &#8212; berapa pola tiap size dalam SATU lapis</label>' +
     '<div class="sp-susun">' +
       sizes.map(function (sz) {
@@ -1547,7 +1582,14 @@ function spRenderFormGelaran_() {
       'di tab Marker.</p>';
     return;
   }
-  const warna = window.SP_PO_WARNA || [];
+  // Warna juga bercadangan: kalau backend belum mengirimnya, ambil dari data
+  // cutting. Kalau dua-duanya kosong, form tetap tampil dengan input teks --
+  // form yang mati total lebih buruk daripada form yang harus diketik manual.
+  let warna = window.SP_PO_WARNA || [];
+  if (!warna.length && window.SP_CUT && window.SP_CUT.baris) {
+    warna = window.SP_CUT.baris.map(function (b) { return b.warna; })
+      .filter(function (w, i, a) { return w && a.indexOf(w) === i; });
+  }
   const kain = (window.SP_KAIN || []).map(function (k) { return k.jenis; });
 
   document.getElementById("sp-gelar-form").innerHTML =
@@ -1560,16 +1602,20 @@ function spRenderFormGelaran_() {
             m.pcsPerLapis + " pcs/lapis</option>";
         }).join("") +
       '</select></label>' +
-      '<label>Warna<select id="sp-gl-warna">' +
-        (warna.length ? warna.map(function (w) {
-          return '<option value="' + spEsc_(w) + '">' + spEsc_(w) + '</option>';
-        }).join("") : '<option value="">(tidak ada warna)</option>') +
-      '</select></label>' +
-      '<label>Jenis Kain<select id="sp-gl-kain">' +
-        (kain.length ? kain.map(function (k) {
-          return '<option value="' + spEsc_(k) + '">' + spEsc_(k) + '</option>';
-        }).join("") : '<option value="">(belum ada data kain)</option>') +
-      '</select></label>' +
+      '<label>Warna' +
+        (warna.length
+          ? '<select id="sp-gl-warna">' + warna.map(function (w) {
+              return '<option value="' + spEsc_(w) + '">' + spEsc_(w) + '</option>';
+            }).join("") + '</select>'
+          : '<input id="sp-gl-warna" placeholder="ketik nama warna" type="text"/>') +
+      '</label>' +
+      '<label>Jenis Kain' +
+        (kain.length
+          ? '<select id="sp-gl-kain">' + kain.map(function (k) {
+              return '<option value="' + spEsc_(k) + '">' + spEsc_(k) + '</option>';
+            }).join("") + '</select>'
+          : '<input id="sp-gl-kain" placeholder="ketik jenis kain" type="text"/>') +
+      '</label>' +
     '</div>' +
     '<div class="sp-grid3">' +
       '<label>Jumlah Lapis<input id="sp-gl-lapis" min="1" oninput="spHitungGelaran_()" ' +
