@@ -483,6 +483,8 @@ function spSimpan() {
  * justru yang membuat serah terima antar bagian bisa diperiksa.
  */
 const SP_BAGIAN_TAB = {
+  marker:  "pola",
+  gelar:   "cutting",
   cutting: "cutting",
   bagi:    "loading",
   setor:   "sewing",
@@ -544,6 +546,10 @@ function spSwitchTab(tab) {
   document.querySelectorAll(".sp-tab").forEach(function (b) {
     b.classList.toggle("active", b.dataset.tab === tab);
   });
+  const pm = document.getElementById("sp-panel-marker");
+  if (pm) pm.classList.toggle("hidden", tab !== "marker");
+  const pg = document.getElementById("sp-panel-gelar");
+  if (pg) pg.classList.toggle("hidden", tab !== "gelar");
   document.getElementById("sp-panel-cutting").classList.toggle("hidden", tab !== "cutting");
   document.getElementById("sp-panel-bagi").classList.toggle("hidden", tab !== "bagi");
   document.getElementById("sp-panel-konf").classList.toggle("hidden", tab !== "konf");
@@ -556,6 +562,8 @@ function spSwitchTab(tab) {
   if (kartuPO) kartuPO.classList.toggle("hidden", tab === "konf" || tab === "riw");
 
   if (tab === "konf") { spMuatKonfirmasi(); return; }
+  if (tab === "marker") { spMuatMarker(); return; }
+  if (tab === "gelar") { spMuatGelaran(); return; }
   if (tab === "riw") { spMuatRiwayat(); return; }
   if (tab === "setor") { spMuatLineSetoran_(); spMuatSetoran(); return; }
   if (!window.SP_PO_AKTIF) return;
@@ -1300,3 +1308,399 @@ window.onload = function () {
     if (wrap && dd && !wrap.contains(e.target)) dd.classList.add("hidden");
   });
 };
+
+/* ============================================================
+   MARKER (bagian: pola)
+   ============================================================ */
+
+/** Ukuran yang bisa dipakai di susunan marker. Diisi dari data PO saat dimuat. */
+function spSizePO_() {
+  const cut = window.SP_CUT;
+  if (!cut || !cut.baris) return [];
+  const set = {};
+  cut.baris.forEach(function (b) {
+    Object.keys(b.sizeQty || b.qtyPerSize || {}).forEach(function (sz) { set[sz] = true; });
+  });
+  const ada = Object.keys(set);
+  // Cadangan: kalau bentuk datanya tidak seperti dugaan, pakai preset umum
+  // supaya form tetap bisa dipakai -- bukan kosong tanpa penjelasan.
+  return ada.length ? ada : ["S", "M", "L", "XL", "2XL", "3XL"];
+}
+
+function spMuatMarker() {
+  if (!window.SP_PO_AKTIF) {
+    document.getElementById("sp-marker-daftar").innerHTML =
+      '<p class="sp-info">Pilih Purchase Order dulu.</p>';
+    document.getElementById("sp-marker-form").innerHTML = "";
+    return;
+  }
+  document.getElementById("sp-marker-daftar").innerHTML = '<p class="sp-info">Memuat...</p>';
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getMarkerPO",
+      idPurchaseOrder: window.SP_PO_AKTIF })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) throw new Error((d && d.error) || "Gagal memuat marker.");
+    window.SP_MARKER = d.marker || [];
+    spRenderMarker_();
+  })
+  .catch(function (e) {
+    document.getElementById("sp-marker-daftar").innerHTML =
+      '<p class="sp-info">' + (e.message || e) + '</p>';
+  });
+}
+
+function spRenderMarker_() {
+  const daftar = window.SP_MARKER || [];
+  const wadah = document.getElementById("sp-marker-daftar");
+
+  wadah.innerHTML = daftar.length
+    ? '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
+        '<th>Kode</th><th>Lebar (cm)</th><th>Panjang</th><th>Susunan</th>' +
+        '<th>Pcs/lapis</th><th>Status</th><th/></tr></thead><tbody>' +
+        daftar.map(function (m) {
+          const susun = Object.keys(m.susunanSize || {})
+            .map(function (sz) { return sz + ":" + m.susunanSize[sz]; }).join(" ");
+          return '<tr><td><b>' + spEsc_(m.kodeMarker || "-") + '</b></td>' +
+            '<td>' + (m.lebarKain || "-") + '</td>' +
+            '<td>' + m.panjangMarker + " " + spEsc_(m.satuanPanjang) + '</td>' +
+            '<td>' + spEsc_(susun || "-") + '</td>' +
+            '<td><b>' + m.pcsPerLapis + '</b></td>' +
+            '<td>' + spEsc_(m.status) + (m.idMarkerAsal ? ' <small>(revisi)</small>' : '') + '</td>' +
+            '<td><button class="sp-btn-kecil" onclick="spRevisiMarker(\'' + m.idMarker + '\')" ' +
+              'type="button">Revisi</button> ' +
+              '<button class="sp-btn-kecil" onclick="spBatalMarker(\'' + m.idMarker + '\')" ' +
+              'type="button">Batal</button></td></tr>';
+        }).join("") +
+      '</tbody></table></div>'
+    : '<p class="sp-info">Belum ada marker untuk PO ini.</p>';
+
+  spRenderFormMarker_(null);
+}
+
+/**
+ * Form marker. Susunan size memakai input ANGKA PER SIZE, bukan teks "S:1".
+ * Format teks pernah diisi "S" saja tanpa jumlah -- sistem menerimanya diam-diam
+ * dan pcs per lapis jadi 0, yang membuat seluruh output gelaran nol tanpa ada
+ * yang tahu sebabnya.
+ */
+function spRenderFormMarker_(asal) {
+  const sizes = spSizePO_();
+  const a = asal || {};
+  document.getElementById("sp-marker-form").innerHTML =
+    '<h4 class="sp-subjudul">' + (asal ? "Revisi marker " + spEsc_(a.kodeMarker) : "Marker baru") + '</h4>' +
+    (asal ? '<p class="sp-info">Marker lama tetap tersimpan. Yang ini jadi baris baru berstatus Revisi.</p>' : '') +
+    '<div class="sp-grid3">' +
+      '<label>Kode Marker<input id="sp-mk-kode" placeholder="mis. A" type="text" value="' +
+        spEsc_(a.kodeMarker || "") + '"/></label>' +
+      '<label>Lebar Kain (cm)<input id="sp-mk-lebar" min="0" placeholder="150" step="0.5" type="number" value="' +
+        (a.lebarKain || "") + '"/></label>' +
+      '<label>Panjang Marker<input id="sp-mk-panjang" min="0" placeholder="6.2" step="0.01" type="number" value="' +
+        (a.panjangMarker || "") + '"/></label>' +
+    '</div>' +
+    '<label class="sp-lbl">Susunan Size &#8212; berapa pola tiap size dalam SATU lapis</label>' +
+    '<div class="sp-susun">' +
+      sizes.map(function (sz) {
+        const v = (a.susunanSize || {})[sz] || "";
+        return '<div class="sp-susun-item"><span>' + spEsc_(sz) + '</span>' +
+          '<input class="sp-mk-sz" data-size="' + spEsc_(sz) + '" min="0" ' +
+          'oninput="spHitungMarker_()" placeholder="0" type="number" value="' + v + '"/></div>';
+      }).join("") +
+    '</div>' +
+    '<p class="sp-info" id="sp-mk-hitung">Pcs per lapis: <b>0</b></p>' +
+    '<label class="sp-lbl">Catatan<input id="sp-mk-catatan" placeholder="opsional" type="text"/></label>' +
+    '<input id="sp-mk-asal" type="hidden" value="' + spEsc_(a.idMarker || "") + '"/>' +
+    '<button class="sp-btn" onclick="spSimpanMarker()" type="button">Simpan Marker</button>';
+  spHitungMarker_();
+}
+
+function spHitungMarker_() {
+  let n = 0;
+  document.querySelectorAll(".sp-mk-sz").forEach(function (inp) { n += Number(inp.value) || 0; });
+  const el = document.getElementById("sp-mk-hitung");
+  if (el) el.innerHTML = "Pcs per lapis: <b>" + n + "</b>";
+}
+
+function spRevisiMarker(idMarker) {
+  const m = (window.SP_MARKER || []).filter(function (x) { return x.idMarker === idMarker; })[0];
+  if (!m) return;
+  spRenderFormMarker_(m);
+  document.getElementById("sp-marker-form").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function spSimpanMarker() {
+  const susunan = {};
+  document.querySelectorAll(".sp-mk-sz").forEach(function (inp) {
+    const v = Number(inp.value) || 0;
+    if (v > 0) susunan[inp.dataset.size] = v;
+  });
+  if (!Object.keys(susunan).length) { alert("Susunan size wajib diisi minimal satu."); return; }
+  const panjang = Number((document.getElementById("sp-mk-panjang") || {}).value) || 0;
+  if (panjang <= 0) { alert("Panjang marker wajib diisi."); return; }
+
+  const asal = (document.getElementById("sp-mk-asal") || {}).value || "";
+  const cut = window.SP_CUT || {};
+  const b0 = (cut.baris || [])[0] || {};
+
+  const btn = event && event.target ? event.target : null;
+  if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
+
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: SP_ID_TOKEN, action: "simpanMarker",
+      payload: {
+        idPurchaseOrder: window.SP_PO_AKTIF,
+        brand: b0.brand || "", artikel: b0.artikel || "", style: b0.style || "",
+        kodeMarker: (document.getElementById("sp-mk-kode") || {}).value || "",
+        lebarKain: Number((document.getElementById("sp-mk-lebar") || {}).value) || 0,
+        panjangMarker: panjang,
+        satuanPanjang: "m",
+        susunanSize: susunan,
+        status: asal ? "Revisi" : "Final",
+        idMarkerAsal: asal,
+        catatan: (document.getElementById("sp-mk-catatan") || {}).value || ""
+      }
+    })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
+    alert("Marker tersimpan: " + d.idMarker + " (" + d.pcsPerLapis + " pcs/lapis)");
+    spMuatMarker();
+  })
+  .catch(function (e) { alert(e.message || e); })
+  .then(function () { if (btn) { btn.disabled = false; btn.textContent = "Simpan Marker"; } });
+}
+
+function spBatalMarker(idMarker) {
+  if (!confirm("Batalkan marker " + idMarker + "?\n\nBarisnya tidak dihapus, cuma ditandai Batal.")) return;
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "batalkanMarker",
+      payload: { idMarker: idMarker } })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) throw new Error((d && d.error) || "Gagal membatalkan.");
+    spMuatMarker();
+  })
+  .catch(function (e) { alert(e.message || e); });
+}
+
+/* ============================================================
+   GELARAN (bagian: cutting)
+   ============================================================ */
+
+function spMuatGelaran() {
+  if (!window.SP_PO_AKTIF) {
+    document.getElementById("sp-gelar-form").innerHTML =
+      '<p class="sp-info">Pilih Purchase Order dulu.</p>';
+    document.getElementById("sp-kain-rekap").innerHTML = "";
+    return;
+  }
+  document.getElementById("sp-gelar-form").innerHTML = '<p class="sp-info">Memuat...</p>';
+  Promise.all([
+    fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
+      idToken: SP_ID_TOKEN, action: "getMarkerPO", idPurchaseOrder: window.SP_PO_AKTIF }) })
+      .then(function (r) { return r.json(); }),
+    fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
+      idToken: SP_ID_TOKEN, action: "getRekapKainPO", idPurchaseOrder: window.SP_PO_AKTIF }) })
+      .then(function (r) { return r.json(); })
+  ])
+  .then(function (hasil) {
+    window.SP_MARKER = (hasil[0] && hasil[0].marker) || [];
+    window.SP_KAIN = (hasil[1] && hasil[1].kain) || [];
+    window.SP_KAIN_AMBANG = hasil[1] || {};
+    spRenderFormGelaran_();
+    spRenderRekapKain_();
+  })
+  .catch(function (e) {
+    document.getElementById("sp-gelar-form").innerHTML =
+      '<p class="sp-info">' + (e.message || e) + '</p>';
+  });
+}
+
+function spRenderFormGelaran_() {
+  const marker = (window.SP_MARKER || []).filter(function (m) {
+    return String(m.status || "").toLowerCase() !== "batal" && m.pcsPerLapis > 0;
+  });
+  if (!marker.length) {
+    document.getElementById("sp-gelar-form").innerHTML =
+      '<p class="sp-info">Belum ada marker yang siap dipakai. Minta tim pola mengisinya dulu ' +
+      'di tab Marker.</p>';
+    return;
+  }
+  const cut = window.SP_CUT || {};
+  const warna = (cut.baris || []).map(function (b) { return b.warna; })
+    .filter(function (w, i, a) { return w && a.indexOf(w) === i; });
+  const kain = (window.SP_KAIN || []).map(function (k) { return k.jenis; });
+
+  document.getElementById("sp-gelar-form").innerHTML =
+    '<div class="sp-grid3">' +
+      '<label>Marker<select id="sp-gl-marker" onchange="spHitungGelaran_()">' +
+        marker.map(function (m) {
+          return '<option data-panjang="' + m.panjangMarker + '" data-pcs="' + m.pcsPerLapis +
+            '" data-susun="' + spEsc_(JSON.stringify(m.susunanSize)) + '" value="' + m.idMarker + '">' +
+            spEsc_(m.kodeMarker || m.idMarker) + " &#183; " + m.panjangMarker + "m &#183; " +
+            m.pcsPerLapis + " pcs/lapis</option>";
+        }).join("") +
+      '</select></label>' +
+      '<label>Warna<select id="sp-gl-warna">' +
+        (warna.length ? warna.map(function (w) {
+          return '<option value="' + spEsc_(w) + '">' + spEsc_(w) + '</option>';
+        }).join("") : '<option value="">(tidak ada warna)</option>') +
+      '</select></label>' +
+      '<label>Jenis Kain<select id="sp-gl-kain">' +
+        (kain.length ? kain.map(function (k) {
+          return '<option value="' + spEsc_(k) + '">' + spEsc_(k) + '</option>';
+        }).join("") : '<option value="">(belum ada data kain)</option>') +
+      '</select></label>' +
+    '</div>' +
+    '<div class="sp-grid3">' +
+      '<label>Jumlah Lapis<input id="sp-gl-lapis" min="1" oninput="spHitungGelaran_()" ' +
+        'placeholder="0" type="number"/></label>' +
+      '<label>Tanggal<input id="sp-gl-tanggal" type="date" value="' +
+        new Date().toISOString().slice(0, 10) + '"/></label>' +
+      '<label>Catatan<input id="sp-gl-catatan" placeholder="opsional" type="text"/></label>' +
+    '</div>' +
+    '<div class="sp-hitung" id="sp-gl-hasil"/>' +
+    '<button class="sp-btn" onclick="spSimpanGelaran()" type="button">Simpan Gelaran</button>';
+  spHitungGelaran_();
+}
+
+/**
+ * Pratinjau hasil SEBELUM disimpan. Ini yang membuat "satu angka diketik" terasa
+ * aman: operator melihat 30 lapis jadi berapa pcs dan berapa meter kain sebelum
+ * menekan simpan, bukan sesudahnya.
+ */
+function spHitungGelaran_() {
+  const sel = document.getElementById("sp-gl-marker");
+  const el = document.getElementById("sp-gl-hasil");
+  if (!sel || !el) return;
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt) { el.innerHTML = ""; return; }
+  const lapis = Number((document.getElementById("sp-gl-lapis") || {}).value) || 0;
+  const panjang = Number(opt.dataset.panjang) || 0;
+  let susun = {};
+  try { susun = JSON.parse(opt.dataset.susun || "{}"); } catch (e) { susun = {}; }
+
+  if (lapis <= 0) {
+    el.innerHTML = '<span class="sp-info">Isi jumlah lapis untuk melihat hasilnya.</span>';
+    return;
+  }
+  const perSize = Object.keys(susun).map(function (sz) {
+    return '<span class="sp-chip">' + spEsc_(sz) + " <b>" + (susun[sz] * lapis) + "</b></span>";
+  }).join("");
+  const total = Object.keys(susun).reduce(function (a, sz) { return a + susun[sz] * lapis; }, 0);
+  const kain = Math.round(panjang * lapis * 100) / 100;
+
+  el.innerHTML =
+    '<div class="sp-hitung-baris"><span>Output</span><div>' + perSize +
+      ' <b class="sp-hitung-total">' + total + ' pcs</b></div></div>' +
+    '<div class="sp-hitung-baris"><span>Kain terpakai</span><div><b class="sp-hitung-total">' +
+      kain + ' m</b> <small>(' + panjang + ' m &#215; ' + lapis + ' lapis)</small></div></div>';
+}
+
+function spSimpanGelaran() {
+  const sel = document.getElementById("sp-gl-marker");
+  const lapis = Number((document.getElementById("sp-gl-lapis") || {}).value) || 0;
+  if (!sel || !sel.value) { alert("Marker wajib dipilih."); return; }
+  if (lapis <= 0) { alert("Jumlah lapis wajib diisi."); return; }
+  const warna = (document.getElementById("sp-gl-warna") || {}).value || "";
+  if (!warna) { alert("Warna wajib dipilih."); return; }
+
+  const cut = window.SP_CUT || {};
+  const b0 = (cut.baris || []).filter(function (b) { return b.warna === warna; })[0] || {};
+  const btn = event && event.target ? event.target : null;
+  if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
+
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: SP_ID_TOKEN, action: "simpanGelaran",
+      payload: {
+        idPurchaseOrder: window.SP_PO_AKTIF,
+        idMarker: sel.value,
+        warna: warna,
+        jenisKain: (document.getElementById("sp-gl-kain") || {}).value || "",
+        jumlahLapis: lapis,
+        tanggalPotong: (document.getElementById("sp-gl-tanggal") || {}).value || "",
+        catatan: (document.getElementById("sp-gl-catatan") || {}).value || "",
+        noSO: b0.noSO || "", brand: b0.brand || "",
+        artikel: b0.artikel || "", style: b0.style || ""
+      }
+    })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
+    alert("Gelaran tersimpan.\n" + d.totalQty + " pcs, kain " + d.kainTerpakai + " " + d.satuanKain);
+    window.SP_CUT = null;   // paksa muat ulang -- qty potong sudah berubah
+    spMuatGelaran();
+  })
+  .catch(function (e) { alert(e.message || e); })
+  .then(function () { if (btn) { btn.disabled = false; btn.textContent = "Simpan Gelaran"; } });
+}
+
+function spRenderRekapKain_() {
+  const kain = window.SP_KAIN || [];
+  const wadah = document.getElementById("sp-kain-rekap");
+  if (!kain.length) {
+    wadah.innerHTML = '<p class="sp-info">Belum ada data kain untuk PO ini.</p>';
+    return;
+  }
+  wadah.innerHTML =
+    '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
+      '<th>Kain</th><th>Diterima</th><th>Terpakai</th><th>Sisa hitung</th>' +
+      '<th>Sisa ukur</th><th>Selisih</th></tr></thead><tbody>' +
+      kain.map(function (k) {
+        const kelas = k.tanda ? ("sp-kain-" + k.tanda) : "";
+        return '<tr class="' + kelas + '"><td><b>' + spEsc_(k.jenis) + '</b></td>' +
+          '<td>' + k.diterima + " " + spEsc_(k.satuan) + '</td>' +
+          '<td>' + k.terpakai + '</td>' +
+          '<td>' + k.sisaHitung + '</td>' +
+          '<td>' + (k.sisaTerukur === null
+            ? '<input class="sp-kain-ukur" data-jenis="' + spEsc_(k.jenis) +
+              '" placeholder="ukur" step="0.01" type="number"/>'
+            : k.sisaTerukur) + '</td>' +
+          '<td>' + (k.selisih === null ? "-"
+            : (k.selisih + " (" + k.persenSelisih + "%) " + k.tanda)) + '</td></tr>';
+      }).join("") +
+    '</tbody></table></div>' +
+    '<button class="sp-btn" onclick="spSimpanSisaKain()" type="button">Simpan Hasil Ukur</button>' +
+    '<p class="sp-info">Selisih wajar sampai ' + (window.SP_KAIN_AMBANG.ambangWajar || 3) +
+      '%. Di atas ' + (window.SP_KAIN_AMBANG.ambangPeriksa || 7) + '% perlu diperiksa. ' +
+      'Selisih memang selalu ada &#8212; penyusutan kain dan potongan yang tidak utuh.</p>';
+}
+
+function spSimpanSisaKain() {
+  const sisa = [];
+  document.querySelectorAll(".sp-kain-ukur").forEach(function (inp) {
+    const v = Number(inp.value);
+    if (inp.value !== "" && !isNaN(v)) sisa.push({ jenisKain: inp.dataset.jenis, jumlah: v, satuan: "m" });
+  });
+  if (!sisa.length) { alert("Belum ada hasil ukur yang diisi."); return; }
+
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "simpanSisaKain",
+      payload: { idPurchaseOrder: window.SP_PO_AKTIF, sisa: sisa } })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
+    spMuatGelaran();
+  })
+  .catch(function (e) { alert(e.message || e); });
+}
+
+/** Escape HTML sederhana -- dipakai di seluruh render tab Marker & Gelaran. */
+function spEsc_(v) {
+  return String(v === null || v === undefined ? "" : v)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
