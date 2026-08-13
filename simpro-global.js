@@ -248,9 +248,22 @@ function buildWarnaSizeSectionHtml(order){
         const cells = sizeList.map(function(s){
           const cell = cellMap[w + "|" + s];
           if(!cell) return '<td class="lp-matrix-cell-empty">&#8212;</td>';
-          const persenHtml = (cell.persen === null) ? '' : '<div class="lp-matrix-persen">' + cell.persen + '%</div>';
-          const judul = (st ? st + ' &#183; ' : '') + w + ' &#183; Size ' + s;
-          return '<td class="' + matrixCellClass(cell.persen) + '" title="' + judul + '">' +
+
+          // Persen DIPLAFON 100 untuk klien. Angka mentah bisa melebihi 100%
+          // karena rework (barang cacat dijahit ulang, tercatat sebagai output
+          // baru) atau koreksi yang belum rapi. Buat klien, "progres 121%" tidak
+          // memberi informasi apa pun -- cuma memancing pertanyaan yang jawabannya
+          // urusan internal.
+          //
+          // Angka MENTAH tetap ditampilkan di kolom output ("17/14"), jadi tidak
+          // ada yang disembunyikan -- yang diplafon cuma persennya. Dan di
+          // diagnosa internal angkanya tetap apa adanya, supaya anomali tidak
+          // hilang dari pandangan.
+          const persenTampil = (cell.persen === null) ? null : Math.min(100, cell.persen);
+          const persenHtml = (persenTampil === null) ? '' : '<div class="lp-matrix-persen">' + persenTampil + '%</div>';
+          const judul = (st ? st + ' &#183; ' : '') + w + ' &#183; Size ' + s +
+            ((cell.persen !== null && cell.persen > 100) ? (' &#183; tercatat ' + cell.persen + '%') : '');
+          return '<td class="' + matrixCellClass(persenTampil) + '" title="' + judul + '">' +
             '<div class="lp-matrix-out">' + cell.output + (cell.qtyTarget ? ('/' + cell.qtyTarget) : '') + '</div>' +
             persenHtml +
             '</td>';
