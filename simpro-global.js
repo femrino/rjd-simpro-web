@@ -1996,6 +1996,10 @@ function ofTambahBarisKainKlien_(containerId, prefill){
   b.innerHTML =
     '<input class="of-f-kk-nama" placeholder="nama/kode kain" type="text"' +
       (pakaiSaran ? ' list="of-datalist-kain"' : '') + '/>' +
+    // Warna: kain dari klien selalu datang PER WARNA. Tanpa kolom ini, "Brokat
+    // Butter 100m" dan "Brokat Dusty 100m" tercatat sebagai satu "Brokat 200m",
+    // dan sisa yang dikembalikan ke klien tidak bisa dipecah per warna.
+    '<input class="of-f-kk-warna" placeholder="warna" type="text"/>' +
     '<input class="of-f-kk-jml" min="0" placeholder="jumlah" step="0.01" type="number"/>' +
     '<select class="of-f-kk-satuan">' + ofOpsiSatuan_("yds", OF_SATUAN_KAIN) + '</select>' +
     '<input class="of-f-kk-tgl" title="tanggal terima" type="date"/>' +
@@ -2004,6 +2008,8 @@ function ofTambahBarisKainKlien_(containerId, prefill){
   wadah.appendChild(b);
   if(prefill){
     b.querySelector(".of-f-kk-nama").value = prefill.nama || "";
+    const elWarna = b.querySelector(".of-f-kk-warna");
+    if (elWarna) elWarna.value = prefill.warna || "";
     b.querySelector(".of-f-kk-jml").value = (prefill.jumlah ? prefill.jumlah : "");
     ofSetSatuan_(b.querySelector(".of-f-kk-satuan"), prefill.satuan || "yds");
     b.querySelector(".of-f-kk-tgl").value = prefill.tanggal || "";
@@ -2026,7 +2032,8 @@ function ofKumpulkanKainKlien_(containerId){
         jumlah: Number(b.querySelector(".of-f-kk-jml").value) || 0,
         satuan: (b.querySelector(".of-f-kk-satuan").value || "yds").trim(),
         tanggal: (b.querySelector(".of-f-kk-tgl").value || "").trim(),
-        keterangan: (b.querySelector(".of-f-kk-ket").value || "").trim()
+        keterangan: (b.querySelector(".of-f-kk-ket").value || "").trim(),
+        warna: ((b.querySelector(".of-f-kk-warna") || {}).value || "").trim()
       };
     })
     .filter(function(k){ return k.nama; });

@@ -936,3 +936,8 @@ footer{padding:28px 0;background:var(--ink)}
 
 @media (max-width: 640px) {.rjd-modal .dbep-warna { min-width: 88px; }.rjd-modal .dbep-kain { min-width: 56px; }.rjd-modal .dbep-qty { min-width: 40px; padding: 5px 3px; }.rjd-modal .dbep-harga { min-width: 82px; }
 }
+
+/* Kolom warna di baris Kain Dari Klien. Kain klien selalu datang per warna,
+   jadi kolom ini sekelas dengan nama kain -- bukan pelengkap. */
+.rjd-modal .of-f-kk-warna { flex: 1 1 120px; }
+

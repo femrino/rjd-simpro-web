@@ -2174,12 +2174,17 @@ function spRenderRekapKain_() {
   }
   wadah.innerHTML =
     '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
-      '<th>Kain</th><th>Diterima</th><th>Terpakai</th><th>Re-cut</th><th>Sisa hitung</th>' +
-      '<th>Sisa ukur</th><th>Selisih</th></tr></thead><tbody>' +
+      '<th>Kain</th><th>Warna</th><th>Diterima</th><th>Terpakai</th><th>Re-cut</th>' +
+      '<th>Sisa hitung</th><th>Sisa ukur</th><th>Selisih</th></tr></thead><tbody>' +
       kain.map(function (k) {
         const kelas = k.tanda ? ("sp-kain-" + k.tanda) : "";
         return '<tr class="' + kelas + '">' +
           '<td data-label="Kain"><b>' + spEsc_(k.jenis) + '</b></td>' +
+          // Kain klien selalu datang per warna, jadi warna sekelas dengan nama
+          // kain di rekap ini -- bukan pelengkap.
+          '<td data-label="Warna">' + (k.warna && k.warna !== "(semua warna)"
+            ? spEsc_(k.warna)
+            : '<span class="sp-kosong">semua warna</span>') + '</td>' +
           '<td data-label="Diterima">' + k.diterima + " " + spEsc_(k.satuan) + '</td>' +
           '<td data-label="Terpakai">' + k.terpakai + '</td>' +
           '<td data-label="Re-cut">' + (k.terpakaiRecut
@@ -2188,6 +2193,7 @@ function spRenderRekapKain_() {
           '<td data-label="Sisa hitung">' + k.sisaHitung + '</td>' +
           '<td data-label="Sisa ukur">' + (k.sisaTerukur === null
             ? '<input class="sp-kain-ukur" data-jenis="' + spEsc_(k.jenis) +
+              '" data-warna="' + spEsc_(k.warna === "(semua warna)" ? "" : (k.warna || "")) +
               '" placeholder="ukur" step="0.01" type="number"/>'
             : k.sisaTerukur) + '</td>' +
           '<td data-label="Selisih">' + (k.selisih === null ? "-"
@@ -2245,7 +2251,15 @@ function spSimpanSisaKain() {
   const sisa = [];
   document.querySelectorAll(".sp-kain-ukur").forEach(function (inp) {
     const v = Number(inp.value);
-    if (inp.value !== "" && !isNaN(v)) sisa.push({ jenisKain: inp.dataset.jenis, jumlah: v, satuan: "m" });
+    if (inp.value !== "" && !isNaN(v)) {
+      // Warna ikut dikirim: hasil ukur milik satu (kain, warna), bukan seluruh
+      // jenis kain. Kosong = penerimaan lama yang belum punya warna.
+      sisa.push({
+        jenisKain: inp.dataset.jenis,
+        warna: inp.dataset.warna || "",
+        jumlah: v, satuan: "m"
+      });
+    }
   });
   if (!sisa.length) { alert("Belum ada hasil ukur yang diisi."); return; }
 
