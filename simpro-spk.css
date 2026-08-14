@@ -442,3 +442,23 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 .sp-setor-info-kembali { background: #FCF6E8; border-left: 3px solid #E8D8AE;
   padding: 9px 12px; border-radius: 8px; margin: 8px 0 4px; }
 
+/* ---- Roll kain ----
+   Rincian utuh vs potongan ditonjolkan: itu yang membuat sisa bisa dijelaskan
+   ke klien. "Sisa 57 m" tidak cukup -- 45 m roll utuh dan 12 m potongan punya
+   nilai yang sangat berbeda, dan di situlah konflik biasanya muncul. */
+.sp-roll-rincian { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 10px; font-size: 12.5px; }
+.sp-roll-rincian > span:first-child { color: var(--ink-soft); }
+.sp-roll-belum-tag { font-size: 11px; color: #8A5D1F; background: #FCF6E8;
+  border: 1px solid #E8D8AE; border-radius: 6px; padding: 2px 8px; }
+/* Roll yang belum diukur diredupkan -- supaya yang perlu diisi menonjol
+   sendiri tanpa perlu dihitung manual. */
+.sp-tabel .sp-roll-belum td { opacity: .72; }
+.sp-roll-sisa { width: 84px; padding: 5px 7px; margin: 0; text-align: right; }
+.sp-roll-kondisi { padding: 5px 6px; margin: 0; font-size: 12px; }
+.sp-roll-tambah { margin-top: 16px; padding: 14px; background: var(--cream);
+  border-radius: 11px; }
+.sp-roll-tambah input { margin: 0; padding: 6px 8px; width: 100%;
+  box-sizing: border-box; }
+.sp-roll-tambah .sp-simpan-btn { margin-top: 12px; }
+

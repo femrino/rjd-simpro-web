@@ -1737,6 +1737,9 @@ function spMuatGelaran() {
       .then(function (r) { return r.json(); }),
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
       idToken: SP_ID_TOKEN, action: "getRingkasanGelaranPO", idPurchaseOrder: window.SP_PO_AKTIF }) })
+      .then(function (r) { return r.json(); }),
+    fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
+      idToken: SP_ID_TOKEN, action: "getRollPO", idPurchaseOrder: window.SP_PO_AKTIF }) })
       .then(function (r) { return r.json(); })
   ])
   .then(function (hasil) {
@@ -1750,10 +1753,12 @@ function spMuatGelaran() {
     window.SP_SET_LENGKAP = (hasil[2] && hasil[2].setLengkap) || [];
     window.SP_RECUT = (hasil[2] && hasil[2].recut) || {};
     window.SP_SARAN_KOMPONEN = (hasil[2] && hasil[2].saranKomponen) || [];
+    window.SP_ROLL = (hasil[3] && hasil[3].kain) || [];
     spRenderFormGelaran_();
     spRenderSetLengkap_();
     spRenderRekapKain_();
     spRenderRecut_();
+    spRenderRoll_();
   })
   .catch(function (e) {
     document.getElementById("sp-gelar-form").innerHTML =
@@ -2245,6 +2250,186 @@ function spRenderRecut_() {
     '<p class="sp-info">Total re-cut: <b>' + totalPcs + ' panel</b>, kain <b>' +
       (Math.round(totalKain * 100) / 100) + ' m</b>. ' +
       'Angka ini yang menjelaskan selisih sisa kain &#8212; bukan sekadar "penyusutan".</p>';
+}
+
+/**
+ * Panel ROLL KAIN. Dua bagian, sesuai dua titik catatnya:
+ *   atas  -> daftar roll yang sudah diterima + isian sisa per roll
+ *   bawah -> form tambah roll (dipakai saat kain datang)
+ */
+function spRenderRoll_() {
+  const wadah = document.getElementById("sp-roll-panel");
+  if (!wadah) return;
+  const daftar = window.SP_ROLL || [];
+
+  const blok = daftar.map(function (g) {
+    const baris = g.roll.map(function (r) {
+      const diukur = r.sisaTerukur !== null && r.sisaTerukur !== undefined;
+      const terpakai = diukur ? (Math.round((r.panjangAwal - r.sisaTerukur) * 100) / 100) : null;
+      return '<tr' + (diukur ? '' : ' class="sp-roll-belum"') + '>' +
+        '<td data-label="No Roll"><b>' + spEsc_(r.noRoll || "-") + '</b></td>' +
+        '<td data-label="Panjang awal">' + r.panjangAwal + ' ' + spEsc_(g.satuan) + '</td>' +
+        '<td data-label="Terpakai">' + (terpakai === null ? "&#8212;" : terpakai) + '</td>' +
+        '<td data-label="Sisa">' +
+          '<input class="sp-roll-sisa" data-id="' + spEsc_(r.idRoll) +
+            '" max="' + r.panjangAwal + '" min="0" placeholder="ukur" step="0.01" ' +
+            'type="number" value="' + (diukur ? r.sisaTerukur : "") + '"/></td>' +
+        '<td data-label="Kondisi">' +
+          '<select class="sp-roll-kondisi" data-id="' + spEsc_(r.idRoll) + '">' +
+            ["Utuh", "Potongan"].map(function (k) {
+              return '<option' + (spEsc_(r.kondisiSisa) === k ? ' selected="selected"' : '') +
+                ' value="' + k + '">' + k + '</option>';
+            }).join("") +
+          '</select></td>' +
+        '<td data-label=""><button class="sp-btn-kecil" onclick="spBatalRoll(\'' +
+          spEsc_(r.idRoll) + '\')" type="button">Batal</button></td></tr>';
+    }).join("");
+
+    // Rincian utuh vs potongan: ini yang membuat sisa bisa dijelaskan ke klien.
+    // "Sisa 57 m" tidak cukup -- 45 m roll utuh dan 12 m potongan punya nilai
+    // yang sangat berbeda.
+    const rincian = (g.sudahDiukur > 0)
+      ? '<div class="sp-roll-rincian">' +
+          '<span>Sisa <b>' + g.totalSisa + ' ' + spEsc_(g.satuan) + '</b></span>' +
+          '<span class="sp-chip">utuh <b>' + g.sisaUtuh + '</b></span>' +
+          '<span class="sp-chip">potongan <b>' + g.sisaPotongan + '</b></span>' +
+          (g.belumDiukur ? '<span class="sp-roll-belum-tag">' + g.belumDiukur +
+            ' roll belum diukur</span>' : '') +
+        '</div>'
+      : '<div class="sp-roll-rincian"><span class="sp-roll-belum-tag">' +
+          g.jumlahRoll + ' roll belum diukur</span></div>';
+
+    return '<div class="sp-set-blok">' +
+      '<div class="sp-set-judul">' + spEsc_(g.jenis) +
+        (g.warna && g.warna !== "(semua warna)" ? ' &#183; ' + spEsc_(g.warna) : '') +
+        '<span class="sp-set-siap">' + g.jumlahRoll + ' ROLL <b>' +
+          g.totalPanjangAwal + ' ' + spEsc_(g.satuan) + '</b></span></div>' +
+      rincian +
+      '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu">' +
+        '<thead><tr><th>No Roll</th><th>Panjang awal</th><th>Terpakai</th>' +
+        '<th>Sisa</th><th>Kondisi</th><th></th></tr></thead><tbody>' + baris +
+        '</tbody></table></div>' +
+    '</div>';
+  }).join("");
+
+  wadah.innerHTML =
+    (daftar.length
+      ? blok + '<button class="sp-simpan-btn" onclick="spSimpanSisaRoll()" type="button">' +
+        'Simpan Hasil Ukur Roll</button>'
+      : '<p class="sp-info">Belum ada roll tercatat. Isi saat kain datang &#8212; ' +
+        'nomor roll dan panjangnya. Sisanya diukur nanti setelah selesai digelar.</p>') +
+    spFormTambahRoll_();
+}
+
+function spFormTambahRoll_() {
+  const kain = window.SP_PO_KAIN || [];
+  const warna = window.SP_PO_WARNA || [];
+  return '<div class="sp-roll-tambah">' +
+    '<div class="sp-lbl">Tambah roll (saat kain datang)</div>' +
+    '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
+      '<th>Jenis Kain</th><th>Warna</th><th>No Roll</th><th>Panjang</th><th></th>' +
+    '</tr></thead><tbody id="sp-roll-baru"></tbody></table></div>' +
+    '<button class="sp-btn-kecil" onclick="spTambahBarisRoll()" type="button">+ Tambah baris</button> ' +
+    '<button class="sp-simpan-btn" onclick="spSimpanRoll()" type="button">Simpan Roll</button>' +
+    '<datalist id="sp-datalist-kainroll">' +
+      kain.map(function (k) { return '<option value="' + spEsc_(k) + '"></option>'; }).join("") +
+    '</datalist>' +
+    '<datalist id="sp-datalist-warnaroll">' +
+      warna.map(function (w) { return '<option value="' + spEsc_(w) + '"></option>'; }).join("") +
+    '</datalist>' +
+  '</div>';
+}
+
+function spTambahBarisRoll() {
+  const tb = document.getElementById("sp-roll-baru");
+  if (!tb) return;
+  // Baris baru mewarisi kain & warna dari baris sebelumnya: kain datang
+  // biasanya beberapa roll sekaligus untuk warna yang sama, dan mengetik
+  // ulang tiap baris itu pekerjaan sia-sia.
+  const terakhir = tb.querySelector("tr:last-child");
+  const kainLama = terakhir ? (terakhir.querySelector(".sp-rb-kain").value || "") : "";
+  const warnaLama = terakhir ? (terakhir.querySelector(".sp-rb-warna").value || "") : "";
+  tb.insertAdjacentHTML("beforeend",
+    '<tr>' +
+      '<td data-label="Jenis Kain"><input class="sp-rb-kain" list="sp-datalist-kainroll" ' +
+        'placeholder="jenis kain" type="text" value="' + spEsc_(kainLama) + '"/></td>' +
+      '<td data-label="Warna"><input class="sp-rb-warna" list="sp-datalist-warnaroll" ' +
+        'placeholder="warna" type="text" value="' + spEsc_(warnaLama) + '"/></td>' +
+      '<td data-label="No Roll"><input class="sp-rb-no" placeholder="mis. R-01" type="text"/></td>' +
+      '<td data-label="Panjang"><input class="sp-rb-panjang" min="0" placeholder="0" ' +
+        'step="0.01" type="number"/></td>' +
+      '<td data-label=""><button class="sp-btn-kecil" onclick="this.closest(\'tr\').remove()" ' +
+        'type="button">&#10005;</button></td>' +
+    '</tr>');
+}
+
+function spSimpanRoll() {
+  const roll = [];
+  document.querySelectorAll("#sp-roll-baru tr").forEach(function (tr) {
+    const jenisKain = (tr.querySelector(".sp-rb-kain").value || "").trim();
+    const panjang = Number(tr.querySelector(".sp-rb-panjang").value) || 0;
+    if (!jenisKain || panjang <= 0) return;
+    roll.push({
+      jenisKain: jenisKain,
+      warna: (tr.querySelector(".sp-rb-warna").value || "").trim(),
+      noRoll: (tr.querySelector(".sp-rb-no").value || "").trim(),
+      panjangAwal: panjang,
+      satuan: "m"
+    });
+  });
+  if (!roll.length) { alert("Isi minimal satu roll: jenis kain dan panjangnya."); return; }
+
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "simpanRollKain",
+      payload: { idPurchaseOrder: window.SP_PO_AKTIF, roll: roll } })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
+    alert(d.tersimpan + " roll tersimpan (" + d.totalPanjang + " m).");
+    spMuatGelaran();
+  })
+  .catch(function (e) { alert(e.message || e); });
+}
+
+function spSimpanSisaRoll() {
+  const sisa = [];
+  document.querySelectorAll(".sp-roll-sisa").forEach(function (inp) {
+    if (inp.value === "") return;
+    const v = Number(inp.value);
+    if (isNaN(v)) return;
+    const sel = document.querySelector('.sp-roll-kondisi[data-id="' + inp.dataset.id + '"]');
+    sisa.push({ idRoll: inp.dataset.id, sisa: v, kondisi: sel ? sel.value : "Potongan" });
+  });
+  if (!sisa.length) { alert("Belum ada sisa roll yang diisi."); return; }
+
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "simpanSisaRoll",
+      payload: { idPurchaseOrder: window.SP_PO_AKTIF, sisa: sisa } })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
+    spMuatGelaran();
+  })
+  .catch(function (e) { alert(e.message || e); });
+}
+
+function spBatalRoll(idRoll) {
+  if (!confirm("Batalkan roll " + idRoll + "?\n\nBarisnya tidak dihapus, cuma ditandai batal.")) return;
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "batalkanRollKain",
+      payload: { idRoll: idRoll } })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) throw new Error((d && d.error) || "Gagal membatalkan.");
+    spMuatGelaran();
+  })
+  .catch(function (e) { alert(e.message || e); });
 }
 
 function spSimpanSisaKain() {
