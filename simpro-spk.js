@@ -1797,28 +1797,73 @@ function spKeCutting(warna) {
   if (!w) return;
   window.SP_ISI_CUTTING = { warna: warna, siap: w.siap };
   spSwitchTab("cutting");
-  setTimeout(function () { spTerapkanIsiCutting_(); }, 600);
+
+  // Tabel cutting mungkin belum dimuat (spSwitchTab baru memanggilnya, dan
+  // jawabannya datang dari server). Ditunggu sampai barisnya benar-benar ada,
+  // bukan menebak dengan satu setTimeout -- di koneksi lambat 600ms tidak cukup,
+  // dan gejalanya persis seperti "baris tidak ketemu".
+  let coba = 0;
+  const tunggu = setInterval(function () {
+    coba++;
+    const ada = document.querySelectorAll("#sp-cut-tabel tbody tr").length;
+    if (ada || coba > 20) {          // maks ~6 detik
+      clearInterval(tunggu);
+      spTerapkanIsiCutting_();
+    }
+  }, 300);
 }
 
-/** Isi kolom qty di tab Hasil Cutting dari set lengkap. */
+/**
+ * Isi kolom qty di tab Hasil Cutting dari set lengkap.
+ *
+ * Tiga hal yang harus tepat, dan versi pertama salah di ketiganya:
+ *   - tabelnya `#sp-cut-tabel`, BUKAN `#sp-tabel` (itu tabel Bagi ke Line)
+ *   - input-nya `.sp-cut-qty`, bukan sembarang input[data-size]
+ *   - nama warna ada di `.sp-warna`, dan dicocokkan PERSIS -- `indexOf` membuat
+ *     "Butter Motif 1" juga cocok dengan "Butter Motif 12"
+ *
+ * Menebak struktur DOM tab lain memang rapuh. Karena itu kalau tidak ketemu,
+ * angkanya tetap diberitahukan supaya bisa disalin manual -- bukan gagal diam.
+ */
 function spTerapkanIsiCutting_() {
   const isi = window.SP_ISI_CUTTING;
   if (!isi) return;
-  let terisi = 0;
-  document.querySelectorAll("#sp-tabel tr").forEach(function (tr) {
-    const th = tr.querySelector("th, td");
-    if (!th || th.textContent.indexOf(isi.warna) === -1) return;
-    tr.querySelectorAll("input[data-size]").forEach(function (inp) {
+
+  const rapikan = function (x) {
+    return String(x || "").trim().toLowerCase().replace(/\s+/g, " ");
+  };
+  const targetWarna = rapikan(isi.warna);
+
+  let terisi = 0, barisKetemu = false;
+  document.querySelectorAll("#sp-cut-tabel tbody tr").forEach(function (tr) {
+    const elWarna = tr.querySelector(".sp-warna");
+    if (!elWarna || rapikan(elWarna.textContent) !== targetWarna) return;
+    barisKetemu = true;
+    tr.querySelectorAll(".sp-cut-qty").forEach(function (inp) {
       const v = isi.siap[inp.dataset.size];
       if (v > 0) { inp.value = v; terisi++; }
     });
   });
+
   window.SP_ISI_CUTTING = null;
-  if (!terisi) {
-    alert("Baris warna " + isi.warna + " tidak ketemu di tab Hasil Cutting. " +
-      "Isi angkanya manual: " +
-      Object.keys(isi.siap).map(function (sz) { return sz + " " + isi.siap[sz]; }).join(", "));
+
+  if (terisi) {
+    // Total di baris & ringkasan bawah tidak ikut terhitung kalau cuma value
+    // yang diubah -- oninput tidak menyala untuk perubahan dari kode.
+    if (typeof spHitungTotalCutting === "function") spHitungTotalCutting();
+    const el = document.getElementById("sp-cut-tabel");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
   }
+
+  const angka = Object.keys(isi.siap)
+    .map(function (sz) { return sz + " " + isi.siap[sz]; }).join(", ");
+  alert(barisKetemu
+    ? ("Baris '" + isi.warna + "' ketemu, tapi ukurannya (" + angka + ") tidak ada " +
+       "kolom isian di tab Hasil Cutting.\n\nBiasanya karena ukuran itu qty ordernya 0. " +
+       "Periksa dulu rincian ordernya.")
+    : ("Baris warna '" + isi.warna + "' tidak ketemu di tab Hasil Cutting.\n\n" +
+       "Isi angkanya manual: " + angka));
 }
 
 function spRenderRekapKain_() {
