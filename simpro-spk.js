@@ -1747,8 +1747,15 @@ function spRenderSetLengkap_() {
   }
 
   wadah.innerHTML = daftar.map(function (w) {
-    const siapChip = Object.keys(w.siap).map(function (sz) {
-      return '<span class="sp-chip">' + spEsc_(sz) + " <b>" + w.siap[sz] + "</b></span>";
+    // Yang ditawarkan untuk dicatat adalah yang BELUM dicatat, bukan set
+    // lengkap kumulatif. Tanpa pembedaan ini, sesi kedua akan menawarkan angka
+    // yang sebagian sudah masuk kemarin.
+    const belum = w.belumDicatat || w.siap;
+    const totalBelum = (w.totalBelumDicatat !== undefined) ? w.totalBelumDicatat : w.totalSiap;
+    const sudah = w.sudahDicatat || 0;
+
+    const siapChip = Object.keys(belum).map(function (sz) {
+      return '<span class="sp-chip">' + spEsc_(sz) + " <b>" + belum[sz] + "</b></span>";
     }).join("");
 
     const barisKain = w.kain.map(function (k) {
@@ -1767,7 +1774,13 @@ function spRenderSetLengkap_() {
 
     return '<div class="sp-set-blok">' +
       '<div class="sp-set-judul">' + spEsc_(w.warna) +
-        '<span class="sp-set-siap">SIAP DIJAHIT <b>' + w.totalSiap + ' pcs</b></span></div>' +
+        '<span class="sp-set-siap">' +
+          (sudah > 0 ? 'BELUM DICATAT' : 'SIAP DIJAHIT') +
+          ' <b>' + totalBelum + ' pcs</b></span></div>' +
+      (sudah > 0
+        ? '<p class="sp-info">Set lengkap seluruhnya <b>' + w.totalSiap + ' pcs</b>, ' +
+          '<b>' + sudah + '</b> sudah tercatat di Hasil Cutting.</p>'
+        : '') +
       (siapChip ? '<div class="sp-set-chip">' + siapChip + '</div>' : '') +
       '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
         '<th>Jenis Kain</th><th>Per size</th><th>Potongan</th><th>Gelar</th>' +
@@ -1776,10 +1789,12 @@ function spRenderSetLengkap_() {
         ? '<p class="sp-info">' + w.totalTertahan + ' potongan menunggu pasangan kain lain. ' +
           'Belum bisa dihitung sebagai baju sampai semua komponennya lengkap.</p>'
         : '') +
-      (w.totalSiap > 0
+      (totalBelum > 0
         ? '<button class="sp-btn-kecil" onclick="spKeCutting(\'' + spEsc_(w.warna) + '\')" ' +
-          'type="button">Catat ' + w.totalSiap + ' pcs sebagai Hasil Cutting</button>'
-        : '') +
+          'type="button">Catat ' + totalBelum + ' pcs sebagai Hasil Cutting</button>'
+        : (sudah > 0
+          ? '<p class="sp-info">Semua set lengkap sudah tercatat di Hasil Cutting.</p>'
+          : '')) +
     '</div>';
   }).join("");
 }
@@ -1795,7 +1810,7 @@ function spRenderSetLengkap_() {
 function spKeCutting(warna) {
   const w = (window.SP_SET_LENGKAP || []).filter(function (x) { return x.warna === warna; })[0];
   if (!w) return;
-  window.SP_ISI_CUTTING = { warna: warna, siap: w.siap };
+  window.SP_ISI_CUTTING = { warna: warna, siap: w.belumDicatat || w.siap };
   spSwitchTab("cutting");
 
   // Tabel cutting mungkin belum dimuat (spSwitchTab baru memanggilnya, dan
