@@ -1393,14 +1393,15 @@ function spRenderMarker_() {
 
   wadah.innerHTML = daftar.length
     ? '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
-        '<th>Kode</th><th>Lebar (cm)</th><th>Panjang</th><th>Susunan</th>' +
-        '<th>Pcs/lapis</th><th>Status</th><th/></tr></thead><tbody>' +
+        '<th>Kode</th><th>Lebar (cm)</th><th>Panjang</th><th>Allow</th><th>Susunan</th>' +
+        '<th>Pcs/lapis</th><th>Status</th><th></th></tr></thead><tbody>' +
         daftar.map(function (m) {
           const susun = Object.keys(m.susunanSize || {})
             .map(function (sz) { return sz + ":" + m.susunanSize[sz]; }).join(" ");
           return '<tr><td><b>' + spEsc_(m.kodeMarker || "-") + '</b></td>' +
             '<td>' + (m.lebarKain || "-") + '</td>' +
             '<td>' + m.panjangMarker + " " + spEsc_(m.satuanPanjang) + '</td>' +
+            '<td>' + (m.allowancePerLapis !== undefined ? m.allowancePerLapis : "-") + '</td>' +
             '<td>' + spEsc_(susun || "-") + '</td>' +
             '<td><b>' + m.pcsPerLapis + '</b></td>' +
             '<td>' + spEsc_(m.status) + (m.idMarkerAsal ? ' <small>(revisi)</small>' : '') + '</td>' +
@@ -1442,9 +1443,17 @@ function spRenderFormMarker_(asal) {
         spEsc_(a.kodeMarker || "") + '"/></label>' +
       '<label>Lebar Kain (cm)<input id="sp-mk-lebar" min="0" placeholder="150" step="0.5" type="number" value="' +
         (a.lebarKain || "") + '"/></label>' +
-      '<label>Panjang Marker<input id="sp-mk-panjang" min="0" placeholder="6.2" step="0.01" type="number" value="' +
+      '<label>Panjang Marker (m)<input id="sp-mk-panjang" min="0" placeholder="1.207" step="0.001" type="number" value="' +
         (a.panjangMarker || "") + '"/></label>' +
     '</div>' +
+    '<div class="sp-grid3">' +
+      '<label>Allowance per lapis (m)<input id="sp-mk-allow" min="0" placeholder="0.02" ' +
+        'step="0.001" type="number" value="' +
+        (a.allowancePerLapis !== undefined ? a.allowancePerLapis : "0.02") + '"/></label>' +
+    '</div>' +
+    '<p class="sp-info">Panjang marker diisi APA ADANYA dari software pola. Allowance ' +
+      'dipisah supaya efisiensi marker tetap bisa dinilai, dan kalau sisa kain meleset ' +
+      'nanti ketahuan penyebabnya yang mana.</p>' +
     catatanSumber +
     '<label class="sp-lbl">Susunan Size &#8212; berapa pola tiap size dalam SATU lapis</label>' +
     '<div class="sp-susun">' +
@@ -1504,6 +1513,7 @@ function spSimpanMarker() {
         kodeMarker: (document.getElementById("sp-mk-kode") || {}).value || "",
         lebarKain: Number((document.getElementById("sp-mk-lebar") || {}).value) || 0,
         panjangMarker: panjang,
+        allowancePerLapis: (document.getElementById("sp-mk-allow") || {}).value,
         satuanPanjang: "m",
         susunanSize: susunan,
         status: asal ? "Revisi" : "Final",
@@ -1612,6 +1622,7 @@ function spRenderFormGelaran_() {
       '<label>Marker<select id="sp-gl-marker" onchange="spHitungGelaran_()">' +
         marker.map(function (m) {
           return '<option data-panjang="' + m.panjangMarker + '" data-pcs="' + m.pcsPerLapis +
+            '" data-allow="' + (m.allowancePerLapis !== undefined ? m.allowancePerLapis : 0.02) +
             '" data-susun="' + spEsc_(JSON.stringify(m.susunanSize)) + '" value="' + m.idMarker + '">' +
             spEsc_(m.kodeMarker || m.idMarker) + " &#183; " + m.panjangMarker + "m &#183; " +
             m.pcsPerLapis + " pcs/lapis</option>";
@@ -1641,6 +1652,10 @@ function spRenderFormGelaran_() {
         'placeholder="0" type="number"/></label>' +
       '<label>Tanggal<input id="sp-gl-tanggal" type="date" value="' +
         new Date().toISOString().slice(0, 10) + '"/></label>' +
+      '<label>Allowance/lapis (m)<input id="sp-gl-allow" min="0" oninput="spHitungGelaran_()" ' +
+        'step="0.001" type="number"/></label>' +
+    '</div>' +
+    '<div class="sp-grid3">' +
       '<label>Catatan<input id="sp-gl-catatan" placeholder="opsional" type="text"/></label>' +
     '</div>' +
     // JANGAN self-closing. Di XML <div/> sah, tapi innerHTML browser
@@ -1664,6 +1679,16 @@ function spHitungGelaran_() {
   if (!sel || !el) return;
   const opt = sel.options[sel.selectedIndex];
   if (!opt) { el.innerHTML = ""; return; }
+
+  // Allowance kosong -> isi dengan bawaan markernya. Diisi ke FIELD, bukan
+  // cuma dipakai diam-diam: operator perlu melihat angka yang sedang dipakai,
+  // dan bisa mengubahnya kalau kain hari itu butuh lebih.
+  const inpAllow = document.getElementById("sp-gl-allow");
+  if (inpAllow && inpAllow.value === "") {
+    inpAllow.value = opt.dataset.allow || "0.02";
+  }
+  const allow = inpAllow ? (Number(inpAllow.value) || 0) : 0.02;
+
   const lapis = Number((document.getElementById("sp-gl-lapis") || {}).value) || 0;
   const panjang = Number(opt.dataset.panjang) || 0;
   let susun = {};
@@ -1677,13 +1702,14 @@ function spHitungGelaran_() {
     return '<span class="sp-chip">' + spEsc_(sz) + " <b>" + (susun[sz] * lapis) + "</b></span>";
   }).join("");
   const total = Object.keys(susun).reduce(function (a, sz) { return a + susun[sz] * lapis; }, 0);
-  const kain = Math.round(panjang * lapis * 100) / 100;
+  const kain = Math.round((panjang + allow) * lapis * 100) / 100;
 
   el.innerHTML =
     '<div class="sp-hitung-baris"><span>Output</span><div>' + perSize +
       ' <b class="sp-hitung-total">' + total + ' pcs</b></div></div>' +
     '<div class="sp-hitung-baris"><span>Kain terpakai</span><div><b class="sp-hitung-total">' +
-      kain + ' m</b> <small>(' + panjang + ' m &#215; ' + lapis + ' lapis)</small></div></div>';
+      kain + ' m</b> <small>((' + panjang + ' m marker + ' + allow +
+      ' m allowance) &#215; ' + lapis + ' lapis)</small></div></div>';
 }
 
 function spSimpanGelaran() {
@@ -1708,6 +1734,7 @@ function spSimpanGelaran() {
         warna: warna,
         jenisKain: (document.getElementById("sp-gl-kain") || {}).value || "",
         jumlahLapis: lapis,
+        allowancePerLapis: (document.getElementById("sp-gl-allow") || {}).value,
         tanggalPotong: (document.getElementById("sp-gl-tanggal") || {}).value || "",
         catatan: (document.getElementById("sp-gl-catatan") || {}).value || "",
         noSO: item.noSO || "", brand: item.brand || "",
