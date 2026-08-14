@@ -409,3 +409,25 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   .sp-tabelwrap-kartu { overflow-x: visible; }
 }
 
+/* ---- Pemilih mode gelaran (Normal / Re-cut) ----
+   Diletakkan paling atas dan dibuat besar: seluruh perilaku form berubah dari
+   sini, jadi keputusannya harus terlihat sebelum mengisi apa pun -- bukan
+   sesudah semua terisi lalu baru sadar salah mode. */
+.sp-mode { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.sp-mode-opsi { flex: 1 1 220px; display: flex; align-items: flex-start; gap: 10px;
+  padding: 11px 14px; border: 1px solid var(--line); border-radius: 11px;
+  background: var(--white); cursor: pointer; }
+.sp-mode-opsi:hover { border-color: var(--thread); }
+.sp-mode-opsi input { margin-top: 3px; width: 16px; height: 16px; cursor: pointer; flex: 0 0 auto; }
+.sp-mode-opsi span { display: flex; flex-direction: column; gap: 2px; }
+.sp-mode-opsi b { font-size: 13px; color: var(--ink); }
+.sp-mode-opsi small { font-size: 11px; color: var(--ink-soft); }
+/* Kelas .aktif dipasang dari JS, bukan :has(input:checked) -- selektor itu
+   belum didukung browser lama, dan alasannya sama dengan tabel kartu tadi:
+   HP di lantai produksi belum tentu baru. */
+.sp-mode-opsi.aktif { border-color: var(--thread); background: var(--cream); }
+
+/* Blok isian khusus re-cut. Diberi garis kiri amber -- penanda yang sama
+   dengan panel ARTIKEL di modal Edit Order: "yang di sini berbeda aturannya". */
+.sp-recut-blok { border-left: 3px solid #C79A3A; padding-left: 14px; margin: 14px 0; }
+

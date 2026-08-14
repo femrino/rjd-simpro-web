@@ -1669,9 +1669,12 @@ function spMuatGelaran() {
     window.SP_KAIN = (hasil[1] && hasil[1].kain) || [];
     window.SP_KAIN_AMBANG = hasil[1] || {};
     window.SP_SET_LENGKAP = (hasil[2] && hasil[2].setLengkap) || [];
+    window.SP_RECUT = (hasil[2] && hasil[2].recut) || {};
+    window.SP_SARAN_KOMPONEN = (hasil[2] && hasil[2].saranKomponen) || [];
     spRenderFormGelaran_();
     spRenderSetLengkap_();
     spRenderRekapKain_();
+    spRenderRecut_();
   })
   .catch(function (e) {
     document.getElementById("sp-gelar-form").innerHTML =
@@ -1708,8 +1711,20 @@ function spRenderFormGelaran_() {
   }
 
   document.getElementById("sp-gelar-form").innerHTML =
+    // Pemilih mode di paling atas: seluruh perilaku form berubah dari sini,
+    // jadi keputusannya harus diambil SEBELUM mengisi apa pun -- bukan sesudah
+    // semua terisi lalu baru sadar salah mode.
+    '<div class="sp-mode">' +
+      '<label class="sp-mode-opsi"><input checked="checked" name="sp-gl-jenis" ' +
+        'onchange="spUbahModeGelaran_()" type="radio" value="Normal"/>' +
+        '<span><b>Gelaran normal</b><small>menghasilkan baju baru</small></span></label>' +
+      '<label class="sp-mode-opsi"><input name="sp-gl-jenis" onchange="spUbahModeGelaran_()" ' +
+        'type="radio" value="Re-cut"/>' +
+        '<span><b>Re-cut</b><small>ganti panel cacat &#183; kain saja</small></span></label>' +
+    '</div>' +
     '<div class="sp-grid3">' +
       '<label>Marker<select id="sp-gl-marker" onchange="spHitungGelaran_()">' +
+        '<option value="">(tanpa marker &#8212; potong manual)</option>' +
         marker.map(function (m) {
           return '<option data-panjang="' + m.panjangMarker + '" data-pcs="' + m.pcsPerLapis +
             '" data-allow="' + (m.allowancePerLapis !== undefined ? m.allowancePerLapis : 0.02) +
@@ -1753,9 +1768,29 @@ function spRenderFormGelaran_() {
     // bawahnya jadi ANAK div ini, lalu ikut terhapus setiap kali
     // spHitungGelaran_ menulis ulang isinya. Gejalanya: tombol Simpan Gelaran
     // hilang dan satu-satunya tombol yang tersisa adalah Simpan Hasil Ukur.
+    // Blok re-cut disembunyikan di mode normal. Ditampilkan/disembunyikan,
+    // bukan dirender ulang -- supaya isian yang sudah diketik tidak hilang
+    // kalau operator berganti mode bolak-balik.
+    '<div class="sp-recut-blok hidden" id="sp-gl-recut">' +
+      '<div class="sp-grid3">' +
+        '<label>Komponen yang diganti' +
+          '<input id="sp-gl-komponen" list="sp-datalist-komponen" ' +
+            'placeholder="mis. Lengan" type="text"/></label>' +
+        '<label>Alasan<input id="sp-gl-alasan" placeholder="mis. kain sobek" type="text"/></label>' +
+        '<label>Kain terpakai (m)<input id="sp-gl-kain-manual" min="0" ' +
+          'oninput="spHitungGelaran_()" placeholder="0" step="0.01" type="number"/></label>' +
+      '</div>' +
+      '<datalist id="sp-datalist-komponen">' +
+        (window.SP_SARAN_KOMPONEN || []).map(function (k) {
+          return '<option value="' + spEsc_(k) + '"></option>';
+        }).join("") +
+      '</datalist>' +
+      '<p class="sp-info">Re-cut TIDAK menambah jumlah baju &#8212; bajunya sudah terhitung ' +
+        'waktu dipotong pertama. Yang bertambah cuma pemakaian kain.</p>' +
+    '</div>' +
     '<div class="sp-hitung" id="sp-gl-hasil"></div>' +
     '<button class="sp-simpan-btn" onclick="spSimpanGelaran()" type="button">Simpan Gelaran</button>';
-  spHitungGelaran_();
+  spUbahModeGelaran_();
 }
 
 /**
@@ -1763,12 +1798,44 @@ function spRenderFormGelaran_() {
  * aman: operator melihat 30 lapis jadi berapa pcs dan berapa meter kain sebelum
  * menekan simpan, bukan sesudahnya.
  */
+/** Mode gelaran berubah -> tampilkan/sembunyikan blok re-cut, hitung ulang. */
+function spUbahModeGelaran_() {
+  const recut = spModeRecut_();
+  const blok = document.getElementById("sp-gl-recut");
+  if (blok) blok.classList.toggle("hidden", !recut);
+  // Penanda visual mode aktif dipasang dari sini, bukan lewat :has() di CSS --
+  // selektor itu belum didukung browser lama.
+  document.querySelectorAll(".sp-mode-opsi").forEach(function (el) {
+    const inp = el.querySelector("input");
+    el.classList.toggle("aktif", !!(inp && inp.checked));
+  });
+  spHitungGelaran_();
+}
+
+function spModeRecut_() {
+  const r = document.querySelector('input[name="sp-gl-jenis"]:checked');
+  return !!(r && r.value === "Re-cut");
+}
+
 function spHitungGelaran_() {
   const sel = document.getElementById("sp-gl-marker");
   const el = document.getElementById("sp-gl-hasil");
   if (!sel || !el) return;
   const opt = sel.options[sel.selectedIndex];
   if (!opt) { el.innerHTML = ""; return; }
+  const recut = spModeRecut_();
+
+  // Re-cut tanpa marker: kain diisi manual, output tidak dihitung sama sekali.
+  if (recut && !sel.value) {
+    const kainManual = Number((document.getElementById("sp-gl-kain-manual") || {}).value) || 0;
+    el.innerHTML = kainManual > 0
+      ? '<div class="sp-hitung-baris"><span>Kain terpakai</span><div><b class="sp-hitung-total">' +
+          kainManual + ' m</b> <small>(diisi manual)</small></div></div>' +
+        '<div class="sp-hitung-baris"><span>Baju bertambah</span><div><b>tidak</b> ' +
+          '<small>&#8212; re-cut hanya mengganti panel</small></div></div>'
+      : '<span class="sp-info">Isi kain terpakai untuk melihat ringkasannya.</span>';
+    return;
+  }
 
   // Allowance kosong -> isi dengan bawaan markernya. Diisi ke FIELD, bukan
   // cuma dipakai diam-diam: operator perlu melihat angka yang sedang dipakai,
@@ -1795,8 +1862,10 @@ function spHitungGelaran_() {
   const kain = Math.round((panjang + allow) * lapis * 100) / 100;
 
   el.innerHTML =
-    '<div class="sp-hitung-baris"><span>Output</span><div>' + perSize +
-      ' <b class="sp-hitung-total">' + total + ' pcs</b></div></div>' +
+    '<div class="sp-hitung-baris"><span>' + (recut ? 'Panel dipotong' : 'Output') +
+      '</span><div>' + perSize +
+      ' <b class="sp-hitung-total">' + total + ' pcs</b>' +
+      (recut ? ' <small>&#8212; TIDAK menambah jumlah baju</small>' : '') + '</div></div>' +
     '<div class="sp-hitung-baris"><span>Kain terpakai</span><div><b class="sp-hitung-total">' +
       kain + ' m</b> <small>((' + panjang + ' m marker + ' + allow +
       ' m allowance) &#215; ' + lapis + ' lapis)</small></div></div>';
@@ -1805,8 +1874,19 @@ function spHitungGelaran_() {
 function spSimpanGelaran() {
   const sel = document.getElementById("sp-gl-marker");
   const lapis = Number((document.getElementById("sp-gl-lapis") || {}).value) || 0;
-  if (!sel || !sel.value) { alert("Marker wajib dipilih."); return; }
-  if (lapis <= 0) { alert("Jumlah lapis wajib diisi."); return; }
+  const recut = spModeRecut_();
+
+  if (recut) {
+    if (!(document.getElementById("sp-gl-komponen") || {}).value) {
+      alert("Komponen yang diganti wajib diisi.\n\nMisal: Lengan, Badan Depan."); return;
+    }
+    if (!sel.value && !Number((document.getElementById("sp-gl-kain-manual") || {}).value)) {
+      alert("Re-cut tanpa marker: isi kain terpakai."); return;
+    }
+  } else {
+    if (!sel || !sel.value) { alert("Marker wajib dipilih."); return; }
+    if (lapis <= 0) { alert("Jumlah lapis wajib diisi."); return; }
+  }
   const warna = (document.getElementById("sp-gl-warna") || {}).value || "";
   if (!warna) { alert("Warna wajib dipilih."); return; }
 
@@ -1823,6 +1903,10 @@ function spSimpanGelaran() {
         idMarker: sel.value,
         warna: warna,
         jenisKain: (document.getElementById("sp-gl-kain") || {}).value || "",
+        jenisGelaran: spModeRecut_() ? "Re-cut" : "Normal",
+        komponen: (document.getElementById("sp-gl-komponen") || {}).value || "",
+        alasan: (document.getElementById("sp-gl-alasan") || {}).value || "",
+        kainTerpakai: (document.getElementById("sp-gl-kain-manual") || {}).value || "",
         jumlahLapis: lapis,
         allowancePerLapis: (document.getElementById("sp-gl-allow") || {}).value,
         tanggalPotong: (document.getElementById("sp-gl-tanggal") || {}).value || "",
@@ -2007,7 +2091,7 @@ function spRenderRekapKain_() {
   }
   wadah.innerHTML =
     '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
-      '<th>Kain</th><th>Diterima</th><th>Terpakai</th><th>Sisa hitung</th>' +
+      '<th>Kain</th><th>Diterima</th><th>Terpakai</th><th>Re-cut</th><th>Sisa hitung</th>' +
       '<th>Sisa ukur</th><th>Selisih</th></tr></thead><tbody>' +
       kain.map(function (k) {
         const kelas = k.tanda ? ("sp-kain-" + k.tanda) : "";
@@ -2015,6 +2099,9 @@ function spRenderRekapKain_() {
           '<td data-label="Kain"><b>' + spEsc_(k.jenis) + '</b></td>' +
           '<td data-label="Diterima">' + k.diterima + " " + spEsc_(k.satuan) + '</td>' +
           '<td data-label="Terpakai">' + k.terpakai + '</td>' +
+          '<td data-label="Re-cut">' + (k.terpakaiRecut
+            ? (k.terpakaiRecut + ' m' + (k.qtyRecut ? ' <small>(' + k.qtyRecut + ' pcs)</small>' : ''))
+            : '&#8212;') + '</td>' +
           '<td data-label="Sisa hitung">' + k.sisaHitung + '</td>' +
           '<td data-label="Sisa ukur">' + (k.sisaTerukur === null
             ? '<input class="sp-kain-ukur" data-jenis="' + spEsc_(k.jenis) +
@@ -2028,6 +2115,47 @@ function spRenderRekapKain_() {
     '<p class="sp-info">Selisih wajar sampai ' + (window.SP_KAIN_AMBANG.ambangWajar || 3) +
       '%. Di atas ' + (window.SP_KAIN_AMBANG.ambangPeriksa || 7) + '% perlu diperiksa. ' +
       'Selisih memang selalu ada &#8212; penyusutan kain dan potongan yang tidak utuh.</p>';
+}
+
+/**
+ * Riwayat re-cut. Ditampilkan di bawah rekap kain -- di situlah pertanyaan
+ * "kenapa kainnya habis lebih cepat" muncul, dan jawabannya ada di sini.
+ */
+function spRenderRecut_() {
+  const wadah = document.getElementById("sp-recut-riwayat");
+  if (!wadah) return;
+  const recut = window.SP_RECUT || {};
+  const kainList = Object.keys(recut);
+  if (!kainList.length) {
+    wadah.innerHTML = '<p class="sp-info">Belum ada re-cut tercatat.</p>';
+    return;
+  }
+
+  let totalKain = 0, totalPcs = 0;
+  const baris = [];
+  kainList.forEach(function (kain) {
+    totalKain += recut[kain].kainTerpakai || 0;
+    totalPcs += recut[kain].total || 0;
+    (recut[kain].rincian || []).forEach(function (r) {
+      baris.push('<tr>' +
+        '<td data-label="Tanggal">' + spEsc_(r.tanggal || "-") + '</td>' +
+        '<td data-label="Warna">' + spEsc_(r.warna || "-") + '</td>' +
+        '<td data-label="Komponen"><b>' + spEsc_(r.komponen || "-") + '</b></td>' +
+        '<td data-label="Kain">' + spEsc_(kain) + '</td>' +
+        '<td data-label="Jumlah">' + (r.qty || 0) + ' pcs</td>' +
+        '<td data-label="Kain terpakai">' + (r.kain || 0) + ' m</td>' +
+        '<td data-label="Alasan">' + spEsc_(r.alasan || "-") + '</td></tr>');
+    });
+  });
+
+  wadah.innerHTML =
+    '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
+      '<th>Tanggal</th><th>Warna</th><th>Komponen</th><th>Kain</th>' +
+      '<th>Jumlah</th><th>Kain terpakai</th><th>Alasan</th></tr></thead><tbody>' +
+      baris.join("") + '</tbody></table></div>' +
+    '<p class="sp-info">Total re-cut: <b>' + totalPcs + ' panel</b>, kain <b>' +
+      (Math.round(totalKain * 100) / 100) + ' m</b>. ' +
+      'Angka ini yang menjelaskan selisih sisa kain &#8212; bukan sekadar "penyusutan".</p>';
 }
 
 function spSimpanSisaKain() {
