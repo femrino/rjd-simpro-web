@@ -8,7 +8,7 @@
  * SELURUH pergerakan barang di lantai: hasil cutting, pembagian ke line,
  * setoran balik ke finishing, konfirmasi terima, dan riwayat/koreksi. Nama
  * "SPK" sudah tidak mewakili -- SPK kini cuma salah satu keluaran dari tab
- * "Bagi ke Line".
+ * "Loading" (data-tab tetap "bagi" -- nama teknis tidak diubah).
  *
  * Nama file (simpro-spk.js) SENGAJA tidak ikut diganti: mengganti nama file
  * berarti semua tag CDN lama menunjuk file yang hilang, dan itu risiko yang
@@ -217,7 +217,7 @@ function spPilihPO(idPO) {
   spSwitchTab(window.SP_TAB || "cutting");
 }
 
-/** Muat data tab "Bagi ke Line" (perilaku lama spPilihPO). */
+/** Muat data tab "Loading" (perilaku lama spPilihPO). */
 function spMuatDistribusi() {
   const idPO = window.SP_PO_AKTIF;
   if (!idPO) return;
@@ -460,7 +460,7 @@ function spSimpan() {
  * dari klien) ini lebih penting lagi: tanpa catatan potong + kain terpakai,
  * RJD tidak punya dasar apa pun saat klien menagih kekurangan barang.
  *
- * BEDA SIKAP dengan tab Bagi ke Line: di sini TIDAK ADA batas atas. Overcut
+ * BEDA SIKAP dengan tab Loading: di sini TIDAK ADA batas atas. Overcut
  * (potong lebih untuk cadangan) itu praktik normal, dan memblokirnya cuma
  * akan bikin petugas mengisi angka bohong supaya tersimpan. Selisih terhadap
  * order tetap ditampilkan, tapi sebagai INFORMASI, bukan penghalang.
@@ -741,7 +741,7 @@ function spSimpanCutting() {
       h.totalPotongKumulatif + ' pcs</b>.</div>';
     kotak.classList.remove("hidden");
     // KEDUANYA dikosongkan: catatan potong baru mengubah "sisa yang boleh
-    // dibagi" di tab sebelah. Kalau tidak direset, tab Bagi ke Line masih
+    // dibagi" di tab sebelah. Kalau tidak direset, tab Loading masih
     // memakai angka lama dan pembagian berikutnya dihitung dari dasar salah.
     window.SP_CUT = null;
     window.SP_PO = null;
@@ -1206,7 +1206,7 @@ function spRenderFormSetoran() {
       '<p class="hidden sp-info sp-setor-info-kembali" id="sp-setor-ket">' +
         'Potongan yang dikembalikan TIDAK dihitung sebagai baju jadi. ' +
         'Barangnya keluar dari tangan line, dan bisa dibagikan lagi ke line lain ' +
-        'lewat tab Bagi ke Line.</p>';
+        'lewat tab Loading.</p>';
   }
 
   document.getElementById("sp-setor-tabel").innerHTML =
@@ -2116,7 +2116,7 @@ function spKeCutting(warna) {
  * Isi kolom qty di tab Hasil Cutting dari set lengkap.
  *
  * Tiga hal yang harus tepat, dan versi pertama salah di ketiganya:
- *   - tabelnya `#sp-cut-tabel`, BUKAN `#sp-tabel` (itu tabel Bagi ke Line)
+ *   - tabelnya `#sp-cut-tabel`, BUKAN `#sp-tabel` (itu tabel Loading)
  *   - input-nya `.sp-cut-qty`, bukan sembarang input[data-size]
  *   - nama warna ada di `.sp-warna`, dan dicocokkan PERSIS -- `indexOf` membuat
  *     "Butter Motif 1" juga cocok dengan "Butter Motif 12"
