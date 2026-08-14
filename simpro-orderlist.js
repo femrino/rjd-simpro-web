@@ -1007,21 +1007,21 @@ function dbHitungTotalBarisPO(inp){
 }
 
 async function dbSimpanEditPO(){
-  if (identitas.length) {
-    const rincian = identitas.map(function(x){
-      return "  " + (x.artikelLama || "-") + " / " + (x.styleLama || "-") +
-        "\n  menjadi: " + x.artikel + " / " + (x.style || "-");
-    }).join("\n\n");
-    if (!confirm("Identitas item akan diubah:\n\n" + rincian +
-        "\n\nSemua baris item ini ikut berubah, termasuk Detail PO. Lanjutkan?")) {
-      return;
-    }
-  }
-
   const btn = document.getElementById("db-editpo-simpan");
   const statusEl = document.getElementById("db-editpo-status");
-  btn.disabled = true;
-  statusEl.textContent = "Menyimpan...";
+
+  // Tombol BARU dinonaktifkan setelah semua validasi lewat. Sebelumnya
+  // dinonaktifkan di baris pertama -- setiap validasi yang `return` (artikel
+  // kosong, konfirmasi dibatalkan) meninggalkan tombol terkunci selamanya, dan
+  // satu-satunya jalan keluar adalah menutup modal lalu kehilangan semua isian.
+  const kunciTombol = function () {
+    btn.disabled = true;
+    statusEl.textContent = "Menyimpan...";
+  };
+  const lepasTombol = function () {
+    btn.disabled = false;
+    statusEl.textContent = "";
+  };
 
   const bacaSize = function(tr){
     // SEMUA ukuran yang tersedia dikirim, bukan cuma kolom yang tampil.
@@ -1082,6 +1082,25 @@ async function dbSimpanEditPO(){
       return;
     }
   }
+
+  // Konfirmasi HARUS di sini, sesudah `identitas` dibangun.
+  // Versi sebelumnya menaruhnya di baris pertama fungsi -- padahal `const
+  // identitas` baru dideklarasikan puluhan baris di bawah. `const` tidak
+  // ter-hoist, jadi setiap kali tombol Simpan ditekan yang terjadi adalah
+  // ReferenceError sebelum satu baris pun sempat jalan: tombolnya seolah tidak
+  // berfungsi, tanpa pesan apa pun.
+  if (identitas.length) {
+    const rincian = identitas.map(function(x){
+      return "  " + (x.artikelLama || "-") + " / " + (x.styleLama || "-") +
+        "\n  menjadi: " + x.artikel + " / " + (x.style || "-");
+    }).join("\n\n");
+    if (!confirm("Identitas item akan diubah:\n\n" + rincian +
+        "\n\nSemua baris item ini ikut berubah, termasuk Detail PO. Lanjutkan?")) {
+      return;
+    }
+  }
+
+  kunciTombol();
 
   // ---- Data ARTIKEL (lintas order) ----
   // Hanya dikirim untuk artikel yang SUDAH terdaftar di Master Artikel.
