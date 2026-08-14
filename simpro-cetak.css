@@ -487,4 +487,10 @@ body { padding-top: 0; }
    jadi judul blok, karena satu blok = satu harga. */
 .ck-inv-sub { min-width: 108px; font-weight: 600; }
 .ck-sj-judul span { font-family: 'IBM Plex Mono', monospace; }
+/* Rincian di bawah nama produk pada proforma. Warna ditebalkan dan dipisah
+   dari daftar size dengan em-dash -- format lama menyambungnya sejajar
+   ("Sand · S 28 · M 81") sehingga warna terbaca setara dengan size, dan begitu
+   warnanya lebih dari satu tidak jelas angka mana milik siapa. */
+.ck-pro-rincian { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
+.ck-pro-rincian b { color: var(--ink); font-weight: 700; }
 

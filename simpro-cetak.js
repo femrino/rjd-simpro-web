@@ -1399,10 +1399,23 @@ function ckRenderProforma(d){
     // sendiri. Bagian keuangan klien membaca dokumen ini untuk menyetujui
     // nominal, bukan memeriksa kurva ukuran -- tapi menghilangkannya sama
     // sekali membuat qty tidak bisa diverifikasi.
-    const sub = [it.warna, it.rincianSize].filter(function(v){ return v && v !== "-"; }).join(" &#183; ");
+    // BUG yang diperbaiki: sebelumnya "&#183;" disisipkan DULU lalu seluruh
+    // gabungannya di-escape -- "&" berubah jadi "&amp;" dan entitasnya tampil
+    // mentah di dokumen: "Sand &#183; S 28". Escape harus per BAGIAN, lalu
+    // digabung dengan entitasnya.
+    //
+    // Warna dipisahkan dari rincian size, bukan disambung sejajar. Format lama
+    // "Sand · S 28 · M 81" membuat warna terbaca setara dengan size -- dan
+    // begitu warnanya lebih dari satu, tidak jelas angka mana milik warna mana.
+    const warnaTeks = (it.warna && it.warna !== "-") ? rjdEscapeHtml_(it.warna) : "";
+    const sizeTeks = (it.rincianSize && it.rincianSize !== "-")
+      ? rjdEscapeHtml_(it.rincianSize) : "";
+    const sub = warnaTeks
+      ? ('<b>' + warnaTeks + '</b>' + (sizeTeks ? ' &#8212; ' + sizeTeks : ''))
+      : sizeTeks;
     return '<tr>' +
       '<td>' + rjdEscapeHtml_(it.deskripsi) +
-        (sub ? '<div style="font-size:11px;color:var(--ink-soft)">' + rjdEscapeHtml_(sub) + '</div>' : '') + '</td>' +
+        (sub ? '<div class="ck-pro-rincian">' + sub + '</div>' : '') + '</td>' +
       '<td class="num">' + it.jumlah + '</td>' +
       '<td class="num">' + formatRupiah(it.hargaSatuan) + '</td>' +
       '<td class="num">' + formatRupiah(it.subtotal) + '</td>' +
