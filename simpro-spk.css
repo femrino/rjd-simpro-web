@@ -463,4 +463,9 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 .sp-roll-tambah .sp-simpan-btn { margin-top: 12px; }
 .sp-roll-tambah select { margin: 0; padding: 6px 6px; font-size: 12.5px; width: 100%;
   box-sizing: border-box; }
+/* Pratinjau konversi satuan. Kecil dan redup -- angka yang DIKETIK tetap yang
+   utama; ini cuma penenang bahwa sistem membacanya dengan benar. */
+.sp-konversi { font-size: 10.5px; color: var(--ink-soft); margin-top: 3px;
+  font-family: 'IBM Plex Mono', monospace; min-height: 13px; }
+.sp-tabel small { color: var(--ink-soft); font-weight: 400; }
 

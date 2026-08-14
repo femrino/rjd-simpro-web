@@ -2190,7 +2190,10 @@ function spRenderRekapKain_() {
           '<td data-label="Warna">' + (k.warna && k.warna !== "(semua warna)"
             ? spEsc_(k.warna)
             : '<span class="sp-kosong">semua warna</span>') + '</td>' +
-          '<td data-label="Diterima">' + k.diterima + " " + spEsc_(k.satuan) + '</td>' +
+          '<td data-label="Diterima">' + k.diterima + ' m' +
+            (k.diterimaAsli && k.satuanAsli
+              ? ' <small>(' + k.diterimaAsli + ' ' + spEsc_(k.satuanAsli) + ')</small>' : '') +
+            '</td>' +
           '<td data-label="Terpakai">' + k.terpakai + '</td>' +
           '<td data-label="Re-cut">' + (k.terpakaiRecut
             ? (k.terpakaiRecut + ' m' + (k.qtyRecut ? ' <small>(' + k.qtyRecut + ' pcs)</small>' : ''))
@@ -2268,13 +2271,18 @@ function spRenderRoll_() {
       const terpakai = diukur ? (Math.round((r.panjangAwal - r.sisaTerukur) * 100) / 100) : null;
       return '<tr' + (diukur ? '' : ' class="sp-roll-belum"') + '>' +
         '<td data-label="No Roll"><b>' + spEsc_(r.noRoll || "-") + '</b></td>' +
-        '<td data-label="Panjang awal">' + r.panjangAwal + ' ' + spEsc_(g.satuan) + '</td>' +
+        // Angka ASLI di depan, konversi di belakang dalam kurung. Roll yang
+        // datang 60 yds ditampilkan "60 yds" -- bukan "54,86 m" yang terasa
+        // seperti angka lain saat dicocokkan dengan surat jalan supplier.
+        '<td data-label="Panjang awal">' + r.panjangAwal + ' ' + spEsc_(r.satuan || "m") +
+          (r.satuan && r.satuan !== "m"
+            ? ' <small>(' + r.panjangAwalMeter + ' m)</small>' : '') + '</td>' +
         '<td data-label="Terpakai">' + (terpakai === null ? "&#8212;"
-          : (terpakai + ' ' + spEsc_(g.satuan))) + '</td>' +
+          : (terpakai + ' ' + spEsc_(r.satuan || "m"))) + '</td>' +
         // Satuan ditempel di label kolom, bukan cuma di header: di layar sempit
         // tabel jadi kartu dan headernya hilang -- kalau satuan cuma di header,
         // orang mengisi angka tanpa tahu satuannya apa.
-        '<td data-label="Sisa (' + spEsc_(g.satuan) + ')">' +
+        '<td data-label="Sisa (' + spEsc_(r.satuan || "m") + ')">' +
           '<input class="sp-roll-sisa" data-id="' + spEsc_(r.idRoll) +
             '" max="' + r.panjangAwal + '" min="0" placeholder="ukur" step="0.01" ' +
             'type="number" value="' + (diukur ? r.sisaTerukur : "") + '"/></td>' +
@@ -2294,7 +2302,7 @@ function spRenderRoll_() {
     // yang sangat berbeda.
     const rincian = (g.sudahDiukur > 0)
       ? '<div class="sp-roll-rincian">' +
-          '<span>Sisa <b>' + g.totalSisa + ' ' + spEsc_(g.satuan) + '</b></span>' +
+          '<span>Sisa <b>' + g.totalSisa + ' m</b></span>' +
           '<span class="sp-chip">utuh <b>' + g.sisaUtuh + '</b></span>' +
           '<span class="sp-chip">potongan <b>' + g.sisaPotongan + '</b></span>' +
           (g.belumDiukur ? '<span class="sp-roll-belum-tag">' + g.belumDiukur +
@@ -2307,11 +2315,14 @@ function spRenderRoll_() {
       '<div class="sp-set-judul">' + spEsc_(g.jenis) +
         (g.warna && g.warna !== "(semua warna)" ? ' &#183; ' + spEsc_(g.warna) : '') +
         '<span class="sp-set-siap">' + g.jumlahRoll + ' ROLL <b>' +
-          g.totalPanjangAwal + ' ' + spEsc_(g.satuan) + '</b></span></div>' +
+          g.totalPanjangAwal + ' m</b>' +
+          (g.satuanAsli && g.satuanAsli !== "m"
+            ? ' <small>(dicatat dalam ' + spEsc_(g.satuanAsli) + ')</small>' : '') +
+        '</span></div>' +
       rincian +
       '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu">' +
         '<thead><tr><th>No Roll</th><th>Panjang awal</th><th>Terpakai</th>' +
-        '<th>Sisa (' + spEsc_(g.satuan) + ')</th><th>Kondisi</th><th></th></tr></thead><tbody>' + baris +
+        '<th>Sisa</th><th>Kondisi</th><th></th></tr></thead><tbody>' + baris +
         '</tbody></table></div>' +
     '</div>';
   }).join("");
@@ -2363,13 +2374,15 @@ function spTambahBarisRoll() {
       '<td data-label="Warna"><input class="sp-rb-warna" list="sp-datalist-warnaroll" ' +
         'placeholder="warna" type="text" value="' + spEsc_(warnaLama) + '"/></td>' +
       '<td data-label="No Roll"><input class="sp-rb-no" placeholder="mis. R-01" type="text"/></td>' +
-      '<td data-label="Panjang"><input class="sp-rb-panjang" min="0" placeholder="0" ' +
-        'step="0.01" type="number"/></td>' +
+      '<td data-label="Panjang"><input class="sp-rb-panjang" min="0" ' +
+        'oninput="spHitungKonversiRoll_(this)" placeholder="0" step="0.01" type="number"/>' +
+        '<div class="sp-konversi"></div></td>' +
       // Satuan DIPILIH, tidak diasumsikan. Backend sebelumnya memasang "m"
       // diam-diam -- dan roll 60 yard yang diketik "60" akan salah 12% tanpa
       // ada yang menyadarinya. Form kain klien juga punya pilihan yds/m, jadi
       // orang wajar mengira di sini bisa memilih juga.
-      '<td data-label="Satuan"><select class="sp-rb-satuan">' +
+      '<td data-label="Satuan"><select class="sp-rb-satuan" ' +
+        'onchange="spHitungKonversiRoll_(this)">' +
         ['m', 'yds'].map(function (u) {
           return '<option' + (u === satuanLama ? ' selected="selected"' : '') +
             ' value="' + u + '">' + u + '</option>';
@@ -2378,6 +2391,25 @@ function spTambahBarisRoll() {
       '<td data-label=""><button class="sp-btn-kecil" onclick="this.closest(\'tr\').remove()" ' +
         'type="button">&#10005;</button></td>' +
     '</tr>');
+}
+
+/**
+ * Pratinjau konversi saat mengetik. Muncul HANYA kalau satuannya bukan meter --
+ * kalau selalu tampil, "(100 m)" di bawah "100 m" cuma jadi bising.
+ *
+ * Ini yang membuat "60 yds" terasa aman diketik: angkanya tetap 60 seperti di
+ * surat jalan supplier, dan setaranya dalam meter terlihat langsung.
+ */
+function spHitungKonversiRoll_(el) {
+  const tr = el.closest("tr");
+  if (!tr) return;
+  const wadah = tr.querySelector(".sp-konversi");
+  if (!wadah) return;
+  const nilai = Number((tr.querySelector(".sp-rb-panjang") || {}).value) || 0;
+  const satuan = (tr.querySelector(".sp-rb-satuan") || {}).value || "m";
+  if (!nilai || satuan === "m") { wadah.textContent = ""; return; }
+  // 1 yard = 0.9144 m -- angka yang sama dengan METER_PER_YARD di backend.
+  wadah.textContent = "= " + (Math.round(nilai * 0.9144 * 100) / 100) + " m";
 }
 
 function spSimpanRoll() {
