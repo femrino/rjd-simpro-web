@@ -544,6 +544,15 @@ function spTerapkanBagian_(d) {
     spSwitchTab(pertamaTampil);
   }
 
+  // Kelompok yang SELURUH tabnya tersembunyi ikut disembunyikan -- kalau
+  // tidak, judul fase seperti "Cutting" menggantung tanpa isi dan terbaca
+  // seperti bagian yang rusak.
+  document.querySelectorAll(".sp-tab-grup").forEach(function (grup) {
+    const adaTampil = Array.prototype.slice.call(grup.querySelectorAll(".sp-tab"))
+      .some(function (b) { return !b.classList.contains("hidden"); });
+    grup.classList.toggle("hidden", !adaTampil);
+  });
+
   // Beri tahu kenapa tabnya sedikit -- kalau tidak, orang akan mengira
   // fiturnya hilang lalu menanyakannya, atau lebih buruk: mencari jalan lain.
   const wadah = document.getElementById("sp-tabs");
@@ -557,11 +566,189 @@ function spTerapkanBagian_(d) {
   }
 }
 
+/**
+ * ============================================================
+ * PANDUAN PENGISIAN PER TAB
+ * ============================================================
+ * Ditaruh DI DALAM layar, bukan dokumen terpisah. Dokumen SOP yang harus
+ * dibuka di tempat lain tidak akan dibaca -- orang yang sedang bingung di
+ * depan form tidak akan berhenti untuk mencari file.
+ *
+ * Tertutup secara bawaan: yang sudah hafal tidak perlu melewatinya tiap kali,
+ * dan panduan yang selalu terbuka justru mendorong orang mengabaikannya.
+ *
+ * Isinya sengaja BUKAN pengulangan label. Yang dijelaskan adalah hal yang
+ * tidak terbaca dari form: kapan memilih apa, apa yang sering salah, dan
+ * akibatnya kalau salah.
+ */
+const SP_PANDUAN = {
+  pola: {
+    judul: "Cara mengisi Pola",
+    isi: [
+      ["Dicatat per ARTIKEL, bukan per order",
+       "Artikel yang polanya sudah pernah dibuat akan muncul keterangan " +
+       "\"sudah dikerjakan di order lain\" -- itu berarti TIDAK perlu dibuat ulang."],
+      ["Isi durasi tiap langkah",
+       "Angka jam ini satu-satunya sumber untuk menghitung biaya pola di HPP nanti. " +
+       "Tidak bisa diambil dari mana pun selain di sini."],
+      ["Satu langkah boleh dicatat berkali-kali",
+       "Kalau Pecah Pola dikerjakan tiga hari, catat tiga kali dengan durasi " +
+       "masing-masing hari. Sistem menjumlahkannya."],
+      ["Langkah terakhir: Layout Marker",
+       "Setelah itu, markernya sendiri diisi di tab Marker -- panjang, susunan " +
+       "size, dan gambar layoutnya."]
+    ]
+  },
+  sampel: {
+    judul: "Cara mengisi Sampel",
+    isi: [
+      ["Tiap perubahan status = catatan baru",
+       "Jangan mengedit catatan lama. Sampel yang bolak-balik revisi justru " +
+       "perlu terlihat riwayatnya."],
+      ["Status Revisi dipakai saat klien minta perbaikan",
+       "Jumlah revisi terhitung otomatis. Angka itu yang memberi tahu apakah " +
+       "spesifikasi dari klien sudah cukup jelas di awal."],
+      ["Durasi boleh kosong untuk catatan status",
+       "\"Dikirim ke klien\" tidak punya durasi kerja. Isi durasi hanya untuk " +
+       "langkah yang benar-benar dikerjakan."]
+    ]
+  },
+  marker: {
+    judul: "Cara mengisi Marker",
+    isi: [
+      ["Panjang marker diisi APA ADANYA dari software pola",
+       "Jangan ditambah allowance. Allowance punya kolom sendiri supaya " +
+       "efisiensi marker tetap bisa dinilai."],
+      ["Susunan size = berapa pola tiap ukuran dalam SATU lapis",
+       "Kalau marker memuat S1 M1 L1 XL1, isi 1 di masing-masing. " +
+       "Pcs per lapis terhitung otomatis."],
+      ["Komponen dikosongkan kalau marker memuat semua panel",
+       "Isi hanya kalau sebagian panel punya marker sendiri -- mis. \"Variasi\" " +
+       "atau \"Kerah, Manset\" untuk interlining. Tanpa ini, dua marker dengan " +
+       "kain sama akan dijumlahkan dan set lengkap jadi terlalu optimis."],
+      ["Revisi lebar kain: pakai tombol Revisi",
+       "Marker lama tetap tersimpan. Jangan hapus lalu buat baru."]
+    ]
+  },
+  gelar: {
+    judul: "Cara mencatat Gelaran",
+    isi: [
+      ["Satu gelaran = satu jenis kain",
+       "Kalau satu warna perlu brokat dan polos, catat dua kali. " +
+       "Set lengkap dihitung dari jumlah terkecil di antara komponennya."],
+      ["Yang diketik cuma jumlah lapis",
+       "Output per size dan pemakaian kain dihitung dari marker. " +
+       "Periksa pratinjaunya sebelum menyimpan."],
+      ["Re-cut untuk mengganti panel yang cacat",
+       "Pilih mode Re-cut. Kainnya terhitung, tapi TIDAK menambah jumlah baju -- " +
+       "bajunya sudah terhitung waktu dipotong pertama."],
+      ["Roll kain dicatat dua kali saja",
+       "Saat kain datang (nomor & panjang), dan saat sisa diukur setelah " +
+       "selesai digelar. Bukan tiap kali menggelar."]
+    ]
+  },
+  cutting: {
+    judul: "Cara mencatat Hasil Cutting",
+    isi: [
+      ["Isi jumlah yang BENAR-BENAR dipotong",
+       "Boleh lebih dari qty order (kain cadangan) -- itu wajar dan tidak diblokir."],
+      ["Potong bertahap? Catat tiap kali",
+       "Angkanya dijumlahkan. Jangan menunggu selesai semua lalu mencatat sekali."],
+      ["Kalau sudah mencatat gelaran, pakai tombol dari Set Lengkap",
+       "Angkanya sudah terisi dan sudah dikurangi yang pernah dicatat sebelumnya."]
+    ]
+  },
+  bagi: {
+    judul: "Cara mengisi Loading",
+    isi: [
+      ["Angka di bawah kotak isian = sisa yang belum dibagi",
+       "Tidak boleh melebihi itu. Kalau sisanya kurang, berarti hasil cutting " +
+       "belum dicatat lengkap."],
+      ["Potongan yang dikembalikan line muncul lagi di sini",
+       "Line yang mengembalikan potongan tanpa dijahit membuat sisanya bertambah, " +
+       "dan bisa dibagikan ke line lain."],
+      ["Cetak SPK setelah membagi",
+       "Itu yang dibawa line sebagai bukti serah terima."]
+    ]
+  },
+  setor: {
+    judul: "Cara mencatat Setoran Hasil",
+    isi: [
+      ["Pilih dulu: Jadi baju atau Dikembalikan",
+       "Dikembalikan = potongan yang tidak jadi dijahit. Barangnya keluar dari " +
+       "line, tapi TIDAK dihitung sebagai baju jadi."],
+      ["Angka di bawah kotak = sisa yang masih dipegang line",
+       "Kalau line menyetor lebih dari itu, berarti ada yang belum tercatat " +
+       "di Loading."],
+      ["Setoran menunggu dihitung ulang finishing",
+       "Statusnya \"Menunggu\" sampai finishing mengonfirmasi di tab " +
+       "Konfirmasi Terima."]
+    ]
+  },
+  konf: {
+    judul: "Cara mengisi Konfirmasi Terima",
+    isi: [
+      ["Isi \"Nama yang menerima\" dulu",
+       "Berlaku untuk semua konfirmasi di halaman ini, bukan per kartu."],
+      ["Terima sesuai = angkanya cocok setelah dihitung",
+       "Bukan sekadar barangnya sampai. Konfirmasi ini soal hasil hitung ulang."],
+      ["Ada selisih = isi angka yang BENAR-BENAR terhitung",
+       "Angka asli tidak diubah. Selisihnya dicatat sebagai koreksi tersendiri " +
+       "supaya jejaknya tidak hilang."],
+      ["Dua jenis serah terima",
+       "Potongan dari Loading dikonfirmasi bagian sewing; setoran ke finishing " +
+       "dikonfirmasi bagian finishing."]
+    ]
+  },
+  riw: {
+    judul: "Cara memakai Riwayat",
+    isi: [
+      ["Salah input? Batalkan, lalu catat ulang",
+       "Barisnya tidak dihapus -- ditandai batal dan tidak ikut dihitung. " +
+       "Jejaknya sengaja disimpan supaya jelas pernah ada kesalahan."],
+      ["Pembatalan minta alasan",
+       "Alasan itu yang menjelaskan kenapa angkanya berubah kalau ditanya nanti."]
+    ]
+  }
+};
+
+function spPanduanHtml_(tab) {
+  const p = SP_PANDUAN[tab];
+  if (!p) return "";
+  return '<details class="sp-panduan">' +
+    '<summary>' + spEsc_(p.judul) + '</summary>' +
+    '<div class="sp-panduan-isi">' +
+      p.isi.map(function (x) {
+        return '<div class="sp-panduan-item">' +
+          '<b>' + spEsc_(x[0]) + '</b>' +
+          '<span>' + spEsc_(x[1]) + '</span>' +
+        '</div>';
+      }).join("") +
+    '</div>' +
+  '</details>';
+}
+
+/** Sisipkan panduan ke panel tab yang sedang aktif, sekali saja per panel. */
+function spPasangPanduan_(tab) {
+  const peta = {
+    pola: "sp-panel-pola", sampel: "sp-panel-sampel", marker: "sp-panel-marker",
+    gelar: "sp-panel-gelar", cutting: "sp-panel-cutting", bagi: "sp-panel-bagi",
+    setor: "sp-panel-setor", konf: "sp-panel-konf", riw: "sp-panel-riw"
+  };
+  const panel = document.getElementById(peta[tab]);
+  if (!panel || panel.querySelector(".sp-panduan")) return;
+  const html = spPanduanHtml_(tab);
+  if (html) panel.insertAdjacentHTML("afterbegin", html);
+}
+
 function spSwitchTab(tab) {
   window.SP_TAB = tab;
   document.querySelectorAll(".sp-tab").forEach(function (b) {
     b.classList.toggle("active", b.dataset.tab === tab);
   });
+  // Panduan disisipkan saat tab pertama kali dibuka, bukan saat halaman
+  // dimuat -- sembilan blok panduan sekaligus di DOM tidak ada gunanya.
+  spPasangPanduan_(tab);
   const pp = document.getElementById("sp-panel-pola");
   if (pp) pp.classList.toggle("hidden", tab !== "pola");
   const ps = document.getElementById("sp-panel-sampel");
