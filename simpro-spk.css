@@ -431,3 +431,14 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
    dengan panel ARTIKEL di modal Edit Order: "yang di sini berbeda aturannya". */
 .sp-recut-blok { border-left: 3px solid #C79A3A; padding-left: 14px; margin: 14px 0; }
 
+/* Penanda setoran yang berupa PENGEMBALIAN potongan.
+   Angkanya sama-sama "pcs", tapi artinya sangat berbeda -- satu jadi baju,
+   satu masih potongan. Tanpa penanda, riwayat terlihat seolah produksinya
+   dua kali lipat dari kenyataan. */
+.sp-tag-kembali { display: inline-block; font-size: 9.5px; font-weight: 700;
+  font-family: 'IBM Plex Mono', monospace; letter-spacing: .04em;
+  color: #8A5D1F; background: #FCF6E8; border: 1px solid #E8D8AE;
+  border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
+.sp-setor-info-kembali { background: #FCF6E8; border-left: 3px solid #E8D8AE;
+  padding: 9px 12px; border-radius: 8px; margin: 8px 0 4px; }
+

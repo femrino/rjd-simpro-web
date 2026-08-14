@@ -969,7 +969,8 @@ function spMuatRiwayat() {
     method: "POST",
     body: JSON.stringify({
       idToken: SP_ID_TOKEN,
-      action: jenis === "cutting" ? "getRiwayatCutting" : "getRiwayatDistribusi",
+      action: jenis === "cutting" ? "getRiwayatCutting"
+        : (jenis === "setoran" ? "getRiwayatSetoran" : "getRiwayatDistribusi"),
       opsi: { idPurchaseOrder: cari.trim() }
     })
   })
@@ -1005,10 +1006,14 @@ function spRenderRiwayat() {
     // begitu pihak kedua membenarkan, catatan itu bukan lagi input sepihak.
     const terkunci = jenis === "distribusi" &&
       (k.status === "Diterima" || k.status === "Ada Selisih");
-    const id = jenis === "cutting" ? k.idCutting : k.idDistribusi;
-    const total = jenis === "cutting" ? k.totalPotong : k.totalQty;
-    const tanggal = jenis === "cutting" ? k.tanggalPotong : k.tanggalSerah;
-    const oleh = jenis === "cutting" ? k.dipotongOleh : k.diserahkanOleh;
+    const id = jenis === "cutting" ? k.idCutting
+      : (jenis === "setoran" ? k.idSetoran : k.idDistribusi);
+    const total = jenis === "cutting" ? k.totalPotong
+      : (jenis === "setoran" ? k.total : k.totalQty);
+    const tanggal = jenis === "cutting" ? k.tanggalPotong
+      : (jenis === "setoran" ? k.tanggal : k.tanggalSerah);
+    const oleh = jenis === "cutting" ? k.dipotongOleh
+      : (jenis === "setoran" ? k.disetorkanOleh : k.diserahkanOleh);
 
     return '<div class="sp-riw-kartu' + (dibatalkan ? ' batal' : '') + '">' +
       '<div class="sp-riw-head">' +
@@ -1022,11 +1027,21 @@ function spRenderRiwayat() {
       '</div>' +
       '<div class="sp-riw-artikel">' + rjdEscapeHtml_(k.artikel) +
         ' &#183; <b>' + rjdEscapeHtml_(k.warna || "-") + '</b>' +
-        (jenis === "distribusi" ? ' &#8594; ' + rjdEscapeHtml_(k.namaLine) : '') + '</div>' +
+        (jenis === "distribusi" ? ' &#8594; ' + rjdEscapeHtml_(k.namaLine) : '') +
+        (jenis === "setoran" ? ' &#8592; ' + rjdEscapeHtml_(k.namaLine || "-") : '') +
+        // Pengembalian ditandai jelas: angkanya sama-sama "pcs", tapi artinya
+        // sangat berbeda -- satu jadi baju, satu masih potongan.
+        (jenis === "setoran" && k.jenisSetoran === "Dikembalikan"
+          ? ' <span class="sp-tag-kembali">DIKEMBALIKAN</span>' : '') + '</div>' +
       '<div class="sp-riw-sizes">' +
-        (k.rincian || []).map(function (x) {
-          return '<span class="sp-konf-size">' + rjdEscapeHtml_(x.size) + ' <b>' + x.qty + '</b></span>';
-        }).join("") +
+        (jenis === "setoran"
+          ? Object.keys(k.sizeQty || {}).map(function (sz) {
+              return '<span class="sp-konf-size">' + rjdEscapeHtml_(sz) +
+                ' <b>' + k.sizeQty[sz] + '</b></span>';
+            }).join("")
+          : (k.rincian || []).map(function (x) {
+              return '<span class="sp-konf-size">' + rjdEscapeHtml_(x.size) + ' <b>' + x.qty + '</b></span>';
+            }).join("")) +
       '</div>' +
       '<div class="sp-riw-status-row">' +
         '<span class="sp-riw-status' + (dibatalkan ? ' batal' : '') + '">' +
@@ -1046,7 +1061,8 @@ function spBatalkanCatatan(i) {
   const jenis = window.SP_RIW_JENIS || "distribusi";
   const k = (window.SP_RIW || [])[i];
   if (!k) return;
-  const id = jenis === "cutting" ? k.idCutting : k.idDistribusi;
+  const id = jenis === "cutting" ? k.idCutting
+    : (jenis === "setoran" ? k.idSetoran : k.idDistribusi);
 
   const alasan = prompt("Batalkan catatan " + id + "?\n\n" +
     "Barisnya TIDAK dihapus \u2014 ditandai batal dan tidak ikut dihitung, " +
@@ -1058,10 +1074,13 @@ function spBatalkanCatatan(i) {
     method: "POST",
     body: JSON.stringify({
       idToken: SP_ID_TOKEN,
-      action: jenis === "cutting" ? "batalkanHasilCutting" : "batalkanDistribusi",
+      action: jenis === "cutting" ? "batalkanHasilCutting"
+        : (jenis === "setoran" ? "batalkanSetoran" : "batalkanDistribusi"),
       payload: jenis === "cutting"
         ? { idCutting: id, alasan: alasan.trim() }
-        : { idDistribusi: id, alasan: alasan.trim() }
+        : (jenis === "setoran"
+          ? { idSetoran: id, alasan: alasan.trim() }
+          : { idDistribusi: id, alasan: alasan.trim() })
     })
   })
   .then(function (r) { return r.json(); })
@@ -1163,6 +1182,26 @@ function spRenderFormSetoran() {
     '</div>';
   document.getElementById("sp-setor-ringkas").classList.remove("hidden");
 
+  // Pemilih jenis SEBELUM tabel: seluruh makna angka yang diisi berubah dari
+  // sini. "Jadi baju" masuk hitungan produksi selesai; "dikembalikan" cuma
+  // memindahkan barang keluar dari line.
+  const wadahJenis = document.getElementById("sp-setor-jenis-wrap");
+  if (wadahJenis && !document.querySelector('input[name="sp-setor-jenis"]')) {
+    wadahJenis.innerHTML =
+      '<div class="sp-mode">' +
+        '<label class="sp-mode-opsi aktif"><input checked="checked" name="sp-setor-jenis" ' +
+          'onchange="spUbahJenisSetoran_()" type="radio" value="Jadi Baju"/>' +
+          '<span><b>Jadi baju</b><small>sudah dijahit, lanjut ke finishing</small></span></label>' +
+        '<label class="sp-mode-opsi"><input name="sp-setor-jenis" ' +
+          'onchange="spUbahJenisSetoran_()" type="radio" value="Dikembalikan"/>' +
+          '<span><b>Dikembalikan</b><small>masih potongan, belum dijahit</small></span></label>' +
+      '</div>' +
+      '<p class="hidden sp-info sp-setor-info-kembali" id="sp-setor-ket">' +
+        'Potongan yang dikembalikan TIDAK dihitung sebagai baju jadi. ' +
+        'Barangnya keluar dari tangan line, dan bisa dibagikan lagi ke line lain ' +
+        'lewat tab Bagi ke Line.</p>';
+  }
+
   document.getElementById("sp-setor-tabel").innerHTML =
     '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
       '<th>Artikel / Warna</th>' +
@@ -1223,6 +1262,21 @@ function spHitungTotalSetor() {
   if (btn) btn.disabled = (total <= 0);
 }
 
+function spUbahJenisSetoran_() {
+  const kembali = spJenisSetoranKembali_();
+  const ket = document.getElementById("sp-setor-ket");
+  if (ket) ket.classList.toggle("hidden", !kembali);
+  document.querySelectorAll('input[name="sp-setor-jenis"]').forEach(function (inp) {
+    const el = inp.closest(".sp-mode-opsi");
+    if (el) el.classList.toggle("aktif", inp.checked);
+  });
+}
+
+function spJenisSetoranKembali_() {
+  const r = document.querySelector('input[name="sp-setor-jenis"]:checked');
+  return !!(r && r.value === "Dikembalikan");
+}
+
 function spSimpanSetoran() {
   const po = window.SP_SETOR;
   if (!po) return;
@@ -1252,6 +1306,7 @@ function spSimpanSetoran() {
       payload: {
         idPurchaseOrder: po.idPurchaseOrder,
         idLine: po.idLine,
+        jenisSetoran: spJenisSetoranKembali_() ? "Dikembalikan" : "Jadi Baju",
         tanggalSetor: (document.getElementById("sp-setor-tanggal") || {}).value || "",
         disetorkanOleh: (document.getElementById("sp-setor-dari") || {}).value || "",
         diterimaOleh: (document.getElementById("sp-setor-penerima") || {}).value || "",
