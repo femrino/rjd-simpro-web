@@ -476,10 +476,18 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 /* Pemilih jenis serah terima di tab Konfirmasi. Dua alur berbeda dengan
    pihak penerima berbeda -- dipisah supaya orang tidak mengonfirmasi milik
    bagian lain karena tercampur dalam satu daftar. */
-.sp-konf-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
-.sp-konf-tab { flex: 1 1 200px; padding: 9px 14px; border: 1px solid var(--line);
-  border-radius: 9px; background: var(--white); font-size: 12.5px; font-weight: 600;
-  color: var(--ink-soft); cursor: pointer; font-family: inherit; }
+/* Baris sendiri, penuh lebar: pemilih ini menentukan SELURUH isi daftar di
+   bawahnya, bukan sekadar filter yang setara dengan "saring per line".
+   Dua tombol berbagi lebar rata supaya keduanya terbaca sama pentingnya. */
+.sp-konf-tabs { display: flex; gap: 8px; margin: 4px 0 16px; flex-wrap: wrap; }
+.sp-konf-tab { flex: 1 1 200px; padding: 11px 16px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--white); font-size: 13px; font-weight: 600;
+  color: var(--ink-soft); cursor: pointer; font-family: inherit; text-align: center; }
 .sp-konf-tab.active { background: var(--ink); color: var(--white); border-color: var(--ink); }
 .sp-konf-tab:hover:not(.active) { border-color: var(--thread); color: var(--thread); }
+
+/* Nama penerima berlaku untuk SEMUA kartu di bawahnya, bukan per kartu.
+   Ditegaskan lewat placeholder, karena posisinya di atas daftar mudah
+   disalahartikan sebagai isian satu kartu saja. */
+#sp-konf-nama::placeholder { font-size: 12px; }
 

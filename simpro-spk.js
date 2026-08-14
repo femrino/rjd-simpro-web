@@ -942,7 +942,19 @@ function spKonfirmasiSelisih(i) {
 }
 
 function spKirimKonfirmasi_(payload) {
-  payload.diterimaOleh = (document.getElementById("sp-konf-nama") || {}).value || "";
+  const elNama = document.getElementById("sp-konf-nama");
+  payload.diterimaOleh = (elNama || {}).value || "";
+
+  // Nama penerima adalah inti dari konfirmasi: tanpa itu, catatannya cuma
+  // "barang diterima" tanpa ada yang bisa ditanya kalau nanti selisihnya
+  // dipersoalkan. Diminta di sini, bukan dijadikan wajib di backend, supaya
+  // pesannya muncul di layar tempat orangnya sedang bekerja.
+  if (!payload.diterimaOleh.trim()) {
+    alert("Isi dulu \"Nama yang menerima\" di atas.\n\n" +
+      "Nama itu yang tercatat sebagai penerima untuk semua konfirmasi di halaman ini.");
+    if (elNama) elNama.focus();
+    return;
+  }
   const setoran = (window.SP_KONF_JENIS || "potongan") === "setoran";
 
   // Bentuk payload berbeda antara dua rute: distribusi memakai
