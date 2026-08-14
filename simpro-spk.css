@@ -516,3 +516,17 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   border-left: 2px solid var(--line-soft); margin-top: 4px; }
 .sp-tahap-jejak i { color: var(--ink-soft); }
 
+/* Rekap jam per langkah. Langkah yang BELUM dikerjakan tetap ditampilkan
+   dengan strip -- kalau disembunyikan, tim pola tidak tahu langkah apa lagi
+   yang tersisa, dan urutan kerjanya jadi mengandalkan ingatan. */
+.sp-langkah-rekap { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.sp-langkah-item { display: flex; flex-direction: column; gap: 2px;
+  background: var(--cream); border-radius: 8px; padding: 6px 11px; min-width: 92px; }
+.sp-langkah-item span { font-size: 10px; font-family: 'IBM Plex Mono', monospace;
+  color: var(--ink-soft); letter-spacing: .02em; }
+.sp-langkah-item b { font-size: 12.5px; color: var(--ink); }
+.sp-langkah-item.belum { background: transparent; border: 1px dashed var(--line-soft); }
+.sp-langkah-item.belum b { color: var(--ink-soft); font-weight: 400; }
+.sp-tahap-jam { font-size: 11px; font-family: 'IBM Plex Mono', monospace;
+  color: var(--thread); font-weight: 600; }
+

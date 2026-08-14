@@ -483,7 +483,13 @@ function spSimpan() {
  * justru yang membuat serah terima antar bagian bisa diperiksa.
  */
 const SP_BAGIAN_TAB = {
-  tahap:   "pola",
+  // Pola dan Sampel dipisah: PIC-nya berbeda orang, dan menggabungkannya
+  // membuat masing-masing melihat form yang bukan miliknya.
+  //
+  // Pola digabung satu tab dengan Marker karena memang satu rangkaian --
+  // "Layout Marker" adalah langkah terakhir pembuatan pola.
+  pola:    "pola",
+  sampel:  ["pola", "sampel"],
   marker:  "pola",
   gelar:   "cutting",
   cutting: "cutting",
@@ -556,8 +562,10 @@ function spSwitchTab(tab) {
   document.querySelectorAll(".sp-tab").forEach(function (b) {
     b.classList.toggle("active", b.dataset.tab === tab);
   });
-  const pt = document.getElementById("sp-panel-tahap");
-  if (pt) pt.classList.toggle("hidden", tab !== "tahap");
+  const pp = document.getElementById("sp-panel-pola");
+  if (pp) pp.classList.toggle("hidden", tab !== "pola");
+  const ps = document.getElementById("sp-panel-sampel");
+  if (ps) ps.classList.toggle("hidden", tab !== "sampel");
   const pm = document.getElementById("sp-panel-marker");
   if (pm) pm.classList.toggle("hidden", tab !== "marker");
   const pg = document.getElementById("sp-panel-gelar");
@@ -574,7 +582,7 @@ function spSwitchTab(tab) {
   if (kartuPO) kartuPO.classList.toggle("hidden", tab === "konf" || tab === "riw");
 
   if (tab === "konf") { spMuatKonfirmasi(); return; }
-  if (tab === "tahap") { spMuatTahap(); return; }
+  if (tab === "pola" || tab === "sampel") { spMuatTahap(tab); return; }
   if (tab === "marker") { spMuatMarker(); return; }
   if (tab === "gelar") { spMuatGelaran(); return; }
   if (tab === "riw") { spMuatRiwayat(); return; }
@@ -2591,8 +2599,10 @@ function spEsc_(v) {
    POLA & SAMPEL (bagian: pola)
    ============================================================ */
 
-function spMuatTahap() {
-  const wadah = document.getElementById("sp-tahap-daftar");
+function spMuatTahap(jenis) {
+  const t = jenis || window.SP_TAHAP_AKTIF || "pola";
+  window.SP_TAHAP_AKTIF = t;
+  const wadah = document.getElementById(t === "sampel" ? "sp-sampel-daftar" : "sp-pola-daftar");
   if (!wadah) return;
   if (!window.SP_PO_AKTIF) {
     wadah.innerHTML = '<p class="sp-info">Pilih Purchase Order dulu.</p>';
@@ -2610,34 +2620,34 @@ function spMuatTahap() {
     window.SP_TAHAP = d.artikel || [];
     window.SP_TAHAP_SUBTIPE = d.subTipe || {};
     window.SP_TAHAP_STATUS = d.statusPilihan || {};
-    spRenderTahap_();
+    window.SP_TAHAP_LANGKAH = d.langkahPilihan || {};
+    spRenderTahap_(t);
   })
   .catch(function (e) {
     wadah.innerHTML = '<p class="sp-info">' + spEsc_(e.message || e) + '</p>';
   });
 }
 
-function spRenderTahap_() {
+function spRenderTahap_(tahap) {
   const daftar = window.SP_TAHAP || [];
-  const wadah = document.getElementById("sp-tahap-daftar");
+  const wadah = document.getElementById(tahap === "sampel" ? "sp-sampel-daftar" : "sp-pola-daftar");
+  if (!wadah) return;
   if (!daftar.length) {
     wadah.innerHTML = '<p class="sp-info">PO ini belum punya artikel di Rincian Sales Order.</p>';
     return;
   }
-
   wadah.innerHTML = daftar.map(function (a, i) {
     return '<div class="sp-set-blok">' +
       '<div class="sp-set-judul">' + spEsc_(a.artikel) +
         (a.style ? ' &#183; ' + spEsc_(a.style) : '') + '</div>' +
-      spKartuTahap_(a, "pola", i) +
-      spKartuTahap_(a, "sampel", i) +
+      spKartuTahap_(a, tahap, i) +
     '</div>';
   }).join("");
 }
 
 /**
- * Satu kartu tahap. Menampilkan keadaan sekarang, lalu form untuk mencatat
- * langkah berikutnya.
+ * Satu kartu tahap: keadaan sekarang, rekap jam per langkah, lalu form untuk
+ * mencatat langkah berikutnya.
  */
 function spKartuTahap_(a, tahap, i) {
   const r = a[tahap] || {};
@@ -2645,6 +2655,7 @@ function spKartuTahap_(a, tahap, i) {
   const label = tahap === "pola" ? "Pola" : "Sampel";
   const statusPilihan = (window.SP_TAHAP_STATUS || {})[tahap] || [];
   const subPilihan = (window.SP_TAHAP_SUBTIPE || {})[tahap] || [];
+  const langkahPilihan = (window.SP_TAHAP_LANGKAH || {})[tahap] || [];
 
   let ringkas;
   if (!r.ada) {
@@ -2655,19 +2666,50 @@ function spKartuTahap_(a, tahap, i) {
         spEsc_(r.status) + '</span>' +
       (r.umurHari !== null
         ? '<span class="sp-tahap-umur">' + r.umurHari + ' hari</span>' : '') +
+      (r.totalJam
+        ? '<span class="sp-tahap-jam">' + r.totalJam + ' jam kerja</span>' : '') +
       (r.jumlahRevisi
         ? '<span class="sp-tahap-revisi">revisi ' + r.jumlahRevisi + '&#215;</span>' : '') +
-      // Inti fiturnya: artikel yang polanya sudah dibuat di order LAIN tidak
-      // perlu dikerjakan ulang -- dan itu tidak akan ketahuan tanpa menyebut
-      // order asalnya.
       (dariOrderLain
         ? '<div class="sp-tahap-lain">Sudah dikerjakan di order <b>' +
           spEsc_(r.idPurchaseOrderAwal) + '</b> &#8212; tidak perlu diulang.</div>'
         : '');
   }
 
+  // Rekap jam PER LANGKAH -- ini yang jadi bahan HPP nanti. Ditampilkan
+  // sekarang juga supaya tim pola melihat gunanya mengisi durasi, bukan
+  // sekadar diminta.
+  const rekapLangkah = (r.perLangkah && Object.keys(r.perLangkah).length)
+    ? '<div class="sp-langkah-rekap">' +
+        langkahPilihan.concat(
+          Object.keys(r.perLangkah).filter(function (x) {
+            return langkahPilihan.indexOf(x) === -1;
+          })
+        ).map(function (lg) {
+          const e = r.perLangkah[lg];
+          return '<div class="sp-langkah-item' + (e ? '' : ' belum') + '">' +
+            '<span>' + spEsc_(lg) + '</span>' +
+            '<b>' + (e ? (e.jam + ' jam' + (e.kali > 1 ? ' (' + e.kali + '&#215;)' : '')) : '&#8212;') + '</b>' +
+          '</div>';
+        }).join("") +
+      '</div>'
+    : '';
+
   return '<div class="sp-tahap-baris">' +
     '<div class="sp-tahap-kepala"><b>' + label + '</b>' + ringkas + '</div>' +
+    rekapLangkah +
+    '<div class="sp-grid3">' +
+      '<label>Langkah<select class="sp-th-langkah" data-i="' + i + '" data-tahap="' + tahap + '">' +
+        '<option value="">(tanpa langkah &#8212; catatan status saja)</option>' +
+        langkahPilihan.map(function (x) {
+          return '<option value="' + spEsc_(x) + '">' + spEsc_(x) + '</option>';
+        }).join("") +
+      '</select></label>' +
+      '<label>Durasi (jam)<input class="sp-th-durasi" data-i="' + i + '" data-tahap="' + tahap +
+        '" max="24" min="0" placeholder="mis. 3.5" step="0.25" type="number"/></label>' +
+      '<label>Tanggal<input class="sp-th-tgl" data-i="' + i + '" data-tahap="' + tahap +
+        '" type="date" value="' + new Date().toISOString().slice(0, 10) + '"/></label>' +
+    '</div>' +
     '<div class="sp-grid3">' +
       '<label>Jenis<select class="sp-th-sub" data-i="' + i + '" data-tahap="' + tahap + '">' +
         subPilihan.map(function (x) {
@@ -2679,10 +2721,6 @@ function spKartuTahap_(a, tahap, i) {
           return '<option value="' + spEsc_(x) + '">' + spEsc_(x) + '</option>';
         }).join("") +
       '</select></label>' +
-      '<label>Tanggal<input class="sp-th-tgl" data-i="' + i + '" data-tahap="' + tahap +
-        '" type="date" value="' + new Date().toISOString().slice(0, 10) + '"/></label>' +
-    '</div>' +
-    '<div class="sp-grid3">' +
       '<label>Catatan<input class="sp-th-catatan" data-i="' + i + '" data-tahap="' + tahap +
         '" placeholder="opsional" type="text"/></label>' +
     '</div>' +
@@ -2700,7 +2738,8 @@ function spRiwayatTahap_(riwayat) {
       return '<div class="sp-tahap-jejak">' +
         '<span>' + spEsc_(x.tanggal || "-") + '</span>' +
         '<b>' + spEsc_(x.status) + '</b>' +
-        (x.subTipe ? '<span>' + spEsc_(x.subTipe) + '</span>' : '') +
+        (x.langkah ? '<span>' + spEsc_(x.langkah) + '</span>' : '') +
+        (x.durasiJam ? '<span>' + x.durasiJam + ' jam</span>' : '') +
         (x.dikerjakanOleh ? '<span>' + spEsc_(x.dikerjakanOleh) + '</span>' : '') +
         (x.catatan ? '<i>' + spEsc_(x.catatan) + '</i>' : '') +
       '</div>';
@@ -2731,6 +2770,8 @@ function spCatatTahap(i, tahap) {
         idPurchaseOrder: window.SP_PO_AKTIF,
         tahap: tahap === "sampel" ? "Sampel" : "Pola",
         subTipe: ambil("sp-th-sub"),
+        langkah: ambil("sp-th-langkah"),
+        durasiJam: ambil("sp-th-durasi"),
         status: status,
         tanggal: ambil("sp-th-tgl"),
         catatan: ambil("sp-th-catatan")
@@ -2740,7 +2781,7 @@ function spCatatTahap(i, tahap) {
   .then(function (r) { return r.json(); })
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
-    spMuatTahap();
+    spMuatTahap(tahap);
   })
   .catch(function (e) { alert(e.message || e); })
   .then(function () {
