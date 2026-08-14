@@ -1432,7 +1432,7 @@ function spRenderMarker_() {
   wadah.innerHTML = daftar.length
     ? '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
         '<th>Kode</th><th>Layout</th><th>Lebar (cm)</th><th>Panjang</th><th>Allow</th>' +
-        '<th>Susunan</th><th>Pcs/lapis</th><th>Status</th><th></th></tr></thead><tbody>' +
+        '<th>Susunan</th><th>Pcs/lapis</th><th>Komponen</th><th>Status</th><th></th></tr></thead><tbody>' +
         daftar.map(function (m) {
           const susun = Object.keys(m.susunanSize || {})
             .map(function (sz) { return sz + ":" + m.susunanSize[sz]; }).join(" ");
@@ -1453,6 +1453,9 @@ function spRenderMarker_() {
             '<td data-label="Allowance">' + (m.allowancePerLapis !== undefined ? m.allowancePerLapis : "-") + '</td>' +
             '<td data-label="Susunan">' + spEsc_(susun || "-") + '</td>' +
             '<td data-label="Pcs/lapis"><b>' + m.pcsPerLapis + '</b></td>' +
+            '<td data-label="Komponen">' + (m.komponen
+              ? spEsc_(m.komponen)
+              : '<span class="sp-kosong">semua panel</span>') + '</td>' +
             '<td data-label="Status">' + spEsc_(m.status) +
               (m.idMarkerAsal ? ' <small>(revisi)</small>' : '') + '</td>' +
             '<td class="sp-td-aksi" data-label="">' +
@@ -1501,7 +1504,14 @@ function spRenderFormMarker_(asal) {
       '<label>Allowance per lapis (m)<input id="sp-mk-allow" min="0" placeholder="0.02" ' +
         'step="0.001" type="number" value="' +
         (a.allowancePerLapis !== undefined ? a.allowancePerLapis : "0.02") + '"/></label>' +
+      '<label>Komponen<input id="sp-mk-komponen" list="sp-datalist-komponen" ' +
+        'placeholder="kosongkan = semua panel" type="text" value="' +
+        spEsc_(a.komponen || "") + '"/></label>' +
     '</div>' +
+    '<p class="sp-info"><b>Komponen</b>: kosongkan kalau marker ini memuat semua panel ' +
+      '(kasus paling umum). Isi hanya kalau sebagian panel punya marker sendiri &#8212; ' +
+      'mis. "Variasi" atau "Kerah, Manset" untuk interlining. Tanpa ini, dua marker ' +
+      'dengan kain yang sama akan dijumlahkan dan set lengkap jadi terlalu optimis.</p>' +
     '<p class="sp-info">Panjang marker diisi APA ADANYA dari software pola. Allowance ' +
       'dipisah supaya efisiensi marker tetap bisa dinilai, dan kalau sisa kain meleset ' +
       'nanti ketahuan penyebabnya yang mana.</p>' +
@@ -1540,6 +1550,12 @@ function spRenderFormMarker_(asal) {
       '<input id="sp-mk-url-layout" type="hidden" value="' + spEsc_(a.urlLayout || "") + '"/>' +
       '<input id="sp-mk-url-file" type="hidden" value="' + spEsc_(a.urlFileMarker || "") + '"/>' +
     '</div>' +
+    '<datalist id="sp-datalist-komponen">' +
+      (window.SP_SARAN_KOMPONEN || ["Variasi", "Kerah", "Manset", "Kerah, Manset",
+        "Badan", "Lengan", "Saku", "Furing"]).map(function (k) {
+        return '<option value="' + spEsc_(k) + '"></option>';
+      }).join("") +
+    '</datalist>' +
     '<input id="sp-mk-asal" type="hidden" value="' + spEsc_(a.idMarker || "") + '"/>' +
     '<button class="sp-simpan-btn" onclick="spSimpanMarker()" type="button">Simpan Marker</button>';
   spHitungMarker_();
@@ -1600,6 +1616,7 @@ async function spSimpanMarker() {
         lebarKain: Number((document.getElementById("sp-mk-lebar") || {}).value) || 0,
         panjangMarker: panjang,
         allowancePerLapis: (document.getElementById("sp-mk-allow") || {}).value,
+        komponen: (document.getElementById("sp-mk-komponen") || {}).value || "",
         satuanPanjang: "m",
         susunanSize: susunan,
         status: asal ? "Revisi" : "Final",
@@ -1730,7 +1747,8 @@ function spRenderFormGelaran_() {
             '" data-allow="' + (m.allowancePerLapis !== undefined ? m.allowancePerLapis : 0.02) +
             '" data-susun="' + spEsc_(JSON.stringify(m.susunanSize)) + '" value="' + m.idMarker + '">' +
             spEsc_(m.kodeMarker || m.idMarker) + " &#183; " + m.panjangMarker + "m &#183; " +
-            m.pcsPerLapis + " pcs/lapis</option>";
+            m.pcsPerLapis + " pcs/lapis" +
+            (m.komponen ? (" &#183; " + spEsc_(m.komponen)) : "") + "</option>";
         }).join("") +
       '</select></label>' +
       '<label>Warna' +
@@ -1965,7 +1983,10 @@ function spRenderSetLengkap_() {
       }).join("  ");
       const tahan = w.tertahan[k.jenis];
       return '<tr' + (tahan ? ' class="sp-kain-perhatikan"' : '') + '>' +
-        '<td data-label="Jenis kain">' + spEsc_(k.jenis) + '</td>' +
+        '<td data-label="Jenis kain">' + spEsc_(k.jenisKain || k.jenis) + '</td>' +
+        '<td data-label="Komponen">' + (k.komponen && k.komponen !== "(semua panel)"
+          ? '<b>' + spEsc_(k.komponen) + '</b>'
+          : '<span class="sp-kosong">semua panel</span>') + '</td>' +
         '<td data-label="Per size">' + spEsc_(per || "-") + '</td>' +
         '<td data-label="Potongan"><b>' + k.total + '</b></td>' +
         '<td data-label="Gelar">' + k.lapis + ' lapis</td>' +
@@ -1984,7 +2005,7 @@ function spRenderSetLengkap_() {
         : '') +
       (siapChip ? '<div class="sp-set-chip">' + siapChip + '</div>' : '') +
       '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
-        '<th>Jenis Kain</th><th>Per size</th><th>Potongan</th><th>Gelar</th>' +
+        '<th>Jenis Kain</th><th>Komponen</th><th>Per size</th><th>Potongan</th><th>Gelar</th>' +
         '<th>Kain</th><th>Menunggu</th></tr></thead><tbody>' + barisKain + '</tbody></table></div>' +
       (w.totalTertahan > 0
         ? '<p class="sp-info">' + w.totalTertahan + ' potongan menunggu pasangan kain lain. ' +
