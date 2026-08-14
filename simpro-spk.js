@@ -1178,6 +1178,13 @@ function spRenderFormSetoran() {
     '<div class="sp-ringkas-list">' +
       '<div class="sp-ringkas-item"><span>Diterima line ini</span><b>' + po.totalDipegang + ' pcs</b></div>' +
       '<div class="sp-ringkas-item"><span>Sudah disetor</span><b>' + po.totalSudahSetor + ' pcs</b></div>' +
+      // Baris pengembalian hanya muncul kalau memang ada -- kalau selalu
+      // ditampilkan dengan nilai 0, ringkasan jadi penuh angka yang tidak
+      // berarti apa-apa untuk mayoritas line.
+      (po.totalDikembalikan
+        ? '<div class="sp-ringkas-item"><span>Dikembalikan (belum dijahit)</span><b>' +
+          po.totalDikembalikan + ' pcs</b></div>'
+        : '') +
       '<div class="sp-ringkas-item"><span>Masih di tangan line</span><b>' + wip + ' pcs</b></div>' +
     '</div>';
   document.getElementById("sp-setor-ringkas").classList.remove("hidden");
