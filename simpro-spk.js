@@ -1555,6 +1555,9 @@ function spMuatGelaran() {
       .then(function (r) { return r.json(); }),
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
       idToken: SP_ID_TOKEN, action: "getRekapKainPO", idPurchaseOrder: window.SP_PO_AKTIF }) })
+      .then(function (r) { return r.json(); }),
+    fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
+      idToken: SP_ID_TOKEN, action: "getRingkasanGelaranPO", idPurchaseOrder: window.SP_PO_AKTIF }) })
       .then(function (r) { return r.json(); })
   ])
   .then(function (hasil) {
@@ -1565,7 +1568,9 @@ function spMuatGelaran() {
     window.SP_PO_KAIN = (hasil[0] && hasil[0].jenisKain) || [];
     window.SP_KAIN = (hasil[1] && hasil[1].kain) || [];
     window.SP_KAIN_AMBANG = hasil[1] || {};
+    window.SP_SET_LENGKAP = (hasil[2] && hasil[2].setLengkap) || [];
     spRenderFormGelaran_();
+    spRenderSetLengkap_();
     spRenderRekapKain_();
   })
   .catch(function (e) {
@@ -1638,7 +1643,12 @@ function spRenderFormGelaran_() {
         new Date().toISOString().slice(0, 10) + '"/></label>' +
       '<label>Catatan<input id="sp-gl-catatan" placeholder="opsional" type="text"/></label>' +
     '</div>' +
-    '<div class="sp-hitung" id="sp-gl-hasil"/>' +
+    // JANGAN self-closing. Di XML <div/> sah, tapi innerHTML browser
+    // menafsirkannya sebagai div yang TIDAK ditutup -- tombol Simpan di
+    // bawahnya jadi ANAK div ini, lalu ikut terhapus setiap kali
+    // spHitungGelaran_ menulis ulang isinya. Gejalanya: tombol Simpan Gelaran
+    // hilang dan satu-satunya tombol yang tersisa adalah Simpan Hasil Ukur.
+    '<div class="sp-hitung" id="sp-gl-hasil"></div>' +
     '<button class="sp-simpan-btn" onclick="spSimpanGelaran()" type="button">Simpan Gelaran</button>';
   spHitungGelaran_();
 }
@@ -1708,12 +1718,107 @@ function spSimpanGelaran() {
   .then(function (r) { return r.json(); })
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
-    alert("Gelaran tersimpan.\n" + d.totalQty + " pcs, kain " + d.kainTerpakai + " " + d.satuanKain);
-    window.SP_CUT = null;   // paksa muat ulang -- qty potong sudah berubah
+    alert("Gelaran tersimpan.\n" + d.totalPotongan + " potongan " +
+      (document.getElementById("sp-gl-kain") || {}).value + ", kain " +
+      d.kainTerpakai + " " + d.satuanKain);
     spMuatGelaran();
   })
   .catch(function (e) { alert(e.message || e); })
   .then(function () { if (btn) { btn.disabled = false; btn.textContent = "Simpan Gelaran"; } });
+}
+
+/**
+ * Panel SET LENGKAP.
+ *
+ * Ini bagian yang menjelaskan kenapa gelaran tidak boleh langsung jadi qty
+ * potong: satu warna bisa perlu beberapa jenis kain, dan yang siap dijahit
+ * adalah MINIMUM dari semua komponen -- bukan jumlahnya.
+ *
+ * Kelebihan di atas minimum ditampilkan sebagai "menunggu", bukan disembunyikan:
+ * itu justru yang memberi tahu kain mana yang menahan produksi.
+ */
+function spRenderSetLengkap_() {
+  const daftar = window.SP_SET_LENGKAP || [];
+  const wadah = document.getElementById("sp-set-lengkap");
+  if (!wadah) return;
+  if (!daftar.length) {
+    wadah.innerHTML = '<p class="sp-info">Belum ada gelaran tercatat untuk PO ini.</p>';
+    return;
+  }
+
+  wadah.innerHTML = daftar.map(function (w) {
+    const siapChip = Object.keys(w.siap).map(function (sz) {
+      return '<span class="sp-chip">' + spEsc_(sz) + " <b>" + w.siap[sz] + "</b></span>";
+    }).join("");
+
+    const barisKain = w.kain.map(function (k) {
+      const per = Object.keys(k.sizeQty).map(function (sz) {
+        return spEsc_(sz) + " " + k.sizeQty[sz];
+      }).join("  ");
+      const tahan = w.tertahan[k.jenis];
+      return '<tr' + (tahan ? ' class="sp-kain-perhatikan"' : '') + '>' +
+        '<td>' + spEsc_(k.jenis) + '</td>' +
+        '<td>' + spEsc_(per || "-") + '</td>' +
+        '<td><b>' + k.total + '</b></td>' +
+        '<td>' + k.lapis + ' lapis</td>' +
+        '<td>' + k.kainTerpakai + ' m</td>' +
+        '<td>' + (tahan ? '<b>' + tahan.total + '</b> menunggu' : '&#8212;') + '</td></tr>';
+    }).join("");
+
+    return '<div class="sp-set-blok">' +
+      '<div class="sp-set-judul">' + spEsc_(w.warna) +
+        '<span class="sp-set-siap">SIAP DIJAHIT <b>' + w.totalSiap + ' pcs</b></span></div>' +
+      (siapChip ? '<div class="sp-set-chip">' + siapChip + '</div>' : '') +
+      '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
+        '<th>Jenis Kain</th><th>Per size</th><th>Potongan</th><th>Gelar</th>' +
+        '<th>Kain</th><th>Menunggu</th></tr></thead><tbody>' + barisKain + '</tbody></table></div>' +
+      (w.totalTertahan > 0
+        ? '<p class="sp-info">' + w.totalTertahan + ' potongan menunggu pasangan kain lain. ' +
+          'Belum bisa dihitung sebagai baju sampai semua komponennya lengkap.</p>'
+        : '') +
+      (w.totalSiap > 0
+        ? '<button class="sp-btn-kecil" onclick="spKeCutting(\'' + spEsc_(w.warna) + '\')" ' +
+          'type="button">Catat ' + w.totalSiap + ' pcs sebagai Hasil Cutting</button>'
+        : '') +
+    '</div>';
+  }).join("");
+}
+
+/**
+ * Pindah ke tab Hasil Cutting dengan angka set lengkap sudah terisi.
+ *
+ * SENGAJA tidak menulis otomatis. Kadang komponen memang sengaja dipotong lebih
+ * dulu dan setnya belum mau dinyatakan siap; memaksa sistem menyimpulkan sendiri
+ * kapan sebuah set "lengkap" akan salah di kasus yang tidak terduga. Yang
+ * dihilangkan cuma pekerjaan menyalin angkanya.
+ */
+function spKeCutting(warna) {
+  const w = (window.SP_SET_LENGKAP || []).filter(function (x) { return x.warna === warna; })[0];
+  if (!w) return;
+  window.SP_ISI_CUTTING = { warna: warna, siap: w.siap };
+  spSwitchTab("cutting");
+  setTimeout(function () { spTerapkanIsiCutting_(); }, 600);
+}
+
+/** Isi kolom qty di tab Hasil Cutting dari set lengkap. */
+function spTerapkanIsiCutting_() {
+  const isi = window.SP_ISI_CUTTING;
+  if (!isi) return;
+  let terisi = 0;
+  document.querySelectorAll("#sp-tabel tr").forEach(function (tr) {
+    const th = tr.querySelector("th, td");
+    if (!th || th.textContent.indexOf(isi.warna) === -1) return;
+    tr.querySelectorAll("input[data-size]").forEach(function (inp) {
+      const v = isi.siap[inp.dataset.size];
+      if (v > 0) { inp.value = v; terisi++; }
+    });
+  });
+  window.SP_ISI_CUTTING = null;
+  if (!terisi) {
+    alert("Baris warna " + isi.warna + " tidak ketemu di tab Hasil Cutting. " +
+      "Isi angkanya manual: " +
+      Object.keys(isi.siap).map(function (sz) { return sz + " " + isi.siap[sz]; }).join(", "));
+  }
 }
 
 function spRenderRekapKain_() {

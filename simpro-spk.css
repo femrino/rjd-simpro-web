@@ -316,3 +316,17 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 .sp-size-catatan { background: #FCF6E8; border-left: 3px solid #E8D8AE;
   padding: 8px 12px; border-radius: 8px; margin: 10px 0; }
 
+/* ---- Panel Set Lengkap ----
+   Angka "siap dijahit" ditonjolkan karena itu satu-satunya angka yang boleh
+   masuk ke Hasil Cutting. Potongan per jenis kain di bawahnya adalah
+   rinciannya, bukan angka yang bisa dijumlah. */
+.sp-set-blok { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+  margin-bottom: 12px; background: var(--white); }
+.sp-set-judul { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; font-size: 14px; font-weight: 700; color: var(--ink);
+  margin-bottom: 10px; }
+.sp-set-siap { font-size: 11.5px; font-family: 'IBM Plex Mono', monospace;
+  font-weight: 600; color: var(--ink-soft); letter-spacing: .03em; }
+.sp-set-siap b { font-size: 15px; color: var(--thread); margin-left: 6px; }
+.sp-set-chip { margin-bottom: 10px; }
+
