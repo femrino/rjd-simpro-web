@@ -468,4 +468,9 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 .sp-konversi { font-size: 10.5px; color: var(--ink-soft); margin-top: 3px;
   font-family: 'IBM Plex Mono', monospace; min-height: 13px; }
 .sp-tabel small { color: var(--ink-soft); font-weight: 400; }
+/* Estimasi order vs kain yang benar-benar diterima. Ditampilkan kecil di
+   bawah angka diterima -- yang utama adalah kenyataannya, estimasi cuma
+   pembanding. */
+.sp-estimasi-beda { font-size: 10.5px; color: #8A5D1F; margin-top: 2px;
+  font-family: 'IBM Plex Mono', monospace; }
 

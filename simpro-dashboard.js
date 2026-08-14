@@ -905,7 +905,7 @@ function omBukaModalProofing(idx){
           '<h4>Detail Pengiriman</h4>' +
           '<label style="display:block">Target Tanggal Kirim <span class="of-hint-akhir">(deadline akhir)</span><input type="date" id="om-proofing-target" value="' + rjdTanggalKeIso_(g) + '"/></label>' +
           '<div class="of-jadwal-wrap">' +'<div class="of-jadwal-lbl">Jadwal Kirim Bertahap (opsional -- isi kalau pengiriman dipecah)</div>' +'<div class="of-jadwal" id="om-proofing-jadwal"></div>' +'<button class="of-jadwal-add" onclick="ofTambahBarisJadwal_(\'om-proofing-jadwal\')" type="button">+ Tambah Tahap</button>' +'</div>' +
-          '<div class="of-jadwal-wrap">' +'<div class="of-jadwal-lbl">Kain Dari Klien (opsional -- kain yang Anda kirim ke RJD)</div>' +'<div id="om-proofing-kaink"></div>' +'<button class="of-jadwal-add" onclick="ofTambahBarisKainKlien_(\'om-proofing-kaink\')" type="button">+ Tambah Kain</button>' +'</div>' +
+          '<div class="of-jadwal-wrap">' +'<div class="of-jadwal-lbl">Estimasi Kain Dari Klien (opsional -- perkiraan kain yang akan dikirim klien)</div>' +'<div id="om-proofing-kaink"></div>' +'<button class="of-jadwal-add" onclick="ofTambahBarisKainKlien_(\'om-proofing-kaink\')" type="button">+ Tambah Kain</button>' +'</div>' +
           // Catatan klien ditaruh DI SINI supaya letaknya sama dengan modal Edit
           // Order (di bagian Detail Pengiriman, bukan menumpuk di atas sebelum
           // daftar ITEM). Di proofing sifatnya BACA SAJA -- ini catatan klien,
@@ -930,6 +930,28 @@ function omBukaModalProofing(idx){
   document.body.appendChild(overlay);
   document.body.style.overflow = "hidden";
   rjdIsiFormDariOrder_("om-proofing-items", g.items, { harga: true });
+
+  // Saran kain & warna untuk baris Estimasi Kain Dari Klien. Diambil dari
+  // pengajuan ini sendiri -- supaya nama yang sudah diketik di bagian item
+  // tidak diketik ulang dengan ejaan berbeda di bagian kain.
+  if (typeof ofSetSaranKain_ === "function") {
+    const kain = [];
+    (g.items || []).forEach(function (it) {
+      (it.komposisiKain || []).forEach(function (k) {
+        if (k.nama && kain.indexOf(k.nama) === -1) kain.push(k.nama);
+      });
+    });
+    ofSetSaranKain_(kain);
+  }
+  if (typeof ofSetSaranWarna_ === "function") {
+    const warna = [];
+    (g.items || []).forEach(function (it) {
+      (it.warnaList || []).forEach(function (w) {
+        if (w.warna && warna.indexOf(w.warna) === -1) warna.push(w.warna);
+      });
+    });
+    ofSetSaranWarna_(warna);
+  }
   ofMuatMasterArtikel_(g.idKlien || null);
   ofRenderJadwalKirim_("om-proofing-jadwal", g.jadwalKirim);
   ofRenderKainKlien_("om-proofing-kaink", g.kainDariKlien);

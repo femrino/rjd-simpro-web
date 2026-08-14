@@ -840,6 +840,19 @@ function dbRenderEditPO(d){
     ofSetSaranKain_(saran);
   }
 
+  // Saran WARNA diambil dari warna yang benar-benar dipesan di order ini --
+  // bukan daftar warna umum. Warna di luar itu tetap boleh diketik: klien
+  // kadang mengirim kain contoh atau kain cadangan yang warnanya berbeda.
+  if (typeof ofSetSaranWarna_ === "function") {
+    const warna = [];
+    (d.itemGroups || []).forEach(function (it) {
+      (it.warnaList || []).forEach(function (w) {
+        if (w.warna && warna.indexOf(w.warna) === -1) warna.push(w.warna);
+      });
+    });
+    ofSetSaranWarna_(warna);
+  }
+
   // URUTAN DISAMAKAN dengan modal Edit Order Request & Proofing: ITEM dulu,
   // Detail Pengiriman di bawahnya. Sebelumnya terbalik -- dan itu satu-satunya
   // form di sistem yang urutannya berbeda, jadi orang yang terbiasa dengan Form
@@ -860,7 +873,15 @@ function dbRenderEditPO(d){
         '<button class="of-jadwal-add" onclick="ofTambahBarisJadwal_(\'db-editpo-jadwal\')" type="button">+ Tambah Tahap</button>' +
       '</div>' +
       '<div class="of-jadwal-wrap">' +
-        '<div class="of-jadwal-lbl">Kain Dari Klien (opsional -- kain yang klien kirim ke RJD)</div>' +
+        // "ESTIMASI", bukan "dijanjikan": di tahap order angkanya memang belum
+        // pasti -- order biasanya dibuat sebelum kainnya datang. "Dijanjikan"
+        // terdengar seperti komitmen yang bisa ditagih, padahal yang dicatat
+        // di sini cuma perkiraan.
+        //
+        // Angka yang SEBENARNYA diterima dicatat terpisah sebagai roll kain
+        // di tab Gelaran, saat kainnya benar-benar sampai.
+        '<div class="of-jadwal-lbl">Estimasi Kain Dari Klien ' +
+          '(opsional &#8212; perkiraan kain yang akan dikirim klien)</div>' +
         '<div id="db-editpo-kaink"></div>' +
         '<button class="of-jadwal-add" onclick="ofTambahBarisKainKlien_(\'db-editpo-kaink\')" type="button">+ Tambah Kain</button>' +
       '</div>' +

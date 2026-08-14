@@ -1973,13 +1973,32 @@ function ofRenderAksesoris_(card, daftar){
  */
 function ofSetSaranKain_(daftar) {
   window.OF_SARAN_KAIN = (daftar || []).filter(function (x) { return x; });
-  let dl = document.getElementById("of-datalist-kain");
+  ofIsiDatalist_("of-datalist-kain", window.OF_SARAN_KAIN);
+}
+
+/**
+ * Saran WARNA untuk baris Kain Dari Klien.
+ *
+ * Alasannya sama dengan saran kain: warna diketik ulang di beberapa tempat
+ * (order, gelaran, roll), dan "Butter Motif 1" vs "butter motif 1" tercatat
+ * sebagai dua warna berbeda di rekap kain. Yang dicegah bukan orang mengetik
+ * warna baru -- itu tetap boleh -- tapi salah ketik pada warna yang MEMANG
+ * sudah ada di order ini.
+ */
+function ofSetSaranWarna_(daftar) {
+  window.OF_SARAN_WARNA = (daftar || []).filter(function (x) { return x; });
+  ofIsiDatalist_("of-datalist-warna", window.OF_SARAN_WARNA);
+}
+
+/** Buat/isi satu datalist. Dipakai bersama saran kain & warna. */
+function ofIsiDatalist_(id, daftar) {
+  let dl = document.getElementById(id);
   if (!dl) {
     dl = document.createElement("datalist");
-    dl.id = "of-datalist-kain";
+    dl.id = id;
     document.body.appendChild(dl);
   }
-  dl.innerHTML = (window.OF_SARAN_KAIN || []).map(function (n) {
+  dl.innerHTML = (daftar || []).map(function (n) {
     return '<option value="' + String(n).replace(/"/g, "&quot;") + '"></option>';
   }).join("");
 }
@@ -1999,7 +2018,8 @@ function ofTambahBarisKainKlien_(containerId, prefill){
     // Warna: kain dari klien selalu datang PER WARNA. Tanpa kolom ini, "Brokat
     // Butter 100m" dan "Brokat Dusty 100m" tercatat sebagai satu "Brokat 200m",
     // dan sisa yang dikembalikan ke klien tidak bisa dipecah per warna.
-    '<input class="of-f-kk-warna" placeholder="warna" type="text"/>' +
+    '<input class="of-f-kk-warna" placeholder="warna" type="text"' +
+      (document.getElementById("of-datalist-warna") ? ' list="of-datalist-warna"' : '') + '/>' +
     '<input class="of-f-kk-jml" min="0" placeholder="jumlah" step="0.01" type="number"/>' +
     '<select class="of-f-kk-satuan">' + ofOpsiSatuan_("yds", OF_SATUAN_KAIN) + '</select>' +
     '<input class="of-f-kk-tgl" title="tanggal terima" type="date"/>' +

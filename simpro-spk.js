@@ -2190,9 +2190,15 @@ function spRenderRekapKain_() {
           '<td data-label="Warna">' + (k.warna && k.warna !== "(semua warna)"
             ? spEsc_(k.warna)
             : '<span class="sp-kosong">semua warna</span>') + '</td>' +
+          // Kalau roll sudah dicatat, angka DITERIMA berasal dari roll dan
+          // estimasi order jadi pembanding -- bukan diganti diam-diam.
+          // Selisihnya sendiri informasi: estimasi 100 yds tapi datang 95 yds
+          // adalah hal yang perlu ketahuan, bukan disembunyikan.
           '<td data-label="Diterima">' + k.diterima + ' m' +
             (k.diterimaAsli && k.satuanAsli
               ? ' <small>(' + k.diterimaAsli + ' ' + spEsc_(k.satuanAsli) + ')</small>' : '') +
+            (k.estimasiBeda
+              ? '<div class="sp-estimasi-beda">estimasi ' + k.estimasi + ' m</div>' : '') +
             '</td>' +
           '<td data-label="Terpakai">' + k.terpakai + '</td>' +
           '<td data-label="Re-cut">' + (k.terpakaiRecut
