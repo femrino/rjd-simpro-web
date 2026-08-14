@@ -826,6 +826,20 @@ function dbRenderEditPO(d){
     '</div>';
   }).join("");
 
+  // Saran nama kain untuk baris "Kain Dari Klien", diambil dari komposisi kain
+  // semua item di order ini. Tanpa ini, nama kain diketik ulang dari nol di dua
+  // tempat -- dan rekap kain membandingkan "Chantily" dengan "Chantilly"
+  // sebagai dua kain berbeda.
+  if (typeof ofSetSaranKain_ === "function") {
+    const saran = [];
+    (d.itemGroups || []).forEach(function (it) {
+      ((it.artikelData || {}).komposisiKain || []).forEach(function (k) {
+        if (k.nama && saran.indexOf(k.nama) === -1) saran.push(k.nama);
+      });
+    });
+    ofSetSaranKain_(saran);
+  }
+
   // URUTAN DISAMAKAN dengan modal Edit Order Request & Proofing: ITEM dulu,
   // Detail Pengiriman di bawahnya. Sebelumnya terbalik -- dan itu satu-satunya
   // form di sistem yang urutannya berbeda, jadi orang yang terbiasa dengan Form

@@ -1958,13 +1958,44 @@ function ofRenderAksesoris_(card, daftar){
 }
 
 /** ---- Kain Dari Klien (level pengajuan, bukan per item) ---- */
+/**
+ * Daftar saran nama kain, dipakai <datalist> di baris Kain Dari Klien.
+ *
+ * DATALIST, bukan dropdown: kain yang dikirim klien tidak selalu ada di
+ * komposisi artikel (kain tambahan, furing, kain contoh). Mengunci pilihannya
+ * berarti memaksa orang mengetik nama yang mirip-mirip di tempat lain, atau
+ * membiarkan barisnya kosong -- dua-duanya lebih buruk daripada typo sesekali.
+ *
+ * Yang dicegah di sini adalah typo pada kain yang MEMANG sudah terdaftar:
+ * "Chantily" vs "Chantilly" vs "chantily" akan tercatat sebagai tiga kain
+ * berbeda di rekap, dan pemakaian kain jadi tidak bisa dibandingkan dengan
+ * penerimaannya.
+ */
+function ofSetSaranKain_(daftar) {
+  window.OF_SARAN_KAIN = (daftar || []).filter(function (x) { return x; });
+  let dl = document.getElementById("of-datalist-kain");
+  if (!dl) {
+    dl = document.createElement("datalist");
+    dl.id = "of-datalist-kain";
+    document.body.appendChild(dl);
+  }
+  dl.innerHTML = (window.OF_SARAN_KAIN || []).map(function (n) {
+    return '<option value="' + String(n).replace(/"/g, "&quot;") + '"></option>';
+  }).join("");
+}
+
 function ofTambahBarisKainKlien_(containerId, prefill){
   const wadah = document.getElementById(containerId);
   if(!wadah) return;
   const b = document.createElement("div");
   b.className = "of-kaink-baris";
+  // list= hanya disematkan kalau datalist-nya memang sudah dibuat. Menunjuk ke
+  // datalist yang tidak ada tidak merusak apa pun, tapi juga tidak berguna --
+  // dan atribut yang menggantung membingungkan orang yang membaca DOM nanti.
+  const pakaiSaran = !!document.getElementById("of-datalist-kain");
   b.innerHTML =
-    '<input class="of-f-kk-nama" placeholder="nama/kode kain" type="text"/>' +
+    '<input class="of-f-kk-nama" placeholder="nama/kode kain" type="text"' +
+      (pakaiSaran ? ' list="of-datalist-kain"' : '') + '/>' +
     '<input class="of-f-kk-jml" min="0" placeholder="jumlah" step="0.01" type="number"/>' +
     '<select class="of-f-kk-satuan">' + ofOpsiSatuan_("yds", OF_SATUAN_KAIN) + '</select>' +
     '<input class="of-f-kk-tgl" title="tanggal terima" type="date"/>' +
