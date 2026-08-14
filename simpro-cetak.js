@@ -203,20 +203,123 @@ function ckPihakHtml(d, labelKananJudul, labelKananIsi){
   '</div>';
 }
 
+/**
+ * Susun item invoice jadi MATRIKS warna x size, dikelompokkan per
+ * (produk, HARGA SATUAN).
+ *
+ * Harga ikut jadi kunci, bukan diabaikan. Satu warna+size bisa punya beberapa
+ * harga -- mis. Col A Rose S: 14 pcs @39.000 dan 1 pcs @50.000 (ukuran khusus,
+ * tambahan bahan). Menggabungkannya jadi satu sel akan menyembunyikan selisih
+ * harga yang justru perlu diperiksa bagian keuangan klien.
+ *
+ * Baris NON-PRODUK (Ongkir, potongan) tidak punya warna/size. Dipisah jadi
+ * baris biasa, bukan dipaksa masuk matriks -- kolom size untuk ongkir tidak
+ * berarti apa-apa.
+ *
+ * Subtotal per warna dijumlah dari subtotal ASLI tiap item, bukan dihitung
+ * ulang qty x harga: kalau backend punya pembulatan atau potongan sendiri,
+ * menghitung ulang di sini akan menghasilkan angka yang berbeda dari total
+ * invoice -- dan itu jenis selisih yang paling sulit dijelaskan.
+ *
+ * FUNGSI MURNI -- bisa diuji tanpa DOM.
+ */
+function ckMatriksInvoice_(items){
+  const urutSize = ["XS","S","M","L","XL","2XL","3XL","4XL","5XL","All Size"];
+  const grup = {};
+  const urut = [];
+  const lain = [];
+
+  (items || []).forEach(function(it){
+    const w = String(it.warna || "").trim();
+    const sz = String(it.size || "").trim();
+    // Tanpa warna DAN size = bukan baris produk.
+    if((!w || w === "-") && (!sz || sz === "-")){ lain.push(it); return; }
+
+    const nama = String(it.deskripsi || "").trim() || "-";
+    const harga = Number(it.hargaSatuan) || 0;
+    const kunci = nama + "||" + harga;
+    if(!grup[kunci]){
+      grup[kunci] = { nama: nama, harga: harga, sel: {}, sub: {},
+                      warna: [], size: {}, totalQty: 0, totalSub: 0 };
+      urut.push(kunci);
+    }
+    const g = grup[kunci];
+    const kw = w || "-", ks = sz || "-";
+    if(g.warna.indexOf(kw) === -1) g.warna.push(kw);
+    g.size[ks] = true;
+    const kk = kw + "||" + ks;
+    g.sel[kk] = (g.sel[kk] || 0) + (Number(it.jumlah) || 0);
+    g.sub[kw] = (g.sub[kw] || 0) + (Number(it.subtotal) || 0);
+    g.totalQty += Number(it.jumlah) || 0;
+    g.totalSub += Number(it.subtotal) || 0;
+  });
+
+  const blok = urut.map(function(k){
+    const g = grup[k];
+    const adaSize = Object.keys(g.size);
+    g.sizeUrut = urutSize.filter(function(x){ return g.size[x]; })
+      .concat(adaSize.filter(function(x){ return urutSize.indexOf(x) === -1; }));
+    g.warna.sort();
+    return g;
+  });
+
+  return { blok: blok, lain: lain };
+}
+
 function ckRenderInvoice(d){
   const statusClass = d.status === "Lunas" ? "lp-badge-lunas" : (d.status === "DP Diterima" ? "lp-badge-dp" : "lp-badge-belum");
 
-  const barisItem = d.items.map(function(it){
-    // Warna/Size bisa "-" buat baris non-produk (misal "Ongkir") -- itu WAJAR,
-    // bukan data kosong/error, tampilin apa adanya.
-    const detailWarnaSize = [it.warna, it.size].filter(function(v){ return v && v !== "-"; }).join(" &#183; ");
-    return '<tr>' +
-      '<td>' + it.deskripsi + (detailWarnaSize ? '<div style="font-size:11px;color:var(--ink-soft)">' + detailWarnaSize + '</div>' : '') + '</td>' +
-      '<td class="num">' + it.jumlah + '</td>' +
-      '<td class="num">' + formatRupiah(it.hargaSatuan) + '</td>' +
-      '<td class="num">' + formatRupiah(it.subtotal) + '</td>' +
-    '</tr>';
+  const m = ckMatriksInvoice_(d.items);
+
+  const blokItem = m.blok.map(function(g){
+    const kepala = '<tr><th class="ck-sj-warna">Warna</th>' +
+      g.sizeUrut.map(function(sz){ return '<th class="num">' + rjdEscapeHtml_(sz) + '</th>'; }).join("") +
+      '<th class="num ck-sj-total">Qty</th><th class="num ck-inv-sub">Subtotal</th></tr>';
+
+    const baris = g.warna.map(function(w){
+      let qw = 0;
+      const sel = g.sizeUrut.map(function(sz){
+        const q = g.sel[w + "||" + sz] || 0;
+        qw += q;
+        return '<td class="num">' + (q ? q : '<span class="ck-sj-nol">&#8212;</span>') + '</td>';
+      }).join("");
+      return '<tr><td class="ck-sj-warna">' + rjdEscapeHtml_(w) + '</td>' + sel +
+        '<td class="num ck-sj-total">' + qw + '</td>' +
+        '<td class="num ck-inv-sub">' + formatRupiah(g.sub[w] || 0) + '</td></tr>';
+    }).join("");
+
+    const kaki = '<tr class="ck-sj-kaki"><td class="ck-sj-warna">Total</td>' +
+      g.sizeUrut.map(function(sz){
+        let t = 0;
+        g.warna.forEach(function(w){ t += g.sel[w + "||" + sz] || 0; });
+        return '<td class="num">' + t + '</td>';
+      }).join("") +
+      '<td class="num ck-sj-total">' + g.totalQty + '</td>' +
+      '<td class="num ck-inv-sub">' + formatRupiah(g.totalSub) + '</td></tr>';
+
+    return '<div class="ck-sj-blok">' +
+      '<div class="ck-sj-judul">' + rjdEscapeHtml_(g.nama) +
+        '<span>' + formatRupiah(g.harga) + ' / pcs</span></div>' +
+      '<table class="ck-dok-tabel ck-sj-matriks">' +
+        '<thead>' + kepala + '</thead><tbody>' + baris + kaki + '</tbody></table>' +
+    '</div>';
   }).join("");
+
+  // Baris non-produk (ongkir, potongan) tetap sebagai tabel biasa.
+  const blokLain = m.lain.length
+    ? '<table class="ck-dok-tabel"><thead><tr><th>Deskripsi</th>' +
+        '<th class="num">Qty</th><th class="num">Harga Satuan</th><th class="num">Subtotal</th>' +
+      '</tr></thead><tbody>' +
+      m.lain.map(function(it){
+        return '<tr><td>' + it.deskripsi + '</td>' +
+          '<td class="num">' + it.jumlah + '</td>' +
+          '<td class="num">' + formatRupiah(it.hargaSatuan) + '</td>' +
+          '<td class="num">' + formatRupiah(it.subtotal) + '</td></tr>';
+      }).join("") +
+      '</tbody></table>'
+    : '';
+
+  const barisItem = blokItem + blokLain;
 
   // Urutan baris ringkasan SENGAJA: Subtotal -> Total Tagihan -> Pembayaran -> Sisa Tagihan.
   //
@@ -295,9 +398,10 @@ function ckRenderInvoice(d){
       ckHeaderHtml("INVOICE", d.idInvoice, d.tanggal) +
       ckPihakHtml(d, "Referensi Order", "Kode Order: " + d.kodeOrder + '<br/>Produk: ' + d.namaProduk +
         '<br/>Status: <span class="ck-badge-status ' + statusClass + '">' + d.status + '</span>') +
-      '<table class="ck-dok-tabel"><thead><tr>' +
-        '<th>Deskripsi</th><th class="num">Qty</th><th class="num">Harga Satuan</th><th class="num">Subtotal</th>' +
-      '</tr></thead><tbody>' + barisItem + '</tbody></table>' +
+      // barisItem SUDAH berisi tabel lengkap (satu per kelompok harga), jadi
+      // tidak dibungkus <table> lagi -- membungkusnya menghasilkan tabel
+      // bersarang yang rusak di sebagian browser dan berantakan saat dicetak.
+      barisItem +
       '<div class="ck-dok-ringkasan">' +
         // Rekening HANYA muncul kalau masih ada yang harus dibayar.
         //
@@ -323,14 +427,90 @@ function ckRenderInvoice(d){
   document.title = "Invoice " + d.idInvoice + " -- RJD Apparel";
 }
 
+/**
+ * Susun item pengiriman jadi MATRIKS warna x size, dikelompokkan per produk.
+ *
+ * Bentuk lama satu baris per (produk, warna, size) menghasilkan 14 baris untuk
+ * satu artikel 4 warna x 4 size -- dan nama produknya diulang 14 kali. Petugas
+ * gudang yang mencocokkan barang harus menyusuri seluruh halaman untuk
+ * menjawab satu pertanyaan: "Beige L berapa?"
+ *
+ * Matriks menjawab itu dalam satu pandangan, dan muat di satu halaman.
+ *
+ * FUNGSI MURNI -- bisa diuji tanpa DOM.
+ */
+function ckMatriksPengiriman_(items){
+  const urutSize = ["XS","S","M","L","XL","2XL","3XL","4XL","5XL","All Size"];
+  const perProduk = {};
+  const urutProduk = [];
+
+  (items || []).forEach(function(it){
+    const nama = String(it.deskripsi || "").trim() || "-";
+    if(!perProduk[nama]){
+      perProduk[nama] = { nama: nama, sel: {}, warna: [], size: {}, total: 0, catatan: [] };
+      urutProduk.push(nama);
+    }
+    const p = perProduk[nama];
+    const w = String(it.warna || "").trim() || "-";
+    const sz = String(it.size || "").trim() || "-";
+    if(p.warna.indexOf(w) === -1) p.warna.push(w);
+    p.size[sz] = true;
+    p.sel[w + "||" + sz] = (p.sel[w + "||" + sz] || 0) + (Number(it.jumlah) || 0);
+    p.total += Number(it.jumlah) || 0;
+    if(it.catatan && p.catatan.indexOf(it.catatan) === -1) p.catatan.push(it.catatan);
+  });
+
+  return urutProduk.map(function(nama){
+    const p = perProduk[nama];
+    // Size diurutkan mengikuti urutan baku, sisanya (ukuran custom seperti
+    // "115*115") ditaruh di belakang menurut kemunculan -- bukan dibuang.
+    const adaSize = Object.keys(p.size);
+    const size = urutSize.filter(function(x){ return p.size[x]; })
+      .concat(adaSize.filter(function(x){ return urutSize.indexOf(x) === -1; }));
+    p.warna.sort();
+    return { nama: nama, warna: p.warna, size: size, sel: p.sel,
+             total: p.total, catatan: p.catatan };
+  });
+}
+
 function ckRenderSuratJalan(d){
-  const barisItem = d.items.map(function(it){
-    const detailWarnaSize = [it.warna, it.size].filter(function(v){ return v && v !== "-"; }).join(" &#183; ");
-    return '<tr>' +
-      '<td>' + it.deskripsi + (detailWarnaSize ? '<div style="font-size:11px;color:var(--ink-soft)">' + detailWarnaSize + '</div>' : '') +
-        (it.catatan ? '<div style="font-size:11px;color:var(--thread);font-style:italic">' + it.catatan + '</div>' : '') + '</td>' +
-      '<td class="num">' + it.jumlah + '</td>' +
-    '</tr>';
+  const blokProduk = ckMatriksPengiriman_(d.items).map(function(p){
+    const kepala = '<tr><th class="ck-sj-warna">Warna</th>' +
+      p.size.map(function(sz){ return '<th class="num">' + rjdEscapeHtml_(sz) + '</th>'; }).join("") +
+      '<th class="num ck-sj-total">Total</th></tr>';
+
+    const baris = p.warna.map(function(w){
+      let totalW = 0;
+      const sel = p.size.map(function(sz){
+        const q = p.sel[w + "||" + sz] || 0;
+        totalW += q;
+        // Sel kosong diberi tanda strip, bukan angka 0: petugas gudang perlu
+        // membedakan "tidak dikirim" dari "dikirim nol" saat mencocokkan.
+        return '<td class="num">' + (q ? q : '<span class="ck-sj-nol">&#8212;</span>') + '</td>';
+      }).join("");
+      return '<tr><td class="ck-sj-warna">' + rjdEscapeHtml_(w) + '</td>' + sel +
+        '<td class="num ck-sj-total">' + totalW + '</td></tr>';
+    }).join("");
+
+    // Baris total per size di kaki tabel -- itu yang dipakai saat menghitung
+    // barang per ukuran sebelum dimasukkan ke kardus.
+    const kaki = '<tr class="ck-sj-kaki"><td class="ck-sj-warna">Total</td>' +
+      p.size.map(function(sz){
+        let t = 0;
+        p.warna.forEach(function(w){ t += p.sel[w + "||" + sz] || 0; });
+        return '<td class="num">' + t + '</td>';
+      }).join("") +
+      '<td class="num ck-sj-total">' + p.total + '</td></tr>';
+
+    return '<div class="ck-sj-blok">' +
+      '<div class="ck-sj-judul">' + rjdEscapeHtml_(p.nama) +
+        '<span>' + p.total + ' pcs</span></div>' +
+      '<table class="ck-dok-tabel ck-sj-matriks">' +
+        '<thead>' + kepala + '</thead><tbody>' + baris + kaki + '</tbody></table>' +
+      (p.catatan.length
+        ? '<div class="ck-sj-catatan">' + p.catatan.map(rjdEscapeHtml_).join(" &#183; ") + '</div>'
+        : '') +
+    '</div>';
   }).join("");
 
   const html =
@@ -339,9 +519,7 @@ function ckRenderSuratJalan(d){
       ckPihakHtml(d, "Detail Pengiriman", "Kode Order: " + d.kodeOrder + '<br/>Produk: ' + d.namaProduk +
         '<br/>Jenis: ' + d.jenisPengiriman + '<br/>Metode: ' + d.metode +
         (d.noResi ? '<br/>No. Resi: ' + d.noResi : '')) +
-      '<table class="ck-dok-tabel"><thead><tr>' +
-        '<th>Deskripsi</th><th class="num">Qty</th>' +
-      '</tr></thead><tbody>' + barisItem + '</tbody></table>' +
+      blokProduk +
       '<div style="text-align:right;font-weight:700;font-size:14px;margin-bottom:20px">Total Dikirim: ' + d.jumlah + ' pcs</div>' +
       (d.catatan ? '<div class="ck-dok-catatan"><b>Catatan:</b> ' + d.catatan + '</div>' : '') +
       '<div class="ck-dok-ttd">' +

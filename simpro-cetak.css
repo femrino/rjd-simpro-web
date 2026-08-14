@@ -455,3 +455,36 @@ body { padding-top: 0; }
   .ck-pro-wm { font-size: 58px; }
   .ck-pro-termin-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* ============================================================
+   SURAT JALAN -- matriks warna x size
+   ============================================================
+   Bentuk satu-baris-per-(warna,size) menghasilkan 14 baris untuk satu artikel
+   4 warna x 4 size, dengan nama produk diulang 14 kali. Petugas gudang harus
+   menyusuri seluruh halaman untuk menjawab "Beige L berapa?".
+
+   Matriks menjawab itu dalam satu pandangan, dan biasanya muat satu halaman. */
+.ck-sj-blok { margin-bottom: 18px; page-break-inside: avoid; }
+.ck-sj-judul { display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+.ck-sj-judul span { font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.ck-sj-matriks { margin-bottom: 4px; }
+.ck-sj-matriks th, .ck-sj-matriks td { padding: 6px 8px; font-size: 12.5px; }
+.ck-sj-matriks .ck-sj-warna { text-align: left; white-space: nowrap; }
+.ck-sj-matriks .ck-sj-total { font-weight: 700; }
+/* Sel kosong diberi strip, bukan angka 0 -- petugas perlu membedakan
+   "tidak dikirim" dari "dikirim nol" saat mencocokkan barang. */
+.ck-sj-nol { color: #C9C4B8; }
+.ck-sj-kaki td { border-top: 1.5px solid var(--line); font-weight: 700; background: var(--cream); }
+.ck-sj-catatan { font-size: 11px; color: var(--thread); font-style: italic; margin-top: 2px; }
+
+@media print {
+  /* Satu blok produk jangan terpotong dua halaman -- matriks yang terbelah
+     justru lebih sulit dibaca daripada daftar panjang. */
+  .ck-sj-blok { page-break-inside: avoid; }
+}
+/* Kolom subtotal di matriks invoice. Harga satuan tidak jadi kolom -- sudah
+   jadi judul blok, karena satu blok = satu harga. */
+.ck-inv-sub { min-width: 108px; font-weight: 600; }
+.ck-sj-judul span { font-family: 'IBM Plex Mono', monospace; }
+
