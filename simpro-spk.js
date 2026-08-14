@@ -1307,6 +1307,11 @@ function spRenderRiwayat() {
     // begitu pihak kedua membenarkan, catatan itu bukan lagi input sepihak.
     const terkunci = jenis === "distribusi" &&
       (k.status === "Diterima" || k.status === "Ada Selisih");
+    // Membatalkan catatan bagian lain akan ditolak backend. Menampilkan
+    // tombolnya tetap salah: orang menekan, gagal, lalu berhenti percaya pada
+    // layarnya. Yang MELIHAT riwayat tetap semua bagian -- itu justru yang
+    // membuat serah terima antar bagian bisa diperiksa.
+    const bolehBatal = spBolehBatalRiwayat_(jenis);
     const id = jenis === "cutting" ? k.idCutting
       : (jenis === "setoran" ? k.idSetoran : k.idDistribusi);
     const total = jenis === "cutting" ? k.totalPotong
@@ -1351,11 +1356,40 @@ function spRenderRiwayat() {
           ? ''
           : (terkunci
               ? '<span class="sp-riw-kunci">sudah dikonfirmasi, tidak bisa dibatalkan</span>'
-              : '<button class="sp-riw-btn" data-i="' + i + '" onclick="spBatalkanCatatan(this.dataset.i)" type="button">Batalkan</button>')) +
+              : (bolehBatal
+                  ? '<button class="sp-riw-btn" data-i="' + i + '" onclick="spBatalkanCatatan(this.dataset.i)" type="button">Batalkan</button>'
+                  : '<span class="sp-riw-kunci">hanya bisa dibatalkan bagian ' +
+                    rjdEscapeHtml_(SP_RIW_BAGIAN[jenis] || "-") + '</span>'))) +
       '</div>' +
       (k.catatan ? '<div class="sp-riw-catatan">' + rjdEscapeHtml_(k.catatan) + '</div>' : '') +
     '</div>';
   }).join("");
+}
+
+/**
+ * Bagian yang berhak MEMBATALKAN tiap jenis catatan. Sama persis dengan
+ * BAGIAN_PER_AKSI di akses-role.gs -- backend sudah menolak yang bukan haknya,
+ * jadi ini murni supaya tombolnya tidak muncul sia-sia.
+ *
+ * Kalau kedua daftar ini pernah berbeda, yang menang backend. Layar cuma
+ * kehilangan tombol yang seharusnya ada -- bukan sebaliknya.
+ */
+const SP_RIW_BAGIAN = {
+  distribusi: "loading",
+  setoran: "sewing",
+  cutting: "cutting"
+};
+
+function spBolehBatalRiwayat_(jenis) {
+  // Peran belum dimuat -> tampilkan saja. Backend tetap menjaga, dan
+  // menyembunyikan tombol karena data yang belum tiba lebih membingungkan
+  // daripada tombol yang sesekali ditolak.
+  if (window.SP_BAGIAN === undefined) return true;
+  if (window.SP_BAGIAN_SEMUA) return true;
+  const bagian = window.SP_BAGIAN || [];
+  if (!bagian.length) return true;   // kosong = semua bagian
+  const perlu = SP_RIW_BAGIAN[jenis];
+  return !perlu || bagian.indexOf(perlu) !== -1;
 }
 
 function spBatalkanCatatan(i) {
