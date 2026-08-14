@@ -544,15 +544,6 @@ function spTerapkanBagian_(d) {
     spSwitchTab(pertamaTampil);
   }
 
-  // Kelompok yang SELURUH tabnya tersembunyi ikut disembunyikan -- kalau
-  // tidak, judul fase seperti "Cutting" menggantung tanpa isi dan terbaca
-  // seperti bagian yang rusak.
-  document.querySelectorAll(".sp-tab-grup").forEach(function (grup) {
-    const adaTampil = Array.prototype.slice.call(grup.querySelectorAll(".sp-tab"))
-      .some(function (b) { return !b.classList.contains("hidden"); });
-    grup.classList.toggle("hidden", !adaTampil);
-  });
-
   // Beri tahu kenapa tabnya sedikit -- kalau tidak, orang akan mengira
   // fiturnya hilang lalu menanyakannya, atau lebih buruk: mencari jalan lain.
   const wadah = document.getElementById("sp-tabs");

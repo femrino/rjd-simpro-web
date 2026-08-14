@@ -530,27 +530,19 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 .sp-tahap-jam { font-size: 11px; font-family: 'IBM Plex Mono', monospace;
   color: var(--thread); font-weight: 600; }
 
-/* ---- Tab dikelompokkan per fase ----
-   Sembilan tab dalam satu deret memaksa mata memindai seluruhnya untuk
-   menemukan satu. Dikelompokkan, cukup memindai empat label fase. */
-.sp-tabs { align-items: flex-start; }
-.sp-tab-grup { display: flex; flex-direction: column; gap: 4px;
-  padding: 0 10px; border-left: 1px solid var(--line-soft); }
-.sp-tab-grup:first-child { border-left: none; padding-left: 4px; }
-.sp-tab-grup-lbl { font-size: 9.5px; font-family: 'IBM Plex Mono', monospace;
-  letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft);
-  padding: 0 8px 2px; }
-.sp-tab-grup .sp-tab { text-align: left; }
+/* ---- Jeda antar fase di deret tab ----
+   Versi kolom per fase dicoba dan rusak: .sp-tab punya `flex: 1`, dan di dalam
+   wadah flex-direction:column itu meregangkan TINGGI. Diganti dengan pemisah
+   tipis -- jauh lebih sederhana, dan tidak melawan gaya tab yang sudah ada. */
+.sp-tab-awal { position: relative; margin-left: 10px; }
+.sp-tab-awal::before { content: ""; position: absolute; left: -6px; top: 20%;
+  bottom: 20%; width: 1px; background: var(--line); }
 
 @media (max-width: 760px) {
-  /* Di layar sempit kelompok jadi baris penuh, bukan kolom bersebelahan --
-     empat kolom sempit membuat label tab terpotong. */
-  .sp-tabs { flex-direction: column; align-items: stretch; }
-  .sp-tab-grup { border-left: none; border-top: 1px solid var(--line-soft);
-    padding: 8px 0 0; flex-direction: row; flex-wrap: wrap; align-items: center; }
-  .sp-tab-grup:first-child { border-top: none; padding-top: 0; }
-  .sp-tab-grup-lbl { flex-basis: 100%; padding: 0 0 2px; }
-  .sp-tab-grup .sp-tab { flex: 1 1 auto; text-align: center; }
+  /* Di layar sempit tab membungkus jadi beberapa baris, dan garis pemisah
+     vertikal jadi menggantung di tempat acak -- lebih baik dihilangkan. */
+  .sp-tab-awal { margin-left: 0; }
+  .sp-tab-awal::before { display: none; }
 }
 
 /* ---- Panduan pengisian per tab ----
