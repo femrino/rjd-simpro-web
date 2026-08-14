@@ -360,3 +360,52 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   padding: 6px; background: var(--white); border: 1px dashed var(--line);
   border-radius: 8px; width: 100%; box-sizing: border-box; }
 
+/* ============================================================
+   TABEL -> KARTU di layar sempit
+   ============================================================
+   Tabel marker punya 9 kolom. Di layar HP, memaksanya muat membuat kolom
+   pertama menyempit sampai kode marker terpotong huruf per huruf, dan tombol
+   Revisi/Batal tersusun vertikal satu huruf per baris.
+
+   Scroll horizontal juga bukan jawaban: orang harus menggeser bolak-balik
+   untuk membandingkan panjang marker dengan susunannya, dan itu justru
+   informasi yang perlu dilihat bersamaan.
+
+   Jadi di bawah 760px tabelnya berubah jadi kartu -- tiap baris satu kartu,
+   tiap sel satu baris label-nilai. data-label diisi dari JS. */
+@media (max-width: 760px) {
+  .sp-tabel-kartu thead { display: none; }
+  .sp-tabel-kartu, .sp-tabel-kartu tbody, .sp-tabel-kartu tr, .sp-tabel-kartu td {
+    display: block; width: 100%; box-sizing: border-box;
+  }
+  .sp-tabel-kartu tr {
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 10px; background: var(--white);
+  }
+  .sp-tabel-kartu td {
+    border: none; padding: 5px 0; text-align: left;
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  /* Label di kiri dengan lebar tetap supaya nilainya sejajar antar baris --
+     lebih mudah dipindai daripada label yang lebarnya ikut isinya. */
+  .sp-tabel-kartu td::before {
+    content: attr(data-label);
+    flex: 0 0 92px;
+    font-size: 10.5px; font-family: 'IBM Plex Mono', monospace;
+    color: var(--ink-soft); letter-spacing: .02em; text-transform: uppercase;
+  }
+  /* Sel tanpa label (tombol aksi) tidak perlu ruang kosong di kirinya. */
+  .sp-tabel-kartu td[data-label=""]::before { display: none; }
+  .sp-tabel-kartu .sp-td-aksi {
+    display: flex; gap: 8px; margin-top: 8px;
+    padding-top: 10px; border-top: 1px dashed var(--line-soft);
+  }
+  .sp-tabel-kartu .sp-btn-kecil { flex: 1; padding: 8px 10px; }
+  .sp-tabel-kartu .sp-td-layout { flex-wrap: wrap; }
+  /* Kartu sudah punya bingkai sendiri -- wrapper scroll tidak diperlukan lagi,
+     dan kalau dibiarkan justru menambah bilah geser yang tidak berguna.
+     Kelasnya dipasang dari JS, bukan :has() -- selektor itu belum didukung
+     browser lama, dan HP yang dipakai di lantai produksi belum tentu baru. */
+  .sp-tabelwrap-kartu { overflow-x: visible; }
+}
+

@@ -1430,7 +1430,7 @@ function spRenderMarker_() {
   const wadah = document.getElementById("sp-marker-daftar");
 
   wadah.innerHTML = daftar.length
-    ? '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
+    ? '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
         '<th>Kode</th><th>Layout</th><th>Lebar (cm)</th><th>Panjang</th><th>Allow</th>' +
         '<th>Susunan</th><th>Pcs/lapis</th><th>Status</th><th></th></tr></thead><tbody>' +
         daftar.map(function (m) {
@@ -1438,19 +1438,25 @@ function spRenderMarker_() {
             .map(function (sz) { return sz + ":" + m.susunanSize[sz]; }).join(" ");
           const layout = spPecahUrl_(m.urlLayout);
           const berkas = spPecahUrl_(m.urlFileMarker);
-          return '<tr><td><b>' + spEsc_(m.kodeMarker || "-") + '</b></td>' +
-            '<td class="sp-td-layout">' +
+          // data-label dipakai CSS di layar sempit: tabel berubah jadi kartu,
+          // dan tiap sel memakai label ini sebagai judulnya. Tanpa itu, 9 kolom
+          // dipaksa muat di layar HP dan kode marker terpotong huruf per huruf.
+          return '<tr>' +
+            '<td data-label="Kode"><b>' + spEsc_(m.kodeMarker || "-") + '</b></td>' +
+            '<td class="sp-td-layout" data-label="Layout">' +
               (layout.length ? layout.map(spThumbMarker_).join("") : '<span class="sp-kosong">&#183;</span>') +
               (berkas.length ? '<div class="sp-file-list">' +
                 berkas.map(spTautanFile_).join("") + '</div>' : '') +
             '</td>' +
-            '<td>' + (m.lebarKain || "-") + '</td>' +
-            '<td>' + m.panjangMarker + " " + spEsc_(m.satuanPanjang) + '</td>' +
-            '<td>' + (m.allowancePerLapis !== undefined ? m.allowancePerLapis : "-") + '</td>' +
-            '<td>' + spEsc_(susun || "-") + '</td>' +
-            '<td><b>' + m.pcsPerLapis + '</b></td>' +
-            '<td>' + spEsc_(m.status) + (m.idMarkerAsal ? ' <small>(revisi)</small>' : '') + '</td>' +
-            '<td><button class="sp-btn-kecil" onclick="spRevisiMarker(\'' + m.idMarker + '\')" ' +
+            '<td data-label="Lebar kain">' + (m.lebarKain || "-") + ' cm</td>' +
+            '<td data-label="Panjang">' + m.panjangMarker + " " + spEsc_(m.satuanPanjang) + '</td>' +
+            '<td data-label="Allowance">' + (m.allowancePerLapis !== undefined ? m.allowancePerLapis : "-") + '</td>' +
+            '<td data-label="Susunan">' + spEsc_(susun || "-") + '</td>' +
+            '<td data-label="Pcs/lapis"><b>' + m.pcsPerLapis + '</b></td>' +
+            '<td data-label="Status">' + spEsc_(m.status) +
+              (m.idMarkerAsal ? ' <small>(revisi)</small>' : '') + '</td>' +
+            '<td class="sp-td-aksi" data-label="">' +
+              '<button class="sp-btn-kecil" onclick="spRevisiMarker(\'' + m.idMarker + '\')" ' +
               'type="button">Revisi</button> ' +
               '<button class="sp-btn-kecil" onclick="spBatalMarker(\'' + m.idMarker + '\')" ' +
               'type="button">Batal</button></td></tr>';
@@ -1875,12 +1881,12 @@ function spRenderSetLengkap_() {
       }).join("  ");
       const tahan = w.tertahan[k.jenis];
       return '<tr' + (tahan ? ' class="sp-kain-perhatikan"' : '') + '>' +
-        '<td>' + spEsc_(k.jenis) + '</td>' +
-        '<td>' + spEsc_(per || "-") + '</td>' +
-        '<td><b>' + k.total + '</b></td>' +
-        '<td>' + k.lapis + ' lapis</td>' +
-        '<td>' + k.kainTerpakai + ' m</td>' +
-        '<td>' + (tahan ? '<b>' + tahan.total + '</b> menunggu' : '&#8212;') + '</td></tr>';
+        '<td data-label="Jenis kain">' + spEsc_(k.jenis) + '</td>' +
+        '<td data-label="Per size">' + spEsc_(per || "-") + '</td>' +
+        '<td data-label="Potongan"><b>' + k.total + '</b></td>' +
+        '<td data-label="Gelar">' + k.lapis + ' lapis</td>' +
+        '<td data-label="Kain">' + k.kainTerpakai + ' m</td>' +
+        '<td data-label="Menunggu">' + (tahan ? '<b>' + tahan.total + '</b> menunggu' : '&#8212;') + '</td></tr>';
     }).join("");
 
     return '<div class="sp-set-blok">' +
@@ -1893,7 +1899,7 @@ function spRenderSetLengkap_() {
           '<b>' + sudah + '</b> sudah tercatat di Hasil Cutting.</p>'
         : '') +
       (siapChip ? '<div class="sp-set-chip">' + siapChip + '</div>' : '') +
-      '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
+      '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
         '<th>Jenis Kain</th><th>Per size</th><th>Potongan</th><th>Gelar</th>' +
         '<th>Kain</th><th>Menunggu</th></tr></thead><tbody>' + barisKain + '</tbody></table></div>' +
       (w.totalTertahan > 0
@@ -2000,20 +2006,21 @@ function spRenderRekapKain_() {
     return;
   }
   wadah.innerHTML =
-    '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
+    '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
       '<th>Kain</th><th>Diterima</th><th>Terpakai</th><th>Sisa hitung</th>' +
       '<th>Sisa ukur</th><th>Selisih</th></tr></thead><tbody>' +
       kain.map(function (k) {
         const kelas = k.tanda ? ("sp-kain-" + k.tanda) : "";
-        return '<tr class="' + kelas + '"><td><b>' + spEsc_(k.jenis) + '</b></td>' +
-          '<td>' + k.diterima + " " + spEsc_(k.satuan) + '</td>' +
-          '<td>' + k.terpakai + '</td>' +
-          '<td>' + k.sisaHitung + '</td>' +
-          '<td>' + (k.sisaTerukur === null
+        return '<tr class="' + kelas + '">' +
+          '<td data-label="Kain"><b>' + spEsc_(k.jenis) + '</b></td>' +
+          '<td data-label="Diterima">' + k.diterima + " " + spEsc_(k.satuan) + '</td>' +
+          '<td data-label="Terpakai">' + k.terpakai + '</td>' +
+          '<td data-label="Sisa hitung">' + k.sisaHitung + '</td>' +
+          '<td data-label="Sisa ukur">' + (k.sisaTerukur === null
             ? '<input class="sp-kain-ukur" data-jenis="' + spEsc_(k.jenis) +
               '" placeholder="ukur" step="0.01" type="number"/>'
             : k.sisaTerukur) + '</td>' +
-          '<td>' + (k.selisih === null ? "-"
+          '<td data-label="Selisih">' + (k.selisih === null ? "-"
             : (k.selisih + " (" + k.persenSelisih + "%) " + k.tanda)) + '</td></tr>';
       }).join("") +
     '</tbody></table></div>' +
