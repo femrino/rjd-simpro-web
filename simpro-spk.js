@@ -1358,6 +1358,44 @@ function spSizePO_() {
   return SP_SIZE_STANDAR;
 }
 
+/**
+ * Thumbnail gambar layout marker.
+ *
+ * Tautan Drive biasa (".../file/d/ID/view") tidak bisa dipakai di <img> --
+ * yang keluar halaman HTML, bukan gambar. Perlu bentuk thumbnail.
+ * Kalau gagal dimuat (file dihapus / izin berubah), onerror menggantinya
+ * dengan tautan teks, bukan ikon rusak.
+ */
+function spThumbMarker_(url) {
+  const m = String(url).match(/\/file\/d\/([^/]+)/) || String(url).match(/[?&]id=([^&]+)/);
+  const src = m
+    ? ("https://drive.google.com/thumbnail?id=" + encodeURIComponent(m[1]) + "&sz=w400")
+    : url;
+  return '<a class="sp-thumb" href="' + spEsc_(url) + '" rel="noopener" target="_blank" ' +
+      'title="Buka gambar layout">' +
+    '<img alt="layout" loading="lazy" onerror="spThumbGagal_(this)" src="' + spEsc_(src) + '"/>' +
+  '</a>';
+}
+
+function spThumbGagal_(img) {
+  const a = img.closest(".sp-thumb");
+  if (!a) return;
+  a.classList.add("sp-thumb-gagal");
+  a.innerHTML = '<span>gambar tidak tampil</span>';
+}
+
+/** Tautan berkas non-gambar (.plt dsb) -- ditampilkan sebagai tautan unduh. */
+function spTautanFile_(url, i) {
+  return '<a class="sp-file-link" href="' + spEsc_(url) + '" rel="noopener" target="_blank">' +
+    '&#128196; file ' + (i + 1) + '</a>';
+}
+
+function spPecahUrl_(gabungan) {
+  return String(gabungan || "").split(";")
+    .map(function (x) { return x.trim(); })
+    .filter(function (x) { return x; });
+}
+
 function spMuatMarker() {
   if (!window.SP_PO_AKTIF) {
     document.getElementById("sp-marker-daftar").innerHTML =
@@ -1393,12 +1431,19 @@ function spRenderMarker_() {
 
   wadah.innerHTML = daftar.length
     ? '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
-        '<th>Kode</th><th>Lebar (cm)</th><th>Panjang</th><th>Allow</th><th>Susunan</th>' +
-        '<th>Pcs/lapis</th><th>Status</th><th></th></tr></thead><tbody>' +
+        '<th>Kode</th><th>Layout</th><th>Lebar (cm)</th><th>Panjang</th><th>Allow</th>' +
+        '<th>Susunan</th><th>Pcs/lapis</th><th>Status</th><th></th></tr></thead><tbody>' +
         daftar.map(function (m) {
           const susun = Object.keys(m.susunanSize || {})
             .map(function (sz) { return sz + ":" + m.susunanSize[sz]; }).join(" ");
+          const layout = spPecahUrl_(m.urlLayout);
+          const berkas = spPecahUrl_(m.urlFileMarker);
           return '<tr><td><b>' + spEsc_(m.kodeMarker || "-") + '</b></td>' +
+            '<td class="sp-td-layout">' +
+              (layout.length ? layout.map(spThumbMarker_).join("") : '<span class="sp-kosong">&#183;</span>') +
+              (berkas.length ? '<div class="sp-file-list">' +
+                berkas.map(spTautanFile_).join("") + '</div>' : '') +
+            '</td>' +
             '<td>' + (m.lebarKain || "-") + '</td>' +
             '<td>' + m.panjangMarker + " " + spEsc_(m.satuanPanjang) + '</td>' +
             '<td>' + (m.allowancePerLapis !== undefined ? m.allowancePerLapis : "-") + '</td>' +
@@ -1468,6 +1513,27 @@ function spRenderFormMarker_(asal) {
     '<div class="sp-grid3" style="margin-top:14px">' +
       '<label>Catatan<input id="sp-mk-catatan" placeholder="opsional" type="text"/></label>' +
     '</div>' +
+    // ---- Lampiran ----
+    // Marker tanpa gambar layout cuma catatan angka: tidak ada yang bisa
+    // memeriksa susunannya sebelum kain digelar. File .plt melengkapinya --
+    // supaya yang tersimpan bukan cuma laporan, tapi juga bahan cetak polanya.
+    '<div class="sp-lampiran">' +
+      '<div class="sp-lbl">Lampiran</div>' +
+      (spPecahUrl_(a.urlLayout).length
+        ? '<div class="sp-thumb-grid">' + spPecahUrl_(a.urlLayout).map(spThumbMarker_).join("") + '</div>'
+        : '') +
+      (spPecahUrl_(a.urlFileMarker).length
+        ? '<div class="sp-file-list">' + spPecahUrl_(a.urlFileMarker).map(spTautanFile_).join("") + '</div>'
+        : '') +
+      '<label class="sp-lbl-kecil">Gambar layout (png/jpg)' +
+        '<input accept="image/*" id="sp-mk-layout" multiple="multiple" type="file"/></label>' +
+      '<label class="sp-lbl-kecil">File marker (.plt, .dxf, .zip)' +
+        '<input id="sp-mk-file" multiple="multiple" type="file"/></label>' +
+      '<div class="sp-info">File baru DITAMBAHKAN &#8212; lampiran lama tidak terhapus. ' +
+        'Maksimal 8MB per file.</div>' +
+      '<input id="sp-mk-url-layout" type="hidden" value="' + spEsc_(a.urlLayout || "") + '"/>' +
+      '<input id="sp-mk-url-file" type="hidden" value="' + spEsc_(a.urlFileMarker || "") + '"/>' +
+    '</div>' +
     '<input id="sp-mk-asal" type="hidden" value="' + spEsc_(a.idMarker || "") + '"/>' +
     '<button class="sp-simpan-btn" onclick="spSimpanMarker()" type="button">Simpan Marker</button>';
   spHitungMarker_();
@@ -1487,7 +1553,7 @@ function spRevisiMarker(idMarker) {
   document.getElementById("sp-marker-form").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function spSimpanMarker() {
+async function spSimpanMarker() {
   const susunan = {};
   document.querySelectorAll(".sp-mk-sz").forEach(function (inp) {
     const v = Number(inp.value) || 0;
@@ -1502,6 +1568,20 @@ function spSimpanMarker() {
 
   const btn = event && event.target ? event.target : null;
   if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
+
+  // Baca lampiran jadi base64 sebelum dikirim. Gagal baca file TIDAK
+  // membatalkan penyimpanan -- data markernya jauh lebih penting daripada
+  // lampirannya, dan menggagalkan semuanya karena satu file bermasalah akan
+  // membuat orang berhenti melampirkan apa pun.
+  let fileLayout = [], fileMarker = [];
+  try {
+    const elL = document.getElementById("sp-mk-layout");
+    const elF = document.getElementById("sp-mk-file");
+    if (elL && elL.files && elL.files.length) fileLayout = await ofBacaBanyakFileSebagaiBase64_(elL.files);
+    if (elF && elF.files && elF.files.length) fileMarker = await ofBacaBanyakFileSebagaiBase64_(elF.files);
+  } catch (errUp) {
+    alert("Lampiran gagal dibaca: " + (errUp.message || errUp) + "\n\nData marker tetap disimpan.");
+  }
 
   fetch(SP_API_URL, {
     method: "POST",
@@ -1518,7 +1598,11 @@ function spSimpanMarker() {
         susunanSize: susunan,
         status: asal ? "Revisi" : "Final",
         idMarkerAsal: asal,
-        catatan: (document.getElementById("sp-mk-catatan") || {}).value || ""
+        catatan: (document.getElementById("sp-mk-catatan") || {}).value || "",
+        urlLayout: (document.getElementById("sp-mk-url-layout") || {}).value || "",
+        urlFileMarker: (document.getElementById("sp-mk-url-file") || {}).value || "",
+        fileLayout: fileLayout,
+        fileMarker: fileMarker
       }
     })
   })
