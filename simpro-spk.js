@@ -544,6 +544,10 @@ function spTerapkanBagian_(d) {
     spSwitchTab(pertamaTampil);
   }
 
+  // Sub-tab Konfirmasi ikut disaring begitu peran datang -- panelnya mungkin
+  // sudah terbuka sebelum jawaban peran tiba.
+  spTerapkanBagianKonf_();
+
   // Beri tahu kenapa tabnya sedikit -- kalau tidak, orang akan mengira
   // fiturnya hilang lalu menanyakannya, atau lebih buruk: mencari jalan lain.
   const wadah = document.getElementById("sp-tabs");
@@ -759,7 +763,7 @@ function spSwitchTab(tab) {
   const kartuPO = document.getElementById("sp-kartu-po");
   if (kartuPO) kartuPO.classList.toggle("hidden", tab === "konf" || tab === "riw");
 
-  if (tab === "konf") { spMuatKonfirmasi(); return; }
+  if (tab === "konf") { spTerapkanBagianKonf_(); spMuatKonfirmasi(); return; }
   if (tab === "pola" || tab === "sampel") { spMuatTahap(tab); return; }
   if (tab === "marker") { spMuatMarker(); return; }
   if (tab === "gelar") { spMuatGelaran(); return; }
@@ -976,6 +980,47 @@ function spSimpanCutting() {
  *   potongan : Loading -> Sewing     (dikonfirmasi bagian sewing)
  *   setoran  : Sewing  -> Finishing  (dikonfirmasi bagian finishing)
  */
+/**
+ * Sub-tab konfirmasi milik BAGIAN PENERIMA masing-masing:
+ *   potongan : Loading -> Sewing     (dikonfirmasi sewing)
+ *   setoran  : Sewing  -> Finishing  (dikonfirmasi finishing)
+ *
+ * Tanpa penyaringan ini, sewing bisa mengonfirmasi setoran yang dia sendiri
+ * kirim -- persis kesalahan yang perbaikan konfirmasi ini ada untuk mencegah.
+ * Backend tetap menolaknya, tapi tombol yang terlihat lalu gagal saat ditekan
+ * membuat orang mengira sistemnya rusak.
+ */
+const SP_KONF_BAGIAN = { potongan: "sewing", setoran: "finishing" };
+
+function spTerapkanBagianKonf_() {
+  // Peran diambil ASINKRON. Kalau tab Konfirmasi dibuka sebelum jawabannya
+  // datang, SP_BAGIAN masih undefined -- dan tanpa penjagaan ini, SEMUA
+  // sub-tab akan disembunyikan karena tidak ada yang cocok.
+  if (window.SP_BAGIAN === undefined) return;
+
+  const bagian = window.SP_BAGIAN || [];
+  // Bagian KOSONG = semua bagian. Aturan yang sama berlaku di penyaring tab
+  // utama dan di backend -- staf lama yang kolom Bagian-nya belum diisi tidak
+  // boleh mendadak kehilangan sub-tab.
+  const semua = window.SP_BAGIAN_SEMUA || !bagian.length;
+  let pertama = null;
+
+  document.querySelectorAll(".sp-konf-tab").forEach(function (b) {
+    const perlu = SP_KONF_BAGIAN[b.dataset.jenis];
+    const boleh = semua || !perlu || bagian.indexOf(perlu) !== -1;
+    b.classList.toggle("hidden", !boleh);
+    if (boleh && !pertama) pertama = b.dataset.jenis;
+  });
+
+  // Kalau jenis yang sedang aktif ternyata bukan miliknya, pindah ke yang
+  // pertama boleh -- kalau tidak, daftarnya kosong tanpa penjelasan.
+  const aktif = window.SP_KONF_JENIS || "potongan";
+  const perluAktif = SP_KONF_BAGIAN[aktif];
+  if (!semua && perluAktif && bagian.indexOf(perluAktif) === -1 && pertama) {
+    spSwitchKonf(pertama);
+  }
+}
+
 function spSwitchKonf(jenis) {
   window.SP_KONF_JENIS = jenis;
   document.querySelectorAll(".sp-konf-tab").forEach(function (b) {
@@ -1039,11 +1084,18 @@ function spRenderKonfirmasi() {
       '<div class="sp-konf-head">' +
         '<div>' +
           '<div class="sp-konf-line">' + rjdEscapeHtml_(k.namaLine || k.idLine || "-") + '</div>' +
+          // Nama field berbeda antara dua sumber: distribusi memakai
+          // totalQty/tanggalSerah/diserahkanOleh, setoran memakai
+          // total/tanggal/disetorkanOleh. Tanpa penyesuaian ini, kartu setoran
+          // menampilkan "undefined pcs" dan tanggalnya kosong.
           '<div class="sp-konf-sub">' + rjdEscapeHtml_(k.idPurchaseOrder) +
-            ' &#183; ' + rjdEscapeHtml_(k.tanggalSerah || "-") +
-            (k.diserahkanOleh ? ' &#183; dari ' + rjdEscapeHtml_(k.diserahkanOleh) : '') + '</div>' +
+            ' &#183; ' + rjdEscapeHtml_(k.tanggalSerah || k.tanggal || "-") +
+            (k.diserahkanOleh || k.disetorkanOleh
+              ? ' &#183; dari ' + rjdEscapeHtml_(k.diserahkanOleh || k.disetorkanOleh) : '') + '</div>' +
         '</div>' +
-        '<div class="sp-konf-qty">' + k.totalQty + '<span>pcs</span></div>' +
+        '<div class="sp-konf-qty">' +
+          (k.totalQty !== undefined ? k.totalQty : (k.total || 0)) +
+          '<span>pcs</span></div>' +
       '</div>' +
       '<div class="sp-konf-artikel">' +
         rjdEscapeHtml_([k.artikel, k.style].filter(Boolean).join(" / ")) +
