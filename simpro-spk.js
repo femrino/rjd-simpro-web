@@ -488,7 +488,10 @@ const SP_BAGIAN_TAB = {
   cutting: "cutting",
   bagi:    "loading",
   setor:   "sewing",
-  konf:    "sewing",   // yang MENERIMA potongan adalah line jahit
+  // Tab Konfirmasi memuat DUA alur dengan penerima berbeda: sewing menerima
+  // potongan dari loading, finishing menerima setoran dari sewing.
+  // Array = boleh salah satu.
+  konf:    ["sewing", "finishing"],
   riw:     null        // selalu tampil
 };
 
@@ -514,7 +517,10 @@ function spTerapkanBagian_(d) {
   document.querySelectorAll(".sp-tab").forEach(function (btn) {
     const tab = btn.dataset.tab;
     const perlu = SP_BAGIAN_TAB[tab];
-    const boleh = !perlu || bagian.indexOf(perlu) !== -1;
+    // perlu bisa string (satu bagian) atau array (salah satu dari beberapa).
+    const boleh = !perlu || (Array.isArray(perlu)
+      ? perlu.some(function (p) { return bagian.indexOf(p) !== -1; })
+      : bagian.indexOf(perlu) !== -1);
     btn.classList.toggle("hidden", !boleh);
     if (boleh && !pertamaTampil) pertamaTampil = tab;
   });
@@ -524,7 +530,10 @@ function spTerapkanBagian_(d) {
   // terlihat seperti halaman rusak.
   const aktif = window.SP_TAB || "cutting";
   const perluAktif = SP_BAGIAN_TAB[aktif];
-  if (perluAktif && bagian.indexOf(perluAktif) === -1 && pertamaTampil) {
+  const bolehAktif = !perluAktif || (Array.isArray(perluAktif)
+    ? perluAktif.some(function (p) { return bagian.indexOf(p) !== -1; })
+    : bagian.indexOf(perluAktif) !== -1);
+  if (!bolehAktif && pertamaTampil) {
     spSwitchTab(pertamaTampil);
   }
 
@@ -769,14 +778,33 @@ function spSimpanCutting() {
  * untuknya, lintas order.
  * ============================================================ */
 
+/**
+ * Dua jenis serah terima yang perlu dikonfirmasi, dan keduanya punya alasan
+ * yang sama: barang berpindah antara dua pihak, dan angkanya baru terbukti
+ * setelah dihitung ulang -- bukan saat diserahkan.
+ *
+ *   potongan : Loading -> Sewing     (dikonfirmasi bagian sewing)
+ *   setoran  : Sewing  -> Finishing  (dikonfirmasi bagian finishing)
+ */
+function spSwitchKonf(jenis) {
+  window.SP_KONF_JENIS = jenis;
+  document.querySelectorAll(".sp-konf-tab").forEach(function (b) {
+    b.classList.toggle("active", b.dataset.jenis === jenis);
+  });
+  spMuatKonfirmasi();
+}
+
 function spMuatKonfirmasi() {
   const wadah = document.getElementById("sp-konf-daftar");
   if (wadah) wadah.innerHTML = '<p class="sp-info">Memuat daftar...</p>';
   const idLine = (document.getElementById("sp-konf-line") || {}).value || "";
+  const jenis = window.SP_KONF_JENIS || "potongan";
 
   fetch(SP_API_URL, {
     method: "POST",
-    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getMenungguKonfirmasi", idLine: idLine })
+    body: JSON.stringify(jenis === "setoran"
+      ? { idToken: SP_ID_TOKEN, action: "getSetoranMenunggu", opsi: { idLine: idLine } }
+      : { idToken: SP_ID_TOKEN, action: "getMenungguKonfirmasi", idLine: idLine })
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
@@ -880,7 +908,9 @@ function spTutupSelisih(i) {
 function spKonfirmasiCocok(i) {
   const k = (window.SP_KONF || [])[i];
   if (!k) return;
-  spKirimKonfirmasi_({ idDistribusi: k.idDistribusi, cocok: true });
+  // idDistribusi dipakai sebagai nama umum; spKirimKonfirmasi_ yang
+  // menerjemahkannya jadi idSetoran kalau jenisnya setoran.
+  spKirimKonfirmasi_({ idDistribusi: k.idDistribusi || k.idSetoran, cocok: true });
 }
 
 function spKonfirmasiSelisih(i) {
@@ -904,7 +934,7 @@ function spKonfirmasiSelisih(i) {
     return;
   }
   spKirimKonfirmasi_({
-    idDistribusi: k.idDistribusi,
+    idDistribusi: k.idDistribusi || k.idSetoran,
     cocok: false,
     sizeQtyDiterima: sizeQtyDiterima,
     catatan: catatan.trim()
@@ -913,10 +943,27 @@ function spKonfirmasiSelisih(i) {
 
 function spKirimKonfirmasi_(payload) {
   payload.diterimaOleh = (document.getElementById("sp-konf-nama") || {}).value || "";
+  const setoran = (window.SP_KONF_JENIS || "potongan") === "setoran";
+
+  // Bentuk payload berbeda antara dua rute: distribusi memakai
+  // {idDistribusi, cocok}, setoran memakai {idSetoran, sesuai}. Diterjemahkan
+  // di sini supaya sisa kode UI tidak perlu tahu bedanya.
+  const badan = setoran
+    ? {
+        idToken: SP_ID_TOKEN, action: "konfirmasiTerimaSetoran",
+        payload: {
+          idSetoran: payload.idDistribusi,
+          sesuai: !!payload.cocok,
+          diterima: payload.diterima,
+          catatan: payload.catatan,
+          diterimaOleh: payload.diterimaOleh
+        }
+      }
+    : { idToken: SP_ID_TOKEN, action: "konfirmasiTerima", payload: payload };
 
   fetch(SP_API_URL, {
     method: "POST",
-    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "konfirmasiTerima", payload: payload })
+    body: JSON.stringify(badan)
   })
   .then(function (r) { return r.json(); })
   .then(function (h) {
