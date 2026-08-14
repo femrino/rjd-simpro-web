@@ -483,6 +483,7 @@ function spSimpan() {
  * justru yang membuat serah terima antar bagian bisa diperiksa.
  */
 const SP_BAGIAN_TAB = {
+  tahap:   "pola",
   marker:  "pola",
   gelar:   "cutting",
   cutting: "cutting",
@@ -555,6 +556,8 @@ function spSwitchTab(tab) {
   document.querySelectorAll(".sp-tab").forEach(function (b) {
     b.classList.toggle("active", b.dataset.tab === tab);
   });
+  const pt = document.getElementById("sp-panel-tahap");
+  if (pt) pt.classList.toggle("hidden", tab !== "tahap");
   const pm = document.getElementById("sp-panel-marker");
   if (pm) pm.classList.toggle("hidden", tab !== "marker");
   const pg = document.getElementById("sp-panel-gelar");
@@ -571,6 +574,7 @@ function spSwitchTab(tab) {
   if (kartuPO) kartuPO.classList.toggle("hidden", tab === "konf" || tab === "riw");
 
   if (tab === "konf") { spMuatKonfirmasi(); return; }
+  if (tab === "tahap") { spMuatTahap(); return; }
   if (tab === "marker") { spMuatMarker(); return; }
   if (tab === "gelar") { spMuatGelaran(); return; }
   if (tab === "riw") { spMuatRiwayat(); return; }
@@ -2581,5 +2585,166 @@ function spEsc_(v) {
   return String(v === null || v === undefined ? "" : v)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/* ============================================================
+   POLA & SAMPEL (bagian: pola)
+   ============================================================ */
+
+function spMuatTahap() {
+  const wadah = document.getElementById("sp-tahap-daftar");
+  if (!wadah) return;
+  if (!window.SP_PO_AKTIF) {
+    wadah.innerHTML = '<p class="sp-info">Pilih Purchase Order dulu.</p>';
+    return;
+  }
+  wadah.innerHTML = '<p class="sp-info">Memuat...</p>';
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getProgresTahapPO",
+      idPurchaseOrder: window.SP_PO_AKTIF })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) throw new Error((d && d.error) || "Gagal memuat.");
+    window.SP_TAHAP = d.artikel || [];
+    window.SP_TAHAP_SUBTIPE = d.subTipe || {};
+    window.SP_TAHAP_STATUS = d.statusPilihan || {};
+    spRenderTahap_();
+  })
+  .catch(function (e) {
+    wadah.innerHTML = '<p class="sp-info">' + spEsc_(e.message || e) + '</p>';
+  });
+}
+
+function spRenderTahap_() {
+  const daftar = window.SP_TAHAP || [];
+  const wadah = document.getElementById("sp-tahap-daftar");
+  if (!daftar.length) {
+    wadah.innerHTML = '<p class="sp-info">PO ini belum punya artikel di Rincian Sales Order.</p>';
+    return;
+  }
+
+  wadah.innerHTML = daftar.map(function (a, i) {
+    return '<div class="sp-set-blok">' +
+      '<div class="sp-set-judul">' + spEsc_(a.artikel) +
+        (a.style ? ' &#183; ' + spEsc_(a.style) : '') + '</div>' +
+      spKartuTahap_(a, "pola", i) +
+      spKartuTahap_(a, "sampel", i) +
+    '</div>';
+  }).join("");
+}
+
+/**
+ * Satu kartu tahap. Menampilkan keadaan sekarang, lalu form untuk mencatat
+ * langkah berikutnya.
+ */
+function spKartuTahap_(a, tahap, i) {
+  const r = a[tahap] || {};
+  const dariOrderLain = tahap === "pola" ? a.polaDariOrderLain : a.sampelDariOrderLain;
+  const label = tahap === "pola" ? "Pola" : "Sampel";
+  const statusPilihan = (window.SP_TAHAP_STATUS || {})[tahap] || [];
+  const subPilihan = (window.SP_TAHAP_SUBTIPE || {})[tahap] || [];
+
+  let ringkas;
+  if (!r.ada) {
+    ringkas = '<span class="sp-tahap-kosong">belum ada catatan</span>';
+  } else {
+    ringkas =
+      '<span class="sp-tahap-status' + (r.selesai ? ' selesai' : '') + '">' +
+        spEsc_(r.status) + '</span>' +
+      (r.umurHari !== null
+        ? '<span class="sp-tahap-umur">' + r.umurHari + ' hari</span>' : '') +
+      (r.jumlahRevisi
+        ? '<span class="sp-tahap-revisi">revisi ' + r.jumlahRevisi + '&#215;</span>' : '') +
+      // Inti fiturnya: artikel yang polanya sudah dibuat di order LAIN tidak
+      // perlu dikerjakan ulang -- dan itu tidak akan ketahuan tanpa menyebut
+      // order asalnya.
+      (dariOrderLain
+        ? '<div class="sp-tahap-lain">Sudah dikerjakan di order <b>' +
+          spEsc_(r.idPurchaseOrderAwal) + '</b> &#8212; tidak perlu diulang.</div>'
+        : '');
+  }
+
+  return '<div class="sp-tahap-baris">' +
+    '<div class="sp-tahap-kepala"><b>' + label + '</b>' + ringkas + '</div>' +
+    '<div class="sp-grid3">' +
+      '<label>Jenis<select class="sp-th-sub" data-i="' + i + '" data-tahap="' + tahap + '">' +
+        subPilihan.map(function (x) {
+          return '<option value="' + spEsc_(x) + '">' + spEsc_(x) + '</option>';
+        }).join("") +
+      '</select></label>' +
+      '<label>Status<select class="sp-th-status" data-i="' + i + '" data-tahap="' + tahap + '">' +
+        statusPilihan.map(function (x) {
+          return '<option value="' + spEsc_(x) + '">' + spEsc_(x) + '</option>';
+        }).join("") +
+      '</select></label>' +
+      '<label>Tanggal<input class="sp-th-tgl" data-i="' + i + '" data-tahap="' + tahap +
+        '" type="date" value="' + new Date().toISOString().slice(0, 10) + '"/></label>' +
+    '</div>' +
+    '<div class="sp-grid3">' +
+      '<label>Catatan<input class="sp-th-catatan" data-i="' + i + '" data-tahap="' + tahap +
+        '" placeholder="opsional" type="text"/></label>' +
+    '</div>' +
+    '<button class="sp-btn-kecil" onclick="spCatatTahap(' + i + ',\'' + tahap + '\')" ' +
+      'type="button">Catat ' + label + '</button>' +
+    (r.ada && r.riwayat && r.riwayat.length > 1 ? spRiwayatTahap_(r.riwayat) : '') +
+  '</div>';
+}
+
+/** Riwayat ditampilkan hanya kalau lebih dari satu langkah -- kalau cuma satu,
+ *  ringkasan di atas sudah memuat semuanya. */
+function spRiwayatTahap_(riwayat) {
+  return '<details class="sp-tahap-riwayat"><summary>Riwayat (' + riwayat.length + ')</summary>' +
+    riwayat.map(function (x) {
+      return '<div class="sp-tahap-jejak">' +
+        '<span>' + spEsc_(x.tanggal || "-") + '</span>' +
+        '<b>' + spEsc_(x.status) + '</b>' +
+        (x.subTipe ? '<span>' + spEsc_(x.subTipe) + '</span>' : '') +
+        (x.dikerjakanOleh ? '<span>' + spEsc_(x.dikerjakanOleh) + '</span>' : '') +
+        (x.catatan ? '<i>' + spEsc_(x.catatan) + '</i>' : '') +
+      '</div>';
+    }).join("") +
+  '</details>';
+}
+
+function spCatatTahap(i, tahap) {
+  const a = (window.SP_TAHAP || [])[i];
+  if (!a) return;
+  const ambil = function (kelas) {
+    const el = document.querySelector("." + kelas + '[data-i="' + i + '"][data-tahap="' + tahap + '"]');
+    return el ? el.value : "";
+  };
+  const status = ambil("sp-th-status");
+  if (!status) { alert("Pilih status dulu."); return; }
+
+  const btn = event && event.target ? event.target : null;
+  if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
+
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: SP_ID_TOKEN, action: "catatProgresTahap",
+      payload: {
+        idArtikel: a.idArtikel, idKlien: a.idKlien,
+        brand: a.brand, artikel: a.artikel, style: a.style,
+        idPurchaseOrder: window.SP_PO_AKTIF,
+        tahap: tahap === "sampel" ? "Sampel" : "Pola",
+        subTipe: ambil("sp-th-sub"),
+        status: status,
+        tanggal: ambil("sp-th-tgl"),
+        catatan: ambil("sp-th-catatan")
+      }
+    })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
+    spMuatTahap();
+  })
+  .catch(function (e) { alert(e.message || e); })
+  .then(function () {
+    if (btn) { btn.disabled = false; btn.textContent = "Catat " + (tahap === "pola" ? "Pola" : "Sampel"); }
+  });
 }
 

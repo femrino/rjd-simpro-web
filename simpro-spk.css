@@ -491,3 +491,28 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
    disalahartikan sebagai isian satu kartu saja. */
 #sp-konf-nama::placeholder { font-size: 12px; }
 
+/* ---- Pola & Sampel ---- */
+.sp-tahap-baris { border-top: 1px dashed var(--line-soft); padding: 12px 0 4px; }
+.sp-tahap-baris:first-of-type { border-top: none; }
+.sp-tahap-kepala { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 8px; font-size: 13px; }
+.sp-tahap-status { font-size: 11px; font-family: 'IBM Plex Mono', monospace;
+  font-weight: 700; padding: 2px 9px; border-radius: 6px;
+  background: #FCF6E8; color: #8A5D1F; border: 1px solid #E8D8AE; }
+/* Selesai diberi warna berbeda, bukan sekadar teks -- yang dicari saat
+   memindai daftar adalah "mana yang BELUM beres". */
+.sp-tahap-status.selesai { background: #EAF3EC; color: #2F6B3F; border-color: #C3DCCA; }
+.sp-tahap-umur, .sp-tahap-revisi { font-size: 11px; color: var(--ink-soft);
+  font-family: 'IBM Plex Mono', monospace; }
+.sp-tahap-revisi { color: #8A5D1F; }
+.sp-tahap-kosong { font-size: 11.5px; color: var(--ink-soft); font-style: italic; }
+/* Penanda "sudah dikerjakan di order lain" -- ini yang mencegah pekerjaan
+   diulang, jadi diberi ruang sendiri, bukan diselipkan di antara chip. */
+.sp-tahap-lain { flex-basis: 100%; font-size: 11.5px; color: #2F6B3F;
+  background: #EAF3EC; border-radius: 7px; padding: 6px 10px; margin-top: 4px; }
+.sp-tahap-riwayat { margin-top: 8px; font-size: 11.5px; }
+.sp-tahap-riwayat summary { cursor: pointer; color: var(--ink-soft); }
+.sp-tahap-jejak { display: flex; gap: 10px; flex-wrap: wrap; padding: 4px 0 4px 12px;
+  border-left: 2px solid var(--line-soft); margin-top: 4px; }
+.sp-tahap-jejak i { color: var(--ink-soft); }
+
