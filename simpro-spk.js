@@ -2269,8 +2269,12 @@ function spRenderRoll_() {
       return '<tr' + (diukur ? '' : ' class="sp-roll-belum"') + '>' +
         '<td data-label="No Roll"><b>' + spEsc_(r.noRoll || "-") + '</b></td>' +
         '<td data-label="Panjang awal">' + r.panjangAwal + ' ' + spEsc_(g.satuan) + '</td>' +
-        '<td data-label="Terpakai">' + (terpakai === null ? "&#8212;" : terpakai) + '</td>' +
-        '<td data-label="Sisa">' +
+        '<td data-label="Terpakai">' + (terpakai === null ? "&#8212;"
+          : (terpakai + ' ' + spEsc_(g.satuan))) + '</td>' +
+        // Satuan ditempel di label kolom, bukan cuma di header: di layar sempit
+        // tabel jadi kartu dan headernya hilang -- kalau satuan cuma di header,
+        // orang mengisi angka tanpa tahu satuannya apa.
+        '<td data-label="Sisa (' + spEsc_(g.satuan) + ')">' +
           '<input class="sp-roll-sisa" data-id="' + spEsc_(r.idRoll) +
             '" max="' + r.panjangAwal + '" min="0" placeholder="ukur" step="0.01" ' +
             'type="number" value="' + (diukur ? r.sisaTerukur : "") + '"/></td>' +
@@ -2307,7 +2311,7 @@ function spRenderRoll_() {
       rincian +
       '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu">' +
         '<thead><tr><th>No Roll</th><th>Panjang awal</th><th>Terpakai</th>' +
-        '<th>Sisa</th><th>Kondisi</th><th></th></tr></thead><tbody>' + baris +
+        '<th>Sisa (' + spEsc_(g.satuan) + ')</th><th>Kondisi</th><th></th></tr></thead><tbody>' + baris +
         '</tbody></table></div>' +
     '</div>';
   }).join("");
@@ -2327,7 +2331,8 @@ function spFormTambahRoll_() {
   return '<div class="sp-roll-tambah">' +
     '<div class="sp-lbl">Tambah roll (saat kain datang)</div>' +
     '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
-      '<th>Jenis Kain</th><th>Warna</th><th>No Roll</th><th>Panjang</th><th></th>' +
+      '<th>Jenis Kain</th><th>Warna</th><th>No Roll</th><th>Panjang</th>' +
+      '<th>Satuan</th><th></th>' +
     '</tr></thead><tbody id="sp-roll-baru"></tbody></table></div>' +
     '<button class="sp-btn-kecil" onclick="spTambahBarisRoll()" type="button">+ Tambah baris</button> ' +
     '<button class="sp-simpan-btn" onclick="spSimpanRoll()" type="button">Simpan Roll</button>' +
@@ -2349,6 +2354,8 @@ function spTambahBarisRoll() {
   const terakhir = tb.querySelector("tr:last-child");
   const kainLama = terakhir ? (terakhir.querySelector(".sp-rb-kain").value || "") : "";
   const warnaLama = terakhir ? (terakhir.querySelector(".sp-rb-warna").value || "") : "";
+  const satuanLama = terakhir
+    ? ((terakhir.querySelector(".sp-rb-satuan") || {}).value || "m") : "m";
   tb.insertAdjacentHTML("beforeend",
     '<tr>' +
       '<td data-label="Jenis Kain"><input class="sp-rb-kain" list="sp-datalist-kainroll" ' +
@@ -2358,6 +2365,16 @@ function spTambahBarisRoll() {
       '<td data-label="No Roll"><input class="sp-rb-no" placeholder="mis. R-01" type="text"/></td>' +
       '<td data-label="Panjang"><input class="sp-rb-panjang" min="0" placeholder="0" ' +
         'step="0.01" type="number"/></td>' +
+      // Satuan DIPILIH, tidak diasumsikan. Backend sebelumnya memasang "m"
+      // diam-diam -- dan roll 60 yard yang diketik "60" akan salah 12% tanpa
+      // ada yang menyadarinya. Form kain klien juga punya pilihan yds/m, jadi
+      // orang wajar mengira di sini bisa memilih juga.
+      '<td data-label="Satuan"><select class="sp-rb-satuan">' +
+        ['m', 'yds'].map(function (u) {
+          return '<option' + (u === satuanLama ? ' selected="selected"' : '') +
+            ' value="' + u + '">' + u + '</option>';
+        }).join("") +
+      '</select></td>' +
       '<td data-label=""><button class="sp-btn-kecil" onclick="this.closest(\'tr\').remove()" ' +
         'type="button">&#10005;</button></td>' +
     '</tr>');
@@ -2374,7 +2391,7 @@ function spSimpanRoll() {
       warna: (tr.querySelector(".sp-rb-warna").value || "").trim(),
       noRoll: (tr.querySelector(".sp-rb-no").value || "").trim(),
       panjangAwal: panjang,
-      satuan: "m"
+      satuan: (tr.querySelector(".sp-rb-satuan") || {}).value || "m"
     });
   });
   if (!roll.length) { alert("Isi minimal satu roll: jenis kain dan panjangnya."); return; }
@@ -2387,7 +2404,8 @@ function spSimpanRoll() {
   .then(function (r) { return r.json(); })
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
-    alert(d.tersimpan + " roll tersimpan (" + d.totalPanjang + " m).");
+    alert(d.tersimpan + " roll tersimpan" +
+      (d.rincianSatuan ? (" (" + d.rincianSatuan + ")") : "") + ".");
     spMuatGelaran();
   })
   .catch(function (e) { alert(e.message || e); });
