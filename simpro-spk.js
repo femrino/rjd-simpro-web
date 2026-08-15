@@ -1873,7 +1873,7 @@ function spRenderMarker_() {
 
   wadah.innerHTML = daftar.length
     ? '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
-        '<th>Kode</th><th>Layout</th><th>Lebar (cm)</th><th>Panjang</th><th>Allow</th>' +
+        '<th>Kode</th><th>Style</th><th>Layout</th><th>Lebar (cm)</th><th>Panjang</th><th>Allow</th>' +
         '<th>Susunan</th><th>Pcs/lapis</th><th>Komponen</th><th>Status</th><th></th></tr></thead><tbody>' +
         daftar.map(function (m) {
           const susun = Object.keys(m.susunanSize || {})
@@ -1885,6 +1885,9 @@ function spRenderMarker_() {
           // dipaksa muat di layar HP dan kode marker terpotong huruf per huruf.
           return '<tr>' +
             '<td data-label="Kode"><b>' + spEsc_(m.kodeMarker || "-") + '</b></td>' +
+            '<td data-label="Style">' + (m.style
+              ? spEsc_(m.style)
+              : '<span class="sp-kosong">&#8212;</span>') + '</td>' +
             '<td class="sp-td-layout" data-label="Layout">' +
               (layout.length ? layout.map(spThumbMarker_).join("") : '<span class="sp-kosong">&#183;</span>') +
               (berkas.length ? '<div class="sp-file-list">' +
@@ -1918,6 +1921,19 @@ function spRenderMarker_() {
  * dan pcs per lapis jadi 0, yang membuat seluruh output gelaran nol tanpa ada
  * yang tahu sebabnya.
  */
+/** Item yang sedang dipilih di form Gelaran. */
+function spItemGelaranTerpilih_() {
+  const daftar = window.SP_PO_DAFTAR_ITEM || [];
+  const sel = document.getElementById("sp-gl-item");
+  if (sel && daftar[Number(sel.value)]) return daftar[Number(sel.value)];
+  return daftar[0] || window.SP_PO_ITEM || {};
+}
+
+/** Daftar item PO. Dipakai form Marker dan form Gelaran. */
+function spDaftarItemPO_() {
+  return window.SP_PO_DAFTAR_ITEM || [];
+}
+
 function spRenderFormMarker_(asal) {
   const sizes = spSizePO_();
   const a = asal || {};
@@ -1934,6 +1950,28 @@ function spRenderFormMarker_(asal) {
   document.getElementById("sp-marker-form").innerHTML =
     '<h4 class="sp-subjudul">' + (asal ? "Revisi marker " + spEsc_(a.kodeMarker) : "Marker baru") + '</h4>' +
     (asal ? '<p class="sp-info">Marker lama tetap tersimpan. Yang ini jadi baris baru berstatus Revisi.</p>' : '') +
+    // Pilihan ITEM. Marker milik ITEM (artikel + style), bukan PO. Tanpa
+    // pilihan ini, semua marker ARUZA tercatat "Kemeja Long Sleeve" -- termasuk
+    // marker Polos SS yang jelas untuk Short Sleeve.
+    //
+    // Akibatnya bukan cuma label salah: dropdown marker di form Gelaran
+    // menyaring per style, jadi marker yang salah style tidak akan muncul saat
+    // menggelar style yang benar.
+    (spDaftarItemPO_().length > 1
+      ? '<div class="sp-grid3">' +
+          '<label>Item (artikel &#183; style)' +
+            '<select id="sp-mk-item">' +
+              spDaftarItemPO_().map(function (it, idx) {
+                const terpilih = (a.artikel === it.artikel && a.style === it.style);
+                return '<option' + (terpilih ? ' selected="selected"' : '') +
+                  ' value="' + idx + '">' + spEsc_(it.artikel) +
+                  (it.style ? ' &#183; ' + spEsc_(it.style) : '') + '</option>';
+              }).join("") +
+            '</select></label>' +
+        '</div>' +
+        '<p class="sp-info">PO ini punya ' + spDaftarItemPO_().length + ' item. ' +
+          'Pilih yang markernya sedang dibuat &#8212; marker milik ITEM, bukan order.</p>'
+      : '') +
     '<div class="sp-grid3">' +
       '<label>Kode Marker<input id="sp-mk-kode" placeholder="mis. A" type="text" value="' +
         spEsc_(a.kodeMarker || "") + '"/></label>' +
@@ -2028,7 +2066,12 @@ async function spSimpanMarker() {
   if (panjang <= 0) { alert("Panjang marker wajib diisi."); return; }
 
   const asal = (document.getElementById("sp-mk-asal") || {}).value || "";
-  const item = window.SP_PO_ITEM || {};
+  // Item terpilih; kalau PO cuma punya satu, pakai yang itu.
+  const daftarMk = spDaftarItemPO_();
+  const selMk = document.getElementById("sp-mk-item");
+  const itemMk = (selMk && daftarMk[Number(selMk.value)])
+    ? daftarMk[Number(selMk.value)]
+    : (daftarMk[0] || window.SP_PO_ITEM || {});
 
   const btn = event && event.target ? event.target : null;
   if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
@@ -2053,7 +2096,7 @@ async function spSimpanMarker() {
       idToken: SP_ID_TOKEN, action: "simpanMarker",
       payload: {
         idPurchaseOrder: window.SP_PO_AKTIF,
-        brand: item.brand || "", artikel: item.artikel || "", style: item.style || "",
+        brand: itemMk.brand || "", artikel: itemMk.artikel || "", style: itemMk.style || "",
         kodeMarker: (document.getElementById("sp-mk-kode") || {}).value || "",
         lebarKain: Number((document.getElementById("sp-mk-lebar") || {}).value) || 0,
         panjangMarker: panjang,
@@ -2150,9 +2193,22 @@ function spMuatGelaran() {
 }
 
 function spRenderFormGelaran_() {
-  const marker = (window.SP_MARKER || []).filter(function (m) {
+  // Marker disaring per ITEM terpilih. Marker milik (artikel, style) --
+  // menampilkan marker Kemeja Long Sleeve saat menggelar Short Sleeve akan
+  // menghasilkan potongan yang tercatat di style yang salah.
+  //
+  // Kalau tidak ada marker yang cocok, JANGAN kosongkan daftarnya: marker lama
+  // yang style-nya belum diisi jadi tidak bisa dipakai sama sekali, dan orang
+  // terjebak tanpa penjelasan.
+  const itemAktif = spItemGelaranTerpilih_();
+  const semuaMarker = (window.SP_MARKER || []).filter(function (m) {
     return String(m.status || "").toLowerCase() !== "batal" && m.pcsPerLapis > 0;
   });
+  const cocokItem = semuaMarker.filter(function (m) {
+    if (!itemAktif.style) return true;
+    return !m.style || m.style === itemAktif.style;
+  });
+  const marker = cocokItem.length ? cocokItem : semuaMarker;
   if (!marker.length) {
     document.getElementById("sp-gelar-form").innerHTML =
       '<p class="sp-info">Belum ada marker yang siap dipakai. Minta tim pola mengisinya dulu ' +
@@ -2190,7 +2246,7 @@ function spRenderFormGelaran_() {
     (perluPilihItem
       ? '<div class="sp-grid3">' +
           '<label>Item (artikel &#183; style)' +
-            '<select id="sp-gl-item" onchange="spHitungGelaran_()">' +
+            '<select id="sp-gl-item" onchange="spRenderFormGelaran_()">' +
               daftarItem.map(function (it, idx) {
                 return '<option value="' + idx + '">' +
                   spEsc_(it.artikel) + (it.style ? ' &#183; ' + spEsc_(it.style) : '') +
@@ -2382,11 +2438,7 @@ function spSimpanGelaran() {
   if (!warna) { alert("Warna wajib dipilih."); return; }
 
   // Item terpilih; kalau PO cuma punya satu, pakai yang itu.
-  const daftar = window.SP_PO_DAFTAR_ITEM || [];
-  const selItem = document.getElementById("sp-gl-item");
-  const item = (selItem && daftar[Number(selItem.value)])
-    ? daftar[Number(selItem.value)]
-    : (daftar[0] || window.SP_PO_ITEM || {});
+  const item = spItemGelaranTerpilih_();
   const btn = event && event.target ? event.target : null;
   if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
 
