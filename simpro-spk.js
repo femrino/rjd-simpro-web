@@ -1984,12 +1984,42 @@ function spRenderMarker_() {
  * dan pcs per lapis jadi 0, yang membuat seluruh output gelaran nol tanpa ada
  * yang tahu sebabnya.
  */
-/** Item yang sedang dipilih di form Gelaran. */
+/**
+ * Item yang sedang dipilih di form Gelaran.
+ *
+ * Membaca dropdown kalau ada. Kalau tidak ada -- yaitu SAAT form sedang
+ * dibangun ulang, ketika dropdown lama sudah terhapus dan yang baru belum
+ * jadi -- dipakai indeks yang diingat.
+ *
+ * Tanpa ingatan itu, memilih style kedua tidak pernah bertahan: onchange
+ * memicu render ulang, render ulang membuat dropdown baru tanpa `selected`,
+ * dan browser kembali ke indeks 0. Akibatnya bukan cuma layar yang balik --
+ * saat Simpan ditekan, nilai yang terbaca juga indeks 0, jadi potongan Short
+ * Sleeve tercatat sebagai Long Sleeve.
+ */
 function spItemGelaranTerpilih_() {
   const daftar = window.SP_PO_DAFTAR_ITEM || [];
   const sel = document.getElementById("sp-gl-item");
   if (sel && daftar[Number(sel.value)]) return daftar[Number(sel.value)];
+  const ingat = Number(window.SP_GL_ITEM_IDX);
+  if (daftar[ingat]) return daftar[ingat];
   return daftar[0] || window.SP_PO_ITEM || {};
+}
+
+/** Indeks item terpilih, sudah dijaga tetap di dalam rentang daftar. */
+function spItemGelaranIdx_() {
+  const daftar = window.SP_PO_DAFTAR_ITEM || [];
+  const ingat = Number(window.SP_GL_ITEM_IDX);
+  return daftar[ingat] ? ingat : 0;
+}
+
+/**
+ * Dipanggil saat dropdown Item diubah. Simpan pilihannya DULU, baru render
+ * ulang -- urutan ini yang membuat pilihannya bertahan.
+ */
+function spGantiItemGelaran_(nilai) {
+  window.SP_GL_ITEM_IDX = Number(nilai) || 0;
+  spRenderFormGelaran_();
 }
 
 /** Daftar item PO. Dipakai form Marker dan form Gelaran. */
@@ -2252,6 +2282,10 @@ function spMuatGelaran() {
     window.SP_PO_WARNA = (hasil[0] && hasil[0].warna) || [];
     window.SP_PO_ITEM = (hasil[0] && hasil[0].item) || {};
     window.SP_PO_DAFTAR_ITEM = (hasil[0] && hasil[0].daftarItem) || [];
+    // PO baru = daftar item baru. Indeks yang diingat dari PO sebelumnya bisa
+    // menunjuk item yang tidak ada lagi, atau -- lebih berbahaya -- item lain
+    // yang kebetulan ada di posisi yang sama.
+    window.SP_GL_ITEM_IDX = 0;
     window.SP_PO_KAIN = (hasil[0] && hasil[0].jenisKain) || [];
     window.SP_KAIN = (hasil[1] && hasil[1].kain) || [];
     window.SP_KAIN_AMBANG = hasil[1] || {};
@@ -2322,14 +2356,16 @@ function spRenderFormGelaran_() {
   // dropdown berisi satu pilihan cuma menambah langkah tanpa gunanya.
   const daftarItem = window.SP_PO_DAFTAR_ITEM || [];
   const perluPilihItem = daftarItem.length > 1;
+  const itemIdx = spItemGelaranIdx_();
 
   document.getElementById("sp-gelar-form").innerHTML =
     (perluPilihItem
       ? '<div class="sp-grid3">' +
           '<label>Item (artikel &#183; style)' +
-            '<select id="sp-gl-item" onchange="spRenderFormGelaran_()">' +
+            '<select id="sp-gl-item" onchange="spGantiItemGelaran_(this.value)">' +
               daftarItem.map(function (it, idx) {
-                return '<option value="' + idx + '">' +
+                return '<option' + (idx === itemIdx ? ' selected="selected"' : '') +
+                  ' value="' + idx + '">' +
                   spEsc_(it.artikel) + (it.style ? ' &#183; ' + spEsc_(it.style) : '') +
                   '</option>';
               }).join("") +
