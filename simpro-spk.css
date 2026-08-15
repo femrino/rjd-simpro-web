@@ -584,3 +584,16 @@ body.sp-siap #sp-hero .eyebrow { display: none; }
    panduan per tab. */
 body.sp-siap #sp-hero .lead { display: none; }
 
+/* ---- Daftar gelaran tercatat ----
+   Baris yang dibatalkan tetap DITAMPILKAN, cuma diredupkan: kalau
+   disembunyikan, orang akan mencari catatan yang dikiranya hilang dan
+   menginput ulang — lalu angkanya berlipat. */
+.sp-gelar-batal td { opacity: .5; text-decoration: line-through; }
+.sp-gelar-batal .sp-tag-batal { text-decoration: none; }
+.sp-tag-batal { display: inline-block; font-size: 9.5px; font-weight: 700;
+  font-family: 'IBM Plex Mono', monospace; letter-spacing: .04em;
+  color: #8C3B32; background: #FDECEA; border: 1px solid #F0C9C4;
+  border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
+.sp-gelar-size { font-size: 10.5px; color: var(--ink-soft);
+  font-family: 'IBM Plex Mono', monospace; margin-top: 2px; }
+

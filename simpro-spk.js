@@ -2131,9 +2131,11 @@ function spMuatGelaran() {
     window.SP_KAIN_AMBANG = hasil[1] || {};
     window.SP_SET_LENGKAP = (hasil[2] && hasil[2].setLengkap) || [];
     window.SP_RECUT = (hasil[2] && hasil[2].recut) || {};
+    window.SP_DAFTAR_GELARAN = (hasil[2] && hasil[2].daftarGelaran) || [];
     window.SP_SARAN_KOMPONEN = (hasil[2] && hasil[2].saranKomponen) || [];
     window.SP_ROLL = (hasil[3] && hasil[3].kain) || [];
     spRenderFormGelaran_();
+    spRenderDaftarGelaran_();
     spRenderSetLengkap_();
     spRenderRekapKain_();
     spRenderRecut_();
@@ -2402,6 +2404,82 @@ function spSimpanGelaran() {
  * Kelebihan di atas minimum ditampilkan sebagai "menunggu", bukan disembunyikan:
  * itu justru yang memberi tahu kain mana yang menahan produksi.
  */
+/**
+ * Daftar gelaran tercatat, dengan tombol Batalkan per baris.
+ *
+ * Sebelumnya `batalkanGelaran` sudah ada di backend tapi TIDAK ada tombolnya
+ * di layar — satu-satunya cara membetulkan salah input adalah mengedit
+ * spreadsheet langsung. Itu jenis jalan pintas yang membuat orang berhenti
+ * memakai layarnya, dan pada akhirnya merusak data dengan cara lain.
+ *
+ * Baris yang sudah dibatalkan tetap ditampilkan (diredupkan) — supaya jelas
+ * pernah ada kesalahan, dan orang tidak mencari catatan yang dikiranya hilang.
+ */
+function spRenderDaftarGelaran_() {
+  const wadah = document.getElementById("sp-gelar-daftar");
+  if (!wadah) return;
+  const daftar = window.SP_DAFTAR_GELARAN || [];
+  if (!daftar.length) {
+    wadah.innerHTML = '<p class="sp-info">Belum ada gelaran tercatat untuk PO ini.</p>';
+    return;
+  }
+
+  const aktif = daftar.filter(function (g) { return !g.dibatalkan; }).length;
+  const batal = daftar.length - aktif;
+
+  wadah.innerHTML =
+    '<p class="sp-info">' + aktif + ' gelaran tercatat' +
+      (batal ? ' &#183; ' + batal + ' dibatalkan' : '') +
+      '. Salah input? Batalkan lalu catat ulang &#8212; barisnya tidak dihapus.</p>' +
+    '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu">' +
+      '<thead><tr><th>ID</th><th>Warna</th><th>Kain</th><th>Lapis</th>' +
+      '<th>Potongan</th><th>Kain</th><th>Tanggal</th><th></th></tr></thead><tbody>' +
+      daftar.map(function (g) {
+        const per = Object.keys(g.sizeQty).map(function (sz) {
+          return spEsc_(sz) + " " + g.sizeQty[sz];
+        }).join("  ");
+        const recut = String(g.jenisGelaran || "").toLowerCase() === "re-cut";
+        return '<tr' + (g.dibatalkan ? ' class="sp-gelar-batal"' : '') + '>' +
+          '<td data-label="ID"><b>' + spEsc_(g.idGelaran) + '</b>' +
+            (recut ? ' <span class="sp-tag-kembali">RE-CUT</span>' : '') +
+            (g.dibatalkan ? ' <span class="sp-tag-batal">DIBATALKAN</span>' : '') + '</td>' +
+          '<td data-label="Warna">' + spEsc_(g.warna || "-") + '</td>' +
+          '<td data-label="Kain">' + spEsc_(g.jenisKain || "-") +
+            (g.komponen ? ' <small>(' + spEsc_(g.komponen) + ')</small>' : '') + '</td>' +
+          '<td data-label="Lapis">' + (g.jumlahLapis || "&#8212;") + '</td>' +
+          '<td data-label="Potongan"><b>' + g.total + '</b>' +
+            (per ? '<div class="sp-gelar-size">' + spEsc_(per) + '</div>' : '') + '</td>' +
+          '<td data-label="Kain terpakai">' + g.kainTerpakai + ' ' + spEsc_(g.satuanKain) + '</td>' +
+          '<td data-label="Tanggal">' + spEsc_(g.tanggal || "-") + '</td>' +
+          '<td data-label="">' + (g.dibatalkan
+            ? '<span class="sp-riw-kunci">sudah dibatalkan</span>'
+            : '<button class="sp-btn-kecil" onclick="spBatalGelaran(\'' +
+              spEsc_(g.idGelaran) + '\')" type="button">Batalkan</button>') + '</td>' +
+        '</tr>';
+      }).join("") +
+    '</tbody></table></div>';
+}
+
+function spBatalGelaran(idGelaran) {
+  // Konfirmasi menyebut akibatnya, bukan cuma "yakin?" — membatalkan gelaran
+  // mengubah set lengkap dan rekap kain sekaligus.
+  if (!confirm("Batalkan gelaran " + idGelaran + "?\n\n" +
+      "Barisnya TIDAK dihapus, cuma ditandai batal. Set lengkap dan rekap kain " +
+      "ikut menyesuaikan.")) return;
+
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "batalkanGelaran",
+      payload: { idGelaran: idGelaran } })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) throw new Error((d && d.error) || "Gagal membatalkan.");
+    spMuatGelaran();
+  })
+  .catch(function (e) { alert(e.message || e); });
+}
+
 function spRenderSetLengkap_() {
   const daftar = window.SP_SET_LENGKAP || [];
   const wadah = document.getElementById("sp-set-lengkap");
@@ -3043,6 +3121,9 @@ function spKartuTahap_(a, tahap, i) {
 function spRiwayatTahap_(riwayat) {
   return '<details class="sp-tahap-riwayat"><summary>Riwayat (' + riwayat.length + ')</summary>' +
     riwayat.map(function (x) {
+      // Tombol Batalkan per jejak. Tanpa ini, salah catat langkah atau durasi
+      // cuma bisa dibetulkan lewat spreadsheet -- dan durasi yang salah akan
+      // ikut ke hitungan HPP nanti.
       return '<div class="sp-tahap-jejak">' +
         '<span>' + spEsc_(x.tanggal || "-") + '</span>' +
         '<b>' + spEsc_(x.status) + '</b>' +
@@ -3050,9 +3131,29 @@ function spRiwayatTahap_(riwayat) {
         (x.durasiJam ? '<span>' + x.durasiJam + ' jam</span>' : '') +
         (x.dikerjakanOleh ? '<span>' + spEsc_(x.dikerjakanOleh) + '</span>' : '') +
         (x.catatan ? '<i>' + spEsc_(x.catatan) + '</i>' : '') +
+        (x.idProgres
+          ? '<button class="sp-btn-kecil" onclick="spBatalTahap(\'' +
+            spEsc_(x.idProgres) + '\')" type="button">Batalkan</button>' : '') +
       '</div>';
     }).join("") +
   '</details>';
+}
+
+function spBatalTahap(idProgres) {
+  if (!confirm("Batalkan catatan " + idProgres + "?\n\n" +
+      "Barisnya TIDAK dihapus, cuma ditandai batal. Status dan rekap jam " +
+      "ikut menyesuaikan.")) return;
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "batalkanProgresTahap",
+      payload: { idProgres: idProgres } })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) throw new Error((d && d.error) || "Gagal membatalkan.");
+    spMuatTahap(window.SP_TAHAP_AKTIF);
+  })
+  .catch(function (e) { alert(e.message || e); });
 }
 
 function spCatatTahap(i, tahap) {
