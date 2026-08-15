@@ -599,4 +599,9 @@ body.sp-siap #sp-hero .lead { display: none; }
 /* Warna di judul blok Set Lengkap. Style yang jadi judul utama, warna
    menyusul -- karena satu style bisa punya banyak warna, bukan sebaliknya. */
 .sp-set-warna { font-weight: 400; color: var(--ink-soft); }
+/* Tautan "tampilkan lainnya". Sengaja tautan, bukan tombol: tindakannya cuma
+   menampilkan lebih banyak, bukan mengubah data — tombol besar akan terbaca
+   sama pentingnya dengan Simpan. */
+.sp-tautan { color: var(--thread); text-decoration: underline; cursor: pointer; }
+.sp-tautan:hover { text-decoration: none; }
 

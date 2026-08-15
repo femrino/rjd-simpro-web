@@ -2457,6 +2457,14 @@ function spRenderDaftarGelaran_() {
   const aktif = daftar.filter(function (g) { return !g.dibatalkan; }).length;
   const batal = daftar.length - aktif;
 
+  // Tampilkan 8 terbaru dulu. Yang baru saja salah diinput itu yang paling
+  // sering dicari untuk dibatalkan; 31 baris sekaligus membuat halaman panjang
+  // tanpa ada yang benar-benar membacanya sampai bawah.
+  const BATAS = 8;
+  const semuaTampil = !!window.SP_GELARAN_SEMUA;
+  const tampil = semuaTampil ? daftar : daftar.slice(0, BATAS);
+  const sisa = daftar.length - tampil.length;
+
   wadah.innerHTML =
     '<p class="sp-info">' + aktif + ' gelaran tercatat' +
       (batal ? ' &#183; ' + batal + ' dibatalkan' : '') +
@@ -2464,7 +2472,7 @@ function spRenderDaftarGelaran_() {
     '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu">' +
       '<thead><tr><th>ID</th><th>Warna</th><th>Kain</th><th>Lapis</th>' +
       '<th>Potongan</th><th>Kain</th><th>Tanggal</th><th></th></tr></thead><tbody>' +
-      daftar.map(function (g) {
+      tampil.map(function (g) {
         const per = Object.keys(g.sizeQty).map(function (sz) {
           return spEsc_(sz) + " " + g.sizeQty[sz];
         }).join("  ");
@@ -2487,7 +2495,12 @@ function spRenderDaftarGelaran_() {
               spEsc_(g.idGelaran) + '\')" type="button">Batalkan</button>') + '</td>' +
         '</tr>';
       }).join("") +
-    '</tbody></table></div>';
+    '</tbody></table></div>' +
+    (sisa > 0
+      ? '<p class="sp-info"><a class="sp-tautan" href="#" ' +
+        'onclick="window.SP_GELARAN_SEMUA=true;spRenderDaftarGelaran_();return false;">' +
+        'Tampilkan ' + sisa + ' gelaran lainnya</a></p>'
+      : '');
 }
 
 function spBatalGelaran(idGelaran) {
@@ -2675,17 +2688,35 @@ function spTerapkanIsiCutting_() {
 }
 
 function spRenderRekapKain_() {
-  const kain = window.SP_KAIN || [];
+  const semua = window.SP_KAIN || [];
   const wadah = document.getElementById("sp-kain-rekap");
-  if (!kain.length) {
+  if (!semua.length) {
     wadah.innerHTML = '<p class="sp-info">Belum ada data kain untuk PO ini.</p>';
     return;
   }
+  // Kain x warna menghasilkan perkalian: 4 kain x 5 warna = 20 baris, padahal
+  // mungkin cuma 6 kombinasi yang dipakai. Baris kosong bukan sekadar
+  // memanjangkan tabel -- ia menyembunyikan baris yang perlu diperiksa di
+  // antara belasan angka nol.
+  //
+  // Yang belum ada angkanya tetap bisa DIBUKA: di situlah hasil ukur diisi
+  // kalau ternyata kombinasinya dipakai juga.
+  const berangka = semua.filter(function (k) { return !k.hanyaPerkiraan; });
+  const belum = semua.filter(function (k) { return k.hanyaPerkiraan; });
+  const tampilSemua = !!window.SP_KAIN_SEMUA;
+  const dipakai = (tampilSemua || !berangka.length) ? semua : berangka;
+
   wadah.innerHTML =
+    (belum.length && !tampilSemua && berangka.length
+      ? '<p class="sp-info">' + berangka.length + ' kombinasi punya angka. ' +
+        '<a class="sp-tautan" href="#" onclick="window.SP_KAIN_SEMUA=true;' +
+        'spRenderRekapKain_();return false;">Tampilkan ' + belum.length +
+        ' kombinasi lain</a> yang belum dipakai.</p>'
+      : '') +
     '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
       '<th>Kain</th><th>Warna</th><th>Diterima</th><th>Terpakai</th><th>Re-cut</th>' +
       '<th>Sisa hitung</th><th>Sisa ukur</th><th>Selisih</th></tr></thead><tbody>' +
-      kain.map(function (k) {
+      dipakai.map(function (k) {
         const kelas = k.tanda ? ("sp-kain-" + k.tanda) : "";
         return '<tr class="' + kelas + '">' +
           '<td data-label="Kain"><b>' + spEsc_(k.jenis) + '</b></td>' +
