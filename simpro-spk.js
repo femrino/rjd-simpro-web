@@ -119,10 +119,20 @@ function spMulaiIsi_() {
   // Dibungkus typeof: kalau simpro-global.js gagal dimuat, halaman tetap jalan
   // dengan semua tab terlihat. Backend tetap menolak yang bukan bagiannya, jadi
   // yang hilang cuma kenyamanan -- bukan pengamannya.
+  if (typeof rjdAmbilPeran_ !== "function") {
+    // simpro-global.js gagal dimuat. Tanpa ini halaman menunggu selamanya
+    // dan tabnya tidak pernah muncul sama sekali.
+    document.body.classList.add("sp-siap");
+  }
   if (typeof rjdAmbilPeran_ === "function") {
     rjdAmbilPeran_(SP_API_URL, SP_ID_TOKEN)
       .then(function (d) { spTerapkanBagian_(d); })
-      .catch(function () { /* gagal -> semua tab tampil, backend tetap menjaga */ });
+      .catch(function () {
+        // Gagal ambil peran -> tampilkan semua tab. Backend tetap menjaga,
+        // dan halaman yang tabnya tidak pernah muncul jauh lebih buruk
+        // daripada tab yang sesekali kelebihan.
+        document.body.classList.add("sp-siap");
+      });
   }
 }
 
@@ -517,6 +527,14 @@ function spTerapkanBagian_(d) {
     bagian.some(function (b) { return b === "produksi" || b === "semua" || b === "all"; });
 
   window.SP_BAGIAN = bagian;
+  // Penanda "peran sudah datang". Dipakai CSS untuk dua hal:
+  //   - deret tab baru ditampilkan SETELAH disaring, jadi tidak berkedip dari
+  //     sembilan tab menyusut jadi tiga
+  //   - hero mengecil, memberi ruang lebih untuk isinya
+  //
+  // Hero DIKECILKAN, bukan disembunyikan: judul halaman tetap perlu terbaca
+  // supaya orang yang membuka beberapa tab browser tahu ada di mana.
+  document.body.classList.add("sp-siap");
   // Line yang dipegang staf ini -- dipakai untuk membatasi pembatalan setoran.
   window.SP_ID_LINE = (d && d.idLine) ? d.idLine : [];
   window.SP_BAGIAN_SEMUA = semua;

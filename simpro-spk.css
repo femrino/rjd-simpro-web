@@ -561,3 +561,26 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 .sp-panduan-item b { font-size: 12.5px; color: var(--ink); }
 .sp-panduan-item span { font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
 
+/* ============================================================
+   SAAT MEMUAT: tab disembunyikan, hero penuh
+   ============================================================
+   Tanpa ini, sembilan tab tampil sesaat lalu menyusut jadi tiga begitu peran
+   datang. Kedipan itu membuat halaman terasa tidak stabil, dan sempat
+   menggoda orang menekan tab yang sebentar lagi hilang.
+
+   Kelas .sp-siap dipasang JS setelah peran diterima -- termasuk kalau
+   pengambilannya GAGAL, supaya halaman tidak pernah terkunci tanpa tab. */
+#sp-tabs { visibility: hidden; }
+body.sp-siap #sp-tabs { visibility: visible; }
+
+/* Hero MENGECIL setelah siap, bukan disembunyikan: judul halaman tetap perlu
+   terbaca supaya orang yang membuka beberapa tab browser tahu ada di mana.
+   Yang dihemat cuma ruangnya. */
+#sp-hero { transition: padding .25s ease; }
+body.sp-siap #sp-hero { padding-top: 24px; padding-bottom: 14px; }
+body.sp-siap #sp-hero h1 { font-size: clamp(20px, 2.4vw, 26px); margin-bottom: 2px; }
+body.sp-siap #sp-hero .eyebrow { display: none; }
+/* Deskripsi panjang paling banyak makan ruang, dan isinya sudah terwakili
+   panduan per tab. */
+body.sp-siap #sp-hero .lead { display: none; }
+
