@@ -517,6 +517,8 @@ function spTerapkanBagian_(d) {
     bagian.some(function (b) { return b === "produksi" || b === "semua" || b === "all"; });
 
   window.SP_BAGIAN = bagian;
+  // Line yang dipegang staf ini -- dipakai untuk membatasi pembatalan setoran.
+  window.SP_ID_LINE = (d && d.idLine) ? d.idLine : [];
   window.SP_BAGIAN_SEMUA = semua;
   if (semua) return;
 
@@ -1311,7 +1313,7 @@ function spRenderRiwayat() {
     // tombolnya tetap salah: orang menekan, gagal, lalu berhenti percaya pada
     // layarnya. Yang MELIHAT riwayat tetap semua bagian -- itu justru yang
     // membuat serah terima antar bagian bisa diperiksa.
-    const bolehBatal = spBolehBatalRiwayat_(jenis);
+    const bolehBatal = spBolehBatalRiwayat_(jenis, k);
     const id = jenis === "cutting" ? k.idCutting
       : (jenis === "setoran" ? k.idSetoran : k.idDistribusi);
     const total = jenis === "cutting" ? k.totalPotong
@@ -1358,8 +1360,11 @@ function spRenderRiwayat() {
               ? '<span class="sp-riw-kunci">sudah dikonfirmasi, tidak bisa dibatalkan</span>'
               : (bolehBatal
                   ? '<button class="sp-riw-btn" data-i="' + i + '" onclick="spBatalkanCatatan(this.dataset.i)" type="button">Batalkan</button>'
-                  : '<span class="sp-riw-kunci">hanya bisa dibatalkan bagian ' +
-                    rjdEscapeHtml_(SP_RIW_BAGIAN[jenis] || "-") + '</span>'))) +
+                  : '<span class="sp-riw-kunci">' +
+                    (jenis === "setoran" && k.namaLine
+                      ? 'hanya bisa dibatalkan ' + rjdEscapeHtml_(k.namaLine)
+                      : 'hanya bisa dibatalkan bagian ' +
+                        rjdEscapeHtml_(SP_RIW_BAGIAN[jenis] || "-")) + '</span>'))) +
       '</div>' +
       (k.catatan ? '<div class="sp-riw-catatan">' + rjdEscapeHtml_(k.catatan) + '</div>' : '') +
     '</div>';
@@ -1390,7 +1395,7 @@ const SP_RIW_BAGIAN = {
   cutting: "cutting"
 };
 
-function spBolehBatalRiwayat_(jenis) {
+function spBolehBatalRiwayat_(jenis, k) {
   // Peran belum dimuat -> tampilkan saja. Backend tetap menjaga, dan
   // menyembunyikan tombol karena data yang belum tiba lebih membingungkan
   // daripada tombol yang sesekali ditolak.
@@ -1399,7 +1404,18 @@ function spBolehBatalRiwayat_(jenis) {
   const bagian = window.SP_BAGIAN || [];
   if (!bagian.length) return true;   // kosong = semua bagian
   const perlu = SP_RIW_BAGIAN[jenis];
-  return !perlu || bagian.indexOf(perlu) !== -1;
+  if (perlu && bagian.indexOf(perlu) === -1) return false;
+
+  // Setoran: hanya line yang menginput. Bagian "sewing" saja tidak cukup --
+  // satu bagian memuat banyak line, dan kepala line A tidak seharusnya bisa
+  // membatalkan setoran line B.
+  //
+  // Kosong = tidak dibatasi, sama seperti kolom Bagian.
+  if (jenis === "setoran" && k) {
+    const lineStaf = window.SP_ID_LINE || [];
+    if (lineStaf.length && k.idLine && lineStaf.indexOf(k.idLine) === -1) return false;
+  }
+  return true;
 }
 
 function spBatalkanCatatan(i) {
