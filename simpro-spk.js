@@ -2634,22 +2634,53 @@ function spRenderDaftarGelaran_() {
   const tampil = semuaTampil ? daftar : daftar.slice(0, BATAS);
   const sisa = daftar.length - tampil.length;
 
+  // Kolom Item ditampilkan HANYA kalau PO punya lebih dari satu item. Untuk
+  // order satu style, kolom yang isinya sama semua cuma memakan lebar tabel.
+  const banyakItem = (window.SP_PO_DAFTAR_ITEM || []).length > 1;
+  // Kalau ada baris yang style-nya kosong, kolomnya tetap ditampilkan meski
+  // PO cuma punya satu item -- baris kosong itu justru yang perlu dibereskan.
+  const adaTanpaStyle = daftar.some(function (g) { return !g.style; });
+  const pakaiKolomItem = banyakItem || adaTanpaStyle;
+
   wadah.innerHTML =
     '<p class="sp-info">' + aktif + ' gelaran tercatat' +
       (batal ? ' &#183; ' + batal + ' dibatalkan' : '') +
       '. Salah input? Batalkan lalu catat ulang &#8212; barisnya tidak dihapus.</p>' +
+    (adaTanpaStyle
+      ? '<p class="sp-info">Ada baris yang <b>belum punya style</b>. Baris seperti ' +
+        'itu ikut terhitung di semua style dan membuat set lengkap tercampur &#8212; ' +
+        'batalkan lalu catat ulang lewat form di atas.</p>'
+      : '') +
     '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu">' +
-      '<thead><tr><th>ID</th><th>Warna</th><th>Kain</th><th>Lapis</th>' +
-      '<th>Potongan</th><th>Kain</th><th>Tanggal</th><th></th></tr></thead><tbody>' +
+      '<thead><tr><th>ID</th>' +
+      (pakaiKolomItem ? '<th>Item</th>' : '') +
+      '<th>Warna</th><th>Kain</th><th>Lapis</th>' +
+      '<th>Potongan</th><th>Kain terpakai</th><th>Tanggal</th><th></th></tr></thead><tbody>' +
       tampil.map(function (g) {
         const per = Object.keys(g.sizeQty).map(function (sz) {
           return spEsc_(sz) + " " + g.sizeQty[sz];
         }).join("  ");
         const recut = String(g.jenisGelaran || "").toLowerCase() === "re-cut";
+        // Artikel hanya ditulis kalau PO memang punya lebih dari satu artikel.
+        // Mengulang "ARUZA" di 12 baris tidak membedakan apa pun; yang
+        // membedakan adalah style-nya.
+        const banyakArtikel = (window.SP_PO_DAFTAR_ITEM || [])
+          .map(function (it) { return it.artikel; })
+          .filter(function (a, idx, arr) { return arr.indexOf(a) === idx; }).length > 1;
+        const selItem = pakaiKolomItem
+          ? '<td data-label="Item">' +
+              (g.style
+                ? spEsc_(g.style)
+                : '<span class="sp-tag-batal">TANPA STYLE</span>') +
+              (banyakArtikel && g.artikel ? '<div class="sp-gelar-size">' +
+                spEsc_(g.artikel) + '</div>' : '') +
+            '</td>'
+          : '';
         return '<tr' + (g.dibatalkan ? ' class="sp-gelar-batal"' : '') + '>' +
           '<td data-label="ID"><b>' + spEsc_(g.idGelaran) + '</b>' +
             (recut ? ' <span class="sp-tag-kembali">RE-CUT</span>' : '') +
             (g.dibatalkan ? ' <span class="sp-tag-batal">DIBATALKAN</span>' : '') + '</td>' +
+          selItem +
           '<td data-label="Warna">' + spEsc_(g.warna || "-") + '</td>' +
           '<td data-label="Kain">' + spEsc_(g.jenisKain || "-") +
             (g.komponen ? ' <small>(' + spEsc_(g.komponen) + ')</small>' : '') + '</td>' +
