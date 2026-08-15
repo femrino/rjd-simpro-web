@@ -1816,11 +1816,70 @@ function spThumbMarker_(url) {
   const src = m
     ? ("https://drive.google.com/thumbnail?id=" + encodeURIComponent(m[1]) + "&sz=w400")
     : url;
-  return '<a class="sp-thumb" href="' + spEsc_(url) + '" rel="noopener" target="_blank" ' +
-      'title="Buka gambar layout">' +
+  // Versi besar untuk pratinjau. Memakai ID yang sama dengan lebar lebih besar
+  // -- bukan URL Drive aslinya, karena halaman Drive tidak bisa disematkan
+  // sebagai <img>.
+  const besar = m
+    ? ("https://drive.google.com/thumbnail?id=" + encodeURIComponent(m[1]) + "&sz=w1600")
+    : url;
+
+  // Klik membuka PRATINJAU di halaman, bukan tab Drive. Memeriksa layout
+  // marker itu pekerjaan berulang -- tiap kali pindah tab lalu kembali
+  // memutus alurnya, dan untuk 45 marker itu jadi mahal.
+  //
+  // Tautan ke Drive tetap disediakan di dalam pratinjau, untuk yang memang
+  // perlu mengunduh atau melihat ukuran asli.
+  return '<button class="sp-thumb" onclick="spBukaPratinjau_(\'' +
+      spEsc_(besar).replace(/'/g, "&#39;") + '\',\'' +
+      spEsc_(url).replace(/'/g, "&#39;") + '\')" ' +
+      'title="Lihat gambar layout" type="button">' +
     '<img alt="layout" loading="lazy" onerror="spThumbGagal_(this)" src="' + spEsc_(src) + '"/>' +
-  '</a>';
+  '</button>';
 }
+
+/**
+ * Pratinjau gambar layar penuh. Dibuat sekali lalu dipakai ulang -- membuat
+ * elemen baru tiap klik meninggalkan sampah di DOM.
+ */
+function spBukaPratinjau_(urlBesar, urlAsli) {
+  let wadah = document.getElementById("sp-pratinjau");
+  if (!wadah) {
+    wadah = document.createElement("div");
+    wadah.id = "sp-pratinjau";
+    wadah.className = "sp-pratinjau";
+    // Klik di LUAR gambar menutup. Klik pada gambarnya sendiri tidak --
+    // orang sering mengklik gambar untuk memperbesar, dan menutupnya di situ
+    // terasa seperti salah pencet.
+    wadah.onclick = function (e) {
+      if (e.target === wadah || e.target.classList.contains("sp-pratinjau-tutup")) {
+        spTutupPratinjau_();
+      }
+    };
+    document.body.appendChild(wadah);
+  }
+  wadah.innerHTML =
+    '<button class="sp-pratinjau-tutup" title="Tutup" type="button">&#215;</button>' +
+    '<img alt="layout marker" src="' + spEsc_(urlBesar) + '"/>' +
+    (urlAsli
+      ? '<a class="sp-pratinjau-drive" href="' + spEsc_(urlAsli) + '" rel="noopener" ' +
+        'target="_blank">Buka di Google Drive</a>'
+      : '');
+  wadah.classList.add("tampil");
+  // Halaman di belakang tidak ikut menggulir saat pratinjau terbuka.
+  document.body.style.overflow = "hidden";
+}
+
+function spTutupPratinjau_() {
+  const wadah = document.getElementById("sp-pratinjau");
+  if (wadah) wadah.classList.remove("tampil");
+  document.body.style.overflow = "";
+}
+
+// Esc menutup pratinjau. Dipasang sekali di tingkat dokumen, bukan per
+// pratinjau -- kalau tidak, penanganannya menumpuk tiap kali dibuka.
+document.addEventListener("keydown", function (e) {
+  if (e.key === "Escape") spTutupPratinjau_();
+});
 
 function spThumbGagal_(img) {
   const a = img.closest(".sp-thumb");
