@@ -2652,7 +2652,7 @@ function spRenderDaftarGelaran_() {
         'batalkan lalu catat ulang lewat form di atas.</p>'
       : '') +
     '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu">' +
-      '<thead><tr><th>ID</th>' +
+      '<thead><tr>' +
       (pakaiKolomItem ? '<th>Item</th>' : '') +
       '<th>Warna</th><th>Kain</th><th>Lapis</th>' +
       '<th>Potongan</th><th>Kain terpakai</th><th>Tanggal</th><th></th></tr></thead><tbody>' +
@@ -2667,6 +2667,15 @@ function spRenderDaftarGelaran_() {
         const banyakArtikel = (window.SP_PO_DAFTAR_ITEM || [])
           .map(function (it) { return it.artikel; })
           .filter(function (a, idx, arr) { return arr.indexOf(a) === idx; }).length > 1;
+        // Penanda RE-CUT & DIBATALKAN pindah ke kolom Warna. Dua penanda itu
+        // dulu menumpang di kolom ID; kolom ID dihilangkan, tapi penandanya
+        // TIDAK boleh ikut hilang -- baris re-cut yang tidak dikenali akan
+        // dikira gelaran biasa dan dihitung sebagai baju.
+        //
+        // Warna dipilih karena selalu ada, sedangkan kolom Item bersyarat.
+        const penanda =
+          (recut ? ' <span class="sp-tag-kembali">RE-CUT</span>' : '') +
+          (g.dibatalkan ? ' <span class="sp-tag-batal">DIBATALKAN</span>' : '');
         const selItem = pakaiKolomItem
           ? '<td data-label="Item">' +
               (g.style
@@ -2676,19 +2685,32 @@ function spRenderDaftarGelaran_() {
                 spEsc_(g.artikel) + '</div>' : '') +
             '</td>'
           : '';
-        return '<tr' + (g.dibatalkan ? ' class="sp-gelar-batal"' : '') + '>' +
-          '<td data-label="ID"><b>' + spEsc_(g.idGelaran) + '</b>' +
-            (recut ? ' <span class="sp-tag-kembali">RE-CUT</span>' : '') +
-            (g.dibatalkan ? ' <span class="sp-tag-batal">DIBATALKAN</span>' : '') + '</td>' +
+        // ID gelaran berformat GLR/RCT + yyMMddHHmmss, jadi JAM input sudah ada
+        // di dalamnya. Kolom Tanggal menampilkan tanggal yang sama untuk semua
+        // baris yang diinput sehari -- yang benar-benar membedakan justru
+        // jamnya, dan itu selama ini terkubur di dalam ID.
+        //
+        // Diambil hanya kalau formatnya persis cocok. Kalau suatu saat pola ID
+        // berubah, yang terjadi cuma jamnya tidak tampil -- bukan angka salah
+        // yang terlanjur dipercaya.
+        const cocokId = /^(?:GLR|RCT)\d{12}$/.test(String(g.idGelaran || ""));
+        const jam = cocokId
+          ? String(g.idGelaran).substr(9, 2) + ":" + String(g.idGelaran).substr(11, 2)
+          : "";
+        // ID tetap melekat di barisnya lewat title -- tidak makan lebar, tapi
+        // masih bisa dicocokkan dengan SD Gelaran saat menelusuri sesuatu.
+        return '<tr title="' + spEsc_(g.idGelaran) + '"' +
+          (g.dibatalkan ? ' class="sp-gelar-batal"' : '') + '>' +
           selItem +
-          '<td data-label="Warna">' + spEsc_(g.warna || "-") + '</td>' +
+          '<td data-label="Warna">' + spEsc_(g.warna || "-") + penanda + '</td>' +
           '<td data-label="Kain">' + spEsc_(g.jenisKain || "-") +
             (g.komponen ? ' <small>(' + spEsc_(g.komponen) + ')</small>' : '') + '</td>' +
           '<td data-label="Lapis">' + (g.jumlahLapis || "&#8212;") + '</td>' +
           '<td data-label="Potongan"><b>' + g.total + '</b>' +
             (per ? '<div class="sp-gelar-size">' + spEsc_(per) + '</div>' : '') + '</td>' +
           '<td data-label="Kain terpakai">' + g.kainTerpakai + ' ' + spEsc_(g.satuanKain) + '</td>' +
-          '<td data-label="Tanggal">' + spEsc_(g.tanggal || "-") + '</td>' +
+          '<td data-label="Tanggal">' + spEsc_(g.tanggal || "-") +
+            (jam ? '<div class="sp-gelar-size">' + jam + '</div>' : '') + '</td>' +
           '<td data-label="">' + (g.dibatalkan
             ? '<span class="sp-riw-kunci">sudah dibatalkan</span>'
             : '<button class="sp-btn-kecil" onclick="spBatalGelaran(\'' +
