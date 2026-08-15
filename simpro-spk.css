@@ -596,4 +596,7 @@ body.sp-siap #sp-hero .lead { display: none; }
   border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
 .sp-gelar-size { font-size: 10.5px; color: var(--ink-soft);
   font-family: 'IBM Plex Mono', monospace; margin-top: 2px; }
+/* Warna di judul blok Set Lengkap. Style yang jadi judul utama, warna
+   menyusul -- karena satu style bisa punya banyak warna, bukan sebaliknya. */
+.sp-set-warna { font-weight: 400; color: var(--ink-soft); }
 

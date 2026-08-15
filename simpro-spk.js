@@ -1857,6 +1857,7 @@ function spMuatMarker() {
     window.SP_PO_SIZE = d.sizeTersedia || [];
     window.SP_PO_WARNA = d.warna || [];
     window.SP_PO_ITEM = d.item || {};
+    window.SP_PO_DAFTAR_ITEM = d.daftarItem || [];
     window.SP_PO_KAIN = d.jenisKain || [];
     spRenderMarker_();
   })
@@ -2126,6 +2127,7 @@ function spMuatGelaran() {
     window.SP_PO_SIZE = (hasil[0] && hasil[0].sizeTersedia) || [];
     window.SP_PO_WARNA = (hasil[0] && hasil[0].warna) || [];
     window.SP_PO_ITEM = (hasil[0] && hasil[0].item) || {};
+    window.SP_PO_DAFTAR_ITEM = (hasil[0] && hasil[0].daftarItem) || [];
     window.SP_PO_KAIN = (hasil[0] && hasil[0].jenisKain) || [];
     window.SP_KAIN = (hasil[1] && hasil[1].kain) || [];
     window.SP_KAIN_AMBANG = hasil[1] || {};
@@ -2175,7 +2177,30 @@ function spRenderFormGelaran_() {
       .filter(function (x) { return x && x !== "(tanpa nama)"; });
   }
 
+  // Pilihan ITEM (artikel + style). Satu artikel bisa punya beberapa style
+  // dengan warna yang sama -- tanpa pilihan ini, potongan Kemeja Long Sleeve
+  // dan Short Sleeve tercampur jadi satu dan set lengkapnya salah.
+  //
+  // Ditampilkan HANYA kalau PO punya lebih dari satu item. Untuk order biasa,
+  // dropdown berisi satu pilihan cuma menambah langkah tanpa gunanya.
+  const daftarItem = window.SP_PO_DAFTAR_ITEM || [];
+  const perluPilihItem = daftarItem.length > 1;
+
   document.getElementById("sp-gelar-form").innerHTML =
+    (perluPilihItem
+      ? '<div class="sp-grid3">' +
+          '<label>Item (artikel &#183; style)' +
+            '<select id="sp-gl-item" onchange="spHitungGelaran_()">' +
+              daftarItem.map(function (it, idx) {
+                return '<option value="' + idx + '">' +
+                  spEsc_(it.artikel) + (it.style ? ' &#183; ' + spEsc_(it.style) : '') +
+                  '</option>';
+              }).join("") +
+            '</select></label>' +
+        '</div>' +
+        '<p class="sp-info">PO ini punya ' + daftarItem.length + ' item. Pilih yang ' +
+          'sedang digelar &#8212; potongan tiap style dihitung terpisah.</p>'
+      : '') +
     // Pemilih mode di paling atas: seluruh perilaku form berubah dari sini,
     // jadi keputusannya harus diambil SEBELUM mengisi apa pun -- bukan sesudah
     // semua terisi lalu baru sadar salah mode.
@@ -2356,7 +2381,12 @@ function spSimpanGelaran() {
   const warna = (document.getElementById("sp-gl-warna") || {}).value || "";
   if (!warna) { alert("Warna wajib dipilih."); return; }
 
-  const item = window.SP_PO_ITEM || {};
+  // Item terpilih; kalau PO cuma punya satu, pakai yang itu.
+  const daftar = window.SP_PO_DAFTAR_ITEM || [];
+  const selItem = document.getElementById("sp-gl-item");
+  const item = (selItem && daftar[Number(selItem.value)])
+    ? daftar[Number(selItem.value)]
+    : (daftar[0] || window.SP_PO_ITEM || {});
   const btn = event && event.target ? event.target : null;
   if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
 
@@ -2519,7 +2549,10 @@ function spRenderSetLengkap_() {
     }).join("");
 
     return '<div class="sp-set-blok">' +
-      '<div class="sp-set-judul">' + spEsc_(w.warna) +
+      '<div class="sp-set-judul">' +
+        (w.style
+          ? spEsc_(w.style) + ' <span class="sp-set-warna">' + spEsc_(w.warnaMurni) + '</span>'
+          : spEsc_(w.warna)) +
         '<span class="sp-set-siap">' +
           (sudah > 0 ? 'BELUM DICATAT' : 'SIAP DIJAHIT') +
           ' <b>' + totalBelum + ' pcs</b></span></div>' +
@@ -2556,7 +2589,14 @@ function spRenderSetLengkap_() {
 function spKeCutting(warna) {
   const w = (window.SP_SET_LENGKAP || []).filter(function (x) { return x.warna === warna; })[0];
   if (!w) return;
-  window.SP_ISI_CUTTING = { warna: warna, siap: w.belumDicatat || w.siap };
+  // Tabel Hasil Cutting punya baris per (item, warna) -- kolom .sp-warna
+  // berisi warna MURNI, bukan "style · warna". Kirim keduanya: warna untuk
+  // mencocokkan, style untuk memilih baris yang benar kalau warnanya sama.
+  window.SP_ISI_CUTTING = {
+    warna: w.warnaMurni || warna,
+    style: w.style || "",
+    siap: w.belumDicatat || w.siap
+  };
   spSwitchTab("cutting");
 
   // Tabel cutting mungkin belum dimuat (spSwitchTab baru memanggilnya, dan
@@ -2599,6 +2639,13 @@ function spTerapkanIsiCutting_() {
   document.querySelectorAll("#sp-cut-tabel tbody tr").forEach(function (tr) {
     const elWarna = tr.querySelector(".sp-warna");
     if (!elWarna || rapikan(elWarna.textContent) !== targetWarna) return;
+    // Warna saja tidak cukup kalau PO punya beberapa style dengan warna sama.
+    // Sub-baris item memuat "Artikel / Style" -- dicocokkan kalau style dikirim.
+    if (isi.style) {
+      const elItem = tr.querySelector(".sp-cut-item, .sp-item-sub, td");
+      const teksBaris = rapikan(tr.textContent || "");
+      if (teksBaris.indexOf(rapikan(isi.style)) === -1) return;
+    }
     barisKetemu = true;
     tr.querySelectorAll(".sp-cut-qty").forEach(function (inp) {
       const v = isi.siap[inp.dataset.size];
