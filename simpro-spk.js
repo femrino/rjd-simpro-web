@@ -1261,7 +1261,7 @@ function spSwitchRiwayat(jenis) {
 }
 
 function spMuatRiwayat() {
-  const jenis = window.SP_RIW_JENIS || "distribusi";
+  const jenis = window.SP_RIW_JENIS || SP_RIW_JENIS_AWAL;
   const wadah = document.getElementById("sp-riw-daftar");
   if (wadah) wadah.innerHTML = '<p class="sp-info">Memuat riwayat...</p>';
 
@@ -1293,7 +1293,7 @@ function spMuatRiwayat() {
 function spRenderRiwayat() {
   const wadah = document.getElementById("sp-riw-daftar");
   if (!wadah) return;
-  const jenis = window.SP_RIW_JENIS || "distribusi";
+  const jenis = window.SP_RIW_JENIS || SP_RIW_JENIS_AWAL;
   const daftar = window.SP_RIW || [];
 
   if (!daftar.length) {
@@ -1374,6 +1374,16 @@ function spRenderRiwayat() {
  * Kalau kedua daftar ini pernah berbeda, yang menang backend. Layar cuma
  * kehilangan tombol yang seharusnya ada -- bukan sebaliknya.
  */
+/**
+ * Sub-tab riwayat yang terbuka pertama. HARUS sama dengan yang berkelas
+ * "active" di template -- kalau berbeda, tab yang tersorot bukan yang isinya
+ * tampil, dan orang mengira daftarnya salah.
+ *
+ * Ditaruh sebagai konstanta supaya kalau urutannya diubah lagi, cukup satu
+ * tempat yang disesuaikan.
+ */
+const SP_RIW_JENIS_AWAL = "cutting";
+
 const SP_RIW_BAGIAN = {
   distribusi: "loading",
   setoran: "sewing",
@@ -1393,7 +1403,7 @@ function spBolehBatalRiwayat_(jenis) {
 }
 
 function spBatalkanCatatan(i) {
-  const jenis = window.SP_RIW_JENIS || "distribusi";
+  const jenis = window.SP_RIW_JENIS || SP_RIW_JENIS_AWAL;
   const k = (window.SP_RIW || [])[i];
   if (!k) return;
   const id = jenis === "cutting" ? k.idCutting
