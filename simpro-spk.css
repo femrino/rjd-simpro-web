@@ -604,4 +604,10 @@ body.sp-siap #sp-hero .lead { display: none; }
    sama pentingnya dengan Simpan. */
 .sp-tautan { color: var(--thread); text-decoration: underline; cursor: pointer; }
 .sp-tautan:hover { text-decoration: none; }
+/* Marker yang berlaku untuk semua style. Ditandai, bukan dikosongkan: strip
+   kosong terbaca seperti data yang belum diisi, padahal ini keputusan
+   yang disengaja. */
+.sp-mk-semua { font-size: 11px; font-family: 'IBM Plex Mono', monospace;
+  color: var(--thread); background: #FCF6E8; border: 1px solid #E8D8AE;
+  border-radius: 5px; padding: 1px 7px; }
 

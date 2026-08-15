@@ -641,6 +641,10 @@ const SP_PANDUAN = {
        "Isi hanya kalau sebagian panel punya marker sendiri -- mis. \"Variasi\" " +
        "atau \"Kerah, Manset\" untuk interlining. Tanpa ini, dua marker dengan " +
        "kain sama akan dijumlahkan dan set lengkap jadi terlalu optimis."],
+      ["Marker yang dipakai beberapa style: pilih \"SEMUA style\"",
+       "Komponen kombinasi yang sama untuk Long Sleeve maupun Short Sleeve " +
+       "tidak perlu dibuat dua kali. Marker itu akan muncul saat menggelar " +
+       "style mana pun, dan potongannya masuk ke style yang dipilih saat menggelar."],
       ["Revisi lebar kain: pakai tombol Revisi",
        "Marker lama tetap tersimpan. Jangan hapus lalu buat baru."]
     ]
@@ -1887,7 +1891,7 @@ function spRenderMarker_() {
             '<td data-label="Kode"><b>' + spEsc_(m.kodeMarker || "-") + '</b></td>' +
             '<td data-label="Style">' + (m.style
               ? spEsc_(m.style)
-              : '<span class="sp-kosong">&#8212;</span>') + '</td>' +
+              : '<span class="sp-mk-semua">semua style</span>') + '</td>' +
             '<td class="sp-td-layout" data-label="Layout">' +
               (layout.length ? layout.map(spThumbMarker_).join("") : '<span class="sp-kosong">&#183;</span>') +
               (berkas.length ? '<div class="sp-file-list">' +
@@ -1967,6 +1971,16 @@ function spRenderFormMarker_(asal) {
                   ' value="' + idx + '">' + spEsc_(it.artikel) +
                   (it.style ? ' &#183; ' + spEsc_(it.style) : '') + '</option>';
               }).join("") +
+              // Sebagian marker memuat komponen yang dipakai LEBIH DARI SATU
+              // style -- mis. potongan motif kombinasi yang sama untuk Long
+              // Sleeve maupun Short Sleeve. Memaksanya terdaftar di satu style
+              // membuat marker itu tidak muncul saat menggelar style lainnya.
+              //
+              // Style dikosongkan, bukan diisi dua nilai: potongan komponen
+              // bersama baru bisa dipasangkan ke style tertentu SAAT DIGELAR,
+              // dan itu memang dipilih di form Gelaran.
+              '<option' + (a.artikel && !a.style ? ' selected="selected"' : '') +
+                ' value="semua">&#8212; Berlaku untuk SEMUA style &#8212;</option>' +
             '</select></label>' +
         '</div>' +
         '<p class="sp-info">PO ini punya ' + spDaftarItemPO_().length + ' item. ' +
@@ -2069,9 +2083,17 @@ async function spSimpanMarker() {
   // Item terpilih; kalau PO cuma punya satu, pakai yang itu.
   const daftarMk = spDaftarItemPO_();
   const selMk = document.getElementById("sp-mk-item");
-  const itemMk = (selMk && daftarMk[Number(selMk.value)])
-    ? daftarMk[Number(selMk.value)]
-    : (daftarMk[0] || window.SP_PO_ITEM || {});
+  // "semua" -> style dikosongkan, artikel & brand tetap dari item pertama
+  // (mereka sama untuk semua style dalam satu artikel).
+  let itemMk;
+  if (selMk && selMk.value === "semua") {
+    const dasar = daftarMk[0] || window.SP_PO_ITEM || {};
+    itemMk = { brand: dasar.brand, artikel: dasar.artikel, style: "" };
+  } else if (selMk && daftarMk[Number(selMk.value)]) {
+    itemMk = daftarMk[Number(selMk.value)];
+  } else {
+    itemMk = daftarMk[0] || window.SP_PO_ITEM || {};
+  }
 
   const btn = event && event.target ? event.target : null;
   if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
