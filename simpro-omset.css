@@ -412,3 +412,71 @@ h1,h2,h3,h4,h5,h6 { font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif
 @media print{
   .lo-tabbar, #lo-panel-hpp{ display:none !important; }
 }
+
+/* ---- KALKULATOR HARGA ---- */
+
+.lo-kalk-grid{
+  display:grid; grid-template-columns:minmax(260px,340px) 1fr; gap:28px;
+  align-items:start;
+}
+@media (max-width:760px){
+  .lo-kalk-grid{ grid-template-columns:1fr; gap:20px; }
+}
+
+/* min-width:0 WAJIB pada anak grid. Tanpa itu, tabel di dalamnya memaksa
+   kolom melebar melewati lebar layar dan seluruh halaman ikut bergeser --
+   gejala yang tampak seperti bug tata letak acak, padahal aturan grid. */
+.lo-kalk-form,
+.lo-kalk-hasil{ min-width:0; }
+
+.lo-kalk-label{
+  display:block; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+  color:var(--ink-soft, #6b6660); font-weight:600; margin:14px 0 5px;
+}
+.lo-kalk-label:first-child{ margin-top:0; }
+.lo-kalk-input{
+  width:100%; box-sizing:border-box; padding:9px 11px; font-size:14px;
+  border:1px solid var(--line, #e5e2dd); border-radius:8px;
+  background:rgba(255,255,255,.85); color:var(--ink, #23201d);
+  font-family:inherit;
+}
+.lo-kalk-input:focus{
+  outline:none; border-color:var(--terra, #b4552d);
+  box-shadow:0 0 0 3px rgba(180,85,45,.12);
+}
+.lo-kalk-bantu{
+  font-size:11px; color:var(--ink-soft, #6b6660); line-height:1.5; margin-top:5px;
+}
+
+.lo-kalk-angka{
+  background:rgba(180,85,45,.06); border:1px solid rgba(180,85,45,.18);
+  border-radius:12px; padding:18px 20px; margin-bottom:16px;
+}
+.lo-kalk-angka-label{
+  font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+  color:var(--ink-soft, #6b6660); margin-bottom:6px;
+}
+.lo-kalk-angka-nilai{
+  font-size:26px; font-weight:700; color:var(--terra, #b4552d);
+  line-height:1.2; word-break:break-word;
+}
+.lo-kalk-angka-ket{ font-size:12px; color:var(--ink-soft, #6b6660); margin-top:4px; }
+
+.lo-kalk-banding{
+  font-size:12.5px; line-height:1.55; padding:10px 12px;
+  border-radius:8px; background:rgba(0,0,0,.03); margin-bottom:14px;
+}
+
+.lo-kalk-tabel{ min-width:0; margin-bottom:14px; }
+.lo-kalk-total td{ font-weight:700; border-top:1px solid var(--line, #e5e2dd); }
+
+.lo-kalk-total-order{
+  font-size:13.5px; padding:11px 13px; border-radius:8px;
+  background:rgba(0,0,0,.03); margin-bottom:14px;
+}
+.lo-kalk-catatan{
+  font-size:11.5px; color:var(--ink-soft, #6b6660); line-height:1.6;
+  padding:12px 14px; background:rgba(0,0,0,.03); border-radius:8px;
+}
+
+@media print{ #lo-panel-kalk{ display:none !important; } }

@@ -239,29 +239,42 @@ let LO_HPP_TAMPIL_SEMUA = { artikel: false, order: false };
 
 function loGantiTab(tab) {
   const isHpp = (tab === "hpp");
-  document.getElementById("lo-tab-spt").classList.toggle("aktif", !isHpp);
+  const isKalk = (tab === "kalk");
+  document.getElementById("lo-tab-spt").classList.toggle("aktif", tab === "spt");
   document.getElementById("lo-tab-hpp").classList.toggle("aktif", isHpp);
-  document.getElementById("lo-panel-spt").classList.toggle("hidden", isHpp);
+  document.getElementById("lo-tab-kalk").classList.toggle("aktif", isKalk);
+  document.getElementById("lo-panel-spt").classList.toggle("hidden", tab !== "spt");
   document.getElementById("lo-panel-hpp").classList.toggle("hidden", !isHpp);
+  document.getElementById("lo-panel-kalk").classList.toggle("hidden", !isKalk);
 
   // Cetak & export milik laporan SPT. Membiarkannya terlihat di tab HPP akan
   // menghasilkan CSV omset padahal yang di layar HPP -- salah satu cara paling
   // halus membuat orang tidak percaya lagi pada tombol.
   ["lo-print-btn", "lo-export-btn"].forEach(function (id) {
     const el = document.getElementById(id);
-    if (el) el.classList.toggle("hidden", isHpp);
+    if (el) el.classList.toggle("hidden", tab !== "spt");
   });
 
   // Diambil sekali saja, dan hanya kalau tabnya dibuka. Halaman SPT tidak
   // boleh jadi lebih lambat gara-gara fitur yang mungkin tidak dipakai.
-  if (isHpp && !LO_HPP_DATA && !LO_HPP_SEDANG_AMBIL) loAmbilHPP();
+  //
+  // Kalkulator memakai data yang SAMA -- kalau tab HPP belum pernah dibuka,
+  // datanya diambil di sini. Kalkulator tidak boleh menuntut orang membuka
+  // tab lain lebih dulu; itu urusan dalam yang tidak perlu diketahui pemakai.
+  if ((isHpp || isKalk) && !LO_HPP_DATA && !LO_HPP_SEDANG_AMBIL) loAmbilHPP();
+  else if (isKalk && LO_HPP_DATA) loRenderKalkulator();
 }
 
 function loAmbilHPP() {
   LO_HPP_SEDANG_AMBIL = true;
-  const wadah = document.getElementById("lo-panel-hpp");
+  // Spinner ditaruh di panel yang SEDANG DILIHAT. Kalau selalu ke panel HPP,
+  // orang yang membuka kalkulator melihat layar kosong tanpa tanda apa pun --
+  // dan menyangka fiturnya rusak.
+  const tabKalkAktif = (document.getElementById("lo-tab-kalk") || {}).classList &&
+    document.getElementById("lo-tab-kalk").classList.contains("aktif");
+  const wadah = document.getElementById(tabKalkAktif ? "lo-panel-kalk" : "lo-panel-hpp");
   wadah.innerHTML = '<div class="lo-hpp-memuat"><div class="lo-spinner"></div>' +
-    '<div class="lo-loading-text">Memuat HPP</div></div>';
+    '<div class="lo-loading-text">Memuat data</div></div>';
 
   fetch(LO_API_URL, {
     method: "POST",
@@ -276,6 +289,9 @@ function loAmbilHPP() {
     }
     LO_HPP_DATA = data.data;
     loRenderHPP();
+    // Kalau yang dibuka tab kalkulator, isi juga -- data ini dipakai keduanya.
+    const tabKalk = document.getElementById("lo-tab-kalk");
+    if (tabKalk && tabKalk.classList.contains("aktif")) loRenderKalkulator();
   })
   .catch(function () {
     LO_HPP_SEDANG_AMBIL = false;
@@ -435,5 +451,195 @@ function loRenderHPPOrder() {
       ? '<a class="lo-hpp-lainnya" href="#" onclick="LO_HPP_TAMPIL_SEMUA.order=!LO_HPP_TAMPIL_SEMUA.order;loRenderHPP();return false;">' +
         (LO_HPP_TAMPIL_SEMUA.order ? 'Tampilkan 10 teratas saja' : 'Tampilkan ' + (rugi.length - 10) + ' order lainnya') + '</a>'
       : '') +
+    '</div>';
+}
+
+/* ============================================================
+ * TAB KALKULATOR HARGA
+ * ============================================================
+ * Dipakai SAAT menetapkan harga, bukan sesudahnya. Semua tab lain menilai
+ * order yang sudah jalan -- berguna untuk belajar, tapi kerugiannya sudah
+ * terjadi saat angkanya muncul.
+ *
+ * Tidak ada rute backend baru: seluruh perhitungan memakai data yang sudah
+ * diambil tab HPP. Kalkulator yang menunggu server tidak akan dipakai saat
+ * klien sedang menelepon.
+ */
+
+let LO_KALK = {
+  artikel: "",        // kunci "artikel|style" dari cache, "" = artikel baru
+  proses: 0,
+  qty: 0,
+  margin: 20,
+  jenis: "cmt",
+  kainPerPcs: 0
+};
+
+/* loBukaKalkulator() DIHAPUS 16 Agustus 2026.
+ *
+ * Ditulis untuk membuka kalkulator, lalu ternyata loGantiTab() sudah
+ * menanganinya sendiri. Fungsi yang tidak pernah dipanggil akan dibaca
+ * orang berikutnya sebagai jalur yang mungkin dipakai -- dan waktu yang
+ * dihabiskan memahaminya tidak menghasilkan apa pun. */
+
+function loKalkSet(field, nilai) {
+  if (field === "artikel") {
+    LO_KALK.artikel = nilai;
+    // Proses ikut terisi dari artikel yang dipilih, tapi TETAP BISA DIUBAH.
+    // Model baru selalu sedikit berbeda dari model lama, dan yang paling tahu
+    // bedanya adalah orang yang memegang sampelnya -- bukan rata-rata.
+    const a = (LO_HPP_DATA.artikel || []).filter(function (x) {
+      return (x["Artikel"] + "|" + x["Style"]) === nilai;
+    })[0];
+    if (a) LO_KALK.proses = Number(a["Proses Per Pcs"]) || 0;
+  } else if (field === "proses" || field === "qty" || field === "margin" || field === "kainPerPcs") {
+    LO_KALK[field] = Number(nilai) || 0;
+  } else {
+    LO_KALK[field] = nilai;
+  }
+  loRenderKalkulator();
+}
+
+function loRenderKalkulator() {
+  const r = (LO_HPP_DATA && LO_HPP_DATA.ringkasan) || {};
+  const tarifUpah = Number(r["Tarif Upah Per Proses Pcs"]) || 0;
+  const ohMin = Number(r["Tarif Overhead Min Per Proses Pcs"]) || 0;
+  const ohMax = Number(r["Tarif Overhead Max Per Proses Pcs"]) || 0;
+
+  const daftar = (LO_HPP_DATA.artikel || []).slice().sort(function (a, b) {
+    return String(a["Artikel"] + a["Style"]).localeCompare(String(b["Artikel"] + b["Style"]));
+  });
+
+  const opsi = ['<option value="">— artikel baru / isi proses manual —</option>'].concat(
+    daftar.map(function (a) {
+      const k = a["Artikel"] + "|" + a["Style"];
+      return '<option value="' + loEsc(k) + '"' +
+        (LO_KALK.artikel === k ? ' selected' : '') + '>' +
+        loEsc(a["Artikel"]) + (a["Style"] ? " · " + loEsc(a["Style"]) : "") +
+        "  (" + a["Proses Per Pcs"] + " proses)</option>";
+    })
+  ).join("");
+
+  const marginOpsi = [10, 15, 20, 25, 30].map(function (m) {
+    return '<option value="' + m + '"' + (LO_KALK.margin === m ? ' selected' : '') +
+      '>' + m + '%</option>';
+  }).join("");
+
+  document.getElementById("lo-panel-kalk").innerHTML =
+    '<div class="lo-kalk-grid">' +
+      '<div class="lo-kalk-form">' +
+        '<label class="lo-kalk-label">Artikel</label>' +
+        '<select class="lo-kalk-input" onchange="loKalkSet(\'artikel\',this.value)">' + opsi + '</select>' +
+        '<div class="lo-kalk-bantu">Pilih artikel yang pernah dikerjakan supaya jumlah prosesnya terisi sendiri. ' +
+          'Untuk model baru, pilih yang paling mirip lalu sesuaikan angkanya.</div>' +
+
+        '<label class="lo-kalk-label">Jumlah proses per pcs</label>' +
+        '<input class="lo-kalk-input" type="number" min="0" step="0.1" value="' +
+          (LO_KALK.proses || "") + '" onchange="loKalkSet(\'proses\',this.value)"/>' +
+
+        '<label class="lo-kalk-label">Qty order (pcs)</label>' +
+        '<input class="lo-kalk-input" type="number" min="0" value="' +
+          (LO_KALK.qty || "") + '" onchange="loKalkSet(\'qty\',this.value)"/>' +
+
+        '<label class="lo-kalk-label">Margin target</label>' +
+        '<select class="lo-kalk-input" onchange="loKalkSet(\'margin\',this.value)">' + marginOpsi + '</select>' +
+
+        '<label class="lo-kalk-label">Jenis order</label>' +
+        '<select class="lo-kalk-input" onchange="loKalkSet(\'jenis\',this.value)">' +
+          '<option value="cmt"' + (LO_KALK.jenis === "cmt" ? " selected" : "") + '>CMT — kain dari klien</option>' +
+          '<option value="maklon"' + (LO_KALK.jenis === "maklon" ? " selected" : "") + '>Maklon — RJD beli kain</option>' +
+        '</select>' +
+
+        (LO_KALK.jenis === "maklon"
+          ? '<label class="lo-kalk-label">Biaya kain per pcs</label>' +
+            '<input class="lo-kalk-input" type="number" min="0" value="' +
+              (LO_KALK.kainPerPcs || "") + '" onchange="loKalkSet(\'kainPerPcs\',this.value)"/>' +
+            '<div class="lo-kalk-bantu">Konsumsi kain per pcs &#215; harga kain. ' +
+              'Belum dihitung otomatis — marker dan harga kain baru tersedia untuk sebagian artikel.</div>'
+          : '') +
+      '</div>' +
+      '<div class="lo-kalk-hasil">' + loKalkHasil(tarifUpah, ohMin, ohMax) + '</div>' +
+    '</div>';
+}
+
+function loKalkHasil(tarifUpah, ohMin, ohMax) {
+  const p = LO_KALK.proses;
+  if (!(p > 0)) {
+    return '<div class="lo-hpp-kosong">Isi jumlah proses per pcs untuk melihat hitungannya.</div>';
+  }
+  if (!(tarifUpah > 0)) {
+    return '<div class="lo-hpp-kosong">Tarif belum tersedia. Jalankan updateCacheHPP() di Apps Script.</div>';
+  }
+
+  const kain = LO_KALK.jenis === "maklon" ? LO_KALK.kainPerPcs : 0;
+  const upah = p * tarifUpah;
+  const oh1 = p * ohMin;
+  const oh2 = p * ohMax;
+  const biaya1 = kain + upah + oh1;
+  const biaya2 = kain + upah + oh2;
+  const m = LO_KALK.margin / 100;
+  const harga1 = biaya1 / (1 - m);
+  const harga2 = biaya2 / (1 - m);
+  const qty = LO_KALK.qty;
+
+  // Pembanding: harga yang PERNAH disepakati untuk artikel ini.
+  let banding = "";
+  if (LO_KALK.artikel) {
+    const a = (LO_HPP_DATA.artikel || []).filter(function (x) {
+      return (x["Artikel"] + "|" + x["Style"]) === LO_KALK.artikel;
+    })[0];
+    if (a && a["Harga Historis"]) {
+      const hist = Number(a["Harga Historis"]);
+      const selisih = harga1 - hist;
+      banding = '<div class="lo-kalk-banding' + (selisih > 0 ? ' lo-hpp-berat' : ' lo-hpp-aman') + '">' +
+        'Artikel ini pernah dijual <b>' + loRp(hist) + '</b>/pcs. ' +
+        (selisih > 0
+          ? 'Harga minimum di atas <b>' + loRp(selisih) + '</b> lebih tinggi (' +
+            (Math.round(selisih / hist * 1000) / 10) + '%).'
+          : 'Harga lama sudah menutup margin ini.') +
+        '</div>';
+    }
+  }
+
+  const barisBiaya = [
+    ["Kain", kain, LO_KALK.jenis === "maklon"],
+    ["Upah borongan", upah, true],
+    ["Overhead", null, true]
+  ];
+
+  let tabel = '<table class="lo-hpp-tabel lo-kalk-tabel"><tbody>';
+  barisBiaya.forEach(function (b) {
+    if (!b[2]) return;
+    if (b[0] === "Overhead") {
+      tabel += '<tr><td>Overhead</td><td class="lo-hpp-num">' +
+        loRp(oh1) + ' – ' + loRp(oh2).replace("Rp ", "") + '</td></tr>';
+    } else {
+      tabel += '<tr><td>' + b[0] + '</td><td class="lo-hpp-num">' + loRp(b[1]) + '</td></tr>';
+    }
+  });
+  tabel += '<tr class="lo-kalk-total"><td>Biaya per pcs</td><td class="lo-hpp-num">' +
+    loRp(biaya1) + ' – ' + loRp(biaya2).replace("Rp ", "") + '</td></tr>';
+  tabel += '</tbody></table>';
+
+  return '<div class="lo-kalk-angka">' +
+      '<div class="lo-kalk-angka-label">Harga minimum per pcs</div>' +
+      '<div class="lo-kalk-angka-nilai">' + loRp(harga1) + ' – ' +
+        loRp(harga2).replace("Rp ", "") + '</div>' +
+      '<div class="lo-kalk-angka-ket">pada margin ' + LO_KALK.margin + '%</div>' +
+    '</div>' +
+    banding +
+    tabel +
+    (qty > 0
+      ? '<div class="lo-kalk-total-order">Nilai order ' + qty.toLocaleString("id-ID") +
+        ' pcs: <b>' + loRp(harga1 * qty) + ' – ' + loRp(harga2 * qty).replace("Rp ", "") + '</b></div>'
+      : '') +
+    '<div class="lo-kalk-catatan">' +
+      'Rentangnya berasal dari biaya tetap bulanan yang masih perkiraan. ' +
+      'Untuk menawar, pakai <b>ujung atas</b> — kalau biaya tetap ternyata di ' +
+      'sisi tinggi, harga di ujung bawah tidak menutupinya.' +
+      (LO_KALK.artikel ? '' :
+        '<br/><br/><b>Artikel baru:</b> jumlah proses masih tebakan sampai model ini ' +
+        'dikerjakan sekali. Setelah itu angkanya muncul sendiri di daftar dan ' +
+        'harga berikutnya berdiri di atas data, bukan perkiraan.') +
     '</div>';
 }
