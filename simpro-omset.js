@@ -472,8 +472,67 @@ let LO_KALK = {
   qty: 0,
   margin: 20,
   jenis: "cmt",
-  kainPerPcs: 0
+  kainPerPcs: 0,
+  // ---- panel "sesuaikan" ----
+  // null = pakai angka tersimpan. Angka = ditimpa SEMENTARA, tidak disimpan.
+  //
+  // Yang disesuaikan ASUMSINYA, bukan tarifnya langsung. "Kalau biaya tetap
+  // ternyata Rp 50 juta, harganya jadi berapa?" adalah pertanyaan yang bisa
+  // dijawab pemilik; "kalau tarif per proses Rp 620" bukan.
+  buka: false,
+  upahBulanan: null,
+  tetapMin: null,
+  tetapMax: null,
+  prosesBulan: null
 };
+
+/** Angka dasar yang sedang berlaku: dari cache, ditimpa penyesuaian sementara. */
+function loKalkDasar_() {
+  const r = (LO_HPP_DATA && LO_HPP_DATA.ringkasan) || {};
+  const asli = {
+    upahBulanan: Number(r["Upah Borongan Bulanan"]) || 0,
+    tetapMin: Number(r["Biaya Tetap Bulanan Min"]) || 0,
+    tetapMax: Number(r["Biaya Tetap Bulanan Max"]) || 0,
+    prosesBulan: Number(r["Proses Pcs Per Bulan"]) || 0
+  };
+  const pakai = {
+    upahBulanan: LO_KALK.upahBulanan !== null ? LO_KALK.upahBulanan : asli.upahBulanan,
+    tetapMin: LO_KALK.tetapMin !== null ? LO_KALK.tetapMin : asli.tetapMin,
+    tetapMax: LO_KALK.tetapMax !== null ? LO_KALK.tetapMax : asli.tetapMax,
+    prosesBulan: LO_KALK.prosesBulan !== null ? LO_KALK.prosesBulan : asli.prosesBulan
+  };
+  const p = pakai.prosesBulan;
+  return {
+    asli: asli, pakai: pakai,
+    tarifUpah: p > 0 ? pakai.upahBulanan / p : 0,
+    ohMin: p > 0 ? pakai.tetapMin / p : 0,
+    ohMax: p > 0 ? pakai.tetapMax / p : 0,
+    // Disesuaikan kalau ADA SATU SAJA yang ditimpa. Dipakai memberi tanda di
+    // hasil -- penawaran tidak boleh diambil dari angka andai-andai tanpa
+    // pemakainya sadar.
+    disesuaikan: ["upahBulanan", "tetapMin", "tetapMax", "prosesBulan"]
+      .some(function (k) { return LO_KALK[k] !== null && LO_KALK[k] !== asli[k]; })
+  };
+}
+
+function loKalkSesuaikan(field, nilai) {
+  const t = String(nilai === null || nilai === undefined ? "" : nilai).trim();
+  LO_KALK[field] = (t === "") ? null : (Number(t) || 0);
+  loRenderKalkulator();
+}
+
+function loKalkReset() {
+  LO_KALK.upahBulanan = null;
+  LO_KALK.tetapMin = null;
+  LO_KALK.tetapMax = null;
+  LO_KALK.prosesBulan = null;
+  loRenderKalkulator();
+}
+
+function loKalkToggle() {
+  LO_KALK.buka = !LO_KALK.buka;
+  loRenderKalkulator();
+}
 
 /* loBukaKalkulator() DIHAPUS 16 Agustus 2026.
  *
@@ -501,10 +560,10 @@ function loKalkSet(field, nilai) {
 }
 
 function loRenderKalkulator() {
-  const r = (LO_HPP_DATA && LO_HPP_DATA.ringkasan) || {};
-  const tarifUpah = Number(r["Tarif Upah Per Proses Pcs"]) || 0;
-  const ohMin = Number(r["Tarif Overhead Min Per Proses Pcs"]) || 0;
-  const ohMax = Number(r["Tarif Overhead Max Per Proses Pcs"]) || 0;
+  const D = loKalkDasar_();
+  const tarifUpah = D.tarifUpah;
+  const ohMin = D.ohMin;
+  const ohMax = D.ohMax;
 
   const daftar = (LO_HPP_DATA.artikel || []).slice().sort(function (a, b) {
     return String(a["Artikel"] + a["Style"]).localeCompare(String(b["Artikel"] + b["Style"]));
@@ -558,11 +617,69 @@ function loRenderKalkulator() {
               'Belum dihitung otomatis — marker dan harga kain baru tersedia untuk sebagian artikel.</div>'
           : '') +
       '</div>' +
-      '<div class="lo-kalk-hasil">' + loKalkHasil(tarifUpah, ohMin, ohMax) + '</div>' +
+      '<div class="lo-kalk-hasil">' + loKalkHasil(tarifUpah, ohMin, ohMax, D) +
+        loKalkPanelSesuaikan(D) + '</div>' +
     '</div>';
 }
 
-function loKalkHasil(tarifUpah, ohMin, ohMax) {
+/**
+ * Panel "sesuaikan" -- mengubah asumsi SEMENTARA untuk melihat pengaruhnya.
+ *
+ * Tidak disimpan ke mana pun. Untuk membuatnya permanen, isi di sheet
+ * SD Kalibrasi HPP. Dipisah begitu dengan sengaja: menawar butuh coba-coba
+ * cepat, dan coba-coba yang langsung tersimpan akan menggeser seluruh angka
+ * perusahaan gara-gara satu percakapan telepon.
+ */
+function loKalkPanelSesuaikan(D) {
+  const isi = function (label, field, nilai, asli, satuan) {
+    const beda = LO_KALK[field] !== null && LO_KALK[field] !== asli;
+    return '<div class="lo-kalk-ses-baris">' +
+      '<label class="lo-kalk-ses-label">' + label +
+        (beda ? ' <span class="lo-kalk-ses-tanda">diubah</span>' : '') + '</label>' +
+      '<input class="lo-kalk-ses-input' + (beda ? ' lo-kalk-ses-aktif' : '') + '" type="number" min="0" ' +
+        'value="' + (LO_KALK[field] !== null ? LO_KALK[field] : "") + '" ' +
+        'placeholder="' + Math.round(asli).toLocaleString("id-ID") + '" ' +
+        'onchange="loKalkSesuaikan(\'' + field + '\',this.value)"/>' +
+      '<div class="lo-kalk-ses-asli">tersimpan: ' +
+        Math.round(asli).toLocaleString("id-ID") + ' ' + satuan + '</div>' +
+    '</div>';
+  };
+
+  if (!LO_KALK.buka) {
+    return '<div class="lo-kalk-ses-tutup">' +
+      '<a href="#" onclick="loKalkToggle();return false;">Sesuaikan asumsi &#9662;</a>' +
+      (D.disesuaikan ? ' <span class="lo-kalk-ses-tanda">sedang diubah</span>' : '') +
+      '</div>';
+  }
+
+  return '<div class="lo-kalk-ses">' +
+    '<div class="lo-kalk-ses-judul">' +
+      '<a href="#" onclick="loKalkToggle();return false;">Sesuaikan asumsi &#9652;</a>' +
+      (D.disesuaikan
+        ? ' <a class="lo-kalk-ses-reset" href="#" onclick="loKalkReset();return false;">kembalikan</a>'
+        : '') +
+    '</div>' +
+    '<div class="lo-kalk-ses-ket">Andai-andai saja &#8212; tidak disimpan. ' +
+      'Kosongkan untuk kembali ke angka tersimpan.</div>' +
+    isi("Upah borongan / bulan", "upahBulanan", null, D.asli.upahBulanan, "Rp") +
+    isi("Biaya tetap / bulan (min)", "tetapMin", null, D.asli.tetapMin, "Rp") +
+    isi("Biaya tetap / bulan (max)", "tetapMax", null, D.asli.tetapMax, "Rp") +
+    isi("Proses-pcs / bulan", "prosesBulan", null, D.asli.prosesBulan, "") +
+    '<div class="lo-kalk-ses-hasil">' +
+      'Tarif upah <b>' + loRp(D.tarifUpah) + '</b> &#183; ' +
+      'overhead <b>' + loRp(D.ohMin) + ' &#8211; ' + loRp(D.ohMax).replace("Rp ", "") + '</b> per proses' +
+    '</div>' +
+    '<div class="lo-kalk-ses-catatan">' +
+      'Menaikkan <b>proses-pcs per bulan</b> menurunkan tarif per proses, dan ' +
+      'harga minimum ikut turun. Itu masuk akal kalau audit menunjukkan ' +
+      'pencatatan memang kurang &#8212; bukan sekadar supaya harganya terlihat enak.' +
+      '<br/><br/>Kalau penyesuaian ini benar dan mau dipakai seterusnya, isi di ' +
+      'sheet <b>SD Kalibrasi HPP</b> lalu jalankan updateCacheHPP().' +
+    '</div>' +
+  '</div>';
+}
+
+function loKalkHasil(tarifUpah, ohMin, ohMax, D) {
   const p = LO_KALK.proses;
   if (!(p > 0)) {
     return '<div class="lo-hpp-kosong">Isi jumlah proses per pcs untuk melihat hitungannya.</div>';
@@ -621,7 +738,16 @@ function loKalkHasil(tarifUpah, ohMin, ohMax) {
     loRp(biaya1) + ' – ' + loRp(biaya2).replace("Rp ", "") + '</td></tr>';
   tabel += '</tbody></table>';
 
-  return '<div class="lo-kalk-angka">' +
+  // Tanda "disesuaikan" menempel pada ANGKANYA, bukan cuma di panel bawah.
+  // Kalau tandanya jauh dari angka, orang yang menyalin harga ke penawaran
+  // tidak akan melihatnya.
+  const tandaSesuai = (D && D.disesuaikan)
+    ? '<div class="lo-kalk-tanda-sesuai">Angka dasar sedang disesuaikan &#8212; ' +
+      'bukan angka tersimpan</div>'
+    : '';
+
+  return tandaSesuai +
+    '<div class="lo-kalk-angka' + (D && D.disesuaikan ? ' lo-kalk-angka-sesuai' : '') + '">' +
       '<div class="lo-kalk-angka-label">Harga minimum per pcs</div>' +
       '<div class="lo-kalk-angka-nilai">' + loRp(harga1) + ' – ' +
         loRp(harga2).replace("Rp ", "") + '</div>' +
