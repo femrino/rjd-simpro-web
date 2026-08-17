@@ -3113,6 +3113,7 @@ var LP_ORDER_EDIT_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"
 /** Halaman -> area yang dibutuhkan. Halaman tanpa entri = boleh semua. */
 var RJD_AREA_HALAMAN = {
   "/p/invoice.html":       "keuangan",
+  "/p/kalkulator-harga.html": "keuangan",
   "/p/laporan-omset.html": "pajak",
   // Dashboard Operasional memang tertutup penuh untuk peran Produksi -- itu
   // penjaga LAMA di doPost (bukan dari sistem peran ini), dan masuk akal:
@@ -3336,6 +3337,9 @@ var RJD_JAGA_HALAMAN = {
   // Dashboard Operasional memuat omset, aging piutang & konsentrasi risiko --
   // tertutup untuk peran produksi. Ini penjaga LAMA di doPost, bukan hal baru.
   "/p/dashboard.html":    "keuangan",
+  // Kalkulator Harga v2: angka upah, overhead, margin. Kelas kepekaannya
+  // sama dengan dashboard/invoice. Peran produksi tidak perlu tahu harga.
+  "/p/kalkulator-harga.html": "keuangan",
   // Laporan omset: peran "pajak", ATAU email yang terdaftar di
   // "SD Akses Laporan Omset" (konsultan pajak dsb). getPeranSaya_ sudah
   // menambahkan area "pajak" untuk mereka, jadi tidak perlu pengecualian di sini.
