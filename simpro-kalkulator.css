@@ -6,15 +6,31 @@
  * Token warna & latar beranimasi dari simpro-global.css.
  * ============================================================ */
 
-/* ---------- kerangka halaman ---------- */
-#kh-app{max-width:1080px;margin:0 auto;padding:96px 20px 80px;position:relative;z-index:1}
-@media(max-width:640px){#kh-app{padding-top:84px}}
+/* ---------- kerangka halaman ----------
+   body global sudah padding-top:68px (simpro-global.css) -- jangan ditambah
+   padding besar lagi di sini, dulu sempat dobel dan halamannya melorot. */
+#kh-app{max-width:1080px;margin:0 auto;padding:20px 20px 80px;position:relative;z-index:1}
 
-/* ---------- header sticky (pola lo-header) ---------- */
-.kh-header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:14px 22px;background:rgba(249,247,242,.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line, #E5E0D6)}
-.kh-nav-actions{display:flex;align-items:center;gap:10px}
-.kh-nav-icon-btn{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border:1px solid var(--line,#E5E0D6);border-radius:10px;background:var(--white);color:var(--navy);cursor:pointer}
-.kh-nav-icon-btn svg{width:18px;height:18px}
+/* ---------- header (RESEP lo-header, disalin utuh) ----------
+   Transparan tanpa bar -- itu gaya rumah halaman staff.
+   fill-mode WAJIB backwards, JANGAN both: both membuat transform menempel
+   permanen setelah animasi dan MEMATIKAN position:sticky.
+   .logo di-scope ke .kh-header: selector .logo polos kena gaya CSS global
+   sistem lama (position:absolute) dan tampil rusak -- sudah terjadi di v86. */
+.kh-header{position:sticky;top:0;z-index:40;padding:20px 32px;display:flex;align-items:center;justify-content:space-between;gap:16px;animation:khSlideDown .5s ease-out backwards}
+@keyframes khSlideDown{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:translateY(0)}}
+.kh-header .logo{font-family:'Archivo',sans-serif;font-weight:900;font-size:18px;letter-spacing:-.02em;display:flex;align-items:center;gap:8px;text-decoration:none;position:static;transform:none}
+.kh-header .logo .navy{color:var(--navy)}
+.kh-header .logo .terra{color:var(--terra);margin-left:4px}
+.kh-header .logo .dot{width:6px;height:6px;border-radius:50%;background:var(--terra);animation:khPulse 2s ease-in-out infinite}
+@keyframes khPulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(189,67,53,.4)}50%{opacity:.5;box-shadow:0 0 0 5px rgba(189,67,53,0)}}
+
+/* Reset per-PROPERTI, bukan per-blok: aturan global position:absolute pada
+   kelas nav lama tidak otomatis batal cuma karena selector lokal menang. */
+.kh-nav-actions{display:flex;align-items:center;gap:8px;position:static;right:auto;top:auto;transform:none}
+.kh-nav-icon-btn{position:static;right:auto;top:auto;transform:none;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9999px;border:1px solid var(--line,#E5E0D6);background:rgba(255,255,255,.6);color:var(--ink-soft,#6B7280);cursor:pointer;transition:all .2s}
+.kh-nav-icon-btn:hover{color:var(--navy);border-color:rgba(23,33,52,.15);background:var(--white)}
+.kh-nav-icon-btn svg{width:16px;height:16px}
 
 /* ---------- kartu login (pola lo-login-card) ---------- */
 .kh-login-card{max-width:400px;margin:8vh auto 0;background:var(--white);border:1px solid var(--line,#E5E0D6);border-radius:16px;padding:36px 28px;text-align:center;box-shadow:0 2px 12px rgba(20,33,61,.06);animation:khMasuk .5s ease both}
