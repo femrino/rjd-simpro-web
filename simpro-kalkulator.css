@@ -102,3 +102,25 @@
 .kh-kosong{border:1px dashed var(--line,#E5E0D6);border-radius:14px;padding:48px 20px;text-align:center;color:var(--ink-soft,#6B7280);font-size:13px}
 
 @media print{.kh-header,.kh-no-print{display:none !important}}
+
+/* ---------- pelengkap desain v2 (rilis v88) ---------- */
+.kh-eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--terra);display:flex;align-items:center;gap:10px;margin:6px 0 8px}
+.kh-eyebrow::before{content:"";width:28px;height:1px;background:var(--terra)}
+.kh-judul{font-family:'Archivo',sans-serif;font-size:26px;font-weight:800;letter-spacing:-.02em;color:var(--navy);margin:0 0 4px}
+.kh-subjudul{font-size:13px;color:var(--ink-soft,#6B7280);margin:0 0 20px;max-width:64ch}
+
+/* grid defensif: kolom grid tidak boleh dipaksa melebar oleh isi (SVG dsb) */
+.kh-grid>div{min-width:0}
+
+.kh-bar{height:6px;border-radius:3px;background:var(--cream-deep,#F0EBE0);overflow:hidden;margin:4px 0 3px;max-width:260px}
+.kh-bar i{display:block;height:100%}
+
+.kh-kv{display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-size:13px;border-bottom:1px solid var(--line-soft,#EFEAE0);color:var(--navy)}
+.kh-kv:last-of-type{border-bottom:none}
+.kh-kv b{font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.kh-note{font-size:12.5px;color:var(--ink-soft,#6B7280);margin-top:12px;padding-top:12px;border-top:1px dashed var(--line,#E5E0D6)}
+.kh-note b{color:var(--navy)}
+.kh-legend{display:flex;gap:16px;font-size:11.5px;color:var(--ink-soft,#6B7280);margin-top:6px;flex-wrap:wrap}
+.kh-legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.kh-svg-t{font-family:'IBM Plex Mono',monospace;font-size:9.5px;fill:#6B7280}
