@@ -2077,6 +2077,22 @@ function spMuatSemuaMarker_(paksa) {
     wadah.className = "sp-kartu";
     panel.appendChild(wadah);
   }
+  // Gaya kartu ini disuntik sekali dari sini (bukan template) supaya rilisnya
+  // cukup satu file. Daftarnya ratusan baris dan terus tumbuh: tanpa batas
+  // tinggi, kartu ini menelan seluruh halaman. Kepala tabel dibuat sticky --
+  // sticky DI DALAM wadah ber-overflow aman; yang berbahaya cuma
+  // overflow-x:hidden di body (pelajaran lama).
+  if (!document.getElementById("sp-marker-semua-css")) {
+    const st = document.createElement("style");
+    st.id = "sp-marker-semua-css";
+    st.textContent =
+      "#sp-marker-semua .sp-tabelwrap{max-height:60vh;overflow:auto;" +
+        "border:1px solid var(--line,#E5E0D6);border-radius:10px}" +
+      "#sp-marker-semua .sp-tabel thead th{position:sticky;top:0;" +
+        "background:var(--cream,#F9F7F2);z-index:2;" +
+        "box-shadow:0 1px 0 var(--line,#E5E0D6)}";
+    document.head.appendChild(st);
+  }
   if (window.SP_SEMUA_MARKER && !paksa) { spRenderSemuaMarker_(); return; }
   wadah.innerHTML = '<p class="sp-info">Memuat daftar semua marker...</p>';
 
