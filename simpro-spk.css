@@ -751,3 +751,87 @@ body.sp-siap #sp-hero .lead { display: none; }
 
 /* ---------- pratinjau hitung: sedikit lebih lapang ---------- */
 .sp-hitung { padding: 14px 16px; border-radius: 11px; }
+
+/* ============================================================
+   RESTYLE TAB v96 -- bar pil satu baris, gulung menyamping
+   ============================================================
+   Grid pembungkus 2 kolom di HP memakan setengah layar dan tab aktif
+   (pil putih di atas krem) nyaris tak terbedakan. Ganti pola: SATU baris
+   pil yang digulung menyamping -- hemat tinggi, urutan fase terjaga,
+   pil terpotong di tepi jadi isyarat alami "masih ada lagi".
+
+   Pemisah antar fase memakai kelas sp-tab-awal yang SUDAH ada di markup
+   (Gelaran, Loading, Riwayat) -- garis tipis + jarak, bukan kotak-kotak.
+
+   Tab aktif dibuat NAVY pekat seperti tombol Simpan: di lantai produksi,
+   "sedang di mana saya" harus terjawab tanpa memicingkan mata.
+
+   SENGAJA tanpa mask-image untuk efek pudar tepi: pelajaran lama --
+   mask-image bentrok dengan box-shadow anak. Pseudo-element pada wadah
+   scroll juga ikut tergulung, jadi tidak dipakai; potongan pil sudah
+   cukup jadi isyarat.
+
+   Semua aturan lama (flex-wrap:wrap, flex-basis 45%, dst) DITIMPA di sini
+   lewat kaskade -- jangan hapus blok lamanya, cukup biarkan kalah.
+   ============================================================ */
+.sp-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  gap: 6px;
+  background: transparent;
+  border-radius: 0;
+  padding: 4px 2px 10px;
+  margin: 14px 0 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line, #E5E0D6) transparent;
+}
+.sp-tabs::-webkit-scrollbar { height: 5px; }
+.sp-tabs::-webkit-scrollbar-thumb { background: var(--line, #E5E0D6); border-radius: 3px; }
+.sp-tabs::-webkit-scrollbar-track { background: transparent; }
+
+.sp-tab,
+.sp-tabs .sp-tab {              /* menang atas flex:1 & flex-basis lama */
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  padding: 10px 18px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: var(--white);
+  border: 1px solid var(--line, #E5E0D6);
+  white-space: nowrap;
+}
+.sp-tab:hover { color: var(--navy); border-color: var(--navy); }
+.sp-tab.active,
+.sp-tabs .sp-tab.active {
+  background: var(--ink);
+  color: var(--white);
+  border-color: var(--ink);
+  box-shadow: 0 2px 8px rgba(23, 33, 52, .25);
+}
+
+/* Pemisah fase: garis tipis di kiri tab pertama tiap fase. */
+.sp-tab-awal,
+.sp-tabs .sp-tab-awal {
+  margin-left: 14px;
+  position: relative;
+}
+.sp-tab-awal::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 15%;
+  height: 70%;
+  width: 1px;
+  background: var(--line, #E5E0D6);
+}
+
+/* Aturan responsif lama (flex-basis 45%, wrap) sudah kalah oleh
+   spesifisitas .sp-tabs .sp-tab di atas -- di HP tetap satu baris gulung. */
+@media (max-width: 640px) {
+  .sp-tabs .sp-tab { padding: 9px 15px; font-size: 12.5px; }
+}

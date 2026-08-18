@@ -799,6 +799,14 @@ function spSwitchTab(tab) {
   document.querySelectorAll(".sp-tab").forEach(function (b) {
     b.classList.toggle("active", b.dataset.tab === tab);
   });
+  // Bar tab v96 satu baris gulung: tab aktif dibawa ke tengah pandangan --
+  // tanpa ini, pindah ke tab yang sedang terpotong di tepi terasa "hilang".
+  try {
+    const btnAktif = document.querySelector('.sp-tab[data-tab="' + tab + '"]');
+    if (btnAktif && btnAktif.scrollIntoView) {
+      btnAktif.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+    }
+  } catch (eTab) { /* browser tua: biarkan */ }
   // Panduan disisipkan saat tab pertama kali dibuka, bukan saat halaman
   // dimuat -- sembilan blok panduan sekaligus di DOM tidak ada gunanya.
   spPasangPanduan_(tab);
