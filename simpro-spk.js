@@ -2342,7 +2342,19 @@ function spRenderFormGelaran_() {
   // mengambilnya dari REKAP -- yang isinya cuma kain yang sudah ada
   // penerimaannya. Untuk PO tanpa catatan kain klien, satu-satunya pilihan jadi
   // "(tanpa nama)" dan tidak ada yang bisa dipilih.
-  let kain = window.SP_PO_KAIN || [];
+  // Jenis kain mengikuti ITEM yang dipilih (v89). Komposisi kain milik
+  // (artikel+style), bukan milik PO -- kain Motif Koko tidak boleh
+  // ditawarkan saat yang digelar Denara Dress. Backend (marker-gelaran.gs)
+  // mengirim daftar per item di daftarItem[i].jenisKain sejak perbaikan
+  // Agustus 2026; SP_PO_KAIN (gabungan semua item) jadi cadangan kalau
+  // backend yang terpasang masih versi lama, lalu cadangan terakhir dari
+  // rekap kain -- form yang mati total lebih buruk daripada daftar yang
+  // kurang presisi. Ganti item -> spGantiItemGelaran_ -> render ulang ->
+  // daftar ini ikut berganti.
+  const itemAktifGl = (window.SP_PO_DAFTAR_ITEM || [])[spItemGelaranIdx_()] || {};
+  let kain = (itemAktifGl.jenisKain && itemAktifGl.jenisKain.length)
+    ? itemAktifGl.jenisKain.slice()
+    : (window.SP_PO_KAIN || []);
   if (!kain.length) {
     kain = (window.SP_KAIN || []).map(function (k) { return k.jenis; })
       .filter(function (x) { return x && x !== "(tanpa nama)"; });
