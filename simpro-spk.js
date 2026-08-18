@@ -2127,8 +2127,30 @@ function spRenderSemuaMarker_() {
   const wadah = document.getElementById("sp-marker-semua");
   const d = window.SP_SEMUA_MARKER;
   if (!wadah || !d) return;
-  const q = ((document.getElementById("sp-semua-cari") || {}).value || "").toLowerCase();
 
+  // KERANGKA (judul + kotak cari + tombol + wadah hasil) dibangun SEKALI.
+  // Versi pertama menulis ulang seluruh kartu di tiap ketikan -- kotak cari
+  // ikut dihancurkan-dibuat-ulang, nilainya selamat tapi FOKUS KURSOR mati:
+  // mengetik "furing" butuh enam klik, satu per huruf. Sekarang mengetik
+  // hanya merender ulang #sp-semua-hasil; kotaknya tidak pernah disentuh.
+  if (!document.getElementById("sp-semua-hasil")) {
+    wadah.innerHTML = '<div class="sp-lbl">Semua Marker Terdaftar</div>' +
+      '<p class="sp-info">Lintas PO, terbaru di atas' +
+      (d.total > (d.marker || []).length
+        ? ' &#8212; menampilkan ' + d.marker.length + ' terbaru dari ' + d.total + ' total'
+        : ' &#8212; ' + (d.marker || []).length + ' marker') +
+      '. Ketik untuk mencari: kode, artikel, PO, kain, atau nama pembuat. ' +
+      'Kalau ada yang <b>salah kamar</b> (nempel di PO yang keliru), betulkan ' +
+      'kolom ID Purchase Order barisnya di SD Marker &#8212; selama belum ' +
+      'dipakai gelaran, itu satu sel saja.</p>' +
+      '<input id="sp-semua-cari" oninput="spRenderSemuaMarker_()" ' +
+        'placeholder="cari: furing / Sienna / 260725 / nama pembuat" type="text"/> ' +
+      '<button class="sp-btn-kecil" onclick="spMuatSemuaMarker_(true)" type="button">Segarkan</button>' +
+      '<div id="sp-semua-hasil"></div>';
+  }
+
+  const q = ((document.getElementById("sp-semua-cari") || {}).value || "")
+    .trim().toLowerCase();
   const baris = (d.marker || []).filter(function (m) {
     if (!q) return true;
     return [m.idMarker, m.idPurchaseOrder, m.brand, m.artikel, m.style,
@@ -2136,27 +2158,16 @@ function spRenderSemuaMarker_() {
       .join(" ").toLowerCase().indexOf(q) !== -1;
   });
 
-  let html = '<div class="sp-lbl">Semua Marker Terdaftar</div>' +
-    '<p class="sp-info">Lintas PO, terbaru di atas' +
-    (d.total > (d.marker || []).length
-      ? ' &#8212; menampilkan ' + d.marker.length + ' terbaru dari ' + d.total + ' total'
-      : ' &#8212; ' + (d.marker || []).length + ' marker') +
-    '. Ketik untuk mencari: kode, artikel, PO, kain, atau nama pembuat. ' +
-    'Kalau ada yang <b>salah kamar</b> (nempel di PO yang keliru), betulkan ' +
-    'kolom ID Purchase Order barisnya di SD Marker &#8212; selama belum ' +
-    'dipakai gelaran, itu satu sel saja.</p>' +
-    '<input id="sp-semua-cari" oninput="spRenderSemuaMarker_()" ' +
-      'placeholder="cari: furing / Sienna / 260725 / nama pembuat" type="text" value="' +
-      rjdEscapeHtml_(q) + '"/> ' +
-    '<button class="sp-btn-kecil" onclick="spMuatSemuaMarker_(true)" type="button">Segarkan</button>';
-
+  let html = "";
+  if (q) {
+    html += '<p class="sp-info">' + baris.length + ' marker cocok dengan "' +
+      rjdEscapeHtml_(q) + '".</p>';
+  }
   if (!baris.length) {
     html += '<p class="sp-info">Tidak ada marker yang cocok dengan pencarian.</p>';
   } else {
     // sp-tabel-kartu: pola mobile yang SUDAH ADA di CSS -- di bawah 760px
-    // tabel berubah jadi kartu label-nilai (data-label tiap sel sudah diisi
-    // di bawah). Tanpa kelas ini, delapan kolom diperas di layar HP sampai
-    // nomor PO patah huruf per huruf.
+    // tabel berubah jadi kartu label-nilai (data-label tiap sel).
     html += '<div class="sp-tabelwrap sp-tabelwrap-kartu">' +
       '<table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
       '<th>Tanggal</th><th>Kode</th><th>PO</th><th>Artikel &#183; Style</th>' +
@@ -2178,7 +2189,7 @@ function spRenderSemuaMarker_() {
       }).join("") +
       '</tbody></table></div>';
   }
-  wadah.innerHTML = html;
+  document.getElementById("sp-semua-hasil").innerHTML = html;
 }
 
 function spMarkerGelaranGanti_() {
