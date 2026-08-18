@@ -3876,6 +3876,11 @@ function qcPilihPO(indexTampil) {
   document.getElementById("qc-po-terpilih-id").textContent = po.idPurchaseOrder;
   document.getElementById("qc-po-terpilih-sub").textContent =
     po.namaKlien + (po.artikel && po.artikel.length ? " \u00b7 " + po.artikel.join(", ") : "");
+  // Perbaikan v106 (bug WARISAN qc.html): markup chip lahir dengan kelas
+  // "hidden", dan .hidden global memakai !important -- menambah "show" saja
+  // tidak pernah cukup, chip tak pernah tampil & ganti PO mustahil tanpa
+  // refresh. "hidden" harus DILEPAS, bukan dikalahkan.
+  document.getElementById("qc-po-terpilih").classList.remove("hidden");
   document.getElementById("qc-po-terpilih").classList.add("show");
   qcMuatRincianPO_(po.idPurchaseOrder);
 }
@@ -4020,6 +4025,7 @@ function qcGantiPO() {
   if (selWarna) selWarna.innerHTML = '<option value="">-- Pilih PO dulu --</option>';
   qcRenderSizeLolos_();
   document.getElementById("qc-po-terpilih").classList.remove("show");
+  document.getElementById("qc-po-terpilih").classList.add("hidden");   // pasangan perbaikan v106
   const input = document.getElementById("qc-po");
   input.classList.remove("hidden");
   input.value = "";
