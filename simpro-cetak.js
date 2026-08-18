@@ -1253,6 +1253,13 @@ function ckRenderSPK(){
       ckHeaderHtml(d.line ? ("SPK " + String(d.line.namaLine).toUpperCase()) : "SURAT PERINTAH KERJA", nomorSPK, d.tanggalDiajukan) +
       (d.isDraft ? '<div class="ck-dok-catatan" style="background:#FCF3E3;border-left:3px solid #EBCFA0">' +
         '<b>DRAFT &#183; status "' + d.status + '".</b> Order ini BELUM disetujui jadi PO. Jangan dijadikan dasar memulai produksi atau memotong kain.</div>' : '') +
+      (d.itemTanpaKain && d.itemTanpaKain.length ?
+        '<div class="ck-dok-catatan" style="background:#FBE9E7;border-left:3px solid #D98177">' +
+        '<b>&#9888; KAIN BELUM TERDEFINISI</b> untuk: <b>' +
+        d.itemTanpaKain.map(function (x) { return rjdEscapeHtml_(x); }).join("</b>, <b>") +
+        '</b>. Belum ada Komposisi Kain di artikelnya dan tidak ada catatan Kain Dari Klien. ' +
+        'Isi lewat Edit Order (panel ARTIKEL) sebelum PO ini digelar &#8212; tanpa itu, nama kain ' +
+        'akan lahir dari ketikan bebas di lantai potong dan rekap kainnya pecah.</div>' : '') +
       ckSPKLineHtml_(d.line, d.ringkasanLine) +
       ckStandarKlienHtml_(d.standarKlien, d.namaKlien) +
       '<div class="ck-spk-meta">' +

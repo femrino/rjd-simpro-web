@@ -1065,7 +1065,15 @@ function omApprove(idOrderRequest){
   .then(function(r){ return r.json(); })
   .then(function(data){
     if(data.success){
-      alert("Order disetujui. PO baru: " + data.idPurchaseOrder);
+      // Peringatan kain (v91): approve TIDAK diblokir, tapi CS harus tahu
+      // SEKARANG -- dialah orang terdekat ke dokumen order; kalau lolos
+      // sampai lantai potong, nama kain lahir dari ketikan bebas operator.
+      var pesanKain = (data.itemTanpaKain && data.itemTanpaKain.length)
+        ? "\n\n\u26A0 KAIN BELUM TERDEFINISI untuk: " + data.itemTanpaKain.join(", ") +
+          ".\nIsi Komposisi Kain lewat Edit Order (panel ARTIKEL) atau catat Kain Dari Klien " +
+          "sebelum PO turun ke produksi."
+        : "";
+      alert("Order disetujui. PO baru: " + data.idPurchaseOrder + pesanKain);
       omTutupModalProofing(); // aksi selesai -> modal ditutup biar nggak nampilin data basi
       dbRenderOrderMasuk();
     } else {

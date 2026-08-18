@@ -2031,6 +2031,38 @@ function spItemGelaranIdx_() {
  * Dipanggil saat dropdown Item diubah. Simpan pilihannya DULU, baru render
  * ulang -- urutan ini yang membuat pilihannya bertahan.
  */
+/**
+ * Marker digambar untuk kain tertentu -- kalau marker yang dipilih membawa
+ * jenis kainnya (kolom Jenis Kain di SD Marker: dideklarasikan saat marker
+ * dibuat sejak v91, atau dipelajari dari gelaran pertama), dropdown kain
+ * MEWARISINYA. Nilainya tetap bisa diganti manual: pewarisan mengisi, tidak
+ * mengunci -- marker lama tanpa kain dan kain pengganti darurat tetap jalan.
+ * "(tanpa marker)" atau marker tanpa data kain: dropdown dibiarkan.
+ */
+function spMarkerGelaranGanti_() {
+  const sel = document.getElementById("sp-gl-marker");
+  const opt = sel && sel.options ? sel.options[sel.selectedIndex] : null;
+  const kain = opt && opt.dataset ? String(opt.dataset.kain || "").trim() : "";
+  if (kain) {
+    const k = document.getElementById("sp-gl-kain");
+    if (k) {
+      if (k.tagName === "SELECT") {
+        let ada = false;
+        for (let i2 = 0; i2 < k.options.length; i2++) {
+          if (k.options[i2].value === kain) { ada = true; break; }
+        }
+        if (!ada) {
+          const o = document.createElement("option");
+          o.value = kain; o.textContent = kain;
+          k.appendChild(o);
+        }
+      }
+      k.value = kain;
+    }
+  }
+  spHitungGelaran_();
+}
+
 function spGantiItemGelaran_(nilai) {
   window.SP_GL_ITEM_IDX = Number(nilai) || 0;
   spRenderFormGelaran_();
@@ -2101,6 +2133,8 @@ function spRenderFormMarker_(asal) {
       '<label>Allowance per lapis (m)<input id="sp-mk-allow" min="0" placeholder="0.02" ' +
         'step="0.001" type="number" value="' +
         (a.allowancePerLapis !== undefined ? a.allowancePerLapis : "0.02") + '"/></label>' +
+      '<label>Jenis Kain<input id="sp-mk-kain" list="sp-datalist-kain" placeholder="mis. Polos" value="' +
+        spEsc_(a.jenisKain || "") + '"/></label>' +
       '<label>Komponen<input id="sp-mk-komponen" list="sp-datalist-komponen" ' +
         'placeholder="kosongkan = semua panel" type="text" value="' +
         spEsc_(a.komponen || "") + '"/></label>' +
@@ -2150,6 +2184,11 @@ function spRenderFormMarker_(asal) {
     '<datalist id="sp-datalist-komponen">' +
       (window.SP_SARAN_KOMPONEN || ["Variasi", "Kerah", "Manset", "Kerah, Manset",
         "Badan", "Lengan", "Saku", "Furing"]).map(function (k) {
+        return '<option value="' + spEsc_(k) + '"></option>';
+      }).join("") +
+    '</datalist>' +
+    '<datalist id="sp-datalist-kain">' +
+      (window.SP_PO_KAIN || []).map(function (k) {
         return '<option value="' + spEsc_(k) + '"></option>';
       }).join("") +
     '</datalist>' +
@@ -2227,6 +2266,7 @@ async function spSimpanMarker() {
         panjangMarker: panjang,
         allowancePerLapis: (document.getElementById("sp-mk-allow") || {}).value,
         komponen: (document.getElementById("sp-mk-komponen") || {}).value || "",
+        jenisKain: (document.getElementById("sp-mk-kain") || {}).value || "",
         satuanPanjang: "m",
         susunanSize: susunan,
         status: asal ? "Revisi" : "Final",
@@ -2425,14 +2465,16 @@ function spRenderFormGelaran_() {
         '<span><b>Re-cut</b><small>ganti panel cacat &#183; kain saja</small></span></label>' +
     '</div>' +
     '<div class="sp-grid3">' +
-      '<label>Marker<select id="sp-gl-marker" onchange="spHitungGelaran_()">' +
+      '<label>Marker<select id="sp-gl-marker" onchange="spMarkerGelaranGanti_()">' +
         '<option value="">(tanpa marker &#8212; potong manual)</option>' +
         marker.map(function (m) {
           return '<option data-panjang="' + m.panjangMarker + '" data-pcs="' + m.pcsPerLapis +
             '" data-allow="' + (m.allowancePerLapis !== undefined ? m.allowancePerLapis : 0.02) +
+            '" data-kain="' + spEsc_(m.jenisKain || "") +
             '" data-susun="' + spEsc_(JSON.stringify(m.susunanSize)) + '" value="' + m.idMarker + '">' +
             spEsc_(m.kodeMarker || m.idMarker) + " &#183; " + m.panjangMarker + "m &#183; " +
             m.pcsPerLapis + " pcs/lapis" +
+            (m.jenisKain ? (" &#183; " + spEsc_(m.jenisKain)) : "") +
             (m.komponen ? (" &#183; " + spEsc_(m.komponen)) : "") + "</option>";
         }).join("") +
       '</select></label>' +
