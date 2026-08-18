@@ -3772,6 +3772,19 @@ function spMuatQC_() {
   qcMuatMaster_();
 }
 
+/**
+ * SHIM qcShow (perbaikan v104). Di qc.html, qcShow menukar tiga layar
+ * (login/loading/isi); qcMuatMaster_ hasil port masih memanggilnya di
+ * tiga tempat (sukses + dua jalur galat). Tanpa shim ini panggilan itu
+ * ReferenceError dan rantai render MATI DIAM-DIAM tepat setelah data
+ * tiba -- tab QC tampil kosong. Di halaman produksi visibilitas panel
+ * sudah diurus spSwitchTab dan layar login tidak ada, jadi shim kosong
+ * adalah terjemahan yang benar. Dibiarkan sebagai shim (bukan mengedit
+ * badan fungsi hasil port satu-satu) supaya port tetap setipis mungkin
+ * dan penyimpangan dari sumber terpusat di satu tempat ini.
+ */
+function qcShow() { /* sengaja kosong -- lihat komentar */ }
+
 function qcMuatMaster_() {
   Promise.all([
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getMasterQC" }) }).then(function (r) { return r.json(); }),
