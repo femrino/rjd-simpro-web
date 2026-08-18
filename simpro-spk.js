@@ -825,14 +825,15 @@ function spSwitchTab(tab) {
   // melihat semua yang menunggu LINTAS ORDER -- memaksa pilih PO dulu di situ
   // justru membalik cara kepala line bekerja (dia pegang beberapa order).
   const kartuPO = document.getElementById("sp-kartu-po");
-  // Tab QC juga tanpa kartu PO produksi: panel QC membawa picker PO-nya
-  // sendiri (qc-po-cari) -- dua picker bertumpuk cuma membingungkan.
-  if (kartuPO) kartuPO.classList.toggle("hidden", tab === "konf" || tab === "riw" || tab === "qc");
+  // v107: tab QC memakai kartu PO BERSAMA seperti tab lain -- picker internal
+  // bawaan qc.html-lah yang disembunyikan (lihat qcSinkronPOAktif_). Satu
+  // halaman satu cara memilih PO.
+  if (kartuPO) kartuPO.classList.toggle("hidden", tab === "konf" || tab === "riw");
 
   if (tab === "konf") { spTerapkanBagianKonf_(); spMuatKonfirmasi(); return; }
   if (tab === "pola" || tab === "sampel") { spMuatTahap(tab); return; }
   if (tab === "marker") { spMuatMarker(); spMuatSemuaMarker_(); return; }
-  if (tab === "qc") { spMuatQC_(); return; }
+  if (tab === "qc") { spMuatQC_(); qcSinkronPOAktif_(); return; }
   if (tab === "gelar") { spMuatGelaran(); return; }
   if (tab === "riw") { spMuatRiwayat(); return; }
   if (tab === "setor") { spMuatLineSetoran_(); spMuatSetoran(); return; }
@@ -3784,6 +3785,88 @@ function spMuatQC_() {
  */
 function qcShow() { /* sengaja kosong -- lihat komentar */ }
 
+/**
+ * Integrasi v107: QC memakai POLA HALAMAN, bukan pulau sendiri.
+ * - PO dipilih lewat kartu "Pilih Purchase Order" bersama (SP_PO_AKTIF);
+ *   picker internal bawaan qc.html disembunyikan (field-nya, bukan dihapus
+ *   dari markup -- markup panel sengaja tidak diubah sejak pemindahan).
+ * - Pemilih ITEM (artikel + style) disuntik di atas Warna, dibangun dari
+ *   baris rincian yang sudah ada ((warna x item) dari getPOUntukCutting) --
+ *   nol rute baru. Warna lalu disaring per item, meniru form Gelaran.
+ * - Nilai option Warna tetap INDEKS GLOBAL baris rincian, jadi qcPilihWarna
+ *   dan seluruh rantai submit tidak berubah satu huruf pun.
+ */
+function qcSinkronPOAktif_() {
+  // picker internal selalu disembunyikan di rumah baru
+  const inp = document.getElementById("qc-po");
+  if (inp && inp.closest(".qc-field")) inp.closest(".qc-field").classList.add("hidden");
+
+  const po = window.SP_PO_AKTIF || "";
+  const selW = document.getElementById("qc-warna");
+  if (!po) {
+    QC_PO_TERPILIH = null; QC_RINCIAN_PO = null; QC_WARNA_DIPILIH = null;
+    if (selW) selW.innerHTML = '<option value="">-- Pilih PO lewat kartu di atas --</option>';
+    qcIsiDropdownItem_();
+    qcRenderSizeLolos_();
+    return;
+  }
+  if (QC_PO_TERPILIH && QC_PO_TERPILIH.idPurchaseOrder === po && QC_RINCIAN_PO) return;
+  QC_PO_TERPILIH = { idPurchaseOrder: po };
+  qcMuatRincianPO_(po);
+}
+
+let QC_ITEM_DIPILIH = "";
+
+function qcKunciItem_(b) {
+  return [b.artikel || "", b.style || ""].join("||");
+}
+
+/** Suntik field "Item (artikel + style)" tepat di atas field Warna -- sekali. */
+function qcPastikanFieldItem_() {
+  if (document.getElementById("qc-item")) return;
+  const selW = document.getElementById("qc-warna");
+  const fieldW = selW ? selW.closest(".qc-field") : null;
+  if (!fieldW || !fieldW.parentNode) return;
+  const f = document.createElement("div");
+  f.className = "qc-field";
+  f.innerHTML = "<label for='qc-item'>Item (artikel \u00b7 style)</label>" +
+    "<select id='qc-item' onchange='qcPilihItem()'>" +
+    "<option value=''>-- Pilih PO dulu --</option></select>";
+  fieldW.parentNode.insertBefore(f, fieldW);
+}
+
+function qcIsiDropdownItem_() {
+  qcPastikanFieldItem_();
+  const sel = document.getElementById("qc-item");
+  if (!sel) return;
+  if (!QC_RINCIAN_PO || !(QC_RINCIAN_PO.baris || []).length) {
+    sel.innerHTML = '<option value="">-- Pilih PO dulu --</option>';
+    QC_ITEM_DIPILIH = "";
+    return;
+  }
+  const urut = [], lihat = {};
+  QC_RINCIAN_PO.baris.forEach(function (b) {
+    const k = qcKunciItem_(b);
+    if (lihat[k]) return;
+    lihat[k] = true;
+    urut.push({ k: k, label: [b.artikel, b.style].filter(Boolean).join(" \u00b7 ") || "(tanpa nama)" });
+  });
+  // item pertama jadi pilihan awal -- meniru form Gelaran
+  QC_ITEM_DIPILIH = urut.length ? urut[0].k : "";
+  sel.innerHTML = urut.map(function (it) {
+    return '<option value="' + rjdEscapeHtml_(it.k) + '">' + rjdEscapeHtml_(it.label) + '</option>';
+  }).join("");
+  sel.value = QC_ITEM_DIPILIH;
+}
+
+function qcPilihItem() {
+  const sel = document.getElementById("qc-item");
+  QC_ITEM_DIPILIH = sel ? sel.value : "";
+  QC_WARNA_DIPILIH = null;
+  qcIsiDropdownWarna_();
+  qcRenderSizeLolos_();
+}
+
 function qcMuatMaster_() {
   Promise.all([
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getMasterQC" }) }).then(function (r) { return r.json(); }),
@@ -3913,6 +3996,7 @@ function qcMuatRincianPO_(idPO) {
       return;
     }
     QC_RINCIAN_PO = d;
+    qcIsiDropdownItem_();
     qcIsiDropdownWarna_();
   })
   .catch(function () {
@@ -3924,10 +4008,14 @@ function qcMuatRincianPO_(idPO) {
 function qcIsiDropdownWarna_() {
   const sel = document.getElementById("qc-warna");
   if (!sel || !QC_RINCIAN_PO) return;
+  // v107: pastikan pemilih item ada & tersaring -- warna hanya milik item
+  // terpilih. Nilai option TETAP indeks global baris rincian (i), bukan
+  // indeks hasil saringan, supaya qcPilihWarna & submit tidak berubah.
+  if (!document.getElementById("qc-item")) qcIsiDropdownItem_();
   sel.innerHTML = '<option value="">-- Pilih warna --</option>' +
     QC_RINCIAN_PO.baris.map(function (b, i) {
+      if (QC_ITEM_DIPILIH && qcKunciItem_(b) !== QC_ITEM_DIPILIH) return "";
       return '<option value="' + i + '">' + rjdEscapeHtml_(b.warna || "(tanpa warna)") +
-        ' &#183; ' + rjdEscapeHtml_([b.artikel, b.style].filter(Boolean).join(" / ")) +
         ' (' + b.totalOrder + ' pcs)</option>';
     }).join("");
 }
