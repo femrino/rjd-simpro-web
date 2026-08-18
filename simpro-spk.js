@@ -1989,7 +1989,9 @@ function spRenderMarker_() {
           // dan tiap sel memakai label ini sebagai judulnya. Tanpa itu, 9 kolom
           // dipaksa muat di layar HP dan kode marker terpotong huruf per huruf.
           return '<tr>' +
-            '<td data-label="Kode"><b>' + spEsc_(m.kodeMarker || "-") + '</b></td>' +
+            '<td data-label="Kode"><b>' + spEsc_(m.kodeMarker || "-") + '</b>' +
+              (m.warisan ? '<div class="sp-sub" style="color:var(--gold,#C8964A)">dari ' +
+                spEsc_(m.poAsal) + '</div>' : '') + '</td>' +
             '<td data-label="Style">' + (m.style
               ? spEsc_(m.style)
               : '<span class="sp-mk-semua">semua style</span>') + '</td>' +
@@ -2009,10 +2011,12 @@ function spRenderMarker_() {
             '<td data-label="Status">' + spEsc_(m.status) +
               (m.idMarkerAsal ? ' <small>(revisi)</small>' : '') + '</td>' +
             '<td class="sp-td-aksi" data-label="">' +
-              '<button class="sp-btn-kecil" onclick="spRevisiMarker(\'' + m.idMarker + '\')" ' +
-              'type="button">Revisi</button> ' +
-              '<button class="sp-btn-kecil" onclick="spBatalMarker(\'' + m.idMarker + '\')" ' +
-              'type="button">Batal</button></td></tr>';
+              (m.warisan
+                ? '<span class="sp-sub">kelola dari PO asalnya</span>'
+                : '<button class="sp-btn-kecil" onclick="spRevisiMarker(\'' + m.idMarker + '\')" ' +
+                  'type="button">Revisi</button> ' +
+                  '<button class="sp-btn-kecil" onclick="spBatalMarker(\'' + m.idMarker + '\')" ' +
+                  'type="button">Batal</button>') + '</td></tr>';
         }).join("") +
       '</tbody></table></div>'
     : '<p class="sp-info">Belum ada marker untuk PO ini.</p>';
@@ -2628,7 +2632,8 @@ function spRenderFormGelaran_() {
             spEsc_(m.kodeMarker || m.idMarker) + " &#183; " + m.panjangMarker + "m &#183; " +
             m.pcsPerLapis + " pcs/lapis" +
             (m.jenisKain ? (" &#183; " + spEsc_(m.jenisKain)) : "") +
-            (m.komponen ? (" &#183; " + spEsc_(m.komponen)) : "") + "</option>";
+            (m.komponen ? (" &#183; " + spEsc_(m.komponen)) : "") +
+            (m.warisan ? " &#183; dari " + spEsc_(m.poAsal) : "") + "</option>";
         }).join("") +
       '</select></label>' +
       '<label>Warna' +
