@@ -835,3 +835,20 @@ body.sp-siap #sp-hero .lead { display: none; }
 @media (max-width: 640px) {
   .sp-tabs .sp-tab { padding: 9px 15px; font-size: 12.5px; }
 }
+
+/* ============================================================
+   PENEGASAN PEMISAH FASE v97
+   ============================================================
+   Jarak ekstra sebelum Gelaran/Loading/Riwayat adalah PEMISAH FASE
+   (Persiapan | Potong | Distribusi | Arsip) -- tapi garis 1px v96 nyaris
+   tak terlihat di layar HP, jadi jarak beda-beda terbaca sebagai
+   kecelakaan, bukan struktur. Pemisah yang tak terlihat lebih buruk
+   daripada tidak ada. Dipertegas: lebih tebal, lebih gelap, ujung bulat.
+   ============================================================ */
+.sp-tab-awal::before {
+  width: 2px;
+  top: 20%;
+  height: 60%;
+  border-radius: 2px;
+  background: #C7BFAE;
+}
