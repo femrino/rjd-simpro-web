@@ -811,24 +811,23 @@ function spSwitchTab(tab) {
   // Panduan disisipkan saat tab pertama kali dibuka, bukan saat halaman
   // dimuat -- sembilan blok panduan sekaligus di DOM tidak ada gunanya.
   spPasangPanduan_(tab);
-  const pp = document.getElementById("sp-panel-pola");
-  if (pp) pp.classList.toggle("hidden", tab !== "pola");
-  const ps = document.getElementById("sp-panel-sampel");
-  if (ps) ps.classList.toggle("hidden", tab !== "sampel");
-  const pm = document.getElementById("sp-panel-marker");
-  if (pm) pm.classList.toggle("hidden", tab !== "marker");
-  const pg = document.getElementById("sp-panel-gelar");
-  if (pg) pg.classList.toggle("hidden", tab !== "gelar");
-  document.getElementById("sp-panel-cutting").classList.toggle("hidden", tab !== "cutting");
-  document.getElementById("sp-panel-bagi").classList.toggle("hidden", tab !== "bagi");
-  document.getElementById("sp-panel-konf").classList.toggle("hidden", tab !== "konf");
-  document.getElementById("sp-panel-riw").classList.toggle("hidden", tab !== "riw");
-  document.getElementById("sp-panel-setor").classList.toggle("hidden", tab !== "setor");
+  // ---- Buka-tutup panel: WILDCARD, bukan daftar keras (v105) ----
+  // Dulu sembilan getElementById eksplisit -- dan panel KESEPULUH (sp-panel-qc,
+  // v103) lupa didaftarkan: kelas hidden-nya tidak pernah dilepas, tab QC
+  // tampil kosong walau datanya sudah termuat. Bug kelas "daftar keras yang
+  // harus diingat manusia". Sekarang satu aturan untuk semua id sp-panel-*:
+  // panel yang lahir kapan pun otomatis ikut, tidak ada lagi yang bisa lupa.
+  // Konvensi yang menopangnya: data-tab tombol == akhiran id panelnya.
+  document.querySelectorAll("[id^='sp-panel-']").forEach(function (p) {
+    p.classList.toggle("hidden", p.id !== "sp-panel-" + tab);
+  });
   // Kartu "Pilih PO" cuma relevan untuk dua tab pertama. Tab Konfirmasi
   // melihat semua yang menunggu LINTAS ORDER -- memaksa pilih PO dulu di situ
   // justru membalik cara kepala line bekerja (dia pegang beberapa order).
   const kartuPO = document.getElementById("sp-kartu-po");
-  if (kartuPO) kartuPO.classList.toggle("hidden", tab === "konf" || tab === "riw");
+  // Tab QC juga tanpa kartu PO produksi: panel QC membawa picker PO-nya
+  // sendiri (qc-po-cari) -- dua picker bertumpuk cuma membingungkan.
+  if (kartuPO) kartuPO.classList.toggle("hidden", tab === "konf" || tab === "riw" || tab === "qc");
 
   if (tab === "konf") { spTerapkanBagianKonf_(); spMuatKonfirmasi(); return; }
   if (tab === "pola" || tab === "sampel") { spMuatTahap(tab); return; }
