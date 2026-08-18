@@ -911,3 +911,46 @@ body.sp-siap #sp-hero .lead { display: none; }
 @media (max-width: 760px) {
   .sp-tabel-kartu .sp-grup-item td { border-radius: 10px; margin-top: 14px; display: block; }
 }
+
+/* ============================================================
+   PENGECUALIAN KOMPAK TAMBAHAN v109 -- kotak qty Loading & Setoran
+   ============================================================
+   Restyle v95 memberi semua input padding 12-14px. Dua keluarga kotak
+   qty kecil sudah dikecualikan saat itu (susunan size, konfirmasi) --
+   kotak qty tabel Loading (.sp-qty) dan Setoran (.sp-setor-qty) LUPUT
+   dari daftar: di sel selebar +-60px, padding besar + tombol spinner
+   membuat angka "0" terpotong jadi "(" di layar sempit.
+
+   Sekalian: spinner number dimatikan untuk SEMUA keluarga kotak angka
+   kecil -- di kotak sesempit itu spinner tidak berguna (angka diketik,
+   bukan diklik naik-turun) dan cuma menutupi nilai.
+   ============================================================ */
+[id^="sp-panel-"] .sp-qty,
+[id^="sp-panel-"] .sp-setor-qty,
+[id^="sp-panel-"] .sp-cut-qty {
+  padding: 9px 4px;
+  font-size: 14px;
+  text-align: center;
+  border-radius: 9px;
+}
+[id^="sp-panel-"] .sp-qty::-webkit-outer-spin-button,
+[id^="sp-panel-"] .sp-qty::-webkit-inner-spin-button,
+[id^="sp-panel-"] .sp-setor-qty::-webkit-outer-spin-button,
+[id^="sp-panel-"] .sp-setor-qty::-webkit-inner-spin-button,
+[id^="sp-panel-"] .sp-cut-qty::-webkit-outer-spin-button,
+[id^="sp-panel-"] .sp-cut-qty::-webkit-inner-spin-button,
+[id^="sp-panel-"] .sp-susun-item input::-webkit-outer-spin-button,
+[id^="sp-panel-"] .sp-susun-item input::-webkit-inner-spin-button,
+[id^="sp-panel-"] .sp-konf-qty-input::-webkit-outer-spin-button,
+[id^="sp-panel-"] .sp-konf-qty-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+[id^="sp-panel-"] .sp-qty,
+[id^="sp-panel-"] .sp-setor-qty,
+[id^="sp-panel-"] .sp-cut-qty,
+[id^="sp-panel-"] .sp-susun-item input,
+[id^="sp-panel-"] .sp-konf-qty-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}

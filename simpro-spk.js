@@ -931,11 +931,30 @@ function spRenderFormCutting() {
       kolom.map(function (sz) { return '<th class="num">' + rjdEscapeHtml_(sz) + '</th>'; }).join("") +
       '<th class="num">Total</th>' +
     '</tr></thead><tbody>' +
-    po.baris.map(function (b, i) {
+    po.baris.map(function (b, i, semua) {
       const s = b.totalSelisih;
-      return '<tr>' +
+      // ---- Kelompok per ITEM (v109) -- pola yang sama dengan tabel Loading.
+      // Header per (artikel+style) + subtotal order/potong item; nama item
+      // tidak diulang di tiap baris warna.
+      const kunciItem = [b.artikel, b.style].filter(Boolean).join(" / ") || "(tanpa nama)";
+      const kunciSebelum = i > 0
+        ? ([semua[i-1].artikel, semua[i-1].style].filter(Boolean).join(" / ") || "(tanpa nama)")
+        : null;
+      let kepala = "";
+      if (kunciItem !== kunciSebelum) {
+        let orderItem = 0, potongItem = 0;
+        semua.forEach(function (x) {
+          const k = [x.artikel, x.style].filter(Boolean).join(" / ") || "(tanpa nama)";
+          if (k !== kunciItem) return;
+          orderItem += (x.totalOrder || 0);
+          potongItem += (x.totalPotong || 0);
+        });
+        kepala = '<tr class="sp-grup-item"><td colspan="' + (kolom.length + 2) + '">' +
+          rjdEscapeHtml_(kunciItem) +
+          '<span class="sp-grup-sisa">order ' + orderItem + ' &#183; potong ' + potongItem + '</span></td></tr>';
+      }
+      return kepala + '<tr>' +
         '<td><div class="sp-warna">' + rjdEscapeHtml_(b.warna || "-") + '</div>' +
-          '<div class="sp-artikel">' + rjdEscapeHtml_([b.artikel, b.style].filter(Boolean).join(" / ")) + '</div>' +
           '<div class="sp-sisa-info">order ' + b.totalOrder + ' &#183; potong ' + b.totalPotong +
             (b.totalPotong ? (s === 0 ? ' (pas)' : (s > 0 ? ' (+' + s + ' overcut)' : ' (' + s + ')')) : '') +
           '</div></td>' +
