@@ -353,11 +353,35 @@ function spRenderForm() {
       kolom.map(function (sz) { return '<th class="num">' + rjdEscapeHtml_(sz) + '</th>'; }).join("") +
       '<th class="num">Total</th>' +
     '</tr></thead><tbody>' +
-    po.baris.map(function (b, i) {
+    po.baris.map(function (b, i, semua) {
       const habis = b.totalSisa <= 0;
-      return '<tr' + (habis ? ' class="sp-habis"' : '') + '>' +
+      // ---- Kelompok per ITEM (v108) ----
+      // Baris dikelompokkan per (artikel+style) dengan baris header + subtotal
+      // sisa item. DIPILIH kelompok, BUKAN filter: satu serahan ke line sering
+      // campuran beberapa item -- filter memaksa admin submit berkali-kali
+      // untuk satu serahan (mengubah alur kerja), kelompok hanya merapikan
+      // pandangan. Nama item tidak diulang lagi di tiap baris warna.
+      const kunciItem = [b.artikel, b.style].filter(Boolean).join(" / ") || "(tanpa nama)";
+      const kunciSebelum = i > 0
+        ? ([semua[i-1].artikel, semua[i-1].style].filter(Boolean).join(" / ") || "(tanpa nama)")
+        : null;
+      let kepala = "";
+      if (kunciItem !== kunciSebelum) {
+        let sisaItem = 0, qtyItem = 0;
+        semua.forEach(function (x) {
+          const k = [x.artikel, x.style].filter(Boolean).join(" / ") || "(tanpa nama)";
+          if (k !== kunciItem) return;
+          sisaItem += (x.totalSisa > 0 ? x.totalSisa : 0);
+          qtyItem += (x.totalQty || 0);
+        });
+        kepala = '<tr class="sp-grup-item"><td colspan="' + (kolom.length + 2) + '">' +
+          rjdEscapeHtml_(kunciItem) +
+          '<span class="sp-grup-sisa">' + (sisaItem > 0
+            ? 'sisa ' + sisaItem + ' dari ' + qtyItem + ' pcs'
+            : 'sudah dibagi semua') + '</span></td></tr>';
+      }
+      return kepala + '<tr' + (habis ? ' class="sp-habis"' : '') + '>' +
         '<td><div class="sp-warna">' + rjdEscapeHtml_(b.warna || "-") + '</div>' +
-          '<div class="sp-artikel">' + rjdEscapeHtml_([b.artikel, b.style].filter(Boolean).join(" / ")) + '</div>' +
           '<div class="sp-sisa-info">' + (habis ? 'sudah dibagi semua'
             : ('sisa ' + b.totalSisa + ' dari ' + b.totalQty + ' pcs')) + '</div></td>' +
         kolom.map(function (sz) {

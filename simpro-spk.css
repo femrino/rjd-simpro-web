@@ -889,3 +889,25 @@ body.sp-siap #sp-hero .lead { display: none; }
   border-color: transparent;
   box-shadow: 0 2px 8px rgba(23, 33, 52, .2);
 }
+
+/* ---- Kelompok per item di tabel Loading (v108) ---- */
+.sp-grup-item td {
+  background: var(--cream);
+  font-family: 'Archivo', sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--navy);
+  padding: 12px 14px 8px;
+  border-top: 2px solid var(--line, #E5E0D6);
+}
+.sp-grup-item .sp-grup-sisa {
+  float: right;
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+/* mode kartu mobile: baris grup jadi pemisah blok */
+@media (max-width: 760px) {
+  .sp-tabel-kartu .sp-grup-item td { border-radius: 10px; margin-top: 14px; display: block; }
+}
