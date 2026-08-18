@@ -803,7 +803,7 @@ function spSwitchTab(tab) {
 
   if (tab === "konf") { spTerapkanBagianKonf_(); spMuatKonfirmasi(); return; }
   if (tab === "pola" || tab === "sampel") { spMuatTahap(tab); return; }
-  if (tab === "marker") { spMuatMarker(); return; }
+  if (tab === "marker") { spMuatMarker(); spMuatSemuaMarker_(); return; }
   if (tab === "gelar") { spMuatGelaran(); return; }
   if (tab === "riw") { spMuatRiwayat(); return; }
   if (tab === "setor") { spMuatLineSetoran_(); spMuatSetoran(); return; }
@@ -2039,6 +2039,99 @@ function spItemGelaranIdx_() {
  * mengunci -- marker lama tanpa kain dan kain pengganti darurat tetap jalan.
  * "(tanpa marker)" atau marker tanpa data kain: dropdown dibiarkan.
  */
+/**
+ * Kartu "Semua Marker Terdaftar" di tab Marker -- daftar lintas PO.
+ * Lahir dari kejadian tim marker (Agu 2026): input beberapa marker, re-login,
+ * PO tidak ketemu di picker (picker menyaring order Selesai), dan tidak ada
+ * cara memastikan markernya masuk / salah kamar selain menebak nomor PO.
+ * Wadahnya dibuat lewat JS (bukan template) supaya tidak menambah beban
+ * rilis template; dimuat sekali per sesi, tombol Segarkan untuk memuat ulang.
+ */
+function spMuatSemuaMarker_(paksa) {
+  const panel = document.getElementById("sp-panel-marker");
+  if (!panel) return;
+  let wadah = document.getElementById("sp-marker-semua");
+  if (!wadah) {
+    wadah = document.createElement("div");
+    wadah.id = "sp-marker-semua";
+    wadah.className = "sp-kartu";
+    panel.appendChild(wadah);
+  }
+  if (window.SP_SEMUA_MARKER && !paksa) { spRenderSemuaMarker_(); return; }
+  wadah.innerHTML = '<p class="sp-info">Memuat daftar semua marker...</p>';
+
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getDaftarSemuaMarker" })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || d.error) {
+      wadah.innerHTML = '<p class="sp-pesan sp-galat">' +
+        rjdEscapeHtml_((d && d.error) || "Gagal memuat daftar marker.") + '</p>';
+      return;
+    }
+    window.SP_SEMUA_MARKER = d;
+    spRenderSemuaMarker_();
+  })
+  .catch(function () {
+    wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
+  });
+}
+
+function spRenderSemuaMarker_() {
+  const wadah = document.getElementById("sp-marker-semua");
+  const d = window.SP_SEMUA_MARKER;
+  if (!wadah || !d) return;
+  const q = ((document.getElementById("sp-semua-cari") || {}).value || "").toLowerCase();
+
+  const baris = (d.marker || []).filter(function (m) {
+    if (!q) return true;
+    return [m.idMarker, m.idPurchaseOrder, m.brand, m.artikel, m.style,
+      m.kodeMarker, m.jenisKain, m.komponen, m.dibuatOleh]
+      .join(" ").toLowerCase().indexOf(q) !== -1;
+  });
+
+  let html = '<div class="sp-lbl">Semua Marker Terdaftar</div>' +
+    '<p class="sp-info">Lintas PO, terbaru di atas' +
+    (d.total > (d.marker || []).length
+      ? ' &#8212; menampilkan ' + d.marker.length + ' terbaru dari ' + d.total + ' total'
+      : ' &#8212; ' + (d.marker || []).length + ' marker') +
+    '. Ketik untuk mencari: kode, artikel, PO, kain, atau nama pembuat. ' +
+    'Kalau ada yang <b>salah kamar</b> (nempel di PO yang keliru), betulkan ' +
+    'kolom ID Purchase Order barisnya di SD Marker &#8212; selama belum ' +
+    'dipakai gelaran, itu satu sel saja.</p>' +
+    '<input id="sp-semua-cari" oninput="spRenderSemuaMarker_()" ' +
+      'placeholder="cari: furing / Sienna / 260725 / nama pembuat" type="text" value="' +
+      rjdEscapeHtml_(q) + '"/> ' +
+    '<button class="sp-btn-kecil" onclick="spMuatSemuaMarker_(true)" type="button">Segarkan</button>';
+
+  if (!baris.length) {
+    html += '<p class="sp-info">Tidak ada marker yang cocok dengan pencarian.</p>';
+  } else {
+    html += '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
+      '<th>Tanggal</th><th>Kode</th><th>PO</th><th>Artikel &#183; Style</th>' +
+      '<th>Kain</th><th>Pcs/Lapis</th><th>Oleh</th><th>Status</th>' +
+      '</tr></thead><tbody>' +
+      baris.map(function (m) {
+        return '<tr>' +
+          '<td data-label="Tanggal">' + rjdEscapeHtml_(m.tanggal || "-") + '</td>' +
+          '<td data-label="Kode"><b>' + rjdEscapeHtml_(m.kodeMarker || m.idMarker) + '</b>' +
+            (m.komponen ? '<div class="sp-sub">' + rjdEscapeHtml_(m.komponen) + '</div>' : '') + '</td>' +
+          '<td data-label="PO">' + rjdEscapeHtml_(m.idPurchaseOrder || "-") + '</td>' +
+          '<td data-label="Artikel">' + rjdEscapeHtml_([m.artikel, m.style]
+            .filter(function (x) { return x; }).join(" \u00b7 ")) + '</td>' +
+          '<td data-label="Kain">' + rjdEscapeHtml_(m.jenisKain || "-") + '</td>' +
+          '<td data-label="Pcs/Lapis">' + (m.pcsPerLapis || "-") + '</td>' +
+          '<td data-label="Oleh">' + rjdEscapeHtml_((m.dibuatOleh || "").split("@")[0]) + '</td>' +
+          '<td data-label="Status">' + rjdEscapeHtml_(m.status || "-") + '</td>' +
+        '</tr>';
+      }).join("") +
+      '</tbody></table></div>';
+  }
+  wadah.innerHTML = html;
+}
+
 function spMarkerGelaranGanti_() {
   const sel = document.getElementById("sp-gl-marker");
   const opt = sel && sel.options ? sel.options[sel.selectedIndex] : null;
