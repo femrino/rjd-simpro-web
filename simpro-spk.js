@@ -2153,7 +2153,12 @@ function spRenderSemuaMarker_() {
   if (!baris.length) {
     html += '<p class="sp-info">Tidak ada marker yang cocok dengan pencarian.</p>';
   } else {
-    html += '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
+    // sp-tabel-kartu: pola mobile yang SUDAH ADA di CSS -- di bawah 760px
+    // tabel berubah jadi kartu label-nilai (data-label tiap sel sudah diisi
+    // di bawah). Tanpa kelas ini, delapan kolom diperas di layar HP sampai
+    // nomor PO patah huruf per huruf.
+    html += '<div class="sp-tabelwrap sp-tabelwrap-kartu">' +
+      '<table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
       '<th>Tanggal</th><th>Kode</th><th>PO</th><th>Artikel &#183; Style</th>' +
       '<th>Kain</th><th>Pcs/Lapis</th><th>Oleh</th><th>Status</th>' +
       '</tr></thead><tbody>' +
