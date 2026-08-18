@@ -216,6 +216,20 @@ function spCariPO() {
  * rangkaian (potong -> bagi -> cetak SPK), jadi memaksa cari PO dua kali cuma
  * jadi friksi tanpa manfaat.
  */
+/**
+ * Tab yang sedang aktif. window.SP_TAB baru terisi setelah spSwitchTab
+ * pertama kali dipanggil -- padahal SATU tab sudah aktif dari HTML (class
+ * "active" bawaan template) tanpa pernah diklik. Fallback lama hardcode
+ * "cutting": buka halaman -> tab Gelaran aktif bawaan -> pilih PO ->
+ * halaman LOMPAT ke Hasil Cutting. Sumber kebenarannya tombol yang
+ * benar-benar aktif di DOM, bukan tebakan.
+ */
+function spTabAktif_() {
+  if (window.SP_TAB) return window.SP_TAB;
+  const btn = document.querySelector(".sp-tab.active");
+  return (btn && btn.dataset && btn.dataset.tab) || "cutting";
+}
+
 function spPilihPO(idPO) {
   document.getElementById("sp-po-dropdown").classList.add("hidden");
   document.getElementById("sp-po-cari").value = idPO;
@@ -224,7 +238,7 @@ function spPilihPO(idPO) {
   window.SP_PO = null;
   window.SP_CUT = null;
   window.SP_SETOR = null;
-  spSwitchTab(window.SP_TAB || "cutting");
+  spSwitchTab(spTabAktif_());
 }
 
 /** Muat data tab "Loading" (perilaku lama spPilihPO). */
@@ -555,7 +569,7 @@ function spTerapkanBagian_(d) {
   // Kalau tab yang sedang aktif ternyata disembunyikan, pindah ke tab pertama
   // yang boleh. Tanpa ini, pemakai melihat panel kosong tanpa tab aktif --
   // terlihat seperti halaman rusak.
-  const aktif = window.SP_TAB || "cutting";
+  const aktif = spTabAktif_();
   const perluAktif = SP_BAGIAN_TAB[aktif];
   const bolehAktif = !perluAktif || (Array.isArray(perluAktif)
     ? perluAktif.some(function (p) { return bagian.indexOf(p) !== -1; })
@@ -2333,9 +2347,23 @@ function spRenderFormGelaran_() {
   // Warna juga bercadangan: kalau backend belum mengirimnya, ambil dari data
   // cutting. Kalau dua-duanya kosong, form tetap tampil dengan input teks --
   // form yang mati total lebih buruk daripada form yang harus diketik manual.
-  let warna = window.SP_PO_WARNA || [];
+  // Item aktif dipakai DUA saringan di bawah (warna dan jenis kain) --
+  // dua-duanya milik (artikel+style), bukan milik PO.
+  const itemAktifGl = (window.SP_PO_DAFTAR_ITEM || [])[spItemGelaranIdx_()] || {};
+
+  // Warna mengikuti ITEM yang dipilih (v90, menyusul kain di v89): baris
+  // Rincian SO milik item ini saja -- warna koko tidak ditawarkan saat yang
+  // digelar Denara Dress. Cadangan berjenjang kalau backend lama: gabungan
+  // se-PO, lalu dari data cutting (disaring style item kalau ada).
+  let warna = (itemAktifGl.warna && itemAktifGl.warna.length)
+    ? itemAktifGl.warna.slice()
+    : (window.SP_PO_WARNA || []);
   if (!warna.length && window.SP_CUT && window.SP_CUT.baris) {
-    warna = window.SP_CUT.baris.map(function (b) { return b.warna; })
+    warna = window.SP_CUT.baris
+      .filter(function (b) {
+        return !itemAktifGl.style || !b.style || b.style === itemAktifGl.style;
+      })
+      .map(function (b) { return b.warna; })
       .filter(function (w, i, a) { return w && a.indexOf(w) === i; });
   }
   // Jenis kain dari konteks PO (komposisi artikel + kain klien). Versi pertama
@@ -2351,7 +2379,6 @@ function spRenderFormGelaran_() {
   // rekap kain -- form yang mati total lebih buruk daripada daftar yang
   // kurang presisi. Ganti item -> spGantiItemGelaran_ -> render ulang ->
   // daftar ini ikut berganti.
-  const itemAktifGl = (window.SP_PO_DAFTAR_ITEM || [])[spItemGelaranIdx_()] || {};
   let kain = (itemAktifGl.jenisKain && itemAktifGl.jenisKain.length)
     ? itemAktifGl.jenisKain.slice()
     : (window.SP_PO_KAIN || []);
