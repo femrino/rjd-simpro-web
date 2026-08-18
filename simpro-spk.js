@@ -174,8 +174,17 @@ function spMuatDaftarPO() {
     }
     // Order yang sudah Selesai tidak perlu dibagi lagi -- menyembunyikannya
     // membuat daftar jauh lebih pendek & relevan untuk lantai produksi.
-    window.SP_DAFTAR_PO = (d.daftar || []).filter(function (p) {
+    // TAPI disimpan terpisah, bukan dibuang: kasus Sienna (Agu 2026) -- PO
+    // sudah Selesai, tim marker masih perlu membuat marker furing untuknya,
+    // dan picker menjawab "tidak ditemukan" seolah datanya lenyap. Mengetik
+    // NOMOR PO-nya adalah niat eksplisit; untuk itu pintunya tetap terbuka
+    // (lihat spCariPO).
+    const semuaPO = d.daftar || [];
+    window.SP_DAFTAR_PO = semuaPO.filter(function (p) {
       return String(p.status || "").toLowerCase() !== "selesai";
+    });
+    window.SP_DAFTAR_PO_SELESAI = semuaPO.filter(function (p) {
+      return String(p.status || "").toLowerCase() === "selesai";
     });
   })
   .catch(function () {
@@ -193,20 +202,31 @@ function spCariPO() {
   const hasil = semua.filter(function (p) {
     return [p.idPurchaseOrder, p.noSO, p.namaKlien, (p.artikel || []).join(" ")]
       .join(" ").toLowerCase().indexOf(q) !== -1;
-  }).slice(0, 25);
+  });
+  // PO Selesai: hanya kalau ketikan cocok dengan NOMOR PO-nya sendiri --
+  // bukan nama klien / artikel, supaya penjelajahan biasa tetap bersih.
+  (window.SP_DAFTAR_PO_SELESAI || []).forEach(function (p) {
+    if (String(p.idPurchaseOrder || "").toLowerCase().indexOf(q) !== -1) {
+      hasil.push(Object.assign({}, p, { spSelesai: true }));
+    }
+  });
+  const potong = hasil.slice(0, 25);
 
   dd.classList.remove("hidden");
-  if (!hasil.length) {
+  if (!potong.length) {
     dd.innerHTML = '<div class="sp-po-kosong">Tidak ada PO yang cocok.</div>';
     return;
   }
-  dd.innerHTML = hasil.map(function (p) {
+  dd.innerHTML = potong.map(function (p) {
     return '<div class="sp-po-opsi" data-id="' + rjdEscapeHtml_(p.idPurchaseOrder) +
-      '" onclick="spPilihPO(this.dataset.id)">' +
-      '<div class="sp-po-opsi-id">' + rjdEscapeHtml_(p.idPurchaseOrder) + '</div>' +
+      '" onclick="spPilihPO(this.dataset.id)"' +
+      (p.spSelesai ? ' style="opacity:.75"' : '') + '>' +
+      '<div class="sp-po-opsi-id">' + rjdEscapeHtml_(p.idPurchaseOrder) +
+        (p.spSelesai ? ' <span style="font-weight:600;color:#8F2C22">&#183; Selesai</span>' : '') + '</div>' +
       '<div class="sp-po-opsi-sub">' + rjdEscapeHtml_(p.namaKlien) +
         ' &#183; ' + (p.jumlah || 0) + ' pcs' +
-        (p.deadline ? ' &#183; deadline ' + rjdEscapeHtml_(p.deadline) : '') + '</div>' +
+        (p.deadline ? ' &#183; deadline ' + rjdEscapeHtml_(p.deadline) : '') +
+        (p.spSelesai ? ' &#183; order sudah Selesai &#8212; lanjutkan hanya untuk marker/re-cut susulan' : '') + '</div>' +
     '</div>';
   }).join("");
 }
