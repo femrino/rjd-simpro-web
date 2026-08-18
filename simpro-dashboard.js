@@ -68,6 +68,10 @@ function dbLogout(){
 function dbSwitchTab(sectionName){
   document.querySelectorAll("#db-section-tabs .lp-section-tab").forEach(function(tab){
     tab.classList.toggle("active", tab.dataset.section === sectionName);
+    // Gulung tab aktif ke tengah (v102) -- helper dari simpro-global.js.
+    if (tab.dataset.section === sectionName && typeof rjdGulungTabKeTengah === "function") {
+      rjdGulungTabKeTengah(tab);
+    }
   });
   document.querySelectorAll("#db-app .lp-section-panel").forEach(function(panel){
     panel.style.display = (panel.dataset.panel === sectionName) ? "" : "none";
@@ -1065,15 +1069,7 @@ function omApprove(idOrderRequest){
   .then(function(r){ return r.json(); })
   .then(function(data){
     if(data.success){
-      // Peringatan kain (v91): approve TIDAK diblokir, tapi CS harus tahu
-      // SEKARANG -- dialah orang terdekat ke dokumen order; kalau lolos
-      // sampai lantai potong, nama kain lahir dari ketikan bebas operator.
-      var pesanKain = (data.itemTanpaKain && data.itemTanpaKain.length)
-        ? "\n\n\u26A0 KAIN BELUM TERDEFINISI untuk: " + data.itemTanpaKain.join(", ") +
-          ".\nIsi Komposisi Kain lewat Edit Order (panel ARTIKEL) atau catat Kain Dari Klien " +
-          "sebelum PO turun ke produksi."
-        : "";
-      alert("Order disetujui. PO baru: " + data.idPurchaseOrder + pesanKain);
+      alert("Order disetujui. PO baru: " + data.idPurchaseOrder);
       omTutupModalProofing(); // aksi selesai -> modal ditutup biar nggak nampilin data basi
       dbRenderOrderMasuk();
     } else {

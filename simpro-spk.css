@@ -837,3 +837,55 @@ body.sp-siap #sp-hero .lead { display: none; }
   #sp-marker-semua .sp-tabel-kartu td[data-label="PO"] b,
   #sp-marker-semua .sp-tabel-kartu td[data-label="PO"] { font-weight: 700; color: var(--ink); }
 }
+
+/* ============================================================
+   ADOPSI DESAIN TAB PORTAL v102 -- satu bahasa untuk tiga halaman
+   ============================================================
+   Portal Klien & Dashboard sudah lama memakai satu bahasa tab
+   (.lp-section-tabs: kartu putih sticky, pil navy saat aktif). Bar
+   produksi (pil lepas v96) kini ikut bahasa yang sama -- blok ini
+   MENIMPA gaya v96 di atasnya lewat kaskade.
+
+   top: 72px = ANGKA MANUAL, mengikuti pola terdokumentasi di portal
+   (78px) & dashboard (68px): tinggi header dihitung tangan, tidak
+   otomatis mengikuti. Kalau ukuran header halaman produksi berubah,
+   angka ini wajib disesuaikan ulang.
+   ============================================================ */
+.sp-tabs {
+  position: sticky;
+  top: 72px;
+  z-index: 30;
+  gap: 4px;
+  background: var(--white);
+  border: 1px solid var(--line, #E5E0D6);
+  border-radius: 14px;
+  padding: 6px;
+  margin: 14px 0 20px;
+  box-shadow: 0 1px 3px rgba(20, 33, 61, .06);
+}
+.sp-tabs::-webkit-scrollbar { height: 3px; }
+
+.sp-tabs .sp-tab {
+  flex: 1;
+  min-width: fit-content;
+  padding: 10px 18px;
+  font-family: 'Archivo', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  transition: all .25s cubic-bezier(.4, 0, .2, 1);
+  white-space: nowrap;
+}
+.sp-tabs .sp-tab:hover {
+  color: var(--navy);
+  background: var(--line-soft, #EFEAE0);
+}
+.sp-tabs .sp-tab.active {
+  background: var(--navy);
+  color: var(--cream);
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(23, 33, 52, .2);
+}

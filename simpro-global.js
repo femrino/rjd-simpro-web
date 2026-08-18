@@ -542,9 +542,24 @@ function setupToggleGroup(containerId, onSelect){
  * Discoped ke class .lp-detail-tab/.lp-detail-panel (BUKAN .lp-section-tab
  * yang dipakai tab utama Dashboard) -- lihat komentar CSS-nya kenapa ini penting.
  */
+/**
+ * Gulung tombol tab aktif ke tengah pandangan -- untuk bar tab yang bisa
+ * digulung menyamping (.lp-section-tabs & kerabatnya). Tanpa ini, pindah
+ * ke tab yang sedang terpotong di tepi layar terasa "hilang". Lahir di
+ * halaman produksi (v96), diadopsi lintas halaman di v102.
+ */
+function rjdGulungTabKeTengah(btn){
+  try {
+    if (btn && btn.scrollIntoView) {
+      btn.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+    }
+  } catch (e) { /* browser tua: biarkan */ }
+}
+
 function switchSectionTab(sectionName){
   document.querySelectorAll(".lp-detail-tab").forEach(function(tab){
     tab.classList.toggle("active", tab.dataset.section === sectionName);
+    if (tab.dataset.section === sectionName) rjdGulungTabKeTengah(tab);
   });
   document.querySelectorAll(".lp-detail-panel").forEach(function(panel){
     panel.style.display = (panel.dataset.panel === sectionName) ? "" : "none";
