@@ -533,20 +533,13 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 .sp-tahap-jam { font-size: 11px; font-family: 'IBM Plex Mono', monospace;
   color: var(--thread); font-weight: 600; }
 
-/* ---- Jeda antar fase di deret tab ----
-   Versi kolom per fase dicoba dan rusak: .sp-tab punya `flex: 1`, dan di dalam
-   wadah flex-direction:column itu meregangkan TINGGI. Diganti dengan pemisah
-   tipis -- jauh lebih sederhana, dan tidak melawan gaya tab yang sudah ada. */
-.sp-tab-awal { position: relative; margin-left: 10px; }
-.sp-tab-awal::before { content: ""; position: absolute; left: -6px; top: 20%;
-  bottom: 20%; width: 1px; background: var(--line); }
-
-@media (max-width: 760px) {
-  /* Di layar sempit tab membungkus jadi beberapa baris, dan garis pemisah
-     vertikal jadi menggantung di tempat acak -- lebih baik dihilangkan. */
-  .sp-tab-awal { margin-left: 0; }
-  .sp-tab-awal::before { display: none; }
-}
+/* ---- [DIHAPUS v98] Jeda antar fase di deret tab ----
+   Blok asli v85 menggambar garis pemisah + jarak ekstra di .sp-tab-awal.
+   Dicoba dipertegas di v96-v97, lalu diputuskan DIHAPUS TOTAL: pemakai
+   membacanya sebagai jarak yang tidak rata, bukan struktur -- elemen yang
+   butuh dijelaskan sudah gagal pada tugasnya. Urutan kiri-ke-kanan sudah
+   memuat urutan fase. Jangan dihidupkan lagi; kelas sp-tab-awal di markup
+   dibiarkan (tidak berbahaya, dan bisa berguna untuk hal lain kelak). */
 
 /* ---- Panduan pengisian per tab ----
    TERTUTUP secara bawaan: yang sudah hafal tidak perlu melewatinya tiap kali,
@@ -814,21 +807,11 @@ body.sp-siap #sp-hero .lead { display: none; }
   box-shadow: 0 2px 8px rgba(23, 33, 52, .25);
 }
 
-/* Pemisah fase: garis tipis di kiri tab pertama tiap fase. */
-.sp-tab-awal,
-.sp-tabs .sp-tab-awal {
-  margin-left: 14px;
-  position: relative;
-}
-.sp-tab-awal::before {
-  content: "";
-  position: absolute;
-  left: -10px;
-  top: 15%;
-  height: 70%;
-  width: 1px;
-  background: var(--line, #E5E0D6);
-}
+/* [DIHAPUS v98] Pemisah fase (jarak ekstra + garis di kiri sp-tab-awal).
+   Alasan: di bar gulung, struktur fasenya hampir tak pernah terlihat utuh,
+   dan pemakai paling paham sekalipun membacanya sebagai jarak yang tidak
+   rata -- elemen yang butuh dijelaskan sudah gagal pada tugasnya. Urutan
+   kiri-ke-kanan sudah memuat struktur fase. Jangan dihidupkan lagi. */
 
 /* Aturan responsif lama (flex-basis 45%, wrap) sudah kalah oleh
    spesifisitas .sp-tabs .sp-tab di atas -- di HP tetap satu baris gulung. */
@@ -837,18 +820,20 @@ body.sp-siap #sp-hero .lead { display: none; }
 }
 
 /* ============================================================
-   PENEGASAN PEMISAH FASE v97
+   DAFTAR SEMUA MARKER DI HP v98 -- ikut pola kartu
    ============================================================
-   Jarak ekstra sebelum Gelaran/Loading/Riwayat adalah PEMISAH FASE
-   (Persiapan | Potong | Distribusi | Arsip) -- tapi garis 1px v96 nyaris
-   tak terlihat di layar HP, jadi jarak beda-beda terbaca sebagai
-   kecelakaan, bukan struktur. Pemisah yang tak terlihat lebih buruk
-   daripada tidak ada. Dipertegas: lebih tebal, lebih gelap, ujung bulat.
-   ============================================================ */
-.sp-tab-awal::before {
-  width: 2px;
-  top: 20%;
-  height: 60%;
-  border-radius: 2px;
-  background: #C7BFAE;
+   Tabel daftar global memakai .sp-tabel-kartu (pola mobile yang sudah ada:
+   baris -> kartu label-nilai). Di mode kartu, bingkai + sticky-header wadah
+   scroll dari gaya suntikan JS tidak relevan lagi -- kartu punya bingkai
+   sendiri, dan thead-nya memang disembunyikan. Batas tinggi 60vh + scroll
+   vertikal DIPERTAHANKAN supaya 180+ kartu tidak menelan halaman. */
+@media (max-width: 760px) {
+  #sp-marker-semua .sp-tabelwrap {
+    border: none;
+    border-radius: 0;
+  }
+  /* Nilai penting tetap menonjol di kartu */
+  #sp-marker-semua .sp-tabel-kartu td[data-label="Kode"] { font-size: 15px; }
+  #sp-marker-semua .sp-tabel-kartu td[data-label="PO"] b,
+  #sp-marker-semua .sp-tabel-kartu td[data-label="PO"] { font-weight: 700; color: var(--ink); }
 }
