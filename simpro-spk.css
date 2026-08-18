@@ -640,3 +640,114 @@ body.sp-siap #sp-hero .lead { display: none; }
   .sp-pratinjau-tutup { top: 8px; right: 8px; }
 }
 
+
+/* ============================================================
+   RESTYLE FORM v95 -- bahasa desain kalkulator/prototipe
+   ============================================================
+   Permintaan lapangan (Agu 2026): field form lantai produksi terasa
+   "browser polos" -- kecil, putih, padat. Referensi kenyamanan: kartu
+   kalkulator harga (field besar berlatar krem, label tegas, judul seksi
+   mono berjarak). Blok ini MENIMPA gaya di atasnya lewat urutan kaskade --
+   markup & JS tidak berubah, jadi berlaku serentak untuk SEMUA tab:
+   Pola, Sampel, Marker, Gelaran, Hasil Cutting, Loading, Konfirmasi,
+   Setoran, Riwayat.
+
+   Aturan main blok ini:
+   - Selector luas dulu (semua input/select/textarea di panel sp-*),
+     lalu PENGECUALIAN kompak di bawahnya (kotak susunan size, qty
+     konfirmasi) -- urutannya penting, jangan dibalik.
+   - Hanya kelas yang SUDAH ADA. Tidak ada kelas baru, supaya tidak ada
+     ketergantungan markup baru yang diam-diam.
+   ============================================================ */
+
+/* ---------- judul seksi: mono, uppercase, berjarak, garis putus ---------- */
+.sp-lbl {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--gold, #C8964A);
+  font-weight: 700;
+  margin: 20px 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--line, #E5E0D6);
+}
+.sp-subjudul {
+  font-size: 14.5px;
+  margin: 20px 0 10px;
+}
+
+/* ---------- label field: tegas, tinta penuh ---------- */
+.sp-grid3 label,
+.sp-field label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  gap: 6px;
+}
+
+/* ---------- field: besar, krem, sudut lembut ---------- */
+/* [id^="sp-panel-"] menjangkau semua panel tab sekaligus; kartu PO ikut. */
+[id^="sp-panel-"] input:not([type="radio"]):not([type="checkbox"]):not([type="file"]),
+[id^="sp-panel-"] select,
+[id^="sp-panel-"] textarea,
+#sp-kartu-po .sp-po-field input {
+  padding: 12px 14px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--cream);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  box-sizing: border-box;
+}
+[id^="sp-panel-"] input:focus,
+[id^="sp-panel-"] select:focus,
+[id^="sp-panel-"] textarea:focus,
+#sp-kartu-po .sp-po-field input:focus {
+  outline: 2px solid var(--thread);
+  outline-offset: 1px;
+  background: var(--white);
+}
+/* select tetap kelihatan select: panah bawaan browser dipertahankan,
+   cuma diberi ruang kanan supaya teks tidak menabrak panah. */
+[id^="sp-panel-"] select { padding-right: 30px; }
+
+/* ---------- PENGECUALIAN kompak (harus SETELAH selector luas) ---------- */
+/* Kotak susunan size: satu angka kecil per ukuran -- besar justru boros. */
+.sp-susun-item input,
+[id^="sp-panel-"] .sp-susun-item input {
+  width: 56px;
+  padding: 9px 4px;
+  font-size: 14px;
+  text-align: center;
+  border-radius: 9px;
+}
+/* Qty konfirmasi per size: grid rapat, padding besar merusak barisnya. */
+[id^="sp-panel-"] .sp-konf-qty-input {
+  padding: 9px 4px;
+  font-size: 14px;
+  border-radius: 8px;
+}
+
+/* ---------- tombol ---------- */
+.sp-simpan-btn {
+  padding: 15px 0;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 12px;
+}
+.sp-btn-kecil {
+  padding: 8px 14px;
+  font-size: 12.5px;
+  border-radius: 9px;
+}
+
+/* ---------- kartu pilihan mode (Gelaran normal / Re-cut) ---------- */
+.sp-mode-opsi {
+  padding: 14px 16px;
+  border-radius: 12px;
+}
+
+/* ---------- pratinjau hitung: sedikit lebih lapang ---------- */
+.sp-hitung { padding: 14px 16px; border-radius: 11px; }
