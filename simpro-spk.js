@@ -246,8 +246,10 @@ function spCariPO() {
  */
 function spTabAktif_() {
   if (window.SP_TAB) return window.SP_TAB;
-  const btn = document.querySelector(".sp-tab.active");
-  return (btn && btn.dataset && btn.dataset.tab) || "cutting";
+  // v112: cari di bar SUBTAB saja -- tombol fase juga berkelas .sp-tab
+  // tapi tanpa data-tab, dan dialah yang tampil pertama di DOM.
+  const btn = document.querySelector("#sp-subtabs .sp-tab.active");
+  return (btn && btn.dataset && btn.dataset.tab) || "gelar";
 }
 
 function spPilihPO(idPO) {
@@ -919,13 +921,24 @@ function spSwitchTab(tab) {
   }
   spRenderFase_();
   spRenderSub_();
-  document.querySelectorAll(".sp-tab").forEach(function (b) {
+  // HANYA bar subtab (perbaikan v112): selector lama menyapu SEMUA .sp-tab
+  // termasuk tombol fase (ber-data-fase, tanpa data-tab) -- kelas active
+  // fase yang barusan dipasang renderer langsung dilucuti lagi di sini,
+  // pil navy fase tak pernah terlihat. Fase milik spRenderFase_, bar ini
+  // hanya mengurus langkahnya.
+  document.querySelectorAll("#sp-subtabs .sp-tab").forEach(function (b) {
     b.classList.toggle("active", b.dataset.tab === tab);
   });
   // Bar tab v96 satu baris gulung: tab aktif dibawa ke tengah pandangan --
   // tanpa ini, pindah ke tab yang sedang terpotong di tepi terasa "hilang".
   try {
-    const btnAktif = document.querySelector('.sp-tab[data-tab="' + tab + '"]');
+    // dua bar, dua gulungan: tombol FASE aktif dan tombol SUBTAB aktif
+    // sama-sama dibawa ke tengah pandangan (v112).
+    const btnFase = document.querySelector('#sp-tabs .sp-tab[data-fase="' + window.SP_FASE + '"]');
+    if (btnFase && btnFase.scrollIntoView) {
+      btnFase.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+    }
+    const btnAktif = document.querySelector('#sp-subtabs .sp-tab[data-tab="' + tab + '"]');
     if (btnAktif && btnAktif.scrollIntoView) {
       btnAktif.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
     }
