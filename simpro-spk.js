@@ -581,7 +581,7 @@ const SP_FASE_PETA = [
   ["loading",    "Loading",       [["bagi", "Bagi ke Line"], ["spkrekap", "SPK & Rekap"]]],
   ["sewing",     "Sewing",        [["konfpot", "Konfirmasi Potongan"], ["setor", "Setoran ke Finishing"]]],
   ["finishing",  "Finishing",     [["konfset", "Konfirmasi Setoran"], ["qc", "QC"], ["qcring", "Ringkasan QC"]]],
-  ["packing",    "Packing & Kirim", [["stok", "Stok Siap Kirim"]]],
+  ["packing",    "Packing & Kirim", [["stok", "Stok Siap Kirim"], ["terkirim", "Terkirim"]]],
   ["riw",        "Riwayat",       [["riw", "Riwayat"]]]
 ];
 
@@ -667,6 +667,7 @@ const SP_BAGIAN_TAB = {
   approval: ["pola", "sampel"],
   spkrekap: "loading",
   stok:    ["finishing", "gudang"],   // kursi gudang disiapkan duluan
+  terkirim: ["finishing", "gudang"],
   qcring:  "qc",
   // Konfirmasi terpecah dua subtab bermode (v116): sewing menerima potongan
   // dari loading, finishing menerima setoran dari sewing. Entri "konf" lama
@@ -993,6 +994,7 @@ function spSwitchTab(tab) {
   if (tab === "approval") { spMuatApproval_(); return; }
   if (tab === "spkrekap") { if (!window.SP_PO) spMuatDistribusi(); return; }
   if (tab === "stok") { spMuatStok_(); return; }
+  if (tab === "terkirim") { spMuatTerkirim_(); return; }
   if (tab === "gelar") { spMuatGelaran(); return; }
   if (tab === "riw") { spMuatRiwayat(); return; }
   if (tab === "setor") { spMuatLineSetoran_(); spMuatSetoran(); return; }
@@ -4884,6 +4886,65 @@ function apsSimpan_() {
   .catch(function () {
     alert("Gagal menghubungi server.");
     if (btn) { btn.disabled = false; btn.textContent = "Simpan Kejadian"; }
+  });
+}
+
+// ============ TERKIRIM (v124) ============
+// Tampilan agregat SURAT JALAN untuk PO aktif -- data yang sama yang
+// dipakai mesin stok sebagai pengurang, kini disajikan sebagai daftar.
+// Satu rute (getStokSiapKirim), dua subtab: tidak ada buku kedua.
+
+function spMuatTerkirim_() {
+  const panel = document.getElementById("sp-panel-terkirim");
+  if (!panel) return;
+  const po = window.SP_PO_AKTIF || "";
+  if (!po) {
+    panel.innerHTML = '<div class="sp-card"><h3 class="sp-judul">Terkirim</h3>' +
+      '<p class="sp-info">Pilih Purchase Order dulu lewat kartu di atas.</p></div>';
+    return;
+  }
+  panel.innerHTML = '<div class="sp-card"><p class="sp-info">Memuat daftar kiriman...</p></div>';
+  fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
+    idToken: SP_ID_TOKEN, action: "getStokSiapKirim", idPurchaseOrder: po }) })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (d.error) {
+      panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' + rjdEscapeHtml_(d.error) + '</p></div>';
+      return;
+    }
+    const daftar = d.pengiriman || [];
+    let html = '<div class="sp-card"><h3 class="sp-judul">Terkirim</h3>' +
+      '<p class="sp-info">Semua surat jalan PO ini (yang batal tidak dihitung). Total terkirim <b>' +
+      (d.totalTerkirim || 0) + ' pcs</b> dari lolos QC <b>' + (d.totalLolos || 0) + ' pcs</b>. ' +
+      '<button class="sp-btn-kecil" onclick="spMuatTerkirim_()" type="button">Segarkan</button></p>';
+    if (!daftar.length) {
+      html += '<p class="sp-info">Belum ada surat jalan untuk PO ini.</p></div>';
+      panel.innerHTML = html;
+      return;
+    }
+    html += daftar.map(function (p) {
+      const rincian = (p.baris || []).map(function (b) {
+        return rjdEscapeHtml_([b.artikel, b.style].filter(Boolean).join(" \u00b7 ")) +
+          ' <b>' + rjdEscapeHtml_(b.warna || "-") + '</b> ' +
+          rjdEscapeHtml_(b.size) + '&#215;' + b.jumlah;
+      }).join(" &nbsp;&#183;&nbsp; ");
+      return '<div style="padding:14px 0;border-bottom:1px dashed var(--line,#E5E0D6)">' +
+        '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">' +
+          '<div><b>' + rjdEscapeHtml_(p.tanggal || "-") + '</b>' +
+            (p.metode ? ' &#183; ' + rjdEscapeHtml_(p.metode) : '') +
+            (p.jenis ? ' &#183; ' + rjdEscapeHtml_(p.jenis) : '') +
+            (p.noResi ? '<div class="sp-sub">Resi: ' + rjdEscapeHtml_(p.noResi) + '</div>' : '') +
+          '</div>' +
+          '<div style="font-family:\'IBM Plex Mono\',monospace;font-weight:700">' + p.total + ' pcs</div>' +
+        '</div>' +
+        '<div class="sp-sub" style="margin-top:6px">' + rincian + '</div>' +
+      '</div>';
+    }).join("");
+    html += '</div>';
+    panel.innerHTML = html;
+  })
+  .catch(function () {
+    panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">Gagal menghubungi server.</p></div>';
   });
 }
 
