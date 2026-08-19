@@ -253,6 +253,8 @@ function spTabAktif_() {
 }
 
 function spPilihPO(idPO) {
+  // PO baru dipilih -> saringan konfirmasi menyala lagi (v117).
+  window.SP_KONF_SEMUA = false;
   document.getElementById("sp-po-dropdown").classList.add("hidden");
   document.getElementById("sp-po-cari").value = idPO;
   spPesan_("sp-po-pesan", "", false);
@@ -974,11 +976,12 @@ function spSwitchTab(tab) {
   // v107: tab QC memakai kartu PO BERSAMA seperti tab lain -- picker internal
   // bawaan qc.html-lah yang disembunyikan (lihat qcSinkronPOAktif_). Satu
   // halaman satu cara memilih PO.
-  // konfpot/konfset (v116): panel konfirmasi bekerja LINTAS PO (daftar
-  // serah-terima semua order) -- kartu PO bersama tidak relevan di sana,
-  // sama seperti Riwayat.
-  if (kartuPO) kartuPO.classList.toggle("hidden",
-    tab === "konfpot" || tab === "konfset" || tab === "riw");
+  // v117: kartu PO tampil juga di konfpot/konfset -- sebagai PENYARING
+  // OPSIONAL, bukan syarat. Konfirmasi itu kotak masuk lintas-PO: kosong
+  // = tampil semua (orang membukanya justru untuk tahu apa yang menunggu);
+  // PO terpilih = daftar tersaring, dengan chip "tampilkan semua" untuk
+  // melepas saringan tanpa mengganggu PO aktif tab lain.
+  if (kartuPO) kartuPO.classList.toggle("hidden", tab === "riw");
 
   if (tab === "konfpot") { spMuatKonfMode_("potongan"); return; }
   if (tab === "konfset") { spMuatKonfMode_("setoran"); return; }
@@ -1278,6 +1281,11 @@ function spMuatKonfMode_(jenis) {
   spMuatKonfirmasi();
 }
 
+function spKonfSemua_() {
+  window.SP_KONF_SEMUA = true;
+  spRenderKonfirmasi();
+}
+
 function spSwitchKonf(jenis) {
   window.SP_KONF_JENIS = jenis;
   document.querySelectorAll(".sp-konf-tab").forEach(function (b) {
@@ -1328,14 +1336,34 @@ function spIsiFilterLineKonf_(daftarLine) {
 function spRenderKonfirmasi() {
   const wadah = document.getElementById("sp-konf-daftar");
   if (!wadah) return;
-  const daftar = window.SP_KONF || [];
+  const semua = window.SP_KONF || [];
+
+  // Penyaring PO opsional (v117): SP_PO_AKTIF menyaring, SP_KONF_SEMUA
+  // (chip "tampilkan semua") melepasnya secara lokal tanpa menghapus PO
+  // aktif -- tab lain tetap memegang PO-nya. Memilih PO baru di kartu
+  // otomatis memasang saringan lagi (spPilihPO mereset penanda ini).
+  const poFilter = (!window.SP_KONF_SEMUA && window.SP_PO_AKTIF) ? window.SP_PO_AKTIF : "";
+  const daftar = poFilter
+    ? semua.filter(function (k) { return String(k.idPurchaseOrder || "").trim() === poFilter; })
+    : semua;
+
+  let chip = "";
+  if (poFilter) {
+    chip = '<p class="sp-info">Menampilkan hanya <b>' + rjdEscapeHtml_(poFilter) + '</b> (' +
+      daftar.length + ' dari ' + semua.length + ') &#183; ' +
+      '<button class="sp-btn-kecil" onclick="spKonfSemua_()" type="button">Tampilkan semua PO</button></p>';
+  }
 
   if (!daftar.length) {
-    wadah.innerHTML = '<p class="sp-info">Tidak ada serah-terima yang menunggu konfirmasi.</p>';
+    wadah.innerHTML = chip + '<p class="sp-info">Tidak ada serah-terima yang menunggu konfirmasi' +
+      (poFilter ? ' untuk PO ini' : '') + '.</p>';
     return;
   }
 
-  wadah.innerHTML = daftar.map(function (k, i) {
+  wadah.innerHTML = chip + daftar.map(function (k) {
+    // indeks HARUS menunjuk ke SP_KONF asli -- tombol Terima/Selisih membaca
+    // window.SP_KONF[i]; indeks daftar tersaring akan salah kartu.
+    const i = semua.indexOf(k);
     const sizes = Object.keys(k.sizeQty || {});
     return '<div class="sp-konf-kartu" id="sp-konf-' + i + '">' +
       '<div class="sp-konf-head">' +
