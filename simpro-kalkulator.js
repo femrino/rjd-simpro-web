@@ -97,6 +97,52 @@ function khAutoHitung_(){
   khHitung();
 }
 
+/* ============================================================
+ * PEMBANDING SMV (v132) -- menutup celah menawar MODEL BARU
+ * ============================================================ */
+let KH_PEMBANDING = [];
+
+function khMuatPembanding_(){
+  fetch(KH_API_URL, { method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ action: "getDaftarSmvArtikel", idToken: KH_ID_TOKEN }) })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    const sel = document.getElementById("kh-pembanding");
+    if (!sel) return;
+    if (d.error || !(d.daftar || []).length) {
+      sel.innerHTML = '<option value="">' + (d.error ? "gagal memuat" :
+        "belum ada resep artikel di arsip") + '</option>';
+      return;
+    }
+    KH_PEMBANDING = d.daftar;
+    sel.innerHTML = '<option value="">-- pilih artikel serupa --</option>' +
+      d.daftar.map(function(x, i){
+        return '<option value="' + i + '">' + khEsc_(
+          [x.artikel, x.style].filter(Boolean).join(" \u00b7 ")) +
+          ' \u2014 ' + x.totalMenit + ' mnt' +
+          (x.cakupan < 100 ? ' (resep ' + x.cakupan + '%)' : '') + '</option>';
+      }).join("");
+  })
+  .catch(function(){ /* biarkan; dropdown tetap berpesan */ });
+}
+
+function khPakaiPembanding_(){
+  const sel = document.getElementById("kh-pembanding");
+  const x = KH_PEMBANDING[Number(sel && sel.value)];
+  if (!x) return;
+  document.getElementById("kh-smv-cut").value = x.cutting || "";
+  document.getElementById("kh-smv-sew").value = x.sewing || "";
+  document.getElementById("kh-smv-fin").value = x.finishing || "";
+  if (x.cakupan < 100) {
+    khFormError_("Resep pembanding baru terisi " + x.cakupan +
+      "% \u2014 menitnya kemungkinan TERLALU RENDAH. Naikkan Model baru % lebih tebal.");
+  } else {
+    khFormError_("");
+  }
+  khOnUbah_();   // simpan draf + auto-hitung
+}
+
 const KH_DRAF_KUNCI = "kh_draf_v3";
 
 function khSimpanDraf_(){
@@ -150,6 +196,12 @@ function khBangunForm_(){
           '<div><input id="kh-smv-sew" inputmode="decimal" type="text"/><span>Sewing</span></div>' +
           '<div><input id="kh-smv-fin" inputmode="decimal" type="text"/><span>Finishing</span></div>' +
         '</div></div>' +
+      '<div class="kh-field"><label>Pembanding SMV (untuk model baru)</label>' +
+        '<p class="kh-sub">Model baru belum punya jejak menit? Ambil dari artikel serupa yang pernah jalan, lalu naikkan <b>Model baru %</b> 10\u201315 sebagai bantalan.</p>' +
+        '<div style="display:flex;gap:8px">' +
+          '<select id="kh-pembanding" style="flex:1"><option value="">-- muat daftar dulu --</option></select>' +
+          '<button class="kh-btn" id="kh-pembanding-pakai" onclick="khPakaiPembanding_()" style="width:auto;padding:0 18px" type="button">Pakai</button>' +
+        '</div></div>' +
       '<div class="kh-row3">' + F("Qty (pcs)","kh-qty","wajib \u2014 mis. 1000") +
         '<div class="kh-field"><label>Jenis order</label>' +
           '<select id="kh-jenis"><option value="CMT">CMT</option><option value="Maklon">Maklon</option></select></div>' +
@@ -180,6 +232,7 @@ function khBangunForm_(){
   // v130: draf terakhir dikembalikan, lalu SEMUA perubahan input memicu
   // auto-hitung berjeda (lihat khOnUbah_). Tombol tetap ada sebagai jangkar.
   khPulihkanDraf_();
+  khMuatPembanding_();
   kolom.addEventListener("input", khOnUbah_);
   kolom.addEventListener("change", khOnUbah_);   // select tidak selalu memicu "input"
     // Perbaikan v129: tombol memakai kelas & id LAMA (kh-btn / kh-btn-hitung)
