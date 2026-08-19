@@ -4017,6 +4017,71 @@ function spMuatQC_() {
  */
 function qcShow() { /* sengaja kosong -- lihat komentar */ }
 
+/* ============================================================
+   TERSEDIA UNTUK QC FINISHING (v121)
+   ============================================================
+   Cermin aturan setoran v119: QC Finishing hanya atas setoran jadi-baju
+   yang SUDAH dikonfirmasi finishing. Angka tersedia ditampilkan di bawah
+   Qty Diperiksa SEBELUM operator mengetik; pengaman kerasnya di server
+   (submitInspeksiQC) -- pra-cek di sini cuma sopan santun. */
+let QC_TERSEDIA = null;   // baris getTersediaQC utk PO aktif
+
+function qcKunciWarnaFE_(brand, artikel, style, warna) {
+  return [brand, artikel, style, warna].map(function (x) {
+    return String(x || "").trim().toLowerCase().replace(/\s+/g, " ");
+  }).join("|");
+}
+
+function qcMuatTersedia_() {
+  QC_TERSEDIA = null;
+  const po = (QC_PO_TERPILIH && QC_PO_TERPILIH.idPurchaseOrder) || window.SP_PO_AKTIF || "";
+  if (!po) { qcTampilTersedia_(); return; }
+  fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
+    idToken: SP_ID_TOKEN, action: "getTersediaQC", idPurchaseOrder: po }) })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d.error) QC_TERSEDIA = d.baris || [];
+    qcTampilTersedia_();
+  })
+  .catch(function () { qcTampilTersedia_(); });
+}
+
+function qcCariTersedia_() {
+  if (!QC_TERSEDIA || !QC_WARNA_DIPILIH) return null;
+  const w = QC_WARNA_DIPILIH;
+  const kunci = qcKunciWarnaFE_(w.brand, w.artikel, w.style, w.warna);
+  return QC_TERSEDIA.filter(function (b) {
+    return qcKunciWarnaFE_(b.brand, b.artikel, b.style, b.warna) === kunci;
+  })[0] || { tersedia: 0, menunggu: 0, terkonfirmasi: 0, sudahDiperiksa: 0 };
+}
+
+function qcTampilTersedia_() {
+  // hint hidup di bawah field Qty Diperiksa, dibuat sekali
+  const inp = document.getElementById("qc-diperiksa");
+  if (!inp) return;
+  const field = inp.closest(".qc-field");
+  if (!field) return;
+  let hint = document.getElementById("qc-tersedia-hint");
+  if (!hint) {
+    hint = document.createElement("div");
+    hint.id = "qc-tersedia-hint";
+    hint.style.cssText = "font-size:12px;margin-top:6px;color:var(--ink-soft)";
+    field.appendChild(hint);
+  }
+  const tahap = window.QC_TAHAP_DIPILIH || QC_TAHAP_DIPILIH;
+  if (tahap !== "Finishing" || !QC_WARNA_DIPILIH) { hint.innerHTML = ""; return; }
+  const t = qcCariTersedia_();
+  if (!t) { hint.innerHTML = ""; return; }
+  let teks = 'Tersedia untuk QC: <b>' + t.tersedia + ' pcs</b>' +
+    ' <span style="color:var(--ink-soft)">(terkonfirmasi ' + t.terkonfirmasi +
+    ' &#8722; diperiksa ' + t.sudahDiperiksa + ')</span>';
+  if (t.menunggu > 0) {
+    teks += '<br/><span style="color:#8F5A16">&#9888; ' + t.menunggu +
+      ' pcs setoran menunggu konfirmasi &#8212; konfirmasi di <b>Finishing &#8250; Konfirmasi Setoran</b> dulu.</span>';
+  }
+  hint.innerHTML = teks;
+}
+
 /**
  * Integrasi v107: QC memakai POLA HALAMAN, bukan pulau sendiri.
  * - PO dipilih lewat kartu "Pilih Purchase Order" bersama (SP_PO_AKTIF);
@@ -4230,6 +4295,7 @@ function qcMuatRincianPO_(idPO) {
     QC_RINCIAN_PO = d;
     qcIsiDropdownItem_();
     qcIsiDropdownWarna_();
+    qcMuatTersedia_();
   })
   .catch(function () {
     if (sel) sel.innerHTML = '<option value="">Gagal memuat warna</option>';
@@ -4253,6 +4319,7 @@ function qcIsiDropdownWarna_() {
 }
 
 function qcPilihWarna() {
+  setTimeout(qcTampilTersedia_, 0);   // v121: hint tersedia ikut warna
   const v = document.getElementById("qc-warna").value;
   QC_WARNA_DIPILIH = (v === "" || !QC_RINCIAN_PO) ? null : QC_RINCIAN_PO.baris[Number(v)];
   qcRenderSizeLolos_();
@@ -4379,6 +4446,7 @@ function qcSwitchTab(tab) {
 
 function qcPilihTahap(tahap) {
   QC_TAHAP_DIPILIH = tahap;
+  setTimeout(qcTampilTersedia_, 0);   // v121: hint hanya utk Finishing
   document.querySelectorAll(".qc-tahap-btn").forEach(function (b) {
     b.classList.toggle("active", b.dataset.t === tahap);
   });
@@ -4470,6 +4538,18 @@ function qcResetForm_() {
 }
 
 function qcSubmitInspeksi() {
+  // Pra-cek v121 (server tetap penjaga sesungguhnya)
+  if ((window.QC_TAHAP_DIPILIH || QC_TAHAP_DIPILIH) === "Finishing") {
+    const t = qcCariTersedia_();
+    const qd = Number((document.getElementById("qc-diperiksa") || {}).value) || 0;
+    if (t && qd > t.tersedia) {
+      alert("Qty diperiksa (" + qd + ") melebihi yang tersedia untuk QC (" + t.tersedia +
+        " pcs)." + (t.menunggu > 0
+          ? " Ada " + t.menunggu + " pcs setoran menunggu konfirmasi -- konfirmasi dulu di Finishing > Konfirmasi Setoran."
+          : " Pastikan setoran jadi-baju warna ini sudah dicatat & dikonfirmasi."));
+      return;
+    }
+  }
   document.getElementById("qc-submit-error").classList.add("hidden");
   document.getElementById("qc-submit-sukses").classList.add("hidden");
 
