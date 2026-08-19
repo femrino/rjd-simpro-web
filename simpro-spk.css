@@ -1021,3 +1021,54 @@ body.sp-siap #sp-subtabs { visibility: visible; }
    subtab bernapas ke atas-bawah setara. */
 .sp-navwrap { margin-bottom: 20px; }
 .sp-subtabs { margin: 18px 0; }
+
+/* ============================================================
+   PENYERAGAMAN TAB QC v120
+   ============================================================
+   simpro-qc.css dimuat SETELAH file ini di cabang produksi, jadi kulit
+   field bawaan qc.html (putih kecil) menang kaskade atas restyle v95.
+   Blok ini menang balik lewat spesifisitas #sp-panel-qc -- kulit field
+   QC kini identik dengan tab lain (krem besar radius 11, fokus terra).
+
+   Sakelar Tahap ikut BAHASA KARTU "Gelaran normal / Re-cut" (arahan
+   Femri): kartu putih berbingkai, aktif = bingkai terra + latar krem --
+   bukan lagi pil navy. Satu bahasa untuk semua pilihan bermode. */
+#sp-panel-qc .qc-field input,
+#sp-panel-qc .qc-field select,
+#sp-panel-qc .qc-field textarea {
+  padding: 12px 14px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--cream);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+}
+#sp-panel-qc .qc-field input:focus,
+#sp-panel-qc .qc-field select:focus,
+#sp-panel-qc .qc-field textarea:focus {
+  outline: 2px solid var(--thread);
+  outline-offset: 1px;
+  background: var(--white);
+}
+#sp-panel-qc .qc-field select { padding-right: 30px; }
+#sp-panel-qc .qc-field label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+#sp-panel-qc .qc-tahap-btn {
+  padding: 14px 0;
+  border-radius: 12px;
+  border: 1px solid var(--line, #E5E0D6);
+  background: var(--white);
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+#sp-panel-qc .qc-tahap-btn:hover { border-color: var(--thread); color: var(--ink); }
+#sp-panel-qc .qc-tahap-btn.active {
+  background: var(--cream);
+  border: 2px solid var(--thread);
+  color: var(--ink);
+}
