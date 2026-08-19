@@ -1832,6 +1832,14 @@ function spRenderFormSetoran() {
           po.totalDikembalikan + ' pcs</b></div>'
         : '') +
       '<div class="sp-ringkas-item"><span>Masih di tangan line</span><b>' + wip + ' pcs</b></div>' +
+      // v119: basis setoran = serah-terima TERKONFIRMASI. Yang masih Menunggu
+      // ditampilkan sebagai peringatan, bukan disembunyikan -- supaya line
+      // tahu kenapa angkanya "kurang" dan ke mana harus mengonfirmasi.
+      ((po.totalMenungguKonfirmasi || 0) > 0
+        ? '<div class="sp-ringkas-item" style="color:#8F5A16"><span>&#9888; Menunggu konfirmasi (belum bisa disetor)</span><b>' +
+          po.totalMenungguKonfirmasi + ' pcs</b></div>' +
+          '<p class="sp-info" style="margin:6px 0 0">Konfirmasi dulu di <b>Sewing &#8250; Konfirmasi Potongan</b> &#8212; angka di atas hanya menghitung serah-terima yang sudah divalidasi kepala line.</p>'
+        : '') +
     '</div>';
   document.getElementById("sp-setor-ringkas").classList.remove("hidden");
 
