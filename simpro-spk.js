@@ -4949,21 +4949,43 @@ function spMuatTerkirim_() {
     html += '<div class="sp-card"><h3 class="sp-judul">Daftar Surat Jalan</h3>';
     if (!daftar.length) html += '<p class="sp-info">Belum ada surat jalan untuk PO ini.</p>';
     html += daftar.map(function (p) {
-      const rincian = (p.baris || []).map(function (b) {
-        return rjdEscapeHtml_([b.artikel, b.style].filter(Boolean).join(" \u00b7 ")) +
-          ' <b>' + rjdEscapeHtml_(b.warna || "-") + '</b> ' +
-          rjdEscapeHtml_(b.size) + '&#215;' + b.jumlah;
-      }).join(" &nbsp;&#183;&nbsp; ");
-      return '<div style="padding:14px 0;border-bottom:1px dashed var(--line,#E5E0D6)">' +
-        '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">' +
+      // v126: rincian dikelompokkan per item-warna -- nama item SEKALI,
+      // size jadi chip ringkas, subtotal di kanan. Sebelumnya nama item
+      // diulang untuk tiap size dan jadi tembok teks tak terbaca.
+      const grup = {}, urut = [];
+      (p.baris || []).forEach(function (b) {
+        const k = [b.artikel, b.style, b.warna].join("||");
+        if (!grup[k]) {
+          grup[k] = { item: [b.artikel, b.style].filter(Boolean).join(" \u00b7 "),
+            warna: b.warna || "-", chips: [], total: 0 };
+          urut.push(k);
+        }
+        grup[k].chips.push(rjdEscapeHtml_(b.size) + ' <b>' + b.jumlah + '</b>');
+        grup[k].total += b.jumlah;
+      });
+      const barisGrup = urut.map(function (k) {
+        const g = grup[k];
+        return '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;padding:7px 0;border-top:1px dashed var(--line,#E5E0D6)">' +
+          '<div style="min-width:0"><b>' + rjdEscapeHtml_(g.item) + '</b>' +
+            ' <span style="color:var(--ink-soft)">' + rjdEscapeHtml_(g.warna) + '</span></div>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:baseline">' +
+            g.chips.map(function (c) {
+              return '<span style="background:var(--cream);border:1px solid var(--line,#E5E0D6);' +
+                'border-radius:8px;padding:2px 8px;font-size:12px;white-space:nowrap">' + c + '</span>';
+            }).join("") +
+            '<span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;margin-left:4px">' +
+              g.total + '</span>' +
+          '</div></div>';
+      }).join("");
+      return '<div style="padding:14px 0 8px;border-bottom:2px solid var(--line,#E5E0D6)">' +
+        '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px">' +
           '<div><b>' + rjdEscapeHtml_(p.tanggal || "-") + '</b>' +
             (p.metode ? ' &#183; ' + rjdEscapeHtml_(p.metode) : '') +
             (p.jenis ? ' &#183; ' + rjdEscapeHtml_(p.jenis) : '') +
             (p.noResi ? '<div class="sp-sub">Resi: ' + rjdEscapeHtml_(p.noResi) + '</div>' : '') +
           '</div>' +
           '<div style="font-family:\'IBM Plex Mono\',monospace;font-weight:700">' + p.total + ' pcs</div>' +
-        '</div>' +
-        '<div class="sp-sub" style="margin-top:6px">' + rincian + '</div>' +
+        '</div>' + barisGrup +
       '</div>';
     }).join("");
     html += '</div>';
