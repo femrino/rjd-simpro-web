@@ -122,8 +122,13 @@ function khBangunForm_(){
       '<div class="kh-row2">' + F("Upah borongan / bulan (Rp)","kh-upah-bulan","bawaan sistem") + F("Biaya tetap / bulan (Rp)","kh-tetap-bulan","bawaan sistem") + '</div>' +
       '<div class="kh-row3">' + F("Kapasitas menit / bulan","kh-kapasitas","mis. 472500") + F("Efisiensi lini %","kh-efisiensi","bawaan 50") + F("Bunga modal / bulan %","kh-bunga","bawaan 1,5") + '</div>' +
     '</div>' +
-    '<button class="kh-hitung" id="kh-hitung" onclick="khHitung()" type="button">Hitung Harga</button>' +
-    '<div class="hidden kh-form-error" id="kh-form-error"></div>';
+    '<button class="kh-btn" id="kh-btn-hitung" onclick="khHitung()" type="button">Hitung Harga</button>' +
+    '<div class="kh-form-error" id="kh-form-error"></div>';
+    // Perbaikan v129: tombol memakai kelas & id LAMA (kh-btn / kh-btn-hitung)
+    // -- khHitung men-disable lewat id itu dan CSS-nya menempel di kelas itu;
+    // versi v128 memakai nama baru: gaya hilang & khHitung mati di baris
+    // pertama (null.disabled), klik terasa diam. Kotak error juga sempat
+    // berkelas "hidden" global (!important) yang mengalahkan .tampil.
 }
 
 window.onload = function(){
@@ -206,8 +211,10 @@ function khHitung(){
 
   var p = khSusunPayload_();
   if (!(p.qty > 0)) { khFormError_("Qty wajib diisi."); return; }
-  if (!(p.smvManual > 0) && !p.artikel) {
-    khFormError_("Isi SMV manual (menit per pcs), atau isi nama Artikel supaya menitnya ditarik dari resep.");
+  // v129: payload v3 mengirim SMV per divisi, bukan smvManual tunggal.
+  var smv3 = (p.smvCutting || 0) + (p.smvSewing || 0) + (p.smvFinishing || 0);
+  if (!(smv3 > 0) && !p.artikel) {
+    khFormError_("Isi menit SMV (Cutting/Sewing/Finishing), atau isi nama Artikel supaya menitnya ditarik dari resep.");
     return;
   }
 
