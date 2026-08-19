@@ -116,6 +116,8 @@ function khMuatPembanding_(){
       return;
     }
     KH_PEMBANDING = d.daftar;
+    window.KH_RASIO = d.rasio || null;
+    khTampilRasio_();
     sel.innerHTML = '<option value="">-- pilih artikel serupa --</option>' +
       d.daftar.map(function(x, i){
         return '<option value="' + i + '">' + khEsc_(
@@ -141,6 +143,33 @@ function khPakaiPembanding_(){
     khFormError_("");
   }
   khOnUbah_();   // simpan draf + auto-hitung
+}
+
+function khTampilRasio_(){
+  const w = document.getElementById("kh-rasio-wrap");
+  const inf = document.getElementById("kh-rasio-info");
+  if (!w || !inf || !window.KH_RASIO) return;
+  const r = window.KH_RASIO;
+  w.style.display = "";
+  inf.innerHTML = "Tidak ada pembanding serupa? <b>Estimasi dari jumlah proses</b>: " +
+    "median arsipmu <b>" + r.menitPerProses + " mnt/proses</b> (rentang " + r.p25 +
+    "\u2013" + r.p75 + ", dari " + r.artikelDipakai + " artikel bercakupan tinggi). " +
+    "Ini anak tangga paling kasar \u2014 pakai <b>Model baru %</b> tebal (15\u201325).";
+}
+
+function khEstimasiDariProses_(){
+  const r = window.KH_RASIO;
+  const n = parseFloat(String((document.getElementById("kh-jml-proses") || {}).value || "").replace(",", "."));
+  if (!r || !(n > 0)) { khFormError_("Isi jumlah proses dulu (dari pecah proses model barunya)."); return; }
+  const total = n * r.menitPerProses;
+  const b1 = function (x) { return Math.round(x * 10) / 10; };
+  document.getElementById("kh-smv-cut").value = b1(total * r.shareCutting);
+  document.getElementById("kh-smv-sew").value = b1(total * r.shareSewing);
+  document.getElementById("kh-smv-fin").value = b1(total * r.shareFinishing);
+  khFormError_("Estimasi kasar dari " + n + " proses \u00d7 " + r.menitPerProses +
+    " mnt (rentang total " + b1(n * r.p25) + "\u2013" + b1(n * r.p75) +
+    " mnt). Naikkan Model baru % 15\u201325, dan timbang ulang begitu sampel jadi.");
+  khOnUbah_();
 }
 
 const KH_DRAF_KUNCI = "kh_draf_v3";
@@ -201,6 +230,13 @@ function khBangunForm_(){
         '<div style="display:flex;gap:8px">' +
           '<select id="kh-pembanding" style="flex:1"><option value="">-- muat daftar dulu --</option></select>' +
           '<button class="kh-btn" id="kh-pembanding-pakai" onclick="khPakaiPembanding_()" style="width:auto;padding:0 18px" type="button">Pakai</button>' +
+        '</div>' +
+        '<div id="kh-rasio-wrap" style="display:none;margin-top:10px">' +
+          '<p class="kh-sub" id="kh-rasio-info"></p>' +
+          '<div style="display:flex;gap:8px">' +
+            '<input id="kh-jml-proses" inputmode="numeric" placeholder="jumlah proses (dari pecah proses)" style="flex:1" type="text"/>' +
+            '<button class="kh-btn" onclick="khEstimasiDariProses_()" style="width:auto;padding:0 18px" type="button">Estimasi</button>' +
+          '</div>' +
         '</div></div>' +
       '<div class="kh-row3">' + F("Qty (pcs)","kh-qty","wajib \u2014 mis. 1000") +
         '<div class="kh-field"><label>Jenis order</label>' +
