@@ -1010,3 +1010,14 @@ body.sp-siap #sp-hero .lead { display: none; }
 /* gating peran: subtab ikut menunggu .sp-siap seperti bar fase */
 #sp-subtabs { visibility: hidden; }
 body.sp-siap #sp-subtabs { visibility: visible; }
+
+/* ============================================================
+   NAPAS VERTIKAL BAR NAVIGASI v114
+   ============================================================
+   Saat rel subtab pindah ke bawah kartu PO (v113), margin-bottom bar
+   fase yang dinolkan di v110 (karena rel dulu di DALAM pembungkus)
+   ikut terbawa -- kartu PO jadi menempel ke bar fase. Kembalikan
+   jarak seperti tata letak lama: bar fase bernapas ke bawah, rel
+   subtab bernapas ke atas-bawah setara. */
+.sp-navwrap { margin-bottom: 20px; }
+.sp-subtabs { margin: 18px 0; }
