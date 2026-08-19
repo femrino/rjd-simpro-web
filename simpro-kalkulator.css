@@ -138,3 +138,11 @@
 .kh-toggle button.active { background: var(--navy); color: var(--cream); border-color: var(--navy); }
 @media (max-width: 700px) { .kh-row3 { grid-template-columns: 1fr; } .kh-row2 { grid-template-columns: 1fr; }
   .kh-smvbox { grid-template-columns: 1fr 1fr 1fr !important; } }
+
+/* ---- Pembeda referensi vs isian (v130) ----
+   Placeholder = petunjuk, BUKAN nilai: miring + pudar. Isian nyata tegak
+   + tinta pekat. Konvensi teksnya: "mis. X" contoh, "bawaan X" nilai yang
+   dipakai kalau dikosongkan, "wajib" harus diisi. */
+.kh-card input::placeholder,
+.kh-card select:invalid { color: #BDB5A7; font-style: italic; opacity: 1; }
+.kh-card input, .kh-card select { color: var(--ink); font-style: normal; }

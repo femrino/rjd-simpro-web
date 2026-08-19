@@ -59,13 +59,67 @@ function khTampilkanForm_(){
   khBangunForm_();
 }
 
-let KH_JENIS = "CMT";
 
-function khPilihJenis(j){
-  KH_JENIS = j;
-  document.querySelectorAll(".kh-toggle button").forEach(function(b){
-    b.classList.toggle("active", b.dataset.j === j);
-  });
+
+/* khPilihJenis & KH_JENIS dipensiunkan (v130): jenis order jadi dropdown
+   biasa (#kh-jenis) atas permintaan Femri -- lebih ringkas di baris tiga
+   kolom, dan nilainya ikut draf otomatis seperti field lain. */
+
+/* ============================================================
+ * AUTO-HITUNG BERJEDA + DRAF FORM (v130)
+ * ============================================================
+ * Rumus hidup di server (latensi 1-3 dtk) -- menghitung per ketukan =
+ * hasil berkedip dan respons balapan. Aturannya:
+ * - jeda 1 dtk setelah perubahan terakhir, baru hitung;
+ * - kalau hitungan lain sedang jalan, coba lagi 700 md kemudian
+ *   (khHitung sudah menjaga diri lewat KH_SEDANG_HITUNG, jadi respons
+ *   tidak pernah saling salip);
+ * - form belum layak (qty kosong dsb.) -> diam, tanpa error mengganggu;
+ * - tiap perubahan juga menyimpan DRAF ke localStorage: buka halaman
+ *   lagi, isian terakhir kembali.
+ */
+let KH_AUTO_TIMER = null;
+
+function khOnUbah_(){
+  khSimpanDraf_();
+  if (KH_AUTO_TIMER) clearTimeout(KH_AUTO_TIMER);
+  KH_AUTO_TIMER = setTimeout(khAutoHitung_, 1000);
+}
+
+function khAutoHitung_(){
+  if (KH_SEDANG_HITUNG) {   // let se-scope, BUKAN window.* (perbaikan dlm v130)
+    KH_AUTO_TIMER = setTimeout(khAutoHitung_, 700);
+    return;
+  }
+  const p = khSusunPayload_();
+  const smv3 = (p.smvCutting || 0) + (p.smvSewing || 0) + (p.smvFinishing || 0);
+  if (!(p.qty > 0) || (!(smv3 > 0) && !p.artikel)) return;   // belum layak: diam
+  khHitung();
+}
+
+const KH_DRAF_KUNCI = "kh_draf_v3";
+
+function khSimpanDraf_(){
+  try {
+    const d = { jenis: KH_JENIS, isi: {} };
+    document.querySelectorAll(".kh-grid > div input[id], .kh-grid > div select[id]").forEach(function (el) {
+      if (el.value) d.isi[el.id] = el.value;
+    });
+    localStorage.setItem(KH_DRAF_KUNCI, JSON.stringify(d));
+  } catch (e) { /* mode privat: biarkan */ }
+}
+
+function khPulihkanDraf_(){
+  try {
+    const raw = localStorage.getItem(KH_DRAF_KUNCI);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    Object.keys(d.isi || {}).forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) el.value = d.isi[id];
+    });
+    if (d.jenis) { const s = document.getElementById("kh-jenis"); if (s) s.value = d.jenis; }
+  } catch (e) { /* draf rusak: mulai bersih */ }
 }
 
 /**
@@ -96,17 +150,15 @@ function khBangunForm_(){
           '<div><input id="kh-smv-sew" inputmode="decimal" type="text"/><span>Sewing</span></div>' +
           '<div><input id="kh-smv-fin" inputmode="decimal" type="text"/><span>Finishing</span></div>' +
         '</div></div>' +
-      '<div class="kh-row3">' + F("Qty (pcs)","kh-qty","1000") +
-        '<div class="kh-field"><label>Jenis order</label><div class="kh-toggle">' +
-          '<button class="active" data-j="CMT" onclick="khPilihJenis(\'CMT\')" type="button">CMT</button>' +
-          '<button data-j="Maklon" onclick="khPilihJenis(\'Maklon\')" type="button">Maklon</button>' +
-        '</div></div>' +
-        F("Margin target %","kh-margin","20") + '</div>' +
+      '<div class="kh-row3">' + F("Qty (pcs)","kh-qty","wajib \u2014 mis. 1000") +
+        '<div class="kh-field"><label>Jenis order</label>' +
+          '<select id="kh-jenis"><option value="CMT">CMT</option><option value="Maklon">Maklon</option></select></div>' +
+        F("Margin target %","kh-margin","bawaan 20") + '</div>' +
     '</div>' +
     '<div class="kh-card"><h2>Bahan &amp; jasa luar (Rp per pcs)</h2>' +
-      F("Kain","kh-kain","0","konsumsi marker &#215; harga kain. Nol untuk CMT &#8212; kain dari klien.") +
+      F("Kain","kh-kain","bawaan 0 \u2014 kain dari klien","konsumsi marker &#215; harga kain. Nol untuk CMT &#8212; kain dari klien.") +
       F("Aksesoris","kh-aks","mis. 3500","benang, kancing, label, hangtag, poly &#8212; PER PCS. Kosongkan untuk otomatis dari resep + SD Master Harga Aksesoris.") +
-      F("Jasa luar","kh-jasa","0","bordir / sablon / printing / wash pihak ketiga, per pcs.") +
+      F("Jasa luar","kh-jasa","bawaan 0","bordir / sablon / printing / wash pihak ketiga, per pcs.") +
     '</div>' +
     '<div class="kh-card"><h2>Biaya sekali jalan (Rp)</h2>' +
       '<p class="kh-sub">Dikeluarkan sekali berapa pun jumlah ordernya, lalu dibagi ke seluruh pcs. Inilah sebabnya 50 pcs tidak boleh sama harganya dengan 5.000 pcs. Kosong semua = ambil dari SD Biaya Setup.</p>' +
@@ -114,8 +166,8 @@ function khBangunForm_(){
       '<div class="kh-row2">' + F("Setel lini / ganti model","kh-set-lini","mis. 600000") + F("Administrasi &amp; kirim","kh-set-admin","mis. 300000") + '</div>' +
     '</div>' +
     '<div class="kh-card"><h2>Risiko &amp; keadaan</h2>' +
-      '<div class="kh-row2">' + F("Reject / rework %","kh-reject","3") + F("Termin pembayaran (hari)","kh-termin","30") + '</div>' +
-      '<div class="kh-row2">' + F("Model baru %","kh-belajar","0","kurva belajar; 0 untuk artikel rutin") + F("Kesulitan bahan %","kh-bahan","0","licin / stretch / motif matching") + '</div>' +
+      '<div class="kh-row2">' + F("Reject / rework %","kh-reject","bawaan 3") + F("Termin pembayaran (hari)","kh-termin","bawaan 0 \u2014 lunas di muka") + '</div>' +
+      '<div class="kh-row2">' + F("Model baru %","kh-belajar","bawaan 0","kurva belajar; 0 untuk artikel rutin") + F("Kesulitan bahan %","kh-bahan","bawaan 0","licin / stretch / motif matching") + '</div>' +
     '</div>' +
     '<div class="kh-card"><h2>Asumsi pabrik</h2>' +
       '<p class="kh-sub">Kosong = bawaan sistem. Isi untuk simulasi &#8212; angka-angka ini menentukan seluruh harga di sebelah kanan.</p>' +
@@ -124,6 +176,12 @@ function khBangunForm_(){
     '</div>' +
     '<button class="kh-btn" id="kh-btn-hitung" onclick="khHitung()" type="button">Hitung Harga</button>' +
     '<div class="kh-form-error" id="kh-form-error"></div>';
+
+  // v130: draf terakhir dikembalikan, lalu SEMUA perubahan input memicu
+  // auto-hitung berjeda (lihat khOnUbah_). Tombol tetap ada sebagai jangkar.
+  khPulihkanDraf_();
+  kolom.addEventListener("input", khOnUbah_);
+  kolom.addEventListener("change", khOnUbah_);   // select tidak selalu memicu "input"
     // Perbaikan v129: tombol memakai kelas & id LAMA (kh-btn / kh-btn-hitung)
     // -- khHitung men-disable lewat id itu dan CSS-nya menempel di kelas itu;
     // versi v128 memakai nama baru: gaya hilang & khHitung mati di baris
@@ -177,7 +235,7 @@ function khSusunPayload_(){
     artikel: khNilai_("kh-artikel"),
     style: khNilai_("kh-style"),
     qty: khAngka_("kh-qty"),
-    jenisOrder: KH_JENIS,
+    jenisOrder: khNilai_("kh-jenis") || "CMT",
     smvCutting: khAngka_("kh-smv-cut"),
     smvSewing: khAngka_("kh-smv-sew"),
     smvFinishing: khAngka_("kh-smv-fin"),
