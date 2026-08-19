@@ -973,32 +973,39 @@ body.sp-siap #sp-hero .lead { display: none; }
   top: auto;
   margin-bottom: 0;
 }
+/* Bar SUBTAB memakai bahasa SEGMEN ala "Input Inspeksi | Ringkasan &
+   Dashboard" milik QC (arahan Femri, 20 Agu 2026): rel krem, segmen
+   selebar sama rata (flex:1), yang aktif = kartu putih terangkat.
+   Versi pil-kecil sebelumnya dibuang -- hierarki fase vs langkah lebih
+   terbaca dari DUA BAHASA BENTUK (pil navy vs segmen putih) daripada
+   dari ukuran pil yang mirip. */
 .sp-subtabs {
   display: flex;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
   gap: 6px;
-  padding: 8px 2px 10px;
-  margin: 0 0 14px;
-  background: transparent;
-  scrollbar-width: none;
+  margin: 10px 0 16px;
+  background: var(--paper-2, var(--cream-deep));
+  border-radius: 12px;
+  padding: 4px;
 }
-.sp-subtabs::-webkit-scrollbar { display: none; }
 .sp-subtabs .sp-tab {
-  flex: 0 0 auto;
-  padding: 8px 14px;
-  font-size: 12.5px;
-  border-radius: 9999px;
-  background: var(--white);
-  border: 1px solid var(--line, #E5E0D6);
-  color: var(--ink-soft);
+  flex: 1;
   min-width: 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: transparent;
+  border: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+.sp-subtabs .sp-tab:hover { color: var(--navy); }
 .sp-subtabs .sp-tab.active {
-  background: var(--navy);
-  color: var(--cream);
-  border-color: var(--navy);
+  background: var(--white);
+  color: var(--navy);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(20,33,61,.08));
 }
 /* gating peran: subtab ikut menunggu .sp-siap seperti bar fase */
 #sp-subtabs { visibility: hidden; }
