@@ -574,11 +574,12 @@ function spSimpan() {
  */
 const SP_FASE_PETA = [
   ["polamarker", "Pola & Marker", [["pola", "Pola"], ["marker", "Marker"]]],
-  ["sampel",     "Sampel",        [["sampel", "Sampel"]]],
+  ["sampel",     "Sampel",        [["sampel", "Sampel"], ["approval", "Approval"]]],
   ["cutting",    "Cutting",       [["gelar", "Gelaran"], ["cutting", "Hasil Potong"]]],
-  ["loading",    "Loading",       [["bagi", "Bagi ke Line"]]],
+  ["loading",    "Loading",       [["bagi", "Bagi ke Line"], ["spkrekap", "SPK & Rekap"]]],
   ["sewing",     "Sewing",        [["konf", "Konfirmasi Potongan"], ["setor", "Setoran ke Finishing"]]],
   ["finishing",  "Finishing",     [["konf", "Konfirmasi Setoran"], ["qc", "QC"]]],
+  ["packing",    "Packing & Kirim", [["stok", "Stok Siap Kirim"]]],
   ["riw",        "Riwayat",       [["riw", "Riwayat"]]]
 ];
 
@@ -661,6 +662,9 @@ const SP_BAGIAN_TAB = {
   bagi:    "loading",
   setor:   "sewing",
   qc:      "qc",
+  approval: ["pola", "sampel"],
+  spkrekap: "loading",
+  stok:    ["finishing", "gudang"],   // kursi gudang disiapkan duluan
   // Tab Konfirmasi memuat DUA alur dengan penerima berbeda: sewing menerima
   // potongan dari loading, finishing menerima setoran dari sewing.
   // Array = boleh salah satu.
@@ -969,6 +973,9 @@ function spSwitchTab(tab) {
   if (tab === "pola" || tab === "sampel") { spMuatTahap(tab); return; }
   if (tab === "marker") { spMuatMarker(); spMuatSemuaMarker_(); return; }
   if (tab === "qc") { spMuatQC_(); qcSinkronPOAktif_(); return; }
+  if (tab === "approval") { spMuatApproval_(); return; }
+  if (tab === "spkrekap") { if (!window.SP_PO) spMuatDistribusi(); return; }
+  if (tab === "stok") { spMuatStok_(); return; }
   if (tab === "gelar") { spMuatGelaran(); return; }
   if (tab === "riw") { spMuatRiwayat(); return; }
   if (tab === "setor") { spMuatLineSetoran_(); spMuatSetoran(); return; }
@@ -4576,3 +4583,195 @@ function qcRenderRingkasan_(d) {
     document.addEventListener("DOMContentLoaded", mulai);
   } else { mulai(); }
 })();
+
+/* ============================================================
+   APPROVAL SAMPEL & STOK SIAP KIRIM (v115)
+   ============================================================
+   Dua subtab baru sesuai cetak biru IA. Keduanya memakai kartu PO
+   BERSAMA (SP_PO_AKTIF), cangkang panel kosong di template, dan
+   backend yang sudah terpasang lebih dulu (approval-sampel.gs,
+   stok-siap-kirim.gs). Gaya field mewarisi restyle v95 otomatis
+   karena panel ber-id sp-panel-*. */
+
+let APS_STATUS = null;       // hasil getStatusApprovalSampel PO aktif
+let APS_ITEM_PO = null;      // daftar item unik PO aktif (dari rincian cutting)
+let APS_JENIS = "Kirim";
+
+function spMuatApproval_() {
+  const panel = document.getElementById("sp-panel-approval");
+  if (!panel) return;
+  const po = window.SP_PO_AKTIF || "";
+  if (!po) {
+    panel.innerHTML = '<div class="sp-card"><h3 class="sp-judul">Approval Sampel</h3>' +
+      '<p class="sp-info">Pilih Purchase Order dulu lewat kartu di atas.</p></div>';
+    return;
+  }
+  panel.innerHTML = '<div class="sp-card"><p class="sp-info">Memuat approval sampel...</p></div>';
+  Promise.all([
+    fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
+      idToken: SP_ID_TOKEN, action: "getPOUntukCutting", idPurchaseOrder: po }) })
+      .then(function (r) { return r.json(); }),
+    fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
+      idToken: SP_ID_TOKEN, action: "getStatusApprovalSampel", idPurchaseOrder: po }) })
+      .then(function (r) { return r.json(); })
+  ]).then(function (hasil) {
+    const rincian = hasil[0], status = hasil[1];
+    if (rincian.error || status.error) {
+      panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' +
+        rjdEscapeHtml_(rincian.error || status.error) + '</p></div>';
+      return;
+    }
+    const lihat = {}; APS_ITEM_PO = [];
+    (rincian.baris || []).forEach(function (b) {
+      const k = [b.brand || "", b.artikel || "", b.style || ""].join("||");
+      if (lihat[k]) return;
+      lihat[k] = true;
+      APS_ITEM_PO.push({ brand: b.brand || "", artikel: b.artikel || "", style: b.style || "" });
+    });
+    APS_STATUS = status;
+    spRenderApproval_();
+  }).catch(function () {
+    panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">Gagal menghubungi server.</p></div>';
+  });
+}
+
+function spRenderApproval_() {
+  const panel = document.getElementById("sp-panel-approval");
+  if (!panel) return;
+  const jenisBtn = ["Kirim", "Revisi", "ACC"].map(function (j) {
+    const aktif = j === APS_JENIS;
+    return '<button type="button" class="sp-btn-kecil" onclick="apsPilihJenis_(\'' + j + '\')" ' +
+      'style="flex:1;padding:12px 0;' + (aktif
+        ? 'background:var(--navy);color:var(--cream);border-color:var(--navy);'
+        : '') + '">' + j + '</button>';
+  }).join("");
+
+  let html = '<div class="sp-card"><h3 class="sp-judul">Catat Kejadian Approval</h3>' +
+    '<p class="sp-info">Satu baris per kejadian: <b>Kirim</b> sampel ke klien, klien minta <b>Revisi</b> (wajib catatan), atau <b>ACC</b>. Ronde &amp; status dihitung dari riwayat &#8212; tidak ada yang diedit.</p>' +
+    '<div class="sp-grid3">' +
+    '<label>Item (artikel &#183; style)<select id="aps-item">' +
+      APS_ITEM_PO.map(function (it, i) {
+        return '<option value="' + i + '">' + rjdEscapeHtml_(
+          [it.artikel, it.style].filter(Boolean).join(" \u00b7 ") || "(tanpa nama)") + '</option>';
+      }).join("") + '</select></label>' +
+    '<label>Tanggal<input id="aps-tanggal" type="date" value="' +
+      new Date().toISOString().slice(0, 10) + '"/></label>' +
+    '</div>' +
+    '<div class="sp-lbl">Jenis kejadian</div>' +
+    '<div style="display:flex;gap:8px">' + jenisBtn + '</div>' +
+    '<div class="sp-grid3" style="margin-top:12px"><label style="grid-column:1/-1">Catatan' +
+      '<input id="aps-catatan" placeholder="wajib diisi untuk Revisi &#8212; poin revisinya apa" type="text"/></label></div>' +
+    '<button class="sp-simpan-btn" id="aps-simpan" onclick="apsSimpan_()" style="width:100%;margin-top:14px" type="button">Simpan Kejadian</button>' +
+    '</div>';
+
+  html += '<div class="sp-card"><h3 class="sp-judul">Status per Item</h3>';
+  const item = (APS_STATUS && APS_STATUS.item) || [];
+  if (!item.length) {
+    html += '<p class="sp-info">Belum ada kejadian approval untuk PO ini.</p>';
+  } else {
+    html += item.map(function (it) {
+      const rantai = it.kejadian.map(function (k) {
+        return '<span title="' + rjdEscapeHtml_(k.tanggal + (k.catatan ? " \u2014 " + k.catatan : "")) + '">' +
+          rjdEscapeHtml_(k.jenis) + '</span>';
+      }).join(' <span style="color:var(--ink-soft)">&#8594;</span> ');
+      return '<div style="padding:12px 0;border-bottom:1px dashed var(--line,#E5E0D6)">' +
+        '<b>' + rjdEscapeHtml_([it.artikel, it.style].filter(Boolean).join(" \u00b7 ")) + '</b>' +
+        ' <span style="font-weight:700;color:' + (it.acc ? 'var(--emerald,#2D8A5F)' : 'var(--gold,#C8964A)') + '">' +
+          rjdEscapeHtml_(it.status) + '</span>' +
+        '<div class="sp-sub" style="margin-top:4px">' + rantai +
+        (it.catatanTerakhir ? ' &#183; <i>' + rjdEscapeHtml_(it.catatanTerakhir) + '</i>' : '') + '</div></div>';
+    }).join("");
+  }
+  html += '</div>';
+  panel.innerHTML = html;
+}
+
+function apsPilihJenis_(j) { APS_JENIS = j; spRenderApproval_(); }
+
+function apsSimpan_() {
+  const it = APS_ITEM_PO[Number((document.getElementById("aps-item") || {}).value) || 0];
+  if (!it) { alert("Pilih item dulu."); return; }
+  const catatan = (document.getElementById("aps-catatan") || {}).value || "";
+  if (APS_JENIS === "Revisi" && !catatan.trim()) {
+    alert("Kejadian Revisi wajib membawa catatan \u2014 poin revisinya apa.");
+    return;
+  }
+  const btn = document.getElementById("aps-simpan");
+  if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
+  fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
+    idToken: SP_ID_TOKEN, action: "catatApprovalSampel",
+    idPurchaseOrder: window.SP_PO_AKTIF,
+    brand: it.brand, artikel: it.artikel, style: it.style,
+    jenis: APS_JENIS, catatan: catatan,
+    tanggal: (document.getElementById("aps-tanggal") || {}).value || ""
+  }) })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (d.error) { alert(d.error); if (btn) { btn.disabled = false; btn.textContent = "Simpan Kejadian"; } return; }
+    alert("Tercatat: " + d.jenis + " (ronde " + d.ronde + ").");
+    spMuatApproval_();     // muat ulang status -- kerangka dirender ulang, aman
+  })
+  .catch(function () {
+    alert("Gagal menghubungi server.");
+    if (btn) { btn.disabled = false; btn.textContent = "Simpan Kejadian"; }
+  });
+}
+
+// ============ STOK SIAP KIRIM ============
+
+function spMuatStok_() {
+  const panel = document.getElementById("sp-panel-stok");
+  if (!panel) return;
+  const po = window.SP_PO_AKTIF || "";
+  if (!po) {
+    panel.innerHTML = '<div class="sp-card"><h3 class="sp-judul">Stok Siap Kirim</h3>' +
+      '<p class="sp-info">Pilih Purchase Order dulu lewat kartu di atas.</p></div>';
+    return;
+  }
+  panel.innerHTML = '<div class="sp-card"><p class="sp-info">Menghitung stok siap kirim...</p></div>';
+  fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
+    idToken: SP_ID_TOKEN, action: "getStokSiapKirim", idPurchaseOrder: po }) })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (d.error) {
+      panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' + rjdEscapeHtml_(d.error) + '</p></div>';
+      return;
+    }
+    let html = '<div class="sp-card"><h3 class="sp-judul">Stok Siap Kirim</h3>' +
+      '<p class="sp-info"><b>Siap = lolos QC Finishing &#8722; terkirim.</b> Nol input baru: angka ini turunan dari QC dan Surat Jalan. ' +
+      'Angka MINUS berarti ada barang terkirim yang lolos QC-nya belum dicatat &#8212; sinyal disiplin QC, sengaja tidak disembunyikan. ' +
+      '<button class="sp-btn-kecil" onclick="spMuatStok_()" type="button">Segarkan</button></p>';
+    if (!(d.baris || []).length) {
+      html += '<p class="sp-info">Belum ada QC tahap Finishing untuk PO ini &#8212; stok siap kirim lahir dari sana. ' +
+        'Catat inspeksi Finishing di tab <b>Finishing &#8250; QC</b> dulu.</p></div>';
+      panel.innerHTML = html;
+      return;
+    }
+    const sz = d.sizeKolom || [];
+    html += '<div class="sp-tabelwrap"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
+      '<th>Item &#183; Warna</th>' +
+      sz.map(function (s) { return '<th>' + rjdEscapeHtml_(s) + '</th>'; }).join("") +
+      '<th>Siap</th></tr></thead><tbody>' +
+      d.baris.map(function (b) {
+        return '<tr>' +
+          '<td data-label="Item"><b>' + rjdEscapeHtml_([b.artikel, b.style].filter(Boolean).join(" \u00b7 ")) + '</b>' +
+            '<div class="sp-sub">' + rjdEscapeHtml_(b.warna || "-") +
+            ' &#183; lolos ' + b.totalLolos + ' &#183; terkirim ' + b.totalTerkirim + '</div></td>' +
+          sz.map(function (s) {
+            const n = (b.siap && b.siap[s] !== undefined) ? b.siap[s] : "";
+            return '<td data-label="' + rjdEscapeHtml_(s) + '"' +
+              (n !== "" && n < 0 ? ' style="color:#8F2C22;font-weight:700"' : '') + '>' +
+              (n === "" ? "-" : n) + '</td>';
+          }).join("") +
+          '<td data-label="Siap"><b' + (b.totalSiap < 0 ? ' style="color:#8F2C22"' : '') + '>' +
+            b.totalSiap + '</b></td></tr>';
+      }).join("") +
+      '</tbody></table></div>' +
+      '<p class="sp-info" style="margin-top:10px">Total: lolos <b>' + d.totalLolos +
+      '</b> &#183; terkirim <b>' + d.totalTerkirim + '</b> &#183; siap kirim <b>' + d.totalSiap + '</b> pcs.</p></div>';
+    panel.innerHTML = html;
+  })
+  .catch(function () {
+    panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">Gagal menghubungi server.</p></div>';
+  });
+}
