@@ -4913,15 +4913,41 @@ function spMuatTerkirim_() {
       return;
     }
     const daftar = d.pengiriman || [];
+    // v125: tampilan utama = TABEL agregat per item-warna x size -- struktur
+    // yang sama persis dengan Stok Siap Kirim (permintaan Femri); daftar
+    // surat jalan turun jadi kartu kedua. Datanya sudah ada di d.baris
+    // (kolom terkirim per size) -- nol fetch tambahan.
     let html = '<div class="sp-card"><h3 class="sp-judul">Terkirim</h3>' +
-      '<p class="sp-info">Semua surat jalan PO ini (yang batal tidak dihitung). Total terkirim <b>' +
+      '<p class="sp-info">Agregat semua surat jalan PO ini (yang batal tidak dihitung). Total terkirim <b>' +
       (d.totalTerkirim || 0) + ' pcs</b> dari lolos QC <b>' + (d.totalLolos || 0) + ' pcs</b>. ' +
       '<button class="sp-btn-kecil" onclick="spMuatTerkirim_()" type="button">Segarkan</button></p>';
-    if (!daftar.length) {
+
+    const barisKirim = (d.baris || []).filter(function (b) { return (b.totalTerkirim || 0) > 0; });
+    if (!barisKirim.length && !daftar.length) {
       html += '<p class="sp-info">Belum ada surat jalan untuk PO ini.</p></div>';
       panel.innerHTML = html;
       return;
     }
+    const sz = d.sizeKolom || [];
+    html += '<div class="sp-tabelwrap"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
+      '<th>Item &#183; Warna</th>' +
+      sz.map(function (s) { return '<th>' + rjdEscapeHtml_(s) + '</th>'; }).join("") +
+      '<th>Terkirim</th></tr></thead><tbody>' +
+      barisKirim.map(function (b) {
+        return '<tr>' +
+          '<td data-label="Item"><b>' + rjdEscapeHtml_([b.artikel, b.style].filter(Boolean).join(" \u00b7 ")) + '</b>' +
+            '<div class="sp-sub">' + rjdEscapeHtml_(b.warna || "-") +
+            ' &#183; lolos ' + b.totalLolos + ' &#183; siap ' + b.totalSiap + '</div></td>' +
+          sz.map(function (s) {
+            const n = (b.terkirim && b.terkirim[s] !== undefined) ? b.terkirim[s] : "";
+            return '<td data-label="' + rjdEscapeHtml_(s) + '">' + (n === "" ? "-" : n) + '</td>';
+          }).join("") +
+          '<td data-label="Terkirim"><b>' + b.totalTerkirim + '</b></td></tr>';
+      }).join("") +
+      '</tbody></table></div></div>';
+
+    html += '<div class="sp-card"><h3 class="sp-judul">Daftar Surat Jalan</h3>';
+    if (!daftar.length) html += '<p class="sp-info">Belum ada surat jalan untuk PO ini.</p>';
     html += daftar.map(function (p) {
       const rincian = (p.baris || []).map(function (b) {
         return rjdEscapeHtml_([b.artikel, b.style].filter(Boolean).join(" \u00b7 ")) +
