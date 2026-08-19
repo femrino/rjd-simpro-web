@@ -580,7 +580,7 @@ const SP_FASE_PETA = [
   ["cutting",    "Cutting",       [["gelar", "Gelaran"], ["cutting", "Hasil Potong"]]],
   ["loading",    "Loading",       [["bagi", "Bagi ke Line"], ["spkrekap", "SPK & Rekap"]]],
   ["sewing",     "Sewing",        [["konfpot", "Konfirmasi Potongan"], ["setor", "Setoran ke Finishing"]]],
-  ["finishing",  "Finishing",     [["konfset", "Konfirmasi Setoran"], ["qc", "QC"]]],
+  ["finishing",  "Finishing",     [["konfset", "Konfirmasi Setoran"], ["qc", "QC"], ["qcring", "Ringkasan QC"]]],
   ["packing",    "Packing & Kirim", [["stok", "Stok Siap Kirim"]]],
   ["riw",        "Riwayat",       [["riw", "Riwayat"]]]
 ];
@@ -667,6 +667,7 @@ const SP_BAGIAN_TAB = {
   approval: ["pola", "sampel"],
   spkrekap: "loading",
   stok:    ["finishing", "gudang"],   // kursi gudang disiapkan duluan
+  qcring:  "qc",
   // Konfirmasi terpecah dua subtab bermode (v116): sewing menerima potongan
   // dari loading, finishing menerima setoran dari sewing. Entri "konf" lama
   // pensiun bersama sakelar internalnya.
@@ -964,7 +965,7 @@ function spSwitchTab(tab) {
   // Alias panel (v116): konfpot & konfset adalah DUA PINTU ke SATU panel
   // fisik sp-panel-konf -- subtab yang menentukan modenya, bukan sakelar
   // internal (sakelar lama dipensiunkan, lihat spMuatKonfMode_).
-  const SP_PANEL_ALIAS = { konfpot: "konf", konfset: "konf" };
+  const SP_PANEL_ALIAS = { konfpot: "konf", konfset: "konf", qcring: "qc" };
   const idPanelTujuan = "sp-panel-" + (SP_PANEL_ALIAS[tab] || tab);
   document.querySelectorAll("[id^='sp-panel-']").forEach(function (p) {
     p.classList.toggle("hidden", p.id !== idPanelTujuan);
@@ -987,7 +988,8 @@ function spSwitchTab(tab) {
   if (tab === "konfset") { spMuatKonfMode_("setoran"); return; }
   if (tab === "pola" || tab === "sampel") { spMuatTahap(tab); return; }
   if (tab === "marker") { spMuatMarker(); spMuatSemuaMarker_(); return; }
-  if (tab === "qc") { spMuatQC_(); qcSinkronPOAktif_(); return; }
+  if (tab === "qc") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("input"); return; }
+  if (tab === "qcring") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("ringkasan"); return; }
   if (tab === "approval") { spMuatApproval_(); return; }
   if (tab === "spkrekap") { if (!window.SP_PO) spMuatDistribusi(); return; }
   if (tab === "stok") { spMuatStok_(); return; }
@@ -3977,7 +3979,10 @@ function spCatatTahap(i, tahap) {
 let QC_MASTER = null;
 let QC_DAFTAR_PO = [];
 let QC_PO_TERPILIH = null;
-let QC_TAHAP_DIPILIH = "";
+// Default "Finishing" (v118): tab ini hidup di fase Finishing dan 90%
+// pemakaiannya QC Finishing (sumber stok siap kirim). Potong/Jahit tetap
+// sekali klik. Tombol tahap di markup di-highlight saat panel dimuat.
+let QC_TAHAP_DIPILIH = "Finishing";
 let QC_RINGKASAN_DIMUAT = false;
 let QC_RINCIAN_PO = null;
 let QC_WARNA_DIPILIH = null;
@@ -3987,6 +3992,8 @@ function spMuatQC_() {
   if (window.QC_SUDAH_DIMUAT) return;
   window.QC_SUDAH_DIMUAT = true;
   qcMuatMaster_();
+  // sorot tombol tahap default (Finishing) -- markup lahir tanpa active
+  try { qcPilihTahap(QC_TAHAP_DIPILIH); } catch (e) { /* elemen belum ada */ }
 }
 
 /**
@@ -4048,7 +4055,7 @@ function qcPastikanFieldItem_() {
   f.className = "qc-field";
   f.innerHTML = "<label for='qc-item'>Item (artikel \u00b7 style)</label>" +
     "<select id='qc-item' onchange='qcPilihItem()'>" +
-    "<option value=''>-- Pilih PO dulu --</option></select>";
+    "<option value=''>-- Pilih PO lewat kartu di atas --</option></select>";
   fieldW.parentNode.insertBefore(f, fieldW);
 }
 
@@ -4057,7 +4064,7 @@ function qcIsiDropdownItem_() {
   const sel = document.getElementById("qc-item");
   if (!sel) return;
   if (!QC_RINCIAN_PO || !(QC_RINCIAN_PO.baris || []).length) {
-    sel.innerHTML = '<option value="">-- Pilih PO dulu --</option>';
+    sel.innerHTML = '<option value="">-- Pilih PO lewat kartu di atas --</option>';
     QC_ITEM_DIPILIH = "";
     return;
   }
@@ -4327,7 +4334,7 @@ function qcGantiPO() {
   QC_RINCIAN_PO = null;
   QC_WARNA_DIPILIH = null;
   const selWarna = document.getElementById("qc-warna");
-  if (selWarna) selWarna.innerHTML = '<option value="">-- Pilih PO dulu --</option>';
+  if (selWarna) selWarna.innerHTML = '<option value="">-- Pilih PO lewat kartu di atas --</option>';
   qcRenderSizeLolos_();
   document.getElementById("qc-po-terpilih").classList.remove("show");
   document.getElementById("qc-po-terpilih").classList.add("hidden");   // pasangan perbaikan v106
@@ -4338,6 +4345,18 @@ function qcGantiPO() {
 }
 
 // ============ TAB SWITCHER ============
+
+/**
+ * v118: Input/Ringkasan naik jadi SUBTAB FASE (Finishing > QC / Ringkasan
+ * QC) -- dua rel segmen bertumpuk itu satu terlalu banyak, dan preseden
+ * peleburannya sudah ada (konfirmasi, v116). Rel internal .qc-tabs
+ * dipensiunkan: disembunyikan di sini, markup dibiarkan bertombstone.
+ */
+function qcModeSub_(mode) {
+  const rel = document.querySelector(".qc-tabs");
+  if (rel) rel.classList.add("hidden");
+  qcSwitchTab(mode);
+}
 
 function qcSwitchTab(tab) {
   document.querySelectorAll(".qc-tab").forEach(function (b) {
