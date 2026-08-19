@@ -56,7 +56,17 @@ body{
      position:sticky buat semua elemen sticky di halaman manapun (termasuk tab bar
      Dashboard). html-nya doang udah cukup buat nyegah scroll horizontal. */
   max-width:100vw;
+  /* Kompensasi nav fixed (68px) -- v130: MENEMPEL SENDIRI pada keberadaan
+     <nav>. Dulu padding ini mutlak di body, jadi setiap halaman baru yang
+     membawa header sendiri (kalkulator dkk) mewarisi band kosong 68px di
+     atas -- kasus yang terus berulang. Sekarang: halaman ber-<nav> dapat
+     68, halaman tanpa nav dapat 0, otomatis untuk halaman masa depan.
+     Browser tanpa :has() jatuh ke perilaku lama (aman, bukan rusak). */
   padding-top:68px;
+}
+@supports selector(:has(*)) {
+  body { padding-top: 0; }
+  body:has(nav) { padding-top: 68px; }
 }
 .mono{font-family:'IBM Plex Mono',monospace}
 h1,h2,h3,h4,.display{font-family:'Archivo',sans-serif}
