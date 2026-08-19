@@ -954,3 +954,52 @@ body.sp-siap #sp-hero .lead { display: none; }
   -moz-appearance: textfield;
   appearance: textfield;
 }
+
+/* ============================================================
+   NAVIGASI DUA TINGKAT v110
+   ============================================================
+   Bar FASE memakai kelas .sp-tabs (kartu putih sticky v102 -- gating
+   .sp-siap #sp-tabs ikut gratis). Sticky PINDAH ke pembungkus supaya
+   bar subtab ikut menempel satu paket; .sp-tabs sendiri jadi statis.
+   Bar SUBTAB: pil lebih kecil & ringan, tanpa kartu -- hierarki
+   terbaca dari ukuran, bukan dari dua kartu bertumpuk. */
+.sp-navwrap {
+  position: sticky;
+  top: 72px;              /* ANGKA MANUAL -- pola sama dgn portal(78)/dashboard(68) */
+  z-index: 30;
+}
+.sp-navwrap .sp-tabs {
+  position: static;
+  top: auto;
+  margin-bottom: 0;
+}
+.sp-subtabs {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  gap: 6px;
+  padding: 8px 2px 10px;
+  margin: 0 0 14px;
+  background: transparent;
+  scrollbar-width: none;
+}
+.sp-subtabs::-webkit-scrollbar { display: none; }
+.sp-subtabs .sp-tab {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  border-radius: 9999px;
+  background: var(--white);
+  border: 1px solid var(--line, #E5E0D6);
+  color: var(--ink-soft);
+  min-width: 0;
+}
+.sp-subtabs .sp-tab.active {
+  background: var(--navy);
+  color: var(--cream);
+  border-color: var(--navy);
+}
+/* gating peran: subtab ikut menunggu .sp-siap seperti bar fase */
+#sp-subtabs { visibility: hidden; }
+body.sp-siap #sp-subtabs { visibility: visible; }

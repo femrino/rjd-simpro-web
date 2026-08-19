@@ -550,6 +550,101 @@ function spSimpan() {
  * Tab "Riwayat" TIDAK pernah disembunyikan -- melihat catatan bagian lain itu
  * justru yang membuat serah terima antar bagian bisa diperiksa.
  */
+/**
+ * ============================================================
+ * NAVIGASI DUA TINGKAT (v110) -- fase di atas, langkah di bawah
+ * ============================================================
+ * Peta tab hidup di SINI SAJA; kedua bar dirender dari peta ini
+ * (markup template cuma dua wadah kosong). Aturan nama dari
+ * KAMUS-ISTILAH-SIMPRO: fase = nama divisi, subtab = Indonesia.
+ *
+ * Subtab memakai ID TAB LAMA apa adanya -- spSwitchTab, wildcard panel
+ * sp-panel-* (v105), penyaring bagian, dan semua pemanggil programatik
+ * (mis. lompatan gelaran->cutting) bekerja tanpa diubah.
+ *
+ * "konf" sengaja muncul di DUA fase (Sewing & Finishing) dengan label
+ * berbeda: panelnya satu, gabungan dua alur, dan penyaring bagian
+ * internal panel yang menentukan alur mana yang tampil per pemakai.
+ * Memecah panelnya jadi dua = operasi lain hari, bukan syarat IA ini.
+ *
+ * Approval (Sampel) & Packing/Stok BELUM di peta -- cetak biru melarang
+ * tab lahir kosong; masuk begitu form-nya jadi.
+ */
+const SP_FASE_PETA = [
+  ["polamarker", "Pola & Marker", [["pola", "Pola"], ["marker", "Marker"]]],
+  ["sampel",     "Sampel",        [["sampel", "Sampel"]]],
+  ["cutting",    "Cutting",       [["gelar", "Gelaran"], ["cutting", "Hasil Potong"]]],
+  ["loading",    "Loading",       [["bagi", "Bagi ke Line"]]],
+  ["sewing",     "Sewing",        [["konf", "Konfirmasi Potongan"], ["setor", "Setoran ke Finishing"]]],
+  ["finishing",  "Finishing",     [["konf", "Konfirmasi Setoran"], ["qc", "QC"]]],
+  ["riw",        "Riwayat",       [["riw", "Riwayat"]]]
+];
+
+/** Boleh-tidaknya satu tab untuk pemakai -- dari peta bagian, BUKAN dari DOM. */
+function spTabBoleh_(tab) {
+  if (window.SP_BAGIAN_SEMUA !== false) return true;   // peran belum datang / admin
+  const perlu = SP_BAGIAN_TAB[tab];
+  const bagian = window.SP_BAGIAN || [];
+  return !perlu || (Array.isArray(perlu)
+    ? perlu.some(function (p) { return bagian.indexOf(p) !== -1; })
+    : bagian.indexOf(perlu) !== -1);
+}
+
+function spFaseBoleh_(f) {
+  return f[2].some(function (s) { return spTabBoleh_(s[0]); });
+}
+
+/** Fase pemilik sebuah tab -- fase aktif menang kalau memuat tab itu (kasus konf ganda). */
+function spFaseDariTab_(tab) {
+  const skrg = SP_FASE_PETA.filter(function (f) { return f[0] === window.SP_FASE; })[0];
+  if (skrg && skrg[2].some(function (s) { return s[0] === tab; })) return skrg[0];
+  const f = SP_FASE_PETA.filter(function (x) {
+    return x[2].some(function (s) { return s[0] === tab; });
+  })[0];
+  return f ? f[0] : null;
+}
+
+function spRenderFase_() {
+  const w = document.getElementById("sp-tabs");
+  if (!w) return;
+  w.innerHTML = SP_FASE_PETA.map(function (f) {
+    if (!spFaseBoleh_(f)) return "";
+    return '<button class="sp-tab' + (f[0] === window.SP_FASE ? ' active' : '') +
+      '" data-fase="' + f[0] + '" onclick="spPilihFase_(\'' + f[0] + '\')" type="button">' +
+      f[1] + '</button>';
+  }).join("");
+}
+
+function spRenderSub_() {
+  const w = document.getElementById("sp-subtabs");
+  if (!w) return;
+  const f = SP_FASE_PETA.filter(function (x) { return x[0] === window.SP_FASE; })[0];
+  if (!f) { w.innerHTML = ""; return; }
+  w.innerHTML = f[2].map(function (s) {
+    if (!spTabBoleh_(s[0])) return "";
+    return '<button class="sp-tab' + (s[0] === window.SP_TAB ? ' active' : '') +
+      '" data-tab="' + s[0] + '" onclick="spSwitchTab(\'' + s[0] + '\')" type="button">' +
+      s[1] + '</button>';
+  }).join("");
+  // fase dengan SATU subtab: barisnya cuma mengulang nama fase -- sembunyikan
+  w.style.display = f[2].filter(function (s) { return spTabBoleh_(s[0]); }).length > 1 ? "" : "none";
+}
+
+function spPilihFase_(fase) {
+  window.SP_FASE = fase;
+  window.SP_SUBTAB_TERAKHIR = window.SP_SUBTAB_TERAKHIR || {};
+  const f = SP_FASE_PETA.filter(function (x) { return x[0] === fase; })[0];
+  const ingat = window.SP_SUBTAB_TERAKHIR[fase];
+  let target = (ingat && f[2].some(function (s) { return s[0] === ingat; }) && spTabBoleh_(ingat))
+    ? ingat : null;
+  if (!target) {
+    const pertama = f[2].filter(function (s) { return spTabBoleh_(s[0]); })[0];
+    target = pertama ? pertama[0] : null;
+  }
+  if (target) spSwitchTab(target);
+  else { spRenderFase_(); spRenderSub_(); }
+}
+
 const SP_BAGIAN_TAB = {
   // Pola dan Sampel dipisah: PIC-nya berbeda orang, dan menggabungkannya
   // membuat masing-masing melihat form yang bukan miliknya.
@@ -597,30 +692,22 @@ function spTerapkanBagian_(d) {
   // Line yang dipegang staf ini -- dipakai untuk membatasi pembatalan setoran.
   window.SP_ID_LINE = (d && d.idLine) ? d.idLine : [];
   window.SP_BAGIAN_SEMUA = semua;
-  if (semua) return;
+  if (semua) { spRenderFase_(); spRenderSub_(); return; }
 
-  let pertamaTampil = null;
-  document.querySelectorAll(".sp-tab").forEach(function (btn) {
-    const tab = btn.dataset.tab;
-    const perlu = SP_BAGIAN_TAB[tab];
-    // perlu bisa string (satu bagian) atau array (salah satu dari beberapa).
-    const boleh = !perlu || (Array.isArray(perlu)
-      ? perlu.some(function (p) { return bagian.indexOf(p) !== -1; })
-      : bagian.indexOf(perlu) !== -1);
-    btn.classList.toggle("hidden", !boleh);
-    if (boleh && !pertamaTampil) pertamaTampil = tab;
-  });
+  // v110: penyaringan lewat PETA (spTabBoleh_ membaca SP_BAGIAN yang barusan
+  // diisi), lalu kedua bar dirender ulang -- tombol yang tidak boleh memang
+  // tidak pernah dilahirkan, bukan disembunyikan. SP_BAGIAN_SEMUA=false
+  // menandakan penyaringan aktif.
+  window.SP_BAGIAN_SEMUA = false;
+  spRenderFase_();
+  spRenderSub_();
 
-  // Kalau tab yang sedang aktif ternyata disembunyikan, pindah ke tab pertama
-  // yang boleh. Tanpa ini, pemakai melihat panel kosong tanpa tab aktif --
-  // terlihat seperti halaman rusak.
-  const aktif = spTabAktif_();
-  const perluAktif = SP_BAGIAN_TAB[aktif];
-  const bolehAktif = !perluAktif || (Array.isArray(perluAktif)
-    ? perluAktif.some(function (p) { return bagian.indexOf(p) !== -1; })
-    : bagian.indexOf(perluAktif) !== -1);
-  if (!bolehAktif && pertamaTampil) {
-    spSwitchTab(pertamaTampil);
+  // Kalau tab yang sedang aktif ternyata bukan milik bagiannya, pindah ke
+  // subtab pertama yang boleh dari fase pertama yang boleh. Tanpa ini,
+  // pemakai melihat panel kosong -- terlihat seperti halaman rusak.
+  if (!spTabBoleh_(spTabAktif_())) {
+    const f = SP_FASE_PETA.filter(spFaseBoleh_)[0];
+    if (f) spPilihFase_(f[0]);
   }
 
   // Sub-tab Konfirmasi ikut disaring begitu peran datang -- panelnya mungkin
@@ -821,6 +908,17 @@ function spPasangPanduan_(tab) {
 
 function spSwitchTab(tab) {
   window.SP_TAB = tab;
+  // Dua tingkat (v110): pastikan fase pemilik tab ini yang terbuka --
+  // pemanggil programatik (lompatan gelaran->cutting, pilih PO, penyaring
+  // bagian) tidak tahu-menahu soal fase, dan memang tidak perlu tahu.
+  const faseTab = spFaseDariTab_(tab);
+  if (faseTab) {
+    window.SP_FASE = faseTab;
+    window.SP_SUBTAB_TERAKHIR = window.SP_SUBTAB_TERAKHIR || {};
+    window.SP_SUBTAB_TERAKHIR[faseTab] = tab;
+  }
+  spRenderFase_();
+  spRenderSub_();
   document.querySelectorAll(".sp-tab").forEach(function (b) {
     b.classList.toggle("active", b.dataset.tab === tab);
   });
@@ -4446,3 +4544,22 @@ function qcRenderRingkasan_(d) {
     '<div><div class="qc-subjudul">Top jenis cacat</div>' + jenisCacat + '</div>' +
     '</div>';
 }
+
+/* Init navigasi dua tingkat (v110): render bar dengan fase Cutting > Gelaran
+   aktif -- meniru keadaan awal lama (tombol Gelaran ber-class active dari
+   HTML). SENGAJA tidak memanggil spSwitchTab di sini: dulu pun panel awal
+   tampil tanpa loader terpicu; loader jalan saat interaksi pertama. */
+(function spInitDuaTingkat_() {
+  const mulai = function () {
+    if (!document.getElementById("sp-tabs")) return;
+    if (window.SP_FASE === undefined) window.SP_FASE = "cutting";
+    if (window.SP_TAB === undefined) window.SP_TAB = "gelar";
+    window.SP_BAGIAN_SEMUA = (window.SP_BAGIAN_SEMUA === undefined)
+      ? true : window.SP_BAGIAN_SEMUA;
+    spRenderFase_();
+    spRenderSub_();
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", mulai);
+  } else { mulai(); }
+})();
