@@ -564,10 +564,10 @@ function spSimpan() {
  * sp-panel-* (v105), penyaring bagian, dan semua pemanggil programatik
  * (mis. lompatan gelaran->cutting) bekerja tanpa diubah.
  *
- * "konf" sengaja muncul di DUA fase (Sewing & Finishing) dengan label
- * berbeda: panelnya satu, gabungan dua alur, dan penyaring bagian
- * internal panel yang menentukan alur mana yang tampil per pemakai.
- * Memecah panelnya jadi dua = operasi lain hari, bukan syarat IA ini.
+ * Konfirmasi (v116): dua subtab bermode -- konfpot (Sewing) & konfset
+ * (Finishing) -- adalah dua pintu ke SATU panel fisik sp-panel-konf
+ * (alias di spSwitchTab). Subtab yang menentukan mode; sakelar internal
+ * lama dipensiunkan.
  *
  * Approval (Sampel) & Packing/Stok BELUM di peta -- cetak biru melarang
  * tab lahir kosong; masuk begitu form-nya jadi.
@@ -577,8 +577,8 @@ const SP_FASE_PETA = [
   ["sampel",     "Sampel",        [["sampel", "Sampel"], ["approval", "Approval"]]],
   ["cutting",    "Cutting",       [["gelar", "Gelaran"], ["cutting", "Hasil Potong"]]],
   ["loading",    "Loading",       [["bagi", "Bagi ke Line"], ["spkrekap", "SPK & Rekap"]]],
-  ["sewing",     "Sewing",        [["konf", "Konfirmasi Potongan"], ["setor", "Setoran ke Finishing"]]],
-  ["finishing",  "Finishing",     [["konf", "Konfirmasi Setoran"], ["qc", "QC"]]],
+  ["sewing",     "Sewing",        [["konfpot", "Konfirmasi Potongan"], ["setor", "Setoran ke Finishing"]]],
+  ["finishing",  "Finishing",     [["konfset", "Konfirmasi Setoran"], ["qc", "QC"]]],
   ["packing",    "Packing & Kirim", [["stok", "Stok Siap Kirim"]]],
   ["riw",        "Riwayat",       [["riw", "Riwayat"]]]
 ];
@@ -665,10 +665,12 @@ const SP_BAGIAN_TAB = {
   approval: ["pola", "sampel"],
   spkrekap: "loading",
   stok:    ["finishing", "gudang"],   // kursi gudang disiapkan duluan
-  // Tab Konfirmasi memuat DUA alur dengan penerima berbeda: sewing menerima
-  // potongan dari loading, finishing menerima setoran dari sewing.
+  // Konfirmasi terpecah dua subtab bermode (v116): sewing menerima potongan
+  // dari loading, finishing menerima setoran dari sewing. Entri "konf" lama
+  // pensiun bersama sakelar internalnya.
   // Array = boleh salah satu.
-  konf:    ["sewing", "finishing"],
+  konfpot: "sewing",
+  konfset: "finishing",
   riw:     null        // selalu tampil
 };
 
@@ -957,8 +959,13 @@ function spSwitchTab(tab) {
   // harus diingat manusia". Sekarang satu aturan untuk semua id sp-panel-*:
   // panel yang lahir kapan pun otomatis ikut, tidak ada lagi yang bisa lupa.
   // Konvensi yang menopangnya: data-tab tombol == akhiran id panelnya.
+  // Alias panel (v116): konfpot & konfset adalah DUA PINTU ke SATU panel
+  // fisik sp-panel-konf -- subtab yang menentukan modenya, bukan sakelar
+  // internal (sakelar lama dipensiunkan, lihat spMuatKonfMode_).
+  const SP_PANEL_ALIAS = { konfpot: "konf", konfset: "konf" };
+  const idPanelTujuan = "sp-panel-" + (SP_PANEL_ALIAS[tab] || tab);
   document.querySelectorAll("[id^='sp-panel-']").forEach(function (p) {
-    p.classList.toggle("hidden", p.id !== "sp-panel-" + tab);
+    p.classList.toggle("hidden", p.id !== idPanelTujuan);
   });
   // Kartu "Pilih PO" cuma relevan untuk dua tab pertama. Tab Konfirmasi
   // melihat semua yang menunggu LINTAS ORDER -- memaksa pilih PO dulu di situ
@@ -967,9 +974,14 @@ function spSwitchTab(tab) {
   // v107: tab QC memakai kartu PO BERSAMA seperti tab lain -- picker internal
   // bawaan qc.html-lah yang disembunyikan (lihat qcSinkronPOAktif_). Satu
   // halaman satu cara memilih PO.
-  if (kartuPO) kartuPO.classList.toggle("hidden", tab === "konf" || tab === "riw");
+  // konfpot/konfset (v116): panel konfirmasi bekerja LINTAS PO (daftar
+  // serah-terima semua order) -- kartu PO bersama tidak relevan di sana,
+  // sama seperti Riwayat.
+  if (kartuPO) kartuPO.classList.toggle("hidden",
+    tab === "konfpot" || tab === "konfset" || tab === "riw");
 
-  if (tab === "konf") { spTerapkanBagianKonf_(); spMuatKonfirmasi(); return; }
+  if (tab === "konfpot") { spMuatKonfMode_("potongan"); return; }
+  if (tab === "konfset") { spMuatKonfMode_("setoran"); return; }
   if (tab === "pola" || tab === "sampel") { spMuatTahap(tab); return; }
   if (tab === "marker") { spMuatMarker(); spMuatSemuaMarker_(); return; }
   if (tab === "qc") { spMuatQC_(); qcSinkronPOAktif_(); return; }
@@ -1248,6 +1260,22 @@ function spTerapkanBagianKonf_() {
   if (!semua && perluAktif && bagian.indexOf(perluAktif) === -1 && pertama) {
     spSwitchKonf(pertama);
   }
+}
+
+/**
+ * v116: mode konfirmasi DITENTUKAN SUBTAB fase (Sewing>Konfirmasi Potongan
+ * = potongan; Finishing>Konfirmasi Setoran = setoran). Sakelar internal
+ * .sp-konf-tabs dipensiunkan -- disembunyikan di sini, markup dibiarkan
+ * (menghapusnya = bedah template; kalau kelak dibongkar, hapus sekalian
+ * spSwitchKonf & spTerapkanBagianKonf_ di bawah). Dua navigasi untuk satu
+ * pilihan hanya melahirkan keadaan saling bertentangan -- persis yang
+ * terjadi: berdiri di "Konfirmasi Potongan" sambil melihat alur setoran.
+ */
+function spMuatKonfMode_(jenis) {
+  window.SP_KONF_JENIS = jenis;
+  const sakelar = document.querySelector(".sp-konf-tabs");
+  if (sakelar) sakelar.classList.add("hidden");
+  spMuatKonfirmasi();
 }
 
 function spSwitchKonf(jenis) {
