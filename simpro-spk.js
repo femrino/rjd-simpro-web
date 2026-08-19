@@ -1088,7 +1088,8 @@ function spRenderFormCutting() {
           rjdEscapeHtml_(kunciItem) +
           '<span class="sp-grup-sisa">order ' + orderItem + ' &#183; potong ' + potongItem + '</span></td></tr>';
       }
-      return kepala + '<tr>' +
+      return kepala + '<tr data-artikel="' + rjdEscapeHtml_(b.artikel || "") +
+        '" data-style="' + rjdEscapeHtml_(b.style || "") + '">' +
         '<td><div class="sp-warna">' + rjdEscapeHtml_(b.warna || "-") + '</div>' +
           '<div class="sp-sisa-info">order ' + b.totalOrder + ' &#183; potong ' + b.totalPotong +
             (b.totalPotong ? (s === 0 ? ' (pas)' : (s > 0 ? ' (+' + s + ' overcut)' : ' (' + s + ')')) : '') +
@@ -3345,9 +3346,15 @@ function spTerapkanIsiCutting_() {
     // Warna saja tidak cukup kalau PO punya beberapa style dengan warna sama.
     // Sub-baris item memuat "Artikel / Style" -- dicocokkan kalau style dikirim.
     if (isi.style) {
-      const elItem = tr.querySelector(".sp-cut-item, .sp-item-sub, td");
-      const teksBaris = rapikan(tr.textContent || "");
-      if (teksBaris.indexOf(rapikan(isi.style)) === -1) return;
+      // Perbaikan v122: v109 memindahkan nama item dari baris ke header
+      // kelompok, jadi mencocokkan lewat teks baris SELALU gagal -- tombol
+      // "Catat X pcs" mati sejak itu. Baris kini membawa identitasnya
+      // sebagai data-attribute; teks tampilan bukan tempat menyimpan data.
+      const cocokDs = rapikan(tr.dataset.style || "") === rapikan(isi.style) ||
+        rapikan(tr.dataset.artikel || "") === rapikan(isi.style);
+      const adaDs = (tr.dataset.style || tr.dataset.artikel);
+      if (adaDs) { if (!cocokDs) return; }
+      else if (rapikan(tr.textContent || "").indexOf(rapikan(isi.style)) === -1) return;
     }
     barisKetemu = true;
     tr.querySelectorAll(".sp-cut-qty").forEach(function (inp) {
