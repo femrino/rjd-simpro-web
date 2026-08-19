@@ -56,6 +56,74 @@ function khHandleLogin(response){
 
 function khTampilkanForm_(){
   khShow("kh-isi");
+  khBangunForm_();
+}
+
+let KH_JENIS = "CMT";
+
+function khPilihJenis(j){
+  KH_JENIS = j;
+  document.querySelectorAll(".kh-toggle button").forEach(function(b){
+    b.classList.toggle("active", b.dataset.j === j);
+  });
+}
+
+/**
+ * v128: form dibangun ulang mengikuti REFERENSI Femri (20 Agu 2026) --
+ * markup pindah ke sini (pola cangkang v115: template cuma wadah, isi
+ * milik JS supaya rilis form berikutnya cukup satu file). Perubahan inti:
+ * - SMV pecah per divisi (Cutting/Sewing/Finishing) -- dijumlah backend;
+ * - BIAYA SEKALI JALAN = 4 kotak Rupiah langsung, menggantikan kunci
+ *   "jenis artikel setup" yang kemarin terisi angka 1000000;
+ * - ASUMSI PABRIK terlihat & bisa disetel (kosong = bawaan backend);
+ * - jenis order jadi dua tombol; rumus TETAP seluruhnya di backend.
+ */
+function khBangunForm_(){
+  const kolom = document.querySelector(".kh-grid > div");
+  if (!kolom || document.getElementById("kh-smv-sew")) return;
+  const F = function(label, id, ph, sub){
+    return '<div class="kh-field"><label>' + label + '</label>' +
+      (sub ? '<p class="kh-sub">' + sub + '</p>' : '') +
+      '<input id="' + id + '" type="text" inputmode="decimal" placeholder="' + (ph || "") + '"/></div>';
+  };
+  kolom.innerHTML =
+    '<div class="kh-card"><h2>Pekerjaan yang ditawar</h2>' +
+      '<div class="kh-row3">' + F("Brand","kh-brand","") + F("Artikel","kh-artikel","") + F("Style","kh-style","") + '</div>' +
+      '<div class="kh-field"><label>Menit kerja per pcs (SMV)</label>' +
+        '<p class="kh-sub">Skala menit resep RJD. Kosongkan ketiganya untuk menarik dari resep Archive_PecahProses.</p>' +
+        '<div class="kh-row3 kh-smvbox">' +
+          '<div><input id="kh-smv-cut" inputmode="decimal" type="text"/><span>Cutting</span></div>' +
+          '<div><input id="kh-smv-sew" inputmode="decimal" type="text"/><span>Sewing</span></div>' +
+          '<div><input id="kh-smv-fin" inputmode="decimal" type="text"/><span>Finishing</span></div>' +
+        '</div></div>' +
+      '<div class="kh-row3">' + F("Qty (pcs)","kh-qty","1000") +
+        '<div class="kh-field"><label>Jenis order</label><div class="kh-toggle">' +
+          '<button class="active" data-j="CMT" onclick="khPilihJenis(\'CMT\')" type="button">CMT</button>' +
+          '<button data-j="Maklon" onclick="khPilihJenis(\'Maklon\')" type="button">Maklon</button>' +
+        '</div></div>' +
+        F("Margin target %","kh-margin","20") + '</div>' +
+    '</div>' +
+    '<div class="kh-card"><h2>Bahan &amp; jasa luar (Rp per pcs)</h2>' +
+      F("Kain","kh-kain","0","konsumsi marker &#215; harga kain. Nol untuk CMT &#8212; kain dari klien.") +
+      F("Aksesoris","kh-aks","mis. 3500","benang, kancing, label, hangtag, poly &#8212; PER PCS. Kosongkan untuk otomatis dari resep + SD Master Harga Aksesoris.") +
+      F("Jasa luar","kh-jasa","0","bordir / sablon / printing / wash pihak ketiga, per pcs.") +
+    '</div>' +
+    '<div class="kh-card"><h2>Biaya sekali jalan (Rp)</h2>' +
+      '<p class="kh-sub">Dikeluarkan sekali berapa pun jumlah ordernya, lalu dibagi ke seluruh pcs. Inilah sebabnya 50 pcs tidak boleh sama harganya dengan 5.000 pcs. Kosong semua = ambil dari SD Biaya Setup.</p>' +
+      '<div class="kh-row2">' + F("Sample &amp; approval","kh-set-sample","mis. 450000") + F("Marker &amp; pola","kh-set-marker","mis. 250000") + '</div>' +
+      '<div class="kh-row2">' + F("Setel lini / ganti model","kh-set-lini","mis. 600000") + F("Administrasi &amp; kirim","kh-set-admin","mis. 300000") + '</div>' +
+    '</div>' +
+    '<div class="kh-card"><h2>Risiko &amp; keadaan</h2>' +
+      '<div class="kh-row2">' + F("Reject / rework %","kh-reject","3") + F("Termin pembayaran (hari)","kh-termin","30") + '</div>' +
+      '<div class="kh-row2">' + F("Model baru %","kh-belajar","0","kurva belajar; 0 untuk artikel rutin") + F("Kesulitan bahan %","kh-bahan","0","licin / stretch / motif matching") + '</div>' +
+    '</div>' +
+    '<div class="kh-card"><h2>Asumsi pabrik</h2>' +
+      '<p class="kh-sub">Kosong = bawaan sistem. Isi untuk simulasi &#8212; angka-angka ini menentukan seluruh harga di sebelah kanan.</p>' +
+      '<div class="kh-row2">' + F("Upah borongan / bulan (Rp)","kh-upah-bulan","bawaan sistem") + F("Biaya tetap / bulan (Rp)","kh-tetap-bulan","bawaan sistem") + '</div>' +
+      '<div class="kh-row3">' + F("Kapasitas menit / bulan","kh-kapasitas","mis. 472500") + F("Efisiensi lini %","kh-efisiensi","bawaan 50") + F("Bunga modal / bulan %","kh-bunga","bawaan 1,5") + '</div>' +
+    '</div>' +
+    '<button class="kh-hitung" id="kh-hitung" onclick="khHitung()" type="button">Hitung Harga</button>' +
+    '<div class="hidden kh-form-error" id="kh-form-error"></div>';
 }
 
 window.onload = function(){
@@ -104,12 +172,22 @@ function khSusunPayload_(){
     artikel: khNilai_("kh-artikel"),
     style: khNilai_("kh-style"),
     qty: khAngka_("kh-qty"),
-    jenisOrder: khNilai_("kh-jenis"),
-    smvManual: khAngka_("kh-smv"),
+    jenisOrder: KH_JENIS,
+    smvCutting: khAngka_("kh-smv-cut"),
+    smvSewing: khAngka_("kh-smv-sew"),
+    smvFinishing: khAngka_("kh-smv-fin"),
     kainPerPcs: khAngka_("kh-kain"),
     aksesorisManualPerPcs: khAngka_("kh-aks"),
     jasaLuarPerPcs: khAngka_("kh-jasa"),
-    jenisArtikelSetup: khNilai_("kh-setupjenis"),
+    setupSample: khAngka_("kh-set-sample"),
+    setupMarker: khAngka_("kh-set-marker"),
+    setupLini: khAngka_("kh-set-lini"),
+    setupAdmin: khAngka_("kh-set-admin"),
+    asumsiUpahBulanan: khAngka_("kh-upah-bulan"),
+    asumsiBiayaTetapBulanan: khAngka_("kh-tetap-bulan"),
+    asumsiKapasitasMenit: khAngka_("kh-kapasitas"),
+    asumsiEfisiensiPersen: khAngka_("kh-efisiensi"),
+    asumsiBungaPersen: khAngka_("kh-bunga"),
     marginPersen: khAngka_("kh-margin"),
     rejectPersen: khAngka_("kh-reject"),
     belajarPersen: khAngka_("kh-belajar"),
