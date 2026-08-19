@@ -4957,26 +4957,30 @@ function spMuatTerkirim_() {
         const k = [b.artikel, b.style, b.warna].join("||");
         if (!grup[k]) {
           grup[k] = { item: [b.artikel, b.style].filter(Boolean).join(" \u00b7 "),
-            warna: b.warna || "-", chips: [], total: 0 };
+            warna: b.warna || "-", sizeQty: {}, total: 0 };
           urut.push(k);
         }
-        grup[k].chips.push(rjdEscapeHtml_(b.size) + ' <b>' + b.jumlah + '</b>');
+        grup[k].sizeQty[b.size] = (grup[k].sizeQty[b.size] || 0) + b.jumlah;
         grup[k].total += b.jumlah;
       });
-      const barisGrup = urut.map(function (k) {
-        const g = grup[k];
-        return '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;padding:7px 0;border-top:1px dashed var(--line,#E5E0D6)">' +
-          '<div style="min-width:0"><b>' + rjdEscapeHtml_(g.item) + '</b>' +
-            ' <span style="color:var(--ink-soft)">' + rjdEscapeHtml_(g.warna) + '</span></div>' +
-          '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:baseline">' +
-            g.chips.map(function (c) {
-              return '<span style="background:var(--cream);border:1px solid var(--line,#E5E0D6);' +
-                'border-radius:8px;padding:2px 8px;font-size:12px;white-space:nowrap">' + c + '</span>';
+      // v127: rincian per surat jalan memakai TABEL berstruktur identik
+      // dengan Stok Siap Kirim & Terkirim -- satu bahasa untuk seluruh fase.
+      const barisGrup = '<div class="sp-tabelwrap"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
+        '<th>Item &#183; Warna</th>' +
+        sz.map(function (s) { return '<th>' + rjdEscapeHtml_(s) + '</th>'; }).join("") +
+        '<th>Total</th></tr></thead><tbody>' +
+        urut.map(function (k) {
+          const g = grup[k];
+          return '<tr>' +
+            '<td data-label="Item"><b>' + rjdEscapeHtml_(g.item) + '</b>' +
+              '<div class="sp-sub">' + rjdEscapeHtml_(g.warna) + '</div></td>' +
+            sz.map(function (s) {
+              const n = g.sizeQty[s];
+              return '<td data-label="' + rjdEscapeHtml_(s) + '">' + (n === undefined ? "-" : n) + '</td>';
             }).join("") +
-            '<span style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;margin-left:4px">' +
-              g.total + '</span>' +
-          '</div></div>';
-      }).join("");
+            '<td data-label="Total"><b>' + g.total + '</b></td></tr>';
+        }).join("") +
+        '</tbody></table></div>';
       return '<div style="padding:14px 0 8px;border-bottom:2px solid var(--line,#E5E0D6)">' +
         '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px">' +
           '<div><b>' + rjdEscapeHtml_(p.tanggal || "-") + '</b>' +
