@@ -424,21 +424,35 @@ function loRenderHPPOrder() {
       '<div class="lo-hpp-kosong">Tidak ada order yang rugi pada kedua ujung rentang.</div></div>';
   }
 
-  const tampil = LO_HPP_TAMPIL_SEMUA.order ? rugi : rugi.slice(0, 10);
+  // v135: baris "order" = induk (10 teratas dihitung dari induk saja);
+  // baris "item" menempel di bawah induknya -- menunjuk item MANA yang
+  // menggerus, dengan harga jual yang BENAR-BENAR disepakati per item.
+  const induk = rugi.filter(function (o) { return (o["Level"] || "order") !== "item"; });
+  const tampilInduk = LO_HPP_TAMPIL_SEMUA.order ? induk : induk.slice(0, 10);
+  const bolehId = {};
+  tampilInduk.forEach(function (o) { bolehId[o["ID Purchase Order"]] = true; });
+  const tampil = rugi.filter(function (o) { return bolehId[o["ID Purchase Order"]]; });
+
   const baris = tampil.map(function (o) {
-    const totalMin = Number(o["Laba Min"]) * Number(o["Qty"]);
-    return '<tr><td>' + loEsc(o["ID Purchase Order"]) +
-        (o["ID Klien"] ? '<div class="lo-hpp-sub">' + loEsc(o["ID Klien"]) + '</div>' : '') + '</td>' +
+    const item = (o["Level"] || "order") === "item";
+    const adaLaba = o["Laba Min"] !== "" && o["Laba Min"] !== undefined;
+    const totalMin = adaLaba ? Number(o["Laba Min"]) * Number(o["Qty"]) : null;
+    const sel1 = item
+      ? '<td class="lo-hpp-item-sel">&#8627; ' + loEsc(o["Item"] || "-") + '</td>'
+      : '<td><b>' + loEsc(o["ID Purchase Order"]) + '</b>' +
+        (o["ID Klien"] ? '<div class="lo-hpp-sub">' + loEsc(o["ID Klien"]) + '</div>' : '') + '</td>';
+    return '<tr class="' + (item ? 'lo-hpp-tr-item' : 'lo-hpp-tr-order') + '">' + sel1 +
       '<td class="lo-hpp-num">' + Number(o["Qty"]).toLocaleString("id-ID") + '</td>' +
       '<td class="lo-hpp-num">' + loRp(o["Jual Per Pcs"]) + '</td>' +
-      '<td class="lo-hpp-num">' + loRp(o["Upah Per Pcs"]) + '</td>' +
-      '<td class="lo-hpp-num lo-hpp-berat">' + loRp(o["Laba Min"]) + ' .. ' +
-        loRp(o["Laba Max"]).replace("Rp ", "").replace("-", "-") + '</td>' +
-      '<td class="lo-hpp-num lo-hpp-berat">' + loRp(totalMin) + '</td></tr>';
+      '<td class="lo-hpp-num">' + (adaLaba ? loRp(o["Upah Per Pcs"]) : '<span title="artikel belum punya jejak proses">?</span>') + '</td>' +
+      '<td class="lo-hpp-num lo-hpp-berat">' + (adaLaba
+        ? loRp(o["Laba Min"]) + '<span class="lo-hpp-rentang"> .. ' + loRp(o["Laba Max"]).replace("Rp ", "") + '</span>'
+        : '-') + '</td>' +
+      '<td class="lo-hpp-num lo-hpp-berat">' + (totalMin === null ? '-' : loRp(totalMin)) + '</td></tr>';
   }).join("");
 
   return '<div class="lo-hpp-blok">' +
-    '<div class="lo-hpp-blok-judul">Order yang merugi &#8212; ' + rugi.length + ' order</div>' +
+    '<div class="lo-hpp-blok-judul">Order yang merugi &#8212; ' + induk.length + ' order</div>' +
     '<div class="lo-hpp-blok-sub">Rugi pada kedua ujung rentang, jadi tidak tergantung ' +
       'ketepatan angka perkiraan. Ini bukan order yang omsetnya kecil &#8212; ini order ' +
       'yang harganya di bawah biayanya.</div>' +
@@ -447,9 +461,9 @@ function loRenderHPPOrder() {
     '<th class="lo-hpp-num">Jual/pcs</th><th class="lo-hpp-num">Upah/pcs</th>' +
     '<th class="lo-hpp-num">Laba/pcs</th><th class="lo-hpp-num">Total</th></tr></thead>' +
     '<tbody>' + baris + '</tbody></table></div>' +
-    (rugi.length > 10
+    (induk.length > 10
       ? '<a class="lo-hpp-lainnya" href="#" onclick="LO_HPP_TAMPIL_SEMUA.order=!LO_HPP_TAMPIL_SEMUA.order;loRenderHPP();return false;">' +
-        (LO_HPP_TAMPIL_SEMUA.order ? 'Tampilkan 10 teratas saja' : 'Tampilkan ' + (rugi.length - 10) + ' order lainnya') + '</a>'
+        (LO_HPP_TAMPIL_SEMUA.order ? 'Tampilkan 10 teratas saja' : 'Tampilkan ' + (induk.length - 10) + ' order lainnya') + '</a>'
       : '') +
     '</div>';
 }

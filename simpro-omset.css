@@ -548,3 +548,20 @@ h1,h2,h3,h4,h5,h6 { font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif
 .lo-kalk-angka-sesuai{
   border-color:rgba(180,85,45,.35); border-radius:0 0 12px 12px;
 }
+
+/* ============================================================
+   PEMBACAAN TABEL HPP v135
+   ============================================================
+   1) Baris item menempel di bawah order induknya (pecahan per item --
+      harga yang BENAR-BENAR disepakati, bukan rata-rata PO).
+   2) Zebra + garis tegas antar keluarga baris; angka rata kanan mono;
+      rentang min..max diredupkan supaya angka utama menonjol. */
+.lo-hpp-tabel tbody tr.lo-hpp-tr-order td { border-top: 2px solid var(--line, #E5E0D6); }
+.lo-hpp-tabel tbody tr.lo-hpp-tr-item td {
+  border-top: none; padding-top: 4px; padding-bottom: 8px;
+  background: rgba(0,0,0,.018); font-size: 13px;
+}
+.lo-hpp-item-sel { padding-left: 22px !important; color: var(--ink-soft); }
+.lo-hpp-rentang { color: var(--ink-soft); font-weight: 400; font-size: 12px; }
+.lo-hpp-tabel .lo-hpp-num { font-family: 'IBM Plex Mono', monospace; white-space: nowrap; }
+.lo-hpp-tabel tbody tr:hover td { background: rgba(0,0,0,.03); }
