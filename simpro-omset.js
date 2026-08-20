@@ -360,8 +360,7 @@ function loRenderHPP() {
       ? ["Tarif per menit",
           loRp(Number(r["Tarif Upah per Menit"]) + Number(r["Tarif OH per Menit Min"])) + " - " +
             loRp(Number(r["Tarif Upah per Menit"]) + Number(r["Tarif OH per Menit Max"])).replace("Rp ", ""),
-          "upah + overhead per menit dibayar &#183; mesin SMV dua-dunia (ef " +
-            (r["Efisiensi Kemeja"] || "?") + "% kemeja / " + (r["Efisiensi Non-Kemeja"] || "?") + "% non)"]
+          "upah + overhead per menit SMV &#183; tarif tertimbang volume dari arsipmu sendiri"]
       : ["Biaya per proses",
           loRp(r["Tarif Upah Per Proses Pcs"] + r["Tarif Overhead Min Per Proses Pcs"]) + " - " +
             loRp(r["Tarif Upah Per Proses Pcs"] + r["Tarif Overhead Max Per Proses Pcs"]).replace("Rp ", ""),
@@ -396,7 +395,7 @@ function loRenderHPPHarga() {
     const kelas = jarak > 25 ? "lo-hpp-berat" : (jarak > 0 ? "lo-hpp-sedang" : "lo-hpp-aman");
     return '<tr><td>' + loEsc(a["Artikel"]) +
         (a["Style"] ? '<div class="lo-hpp-sub">' + loEsc(a["Style"]) + '</div>' : '') + '</td>' +
-      '<td class="lo-hpp-num">' + (a["Basis"] === "SMV"
+      '<td class="lo-hpp-num">' + ((a["Basis"] === "SMV" || (a["SMV Menit"] !== "" && a["SMV Menit"] !== undefined))
         ? a["SMV Menit"] + ' <span class="lo-hpp-basis">mnt &#183; ' + loEsc(a["Cakupan Resep"] || "") + '</span>'
         : a["Proses Per Pcs"] + ' <span class="lo-hpp-basis">proses</span>') + '</td>' +
       '<td class="lo-hpp-num">' + loRp(a["Harga Min"]) + '</td>' +
