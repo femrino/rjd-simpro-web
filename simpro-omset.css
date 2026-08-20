@@ -565,3 +565,29 @@ h1,h2,h3,h4,h5,h6 { font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif
 .lo-hpp-rentang { color: var(--ink-soft); font-weight: 400; font-size: 12px; }
 .lo-hpp-tabel .lo-hpp-num { font-family: 'IBM Plex Mono', monospace; white-space: nowrap; }
 .lo-hpp-tabel tbody tr:hover td { background: rgba(0,0,0,.03); }
+
+/* ============================================================
+   LATAR PADAT TAB HPP (v135) -- permintaan Femri 21 Agu
+   ============================================================
+   Kartu & tabel HPP sebelumnya transparan: blob dekoratif halaman
+   menembus tulisan. Disamakan dengan bahasa tab SPT (.lo-tabel):
+   kartu putih padat berbingkai, sel tak tembus pandang. */
+.lo-hpp-blok {
+  background: var(--white);
+  border: 1px solid var(--line, #E5E0D6);
+  border-radius: 16px;
+  padding: 20px 22px;
+  margin-top: 22px;
+}
+.lo-hpp-kartu, .lo-hpp-ringkas > div {
+  background: var(--white);
+  border: 1px solid var(--line, #E5E0D6);
+  border-radius: 14px;
+}
+.lo-hpp-tabelwrap { background: var(--white); border-radius: 12px; }
+.lo-hpp-tabel { background: var(--white); border-collapse: separate; border-spacing: 0; width: 100%; }
+.lo-hpp-tabel thead th { background: var(--cream); position: sticky; top: 0; }
+.lo-hpp-tabel td, .lo-hpp-tabel th { background-clip: padding-box; }
+.lo-hpp-tabel tbody td { background: var(--white); }
+.lo-hpp-tabel tbody tr.lo-hpp-tr-item td { background: var(--cream); }
+.lo-hpp-tabel tbody tr:hover td { background: var(--cream-deep, #F3EEE4); }
