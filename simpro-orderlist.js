@@ -895,7 +895,39 @@ function dbRenderEditPO(d){
       'Mengubah qty otomatis memperbarui Detail PO untuk order ini saja -- order lain tidak tersentuh. ' +
       'Daftar ukuran belum bisa diubah dari sini &#8212; menghapus ukuran perlu pemeriksaan ' +
       'invoice &amp; surat jalan yang belum tersedia.' +
-    '</p>';
+    '</p>' +
+
+    // ---- TAMBAH ITEM (v134) -- UI untuk backend tambahItemPO_ yang sudah ----
+    // ---- ada (lahir dari kasus realokasi Pashmina Oval). Item baru = -------
+    // ---- baris Rincian SO baru lewat jalur kelahiran resmi. ----------------
+    '<div class="of-item-card" style="margin-top:18px;border-style:dashed">' +
+      '<div class="of-item-head"><b>+ TAMBAH ITEM BARU</b></div>' +
+      '<div class="of-komposisi-hint">Untuk item yang belum ada di order ini (mis. realokasi panel jadi style lain). ' +
+        'Sepakati HARGA dengan klien dulu &#8212; item lahir langsung ikut proforma.</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px">' +
+        '<label>Brand<input id="db-ti-brand" type="text"/></label>' +
+        '<label>Artikel *<input id="db-ti-artikel" type="text"/></label>' +
+        '<label>Style<input id="db-ti-style" type="text"/></label>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">' +
+        '<label>Warna *<input id="db-ti-warna" type="text"/></label>' +
+        '<label>Harga/pcs<input id="db-ti-harga" inputmode="numeric" type="text"/></label>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px" id="db-ti-size">' +
+        (window.DBEP_SIZE_TERSEDIA || []).map(function(sz){
+          return '<label style="display:flex;flex-direction:column;align-items:center;font-size:12px">' +
+            rjdEscapeHtml_(sz) +
+            '<input data-size="' + rjdEscapeHtml_(sz) + '" inputmode="numeric" ' +
+              'style="width:56px;text-align:center" type="text"/></label>';
+        }).join("") +
+      '</div>' +
+      '<label style="display:block;margin-top:8px">Catatan item' +
+        '<input id="db-ti-catatan" placeholder="mis. realokasi 6 panel dari POB-01" type="text"/></label>' +
+      '<div style="margin-top:10px">' +
+        '<button class="rjd-btn" id="db-ti-btn" onclick="dbTambahItemPO_()" type="button">Tambah Item</button>' +
+        '<span id="db-ti-status" style="margin-left:10px;font-size:12.5px;color:var(--ink-soft)"></span>' +
+      '</div>' +
+    '</div>';
 
   ofRenderJadwalKirim_("db-editpo-jadwal", d.jadwalKirim);
   ofRenderKainKlien_("db-editpo-kaink", d.kainDariKlien);
@@ -925,6 +957,7 @@ function dbMuatProgresWarna_(idPO){
   .then(function(d){
     if(!d || !d.success){
       kunciSemua("Progres produksi tidak bisa dipastikan, jadi warna tidak boleh dihapus.");
+      dbProgresGagalHint_();   // v134
       return;
     }
     const progres = d.progres || {};
@@ -981,6 +1014,14 @@ function dbMuatProgresWarna_(idPO){
   })
   .catch(function(){
     kunciSemua("Gagal memuat progres produksi -- warna tidak boleh dihapus.");
+    dbProgresGagalHint_();   // v134: hint keterikatan jangan membeku
+  });
+}
+
+function dbProgresGagalHint_(){
+  document.querySelectorAll(".dbep-size-hint").forEach(function(el){
+    el.textContent = "Keterikatan ukuran tidak bisa dimuat -- ukuran dikunci. " +
+      "Suntingan lain (qty, harga, kain, catatan) tetap bisa disimpan.";
   });
 }
 
@@ -997,6 +1038,52 @@ function dbHapusBarisPO(btn){
   btn.innerHTML = dihapus ? "&#8634;" : "&#10005;";
   btn.title = dihapus ? "Batalkan penghapusan" : "Hapus warna ini";
   tr.querySelectorAll("input").forEach(function(i){ i.disabled = dihapus; });
+}
+
+/**
+ * TAMBAH ITEM BARU ke PO berjalan (v134) -- memanggil rute catatTambahItemPO
+ * (backend tambahItemPO_: No SO lanjutan, ID Artikel kunci tetap, tolak
+ * item kembar). Sukses -> modal dimuat ulang supaya item baru langsung
+ * kelihatan dan bisa diedit seperti item lain.
+ */
+function dbTambahItemPO_(){
+  const v = function(id){ return (document.getElementById(id).value || "").trim(); };
+  const btn = document.getElementById("db-ti-btn");
+  const st = document.getElementById("db-ti-status");
+  const artikel = v("db-ti-artikel"), warna = v("db-ti-warna");
+  if(!artikel && !v("db-ti-style")){ st.textContent = "Artikel/Style wajib diisi."; return; }
+  if(!warna){ st.textContent = "Warna wajib diisi."; return; }
+  const sizeQty = {};
+  let total = 0;
+  document.querySelectorAll("#db-ti-size input").forEach(function(inp){
+    const n = Number(inp.value) || 0;
+    if(n > 0){ sizeQty[inp.dataset.size] = n; total += n; }
+  });
+  if(!total){ st.textContent = "Isi qty minimal satu ukuran."; return; }
+  btn.disabled = true; st.textContent = "Menambahkan...";
+  fetch(OL_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: OL_ID_TOKEN, action: "catatTambahItemPO",
+      idPurchaseOrder: window.OL_EDITPO_ID,
+      brand: v("db-ti-brand"), artikel: artikel, style: v("db-ti-style"),
+      harga: Number(v("db-ti-harga").replace(/[^0-9]/g, "")) || "",
+      catatanItem: v("db-ti-catatan"),
+      daftarWarna: [{ warna: warna, sizeQty: sizeQty }]
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    btn.disabled = false;
+    if(d && d.success){
+      st.textContent = "Item ditambahkan.";
+      window.OL_DAFTAR_PO = null;
+      dbBukaEditPO(window.OL_EDITPO_ID);   // muat ulang: item baru langsung tampil
+    } else {
+      st.textContent = (d && d.error) || "Gagal menambah item.";
+    }
+  })
+  .catch(function(){ btn.disabled = false; st.textContent = "Gagal menghubungi server."; });
 }
 
 /** Tambah baris warna BARU ke sebuah ITEM. */
