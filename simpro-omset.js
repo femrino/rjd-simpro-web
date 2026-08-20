@@ -356,10 +356,16 @@ function loRenderHPP() {
     ["Titik impas",
       loRp(r["Titik Impas Biaya Tetap"]),
       "biaya tetap bulanan yang masih tertutup"],
-    ["Biaya per proses",
-      loRp(r["Tarif Upah Per Proses Pcs"] + r["Tarif Overhead Min Per Proses Pcs"]) + " - " +
-        loRp(r["Tarif Upah Per Proses Pcs"] + r["Tarif Overhead Max Per Proses Pcs"]).replace("Rp ", ""),
-      "upah + overhead, dasar harga minimum"]
+    (r["Tarif Upah per Menit"] !== undefined
+      ? ["Tarif per menit",
+          loRp(Number(r["Tarif Upah per Menit"]) + Number(r["Tarif OH per Menit Min"])) + " - " +
+            loRp(Number(r["Tarif Upah per Menit"]) + Number(r["Tarif OH per Menit Max"])).replace("Rp ", ""),
+          "upah + overhead per menit dibayar &#183; mesin SMV dua-dunia (ef " +
+            (r["Efisiensi Kemeja"] || "?") + "% kemeja / " + (r["Efisiensi Non-Kemeja"] || "?") + "% non)"]
+      : ["Biaya per proses",
+          loRp(r["Tarif Upah Per Proses Pcs"] + r["Tarif Overhead Min Per Proses Pcs"]) + " - " +
+            loRp(r["Tarif Upah Per Proses Pcs"] + r["Tarif Overhead Max Per Proses Pcs"]).replace("Rp ", ""),
+          "upah + overhead, dasar harga minimum"])
   ].map(function (k) {
     return '<div class="lo-hpp-kartu"><div class="lo-hpp-kartu-label">' + loEsc(k[0]) +
       '</div><div class="lo-hpp-kartu-nilai">' + k[1] +
@@ -372,12 +378,7 @@ function loRenderHPP() {
     loRenderHPPHarga() +
     loRenderHPPOrder() +
     '<div class="lo-hpp-catatan">' +
-      'Semua angka bergantung pada dua perkiraan: upah borongan bulanan (' +
-      loRp(r["Upah Borongan Bulanan"]) + ') dan biaya tetap bulanan (' +
-      loRp(r["Biaya Tetap Bulanan Min"]) + ' - ' +
-      loRp(r["Biaya Tetap Bulanan Max"]).replace("Rp ", ") ") +
-      '. Yang tidak bergantung pada keduanya: URUTAN di kedua daftar ini, ' +
-      'karena semuanya memakai tarif yang sama.' +
+      'Semua angka memakai asumsi yang tercantum di kartu &amp; SD Kalibrasi HPP (upah borongan, biaya tetap, kapasitas menit, efisiensi dua-dunia). Angka berubah? Ubah barisnya di SD Kalibrasi HPP lalu jalankan updateCacheHPP &#8212; tanpa menyentuh kode. Baris berbasis &quot;proses&quot; adalah artikel yang resepnya belum layak (cakupan di bawah 50%) &#8212; melengkapi resep otomatis memindahkannya ke basis SMV.' +
     '</div>';
 }
 
@@ -395,7 +396,9 @@ function loRenderHPPHarga() {
     const kelas = jarak > 25 ? "lo-hpp-berat" : (jarak > 0 ? "lo-hpp-sedang" : "lo-hpp-aman");
     return '<tr><td>' + loEsc(a["Artikel"]) +
         (a["Style"] ? '<div class="lo-hpp-sub">' + loEsc(a["Style"]) + '</div>' : '') + '</td>' +
-      '<td class="lo-hpp-num">' + a["Proses Per Pcs"] + '</td>' +
+      '<td class="lo-hpp-num">' + (a["Basis"] === "SMV"
+        ? a["SMV Menit"] + ' <span class="lo-hpp-basis">mnt &#183; ' + loEsc(a["Cakupan Resep"] || "") + '</span>'
+        : a["Proses Per Pcs"] + ' <span class="lo-hpp-basis">proses</span>') + '</td>' +
       '<td class="lo-hpp-num">' + loRp(a["Harga Min"]) + '</td>' +
       '<td class="lo-hpp-num">' + loRp(a["Harga Historis"]) + '</td>' +
       '<td class="lo-hpp-num ' + kelas + '">' + (jarak > 0 ? "+" : "") + jarak + '%</td></tr>';
@@ -407,7 +410,7 @@ function loRenderHPPHarga() {
       ' artikel harganya belum menutup margin target. Jarak besar bukan berarti harga ' +
       'harus naik sebesar itu &#8212; mengurangi proses juga menutupnya.</div>' +
     '<div class="lo-hpp-tabelwrap"><table class="lo-hpp-tabel">' +
-    '<thead><tr><th>Artikel</th><th class="lo-hpp-num">Proses</th>' +
+    '<thead><tr><th>Artikel</th><th class="lo-hpp-num">SMV / Proses</th>' +
     '<th class="lo-hpp-num">Harga min</th><th class="lo-hpp-num">Pernah dijual</th>' +
     '<th class="lo-hpp-num">Jarak</th></tr></thead><tbody>' + baris + '</tbody></table></div>' +
     (semua.length > 15

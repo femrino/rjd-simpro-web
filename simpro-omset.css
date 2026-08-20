@@ -591,3 +591,4 @@ h1,h2,h3,h4,h5,h6 { font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif
 .lo-hpp-tabel tbody td { background: var(--white); }
 .lo-hpp-tabel tbody tr.lo-hpp-tr-item td { background: var(--cream); }
 .lo-hpp-tabel tbody tr:hover td { background: var(--cream-deep, #F3EEE4); }
+.lo-hpp-basis { font-size: 11px; color: var(--ink-soft); font-family: inherit; }
