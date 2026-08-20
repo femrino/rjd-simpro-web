@@ -384,7 +384,7 @@ function loRenderHPP() {
       '<div class="lo-hpp-blok-sub">Angka kemarin masih perkiraan? Ketik yang benar &#8212; tersimpan ke SD Kalibrasi HPP, lalu seluruh laporan dihitung ulang di latar (&#177;4 menit).</div>' +
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">' +
         [["Upah Borongan Bulanan","lo-kal-upah"],["Biaya Tetap Bulanan Min","lo-kal-tmin"],
-         ["Biaya Tetap Bulanan Max","lo-kal-tmax"],["Margin Persen","lo-kal-margin"]]
+         ["Biaya Tetap Bulanan Max","lo-kal-tmax"],["Margin Target Persen","lo-kal-margin"]]
         .map(function(f){
           const nilaiKini = r[f[0]] !== undefined ? r[f[0]] : "";
           return '<label style="font-size:12.5px;color:var(--ink-soft)">' + f[0] +
