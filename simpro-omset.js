@@ -378,6 +378,24 @@ function loRenderHPP() {
     loRenderHPPOrder() +
     '<div class="lo-hpp-catatan">' +
       'Semua angka memakai asumsi yang tercantum di kartu &amp; SD Kalibrasi HPP (upah borongan, biaya tetap, kapasitas menit, efisiensi dua-dunia). Angka berubah? Ubah barisnya di SD Kalibrasi HPP lalu jalankan updateCacheHPP &#8212; tanpa menyentuh kode. Baris berbasis &quot;proses&quot; adalah artikel yang resepnya belum layak (cakupan di bawah 50%) &#8212; melengkapi resep otomatis memindahkannya ke basis SMV.' +
+    '</div>' +
+    '<div class="lo-hpp-blok" id="lo-kal-form">' +
+      '<div class="lo-hpp-blok-judul">Koreksi asumsi</div>' +
+      '<div class="lo-hpp-blok-sub">Angka kemarin masih perkiraan? Ketik yang benar &#8212; tersimpan ke SD Kalibrasi HPP, lalu seluruh laporan dihitung ulang di latar (&#177;4 menit).</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">' +
+        [["Upah Borongan Bulanan","lo-kal-upah"],["Biaya Tetap Bulanan Min","lo-kal-tmin"],
+         ["Biaya Tetap Bulanan Max","lo-kal-tmax"],["Margin Persen","lo-kal-margin"]]
+        .map(function(f){
+          const nilaiKini = r[f[0]] !== undefined ? r[f[0]] : "";
+          return '<label style="font-size:12.5px;color:var(--ink-soft)">' + f[0] +
+            '<input id="' + f[1] + '" inputmode="numeric" style="width:100%;margin-top:4px" ' +
+              'type="text" value="' + nilaiKini + '"/></label>';
+        }).join("") +
+      '</div>' +
+      '<div style="margin-top:12px">' +
+        '<button class="lo-btn" id="lo-kal-btn" onclick="loSimpanKalibrasi_()" type="button">Simpan &amp; hitung ulang</button>' +
+        '<span id="lo-kal-status" style="margin-left:10px;font-size:12.5px;color:var(--ink-soft)"></span>' +
+      '</div>' +
     '</div>';
 }
 
@@ -481,6 +499,26 @@ function loRenderHPPOrder() {
  * diambil tab HPP. Kalkulator yang menunggu server tidak akan dipakai saat
  * klien sedang menelepon.
  */
+
+function loSimpanKalibrasi_(){
+  const v = function(id){ return (document.getElementById(id).value || "").trim(); };
+  const btn = document.getElementById("lo-kal-btn");
+  const st = document.getElementById("lo-kal-status");
+  const nilai = { "Upah Borongan Bulanan": v("lo-kal-upah"),
+    "Biaya Tetap Bulanan Min": v("lo-kal-tmin"),
+    "Biaya Tetap Bulanan Max": v("lo-kal-tmax"),
+    "Margin Persen": v("lo-kal-margin") };
+  btn.disabled = true; st.textContent = "Menyimpan...";
+  fetch(LO_API_URL, { method: "POST", body: JSON.stringify({
+    idToken: LO_ID_TOKEN, action: "simpanKalibrasiHPP", nilai: nilai }) })
+  .then(function(r2){ return r2.json(); })
+  .then(function(d2){
+    btn.disabled = false;
+    st.textContent = d2 && d2.success ? d2.pesan
+      : ((d2 && d2.error) || "Gagal menyimpan.");
+  })
+  .catch(function(){ btn.disabled = false; st.textContent = "Gagal menghubungi server."; });
+}
 
 let LO_KALK = {
   artikel: "",        // kunci "artikel|style" dari cache, "" = artikel baru
