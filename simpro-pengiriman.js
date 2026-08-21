@@ -572,6 +572,10 @@ function krSimpanPengiriman() {
         tanggal: (document.getElementById("kr-buat-tanggal") || {}).value || "",
         jenisPengiriman: (document.getElementById("kr-buat-jenis") || {}).value || "Produksi",
         metodePengiriman: (document.getElementById("kr-buat-metode") || {}).value || "",
+        // v141: nama kurir -- opsional, SIAPA yang mengantar (bukan CARAnya;
+        // itu "Metode kirim"). Backend yang menulis ID Klien: turunan dari PO,
+        // tidak dikirim dari sini supaya layar tak bisa salah menulis klien.
+        kurir: (document.getElementById("kr-buat-kurir") || {}).value || "",
         noResi: (document.getElementById("kr-buat-resi") || {}).value || "",
         catatan: (document.getElementById("kr-buat-catatan") || {}).value || "",
         izinkanLebihDariOrder: !!(document.getElementById("kr-buat-izin-lebih") || {}).checked,
