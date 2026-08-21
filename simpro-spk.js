@@ -2735,6 +2735,9 @@ function spMuatGelaran() {
     window.SP_SET_LENGKAP = (hasil[2] && hasil[2].setLengkap) || [];
     window.SP_RECUT = (hasil[2] && hasil[2].recut) || {};
     window.SP_DAFTAR_GELARAN = (hasil[2] && hasil[2].daftarGelaran) || [];
+    // v143: kode kain RENCANA per (warna, slot) dari order -- dipakai mengisi
+    // kotak Kode Kain otomatis. Saran, bukan paksaan.
+    window.SP_BAHAN_RENCANA = (hasil[2] && hasil[2].bahanRencana) || { peta: {}, semuaKode: [] };
     window.SP_SARAN_KOMPONEN = (hasil[2] && hasil[2].saranKomponen) || [];
     window.SP_ROLL = (hasil[3] && hasil[3].kain) || [];
     spRenderFormGelaran_();
@@ -2870,17 +2873,19 @@ function spRenderFormGelaran_() {
       '</select></label>' +
       '<label>Warna' +
         (warna.length
-          ? '<select id="sp-gl-warna">' + warna.map(function (w) {
+          ? '<select id="sp-gl-warna" onchange="spIsiKodeKain_()">' + warna.map(function (w) {
               return '<option value="' + spEsc_(w) + '">' + spEsc_(w) + '</option>';
             }).join("") + '</select>'
-          : '<input id="sp-gl-warna" placeholder="ketik nama warna" type="text"/>') +
+          : '<input id="sp-gl-warna" onchange="spIsiKodeKain_()" ' +
+            'placeholder="ketik nama warna" type="text"/>') +
       '</label>' +
       '<label>Jenis Kain' +
         (kain.length
-          ? '<select id="sp-gl-kain">' + kain.map(function (k) {
+          ? '<select id="sp-gl-kain" onchange="spIsiKodeKain_()">' + kain.map(function (k) {
               return '<option value="' + spEsc_(k) + '">' + spEsc_(k) + '</option>';
             }).join("") + '</select>'
-          : '<input id="sp-gl-kain" placeholder="ketik jenis kain" type="text"/>') +
+          : '<input id="sp-gl-kain" onchange="spIsiKodeKain_()" ' +
+            'placeholder="ketik jenis kain" type="text"/>') +
       '</label>' +
     (kain.length ? '' :
       '<p class="sp-info sp-size-catatan">Daftar kain kosong. Isi Komposisi Kain di ' +
@@ -2896,8 +2901,19 @@ function spRenderFormGelaran_() {
         'step="0.001" type="number"/></label>' +
     '</div>' +
     '<div class="sp-grid3">' +
+      // v143: KODE kain yang benar-benar digelar. "Jenis Kain" di atas itu
+      // SLOT (Brokat/Polos); ini barang fisiknya. Satu slot bisa terisi lebih
+      // dari satu kode dalam satu PO -- beda batch, atau diganti kain lain
+      // berwarna sama karena stok kurang. Terisi otomatis dari rencana order,
+      // boleh ditimpa kalau kenyataannya beda.
+      '<label>Kode Kain<input id="sp-gl-kodekain" list="sp-datalist-kodekain" ' +
+        'placeholder="terisi dari order &#183; ubah bila beda" type="text"/></label>' +
       '<label>Catatan<input id="sp-gl-catatan" placeholder="opsional" type="text"/></label>' +
     '</div>' +
+    '<datalist id="sp-datalist-kodekain">' +
+      ((window.SP_BAHAN_RENCANA && window.SP_BAHAN_RENCANA.semuaKode) || [])
+        .map(function (k) { return '<option value="' + spEsc_(k) + '"></option>'; }).join("") +
+    '</datalist>' +
     // JANGAN self-closing. Di XML <div/> sah, tapi innerHTML browser
     // menafsirkannya sebagai div yang TIDAK ditutup -- tombol Simpan di
     // bawahnya jadi ANAK div ini, lalu ikut terhapus setiap kali
@@ -2950,6 +2966,34 @@ function spUbahModeGelaran_() {
 function spModeRecut_() {
   const r = document.querySelector('input[name="sp-gl-jenis"]:checked');
   return !!(r && r.value === "Re-cut");
+}
+
+/**
+ * v143: isi kotak Kode Kain dari rencana order untuk (warna, jenis kain)
+ * yang sedang dipilih.
+ *
+ * TIDAK menimpa isian yang sudah diketik manual -- kalau operator sengaja
+ * menulis kode lain (roll diganti, batch beda), pilihan warna/kain berikutnya
+ * tidak boleh menghapusnya diam-diam. Penanda "dari rencana" disimpan di
+ * data-attribute, bukan dibaca dari teksnya: identitas data tidak pernah
+ * bersandar pada apa yang kebetulan tampil.
+ */
+function spIsiKodeKain_() {
+  const kotak = document.getElementById("sp-gl-kodekain");
+  if (!kotak) return;
+  const rencana = (window.SP_BAHAN_RENCANA && window.SP_BAHAN_RENCANA.peta) || {};
+  const warna = (document.getElementById("sp-gl-warna") || {}).value || "";
+  const kain = (document.getElementById("sp-gl-kain") || {}).value || "";
+  const norm = function (s) { return String(s || "").trim().toLowerCase().replace(/\s+/g, " "); };
+  const kode = rencana[norm(warna) + "||" + norm(kain)] || "";
+
+  const isiSekarang = String(kotak.value || "").trim();
+  const dariRencana = kotak.getAttribute("data-dari-rencana") || "";
+  // Boleh ditimpa hanya kalau kosong, atau isinya memang hasil isian otomatis
+  // sebelumnya (bukan ketikan manusia).
+  if (isiSekarang && isiSekarang !== dariRencana) return;
+  kotak.value = kode;
+  kotak.setAttribute("data-dari-rencana", kode);
 }
 
 function spHitungGelaran_() {
@@ -3047,6 +3091,7 @@ function spSimpanGelaran() {
         allowancePerLapis: (document.getElementById("sp-gl-allow") || {}).value,
         tanggalPotong: (document.getElementById("sp-gl-tanggal") || {}).value || "",
         catatan: (document.getElementById("sp-gl-catatan") || {}).value || "",
+        kodeKain: (document.getElementById("sp-gl-kodekain") || {}).value || "",
         noSO: item.noSO || "", brand: item.brand || "",
         artikel: item.artikel || "", style: item.style || ""
       }
@@ -3173,9 +3218,20 @@ function spRenderDaftarGelaran_() {
         return '<tr title="' + spEsc_(g.idGelaran) + '"' +
           (g.dibatalkan ? ' class="sp-gelar-batal"' : '') + '>' +
           selItem +
-          '<td data-label="Warna">' + spEsc_(g.warna || "-") + penanda + '</td>' +
+          // v143: CATATAN akhirnya terlihat. Sebelum ini kolomnya tersimpan
+          // ke SD Gelaran dan bahkan ikut dikirim ke layar -- tapi tidak
+          // pernah dirender, jadi mengisinya terasa sia-sia. Ditaruh di
+          // kolom Warna karena kolom itu satu-satunya yang selalu tampil.
+          '<td data-label="Warna">' + spEsc_(g.warna || "-") + penanda +
+            (g.catatan ? '<div class="sp-gelar-size" title="catatan">&#8220;' +
+              spEsc_(g.catatan) + '&#8221;</div>' : '') + '</td>' +
+          // v143: kode kain aktual tampil di bawah slot kainnya. Selama ini
+          // kode cuma ada di rencana order -- yang benar-benar digelar tidak
+          // pernah terlihat di mana pun.
           '<td data-label="Kain">' + spEsc_(g.jenisKain || "-") +
-            (g.komponen ? ' <small>(' + spEsc_(g.komponen) + ')</small>' : '') + '</td>' +
+            (g.komponen ? ' <small>(' + spEsc_(g.komponen) + ')</small>' : '') +
+            (g.kodeKain ? '<div class="sp-gelar-size">' + spEsc_(g.kodeKain) + '</div>' : '') +
+            '</td>' +
           '<td data-label="Lapis">' + (g.jumlahLapis || "&#8212;") + '</td>' +
           '<td data-label="Potongan"><b>' + g.total + '</b>' +
             (per ? '<div class="sp-gelar-size">' + spEsc_(per) + '</div>' : '') + '</td>' +
