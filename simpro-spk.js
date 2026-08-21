@@ -5060,57 +5060,10 @@ function spMuatStok_() {
 }
 
 /* ============================================================
-   PENJAGA SESI KEDALUWARSA (v123)
+   PENJAGA SESI KEDALUWARSA -- DIPINDAH (v141)
    ============================================================
-   Token ID Google berumur +-1 jam. Begitu kedaluwarsa, SEMUA panggilan
-   API menjawab "Login gagal diverifikasi. Coba login ulang." -- padahal
-   form login hanya ada di keadaan belum-login, dan sesi tersimpan
-   (localStorage "db_session") masih dianggap sah oleh halaman: muat
-   ulang biasa kembali ke jebakan yang sama. Orang terkunci di halaman
-   tanpa jalan keluar.
-
-   Penjaga ini menyadap SEMUA respons SP_API_URL di satu tempat (bukan
-   menambal puluhan pemanggil): begitu pesan itu terlihat, tampilkan
-   layar "sesi berakhir" dengan SATU tombol yang melakukan hal yang
-   benar -- HAPUS sesi tersimpan dulu, baru muat ulang, sehingga halaman
-   terlahir di keadaan login yang sesungguhnya. */
-(function spPasangPenjagaSesi_() {
-  const fetchAsli = window.fetch.bind(window);
-  let sudahTampil = false;
-
-  window.rjdSesiHabis_ = function () {
-    if (sudahTampil) return;
-    sudahTampil = true;
-    const layar = document.createElement("div");
-    layar.id = "sp-sesi-habis";
-    layar.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(23,33,47,.55);" +
-      "display:flex;align-items:center;justify-content:center;padding:20px";
-    layar.innerHTML =
-      '<div style="background:#fff;border-radius:16px;max-width:420px;padding:28px 24px;text-align:center;font-family:inherit">' +
-      '<h3 style="margin:0 0 10px">Sesi login berakhir</h3>' +
-      '<p style="color:#5F6B7A;margin:0 0 18px">Login Google berumur sekitar satu jam. Data yang belum disimpan di form ini tidak terkirim &#8212; login lagi lalu ulangi langkah terakhirmu.</p>' +
-      '<button id="sp-sesi-ulang" style="width:100%;padding:13px 0;background:#17212F;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer" type="button">Login ulang</button></div>';
-    document.body.appendChild(layar);
-    document.getElementById("sp-sesi-ulang").onclick = function () {
-      try { localStorage.removeItem("db_session"); } catch (e) { /* private mode */ }
-      window.location.reload();
-    };
-  };
-
-  window.fetch = function (url, opts) {
-    const p = fetchAsli(url, opts);
-    try {
-      if (typeof SP_API_URL !== "undefined" && String(url) === String(SP_API_URL)) {
-        return p.then(function (r) {
-          r.clone().json().then(function (d) {
-            if (d && d.error && /login gagal diverifikasi/i.test(String(d.error))) {
-              window.rjdSesiHabis_();
-            }
-          }).catch(function () { /* bukan json -- biarkan */ });
-          return r;
-        });
-      }
-    } catch (e) { /* penjaga tidak boleh mematikan fetch */ }
-    return p;
-  };
-})();
+   Blok v123 yang dulu di sini (sadap fetch SP_API_URL + layar "sesi
+   berakhir") NAIK ke simpro-global.js supaya SEMUA halaman terlindungi,
+   bukan cuma SPK. Jangan pasang ulang di sini: dua penyadap fetch =
+   fetch terbungkus dua kali. window.rjdSesiHabis_ tetap tersedia --
+   sekarang dari global. */

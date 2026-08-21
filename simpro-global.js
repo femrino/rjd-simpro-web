@@ -3673,3 +3673,83 @@ function rjdJagaHalaman(idToken, apiUrl, saatLolos) {
         { teks: "Coba lagi", saatKlik: function () { window.location.reload(); } });
     });
 }
+
+/* ============================================================
+   PENJAGA SESI KEDALUWARSA -- GLOBAL (v141, naik dari spk v123)
+   ============================================================
+   Token ID Google berumur +-1 jam. Begitu kedaluwarsa, SEMUA panggilan
+   API menjawab "Login gagal diverifikasi. Coba login ulang." -- padahal
+   form login hanya ada di keadaan belum-login, dan sesi tersimpan
+   (localStorage "db_session") masih dianggap sah oleh halaman: muat
+   ulang biasa kembali ke jebakan yang sama.
+
+   v123 memasang penjaga ini HANYA di halaman SPK (SP_API_URL).
+   Dashboard, portal, omset, QC, invoice, pengiriman tetap bisa terjebak.
+   v141 memindahkannya ke sini -- simpro-global.js dimuat di SEMUA
+   halaman sebelum skrip halaman mana pun -- dan menyadap SEMUA API
+   SIMPRO yang dikenal. Daftar URL dibaca SAAT fetch terjadi, bukan saat
+   penjaga dipasang: konstanta *_API_URL milik halaman baru terdefinisi
+   setelah skrip halamannya dimuat.
+
+   Blok kembar di simpro-spk.js DIHAPUS pada v141 (tombstone di sana). */
+(function rjdPasangPenjagaSesi_() {
+  if (window.__rjdPenjagaSesi) return;   // jangan sadap fetch dua kali
+  window.__rjdPenjagaSesi = true;
+
+  const fetchAsli = window.fetch.bind(window);
+  let sudahTampil = false;
+
+  // Semua pintu API SIMPRO. Halaman hanya mendefinisikan miliknya sendiri;
+  // typeof menjaga sisanya tetap aman tanpa ReferenceError.
+  function rjdDaftarApi_() {
+    const u = [];
+    if (typeof DB_API_URL !== "undefined") u.push(String(DB_API_URL));   // dashboard
+    if (typeof SP_API_URL !== "undefined") u.push(String(SP_API_URL));   // spk/produksi
+    if (typeof LP_API_URL !== "undefined") u.push(String(LP_API_URL));   // portal tracking
+    if (typeof LO_API_URL !== "undefined") u.push(String(LO_API_URL));   // laporan omset
+    if (typeof QC_API_URL !== "undefined") u.push(String(QC_API_URL));   // qc
+    if (typeof IV_API_URL !== "undefined") u.push(String(IV_API_URL));   // invoice
+    if (typeof KR_API_URL !== "undefined") u.push(String(KR_API_URL));   // pengiriman
+    if (typeof OL_API_URL !== "undefined") u.push(String(OL_API_URL));   // order list
+    if (typeof OF_API_URL !== "undefined") u.push(String(OF_API_URL));   // order form
+    if (typeof KH_API_URL !== "undefined") u.push(String(KH_API_URL));   // kalkulator harga
+    return u;
+  }
+
+  window.rjdSesiHabis_ = function () {
+    if (sudahTampil || document.getElementById("rjd-sesi-habis")) return;
+    sudahTampil = true;
+    const layar = document.createElement("div");
+    layar.id = "rjd-sesi-habis";
+    layar.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(23,33,47,.55);" +
+      "display:flex;align-items:center;justify-content:center;padding:20px";
+    layar.innerHTML =
+      '<div style="background:#fff;border-radius:16px;max-width:420px;padding:28px 24px;text-align:center;font-family:inherit">' +
+      '<h3 style="margin:0 0 10px">Sesi login berakhir</h3>' +
+      '<p style="color:#5F6B7A;margin:0 0 18px">Login Google berumur sekitar satu jam. Data yang belum disimpan tidak terkirim &#8212; login lagi lalu ulangi langkah terakhirmu.</p>' +
+      '<button id="rjd-sesi-ulang" style="width:100%;padding:13px 0;background:#17212F;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer" type="button">Login ulang</button></div>';
+    document.body.appendChild(layar);
+    document.getElementById("rjd-sesi-ulang").onclick = function () {
+      try { localStorage.removeItem("db_session"); } catch (e) { /* private mode */ }
+      window.location.reload();
+    };
+  };
+
+  window.fetch = function (url, opts) {
+    const p = fetchAsli(url, opts);
+    try {
+      const alamat = (url && url.url) ? String(url.url) : String(url);
+      if (rjdDaftarApi_().indexOf(alamat) !== -1) {
+        return p.then(function (r) {
+          r.clone().json().then(function (d) {
+            if (d && d.error && /login gagal diverifikasi/i.test(String(d.error))) {
+              window.rjdSesiHabis_();
+            }
+          }).catch(function () { /* bukan json -- biarkan */ });
+          return r;
+        });
+      }
+    } catch (e) { /* penjaga tidak boleh mematikan fetch */ }
+    return p;
+  };
+})();
