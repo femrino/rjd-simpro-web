@@ -577,14 +577,27 @@ function spSimpan() {
 const SP_FASE_PETA = [
   ["polamarker", "Pola & Marker", [["pola", "Pola"], ["marker", "Marker"]]],
   ["sampel",     "Sampel",        [["sampel", "Sampel"], ["approval", "Approval"]]],
-  // v150: "Potongan Keluar" ditaruh di fase CUTTING, bukan Loading -- potongan
-  // yang diambil klien memang pergi sebelum sempat masuk pembagian ke line.
-  ["cutting",    "Cutting",       [["gelar", "Gelaran"], ["cutting", "Hasil Potong"], ["keluar", "Potongan Keluar"]]],
+  ["cutting",    "Cutting",       [["gelar", "Gelaran"], ["cutting", "Hasil Potong"]]],
   // v145: subtab "Siapkan Potongan" menutup celah peran yang membingungkan
   // lantai (22 Agu). "Bagi ke Line" itu KEPUTUSAN (qty per line + target
   // selesai); tim loading cuma MENYIAPKAN fisiknya. Dua pekerjaan berbeda
   // sekarang punya pintunya masing-masing di dalam satu rumah.
-  ["loading",    "Loading",       [["bagi", "Bagi ke Line"], ["siapkan", "Siapkan Potongan"], ["spkrekap", "SPK & Rekap"]]],
+  //
+  // v151: "Potongan Keluar" DIPINDAH ke sini dari fase Cutting. Alasannya
+  // bukan soal urutan waktu (di lantai memang terjadi sebelum loading),
+  // melainkan APA YANG DIKERJAKAN TERHADAP POOL:
+  //
+  //     Cutting  MENGISI pool   (Gelaran -> Hasil Potong)
+  //     Loading  MENGELOLA pool (keluar ke line / keluar ke klien)
+  //
+  // "Bagi ke Line" dan "Potongan Keluar" adalah DUA PINTU KELUAR dari pool
+  // yang sama, dengan batas qty dari rumus yang sama persis -- kodenya pun
+  // begitu: getPOUntukPotonganKeluar_ memakai getPOUntukDistribusi_ sebagai
+  // basisnya. Menaruhnya di fase berbeda menyembunyikan hubungan itu, dan
+  // orang yang hendak membagi 990 pcs tidak melihat bahwa 30 sudah keluar.
+  //
+  // Urutan: dua yang dipakai harian di depan, yang jarang di belakang.
+  ["loading",    "Loading",       [["bagi", "Bagi ke Line"], ["siapkan", "Siapkan Potongan"], ["keluar", "Potongan Keluar"], ["spkrekap", "SPK & Rekap"]]],
   ["sewing",     "Sewing",        [["konfpot", "Konfirmasi Potongan"], ["setor", "Setoran ke Finishing"]]],
   ["finishing",  "Finishing",     [["konfset", "Konfirmasi Setoran"], ["qc", "QC"], ["qcring", "Ringkasan QC"]]],
   ["packing",    "Packing & Kirim", [["stok", "Stok Siap Kirim"], ["terkirim", "Terkirim"]]],
@@ -667,10 +680,11 @@ const SP_BAGIAN_TAB = {
   marker:  "pola",
   gelar:   "cutting",
   cutting: "cutting",
-  // Dua bagian: barangnya ada di gudang potongan (cutting), keputusan
-  // melepasnya ke klien ada di PPIC/kepala produksi. Keduanya perlu bisa
-  // membukanya -- yang satu menyerahkan fisiknya, yang satu memutuskan.
-  keluar:  ["cutting", "ppic"],
+  // v151: melepas potongan ke klien adalah KEPUTUSAN, sekelas dengan "bagi" --
+  // bukan eksekusi fisik seperti "siapkan". Karena itu bagiannya "ppic", bukan
+  // "loading": tim loading menyiapkan barang, tidak memutuskan barang mana yang
+  // boleh keluar dari pabrik. Kepala produksi lolos lewat peran full/produksi.
+  keluar:  "ppic",
   // v149: "Bagi ke Line" adalah KEPUTUSAN (qty per line + target selesai),
   // dan yang memutuskan adalah kepala produksi/PPIC. Sampai v148 entri ini
   // berbunyi "loading" -- sistem menyuruh tim loading memutuskan hal yang
