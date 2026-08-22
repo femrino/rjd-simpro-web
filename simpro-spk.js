@@ -284,6 +284,11 @@ function spPilihPO(idPO) {
   window.SP_PO = null;
   window.SP_CUT = null;
   window.SP_SETOR = null;
+  // v160: cache detail order ikut dibuang. Kalau tidak, ganti PO akan
+  // menampilkan detail PO SEBELUMNYA sampai orang menyadarinya sendiri --
+  // dan itu jenis salah baca yang berakhir dengan memotong warna yang keliru.
+  window.SP_DETAIL = null;
+  window.SP_DETAIL_PO = null;
   spSwitchTab(spTabAktif_());
 }
 
@@ -612,7 +617,8 @@ const SP_FASE_PETA = [
   // Soal harga terselesaikan sendiri: getDaftarPO tidak pernah mengirim
   // harga ke halaman produksi. Pemisahan barang vs uang sudah ada sejak awal
   // dan tidak perlu dilonggarkan lalu ditambal filter.
-  ["orderan", "Orderan", [["orderan", "Orderan Berjalan"]]],
+  // v160: subtab kedua "Detail Order" -- isi SPK produksi tanpa harus mencetak.
+  ["orderan", "Orderan", [["orderan", "Orderan Berjalan"], ["detailorder", "Detail Order"]]],
   ["polamarker", "Pola & Marker", [["pola", "Pola"], ["marker", "Marker"]]],
   ["sampel",     "Sampel",        [["sampel", "Sampel"], ["approval", "Approval"]]],
   ["cutting",    "Cutting",       [["gelar", "Gelaran"], ["cutting", "Hasil Potong"]]],
@@ -802,7 +808,8 @@ const SP_BAGIAN_TAB = {
   sop:     null,
   // Sama seperti SOP: tidak dimiliki bagian mana pun, jadi tidak pernah jadi
   // fase pendaratan. Isinya memang cuma dibaca.
-  orderan: null
+  orderan: null,
+  detailorder: null
 };
 
 /**
@@ -1347,6 +1354,8 @@ function spSwitchTab(tab) {
   // Tab Orderan ikut menyembunyikan kartu Pilih PO: daftarnya sendiri SUDAH
   // pemilih PO (klik baris = pilih + lompat ke fase kerja). Dua pemilih di
   // satu layar cuma bikin ragu mana yang berlaku.
+  // detailorder TIDAK ikut disembunyikan: ia justru butuh PO terpilih, dan
+  // kartunya adalah satu-satunya cara mengganti PO tanpa balik ke daftar.
   if (kartuPO) kartuPO.classList.toggle("hidden",
     tab === "riw" || tab === "sop" || tab === "orderan");
 
@@ -1359,6 +1368,7 @@ function spSwitchTab(tab) {
   if (tab === "approval") { spMuatApproval_(); return; }
   if (tab === "sop") { spMuatSOP_(); return; }
   if (tab === "orderan") { spRenderOrderan_(); return; }
+  if (tab === "detailorder") { spMuatDetailOrder_(); return; }
   if (tab === "keluar") { if (window.SP_PO_AKTIF) spMuatKeluar_(); return; }
   if (tab === "siapkan") { spMuatSiapkan_(); return; }
   if (tab === "spkrekap") { if (!window.SP_PO) spMuatDistribusi(); return; }
@@ -2033,6 +2043,12 @@ function spOrderanPilih_(idPO) {
   if (fase) spPilihFase_(fase[0]);
 }
 
+/** Pilih PO lalu buka subtab Detail Order -- untuk yang mau LIHAT dulu. */
+function spLihatDetailOrder_(idPO) {
+  spPilihPO(idPO);
+  spSwitchTab("detailorder");
+}
+
 function spRenderOrderan_() {
   const panel = document.getElementById("sp-panel-orderan");
   if (!panel) return;
@@ -2145,7 +2161,7 @@ function spRenderOrderan_() {
         // tengah kata, dan satu baris jadi setinggi layar.
         ? '<div class="sp-tabelwrap"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
             '<th>PO / Klien</th><th>Artikel</th><th class="num">Qty</th>' +
-            '<th>Masuk</th><th>Deadline</th><th>Tahap</th>' +
+            '<th>Masuk</th><th>Deadline</th><th>Tahap</th><th/>' +
           '</tr></thead><tbody>' +
           baris.map(function (p) {
             const sisa = spSisaHari_(p.deadlineIso);
@@ -2184,6 +2200,14 @@ function spRenderOrderan_() {
               '<td data-label="Tahap">' + (p.tahap
                 ? rjdEscapeHtml_(p.tahap)
                 : '<span class="sp-kosong">belum mulai</span>') + '</td>' +
+              // Dua aksi dari satu baris: klik baris = KERJAKAN (lompat ke
+              // fase kerja), tombol ini = LIHAT dulu. stopPropagation supaya
+              // menekan tombol tidak sekaligus memicu klik barisnya.
+              '<td data-label="" class="sp-td-aksi">' +
+                '<button class="sp-btn-kecil" type="button" ' +
+                  'onclick="event.stopPropagation();spLihatDetailOrder_(\'' +
+                  rjdEscapeHtml_(p.idPurchaseOrder) + '\')">Detail</button>' +
+              '</td>' +
             '</tr>';
           }).join("") +
           '</tbody></table></div>'
@@ -2194,6 +2218,195 @@ function spRenderOrderan_() {
   // ketukan -- panel dirender ulang penuh setiap huruf.
   const inp = document.getElementById("sp-ord-cari");
   if (inp && q) { inp.focus(); inp.setSelectionRange(q.length, q.length); }
+}
+
+/* ============================================================
+ * DETAIL ORDER (v160)
+ * ============================================================
+ * Isi SPK produksi, dibaca di layar tanpa harus mencetak.
+ *
+ * Menjawab pertanyaan yang selama ini dijawab dengan mencetak lembar SPK lalu
+ * mencarinya lagi di tumpukan: warna apa saja, size berapa, standar klien
+ * apa, catatan apa yang menempel di item ini. Semua itu sudah diinput lewat
+ * Form Order dan tidak pernah bisa dilihat lagi dari lantai.
+ *
+ * Memakai rute getSPKCetak yang SUDAH ADA: fungsinya menerima ID Order
+ * Request MAUPUN ID Purchase Order (jatuh ke getSPKDariPurchaseOrder_ kalau
+ * tidak ketemu sebagai Order Request). Nol rute baru.
+ *
+ * NOL DATA HARGA, dan itu bukan kebetulan: payload SPK memang dirancang
+ * tanpa harga sejak awal ("bahan: []" di tiap warna) karena dokumennya
+ * dipegang lantai produksi. Jadi tab ini aman dibuka semua bagian tanpa
+ * filter apa pun.
+ * ============================================================ */
+
+function spMuatDetailOrder_() {
+  const panel = document.getElementById("sp-panel-detailorder");
+  if (!panel) return;
+  const idPO = window.SP_PO_AKTIF;
+  if (!idPO) {
+    panel.innerHTML = '<div class="sp-card"><h3 class="sp-judul">Detail Order</h3>' +
+      '<p class="sp-info">Pilih Purchase Order dulu &#8212; atau klik salah satu order ' +
+      'di subtab <b>Orderan Berjalan</b>.</p></div>';
+    return;
+  }
+  if (window.SP_DETAIL_PO === idPO && window.SP_DETAIL) { spRenderDetailOrder_(); return; }
+
+  panel.innerHTML = '<div class="sp-card"><p class="sp-info">Memuat detail order...</p></div>';
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getSPKCetak", id: idPO })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) {
+      panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' +
+        rjdEscapeHtml_((d && d.error) || "Gagal memuat detail order.") + '</p></div>';
+      return;
+    }
+    window.SP_DETAIL = d.data || d;
+    window.SP_DETAIL_PO = idPO;
+    spRenderDetailOrder_();
+  })
+  .catch(function () {
+    panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' +
+      'Gagal menghubungi server.</p></div>';
+  });
+}
+
+/** Tabel warna x size untuk satu item. */
+function spDetailTabelItem_(it) {
+  const kolom = it.sizeColumns || [];
+  const adaNonStandar = (it.warnaList || []).some(function (w) {
+    return w.detailAllSizeParsed && w.detailAllSizeParsed.length;
+  });
+  return '<div class="sp-tabelwrap"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
+      '<th>Warna</th>' +
+      kolom.map(function (sz) { return '<th class="num">' + rjdEscapeHtml_(sz) + '</th>'; }).join("") +
+      (adaNonStandar ? '<th>Size lain</th>' : '') +
+      '<th class="num">Total</th>' +
+    '</tr></thead><tbody>' +
+    (it.warnaList || []).map(function (w) {
+      const lain = (w.detailAllSizeParsed || []).map(function (x) {
+        return rjdEscapeHtml_(x.label || x.size || "") + " " + (x.qty || 0);
+      }).join(", ");
+      return '<tr>' +
+        '<td data-label="Warna"><b>' + rjdEscapeHtml_(w.warna || "-") + '</b></td>' +
+        kolom.map(function (sz) {
+          const v = (w.sizeQty || {})[sz] || 0;
+          return '<td class="num" data-label="' + rjdEscapeHtml_(sz) + '">' +
+            (v ? v : '<span class="sp-kosong">&#183;</span>') + '</td>';
+        }).join("") +
+        (adaNonStandar ? '<td data-label="Size lain">' +
+          (lain || '<span class="sp-kosong">&#183;</span>') + '</td>' : '') +
+        '<td class="num" data-label="Total"><b>' + (w.totalQtyWarna || 0) + '</b></td>' +
+      '</tr>';
+    }).join("") +
+    '</tbody></table></div>';
+}
+
+function spRenderDetailOrder_() {
+  const d = window.SP_DETAIL;
+  const panel = document.getElementById("sp-panel-detailorder");
+  if (!d || !panel) return;
+
+  const baris_ = function (label, isi) {
+    if (!isi) return "";
+    return '<div class="sp-det-baris"><span>' + label + '</span><b>' + isi + '</b></div>';
+  };
+
+  // Jadwal kirim bertahap: yang penting bagi lantai adalah TANGGAL dan QTY-nya,
+  // bukan bahwa jadwalnya ada. Kalau cuma satu tahap, tidak ditampilkan --
+  // target kirim di atas sudah menjawab.
+  const jadwal = (d.jadwalKirim || []).length > 1
+    ? '<div class="sp-det-blok"><h4>Jadwal kirim bertahap</h4>' +
+      '<ul class="sp-det-list">' + d.jadwalKirim.map(function (j) {
+        return '<li><b>' + rjdEscapeHtml_(j.tanggal || j.tanggalKirim || "-") + '</b> &#183; ' +
+          (j.qty || j.jumlah || 0) + ' pcs' +
+          (j.catatan ? ' <span>' + rjdEscapeHtml_(j.catatan) + '</span>' : '') + '</li>';
+      }).join("") + '</ul></div>'
+    : "";
+
+  const items = (d.itemGroups || []).map(function (it, i) {
+    const nama = [it.artikel, it.style].filter(String).join(" / ") || "(tanpa nama)";
+    return '<div class="sp-det-item">' +
+      '<div class="sp-det-item-kepala">' +
+        '<h4>' + rjdEscapeHtml_(nama) + '</h4>' +
+        '<span>' + (it.brand ? rjdEscapeHtml_(it.brand) + ' &#183; ' : '') +
+          (it.totalQtyItem || 0) + ' pcs</span>' +
+      '</div>' +
+      // Catatan & gambar melekat pada ITEM, bukan order -- itu sebabnya
+      // ditampilkan di sini, bukan digabung ke catatan umum di bawah.
+      (it.catatanOrder ? '<p class="sp-det-catatan">&#8220;' +
+        rjdEscapeHtml_(it.catatanOrder) + '&#8221;</p>' : '') +
+      ((it.kainArtikel && it.kainArtikel.length)
+        ? '<p class="sp-det-kain"><b>Kain:</b> ' +
+          it.kainArtikel.map(function (k) {
+            return rjdEscapeHtml_(k.nama || k.jenis || k);
+          }).join(", ") + '</p>'
+        : '<p class="sp-det-kain sp-det-kain-kosong">Kain belum tercatat untuk item ini.</p>') +
+      spDetailTabelItem_(it) +
+      ((it.gambarOrder || it.scOrder) ? '<div class="sp-det-tautan">' +
+        (it.gambarOrder ? '<a href="' + rjdEscapeHtml_(it.gambarOrder) +
+          '" target="_blank">Gambar model</a>' : '') +
+        (it.scOrder ? '<a href="' + rjdEscapeHtml_(it.scOrder) +
+          '" target="_blank">Size chart</a>' : '') +
+      '</div>' : '') +
+    '</div>';
+  }).join("");
+
+  const lampiran = (d.urlFileLainnya || []).length
+    ? '<div class="sp-det-blok"><h4>Lampiran</h4><div class="sp-det-tautan">' +
+      d.urlFileLainnya.map(function (u, i) {
+        return '<a href="' + rjdEscapeHtml_(u) + '" target="_blank">Berkas ' + (i + 1) + '</a>';
+      }).join("") + '</div></div>'
+    : "";
+
+  panel.innerHTML =
+    '<div class="sp-card">' +
+      '<h3 class="sp-judul">Detail Order</h3>' +
+      (d.isDraft
+        ? '<div class="sp-baca-banner"><b>Order ini belum disetujui.</b> ' +
+          'Isinya masih bisa berubah &#8212; jangan dijadikan dasar memotong kain.</div>'
+        : '') +
+
+      '<div class="sp-det-kepala">' +
+        baris_("Purchase Order", rjdEscapeHtml_(d.idPurchaseOrderHasil || window.SP_PO_AKTIF || "-")) +
+        baris_("No SO", rjdEscapeHtml_(d.noSOHasil || "-")) +
+        baris_("Klien", rjdEscapeHtml_(d.namaKlien || "-")) +
+        baris_("Masuk", rjdEscapeHtml_(d.tanggalDiajukan || "-")) +
+        baris_("Target kirim", rjdEscapeHtml_(d.targetTanggalKirim || "-")) +
+        baris_("Total", (d.totalQtyKeseluruhan || 0) + " pcs") +
+      '</div>' +
+
+      // Standar klien & asal kain ditaruh DI ATAS rincian item: keduanya
+      // mengubah cara seluruh order dikerjakan, jadi harus terbaca sebelum
+      // orang tenggelam di angka size.
+      (d.standarKlien ? '<div class="sp-det-blok sp-det-standar"><h4>Standar klien</h4>' +
+        '<p>' + rjdEscapeHtml_(d.standarKlien) + '</p></div>' : '') +
+      (d.kainDariKlien
+        ? '<div class="sp-det-blok sp-det-standar"><h4>Kain dari klien</h4>' +
+          '<p>Kain disediakan klien. Kekurangan kain bukan tanggung jawab RJD &#8212; ' +
+          'catat pemakaian apa adanya supaya ada dasar saat ditanyakan.</p></div>'
+        : '') +
+
+      jadwal +
+
+      '<div class="sp-det-blok"><h4>Rincian item (' + (d.itemGroups || []).length + ')</h4>' +
+        (items || '<p class="sp-info">Belum ada rincian item.</p>') +
+      '</div>' +
+
+      (d.catatanKlien ? '<div class="sp-det-blok"><h4>Catatan klien</h4>' +
+        '<p class="sp-det-catatan">&#8220;' + rjdEscapeHtml_(d.catatanKlien) + '&#8221;</p></div>' : '') +
+      (d.catatanAdmin ? '<div class="sp-det-blok"><h4>Catatan admin</h4>' +
+        '<p class="sp-det-catatan">&#8220;' + rjdEscapeHtml_(d.catatanAdmin) + '&#8221;</p></div>' : '') +
+      lampiran +
+
+      '<div class="sp-det-tautan sp-det-cetak">' +
+        '<a class="sp-tautan" href="/p/cetak.html?jenis=spk&amp;id=' +
+          encodeURIComponent(window.SP_PO_AKTIF || "") + '" target="_blank">Cetak SPK produksi</a>' +
+      '</div>' +
+    '</div>';
 }
 
 function spMuatSOP_() {
