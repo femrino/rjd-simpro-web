@@ -1334,3 +1334,39 @@ body.sp-siap #sp-subtabs { visibility: visible; }
 }
 #sp-panel-sop .sop-blok:first-child { border-top: 0; padding-top: 0; }
 #sp-panel-sop .sop-judul-besar { font-size: 18px; }
+
+/* ============================================================
+   TAB ORDERAN BERJALAN (v157)
+   ============================================================ */
+
+.sp-ord-alat {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 14px 0 10px;
+}
+.sp-ord-alat input[type="text"] {
+  flex: 1; min-width: 220px; padding: 10px 14px;
+  border: 1px solid var(--line, #E5E0D6); border-radius: 10px;
+  font-family: inherit; font-size: 13.5px;
+}
+.sp-ord-alat input[type="text"]:focus { outline: none; border-color: var(--ink, #17212F); }
+.sp-ord-cek {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12.5px; color: var(--ink-soft, #5F6B7A); cursor: pointer; white-space: nowrap;
+}
+.sp-ord-cek input { width: 17px; height: 17px; accent-color: var(--navy, #17212F); }
+
+/* Seluruh baris bisa diklik -- target sebesar itu penting di HP yang dipegang
+   sambil berdiri, jauh lebih mudah daripada mengejar satu tautan kecil. */
+.sp-ord-baris { cursor: pointer; }
+.sp-ord-baris:hover { background: var(--paper, #FAF7F2); }
+.sp-ord-selesai { opacity: .62; }
+
+/* Deadline: dua tingkat, bukan satu warna merah untuk semuanya. Yang sudah
+   lewat dan yang tinggal beberapa hari butuh tindakan berbeda, jadi harus
+   bisa dibedakan tanpa membaca angkanya. */
+.sp-ord-dekat, .sp-ord-lewat {
+  display: inline-block; margin-top: 3px; padding: 1px 7px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700;
+}
+.sp-ord-dekat { background: #FCF3E3; color: #8A5D1F; }
+.sp-ord-lewat { background: #FBEAE5; color: #8F2C22; }

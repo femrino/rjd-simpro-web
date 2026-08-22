@@ -579,6 +579,18 @@ const SP_FASE_PETA = [
   // orang baru. Tapi ia TIDAK dijadikan fase awal (lihat spTerapkanBagian_):
   // yang membuka halaman ini tiap hari datang untuk bekerja, bukan membaca.
   ["sop", "SOP", [["sop", "SOP"]]],
+  // v157: keluhan tim saat uji coba -- tiap tab meminta nomor PO, tapi tidak
+  // ada tempat melihat order mana yang sedang berjalan. Orang harus membuka
+  // halaman Orderan di tab browser lain, mencatat nomornya, lalu kembali.
+  //
+  // TIDAK memindahkan halaman Orderan ke sini: daftarnya SUDAH ada di memori
+  // halaman ini (SP_DAFTAR_PO, dipakai kotak Pilih PO). Yang kurang cuma
+  // tempat melihatnya utuh. Nol rute baru, nol fetch tambahan.
+  //
+  // Soal harga terselesaikan sendiri: getDaftarPO tidak pernah mengirim
+  // harga ke halaman produksi. Pemisahan barang vs uang sudah ada sejak awal
+  // dan tidak perlu dilonggarkan lalu ditambal filter.
+  ["orderan", "Orderan", [["orderan", "Orderan Berjalan"]]],
   ["polamarker", "Pola & Marker", [["pola", "Pola"], ["marker", "Marker"]]],
   ["sampel",     "Sampel",        [["sampel", "Sampel"], ["approval", "Approval"]]],
   ["cutting",    "Cutting",       [["gelar", "Gelaran"], ["cutting", "Hasil Potong"]]],
@@ -765,7 +777,10 @@ const SP_BAGIAN_TAB = {
   // "memilikinya" -- itu juga yang membuat spTerapkanBagian_ tidak pernah
   // mendaratkan orang di sini: pencarian fase awal mencari fase yang BOLEH
   // DIISI, dan SOP tidak diisi siapa-siapa.
-  sop:     null
+  sop:     null,
+  // Sama seperti SOP: tidak dimiliki bagian mana pun, jadi tidak pernah jadi
+  // fase pendaratan. Isinya memang cuma dibaca.
+  orderan: null
 };
 
 /**
@@ -1307,7 +1322,11 @@ function spSwitchTab(tab) {
   // v156: SOP ikut menyembunyikan kartu PO -- panduan kerja tidak ada
   // hubungannya dengan order mana pun, dan kartu yang tetap tampil di situ
   // mengundang orang mengira SOP-nya berbeda per PO.
-  if (kartuPO) kartuPO.classList.toggle("hidden", tab === "riw" || tab === "sop");
+  // Tab Orderan ikut menyembunyikan kartu Pilih PO: daftarnya sendiri SUDAH
+  // pemilih PO (klik baris = pilih + lompat ke fase kerja). Dua pemilih di
+  // satu layar cuma bikin ragu mana yang berlaku.
+  if (kartuPO) kartuPO.classList.toggle("hidden",
+    tab === "riw" || tab === "sop" || tab === "orderan");
 
   if (tab === "konfpot") { spMuatKonfMode_("potongan"); return; }
   if (tab === "konfset") { spMuatKonfMode_("setoran"); return; }
@@ -1317,6 +1336,7 @@ function spSwitchTab(tab) {
   if (tab === "qcring") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("ringkasan"); return; }
   if (tab === "approval") { spMuatApproval_(); return; }
   if (tab === "sop") { spMuatSOP_(); return; }
+  if (tab === "orderan") { spRenderOrderan_(); return; }
   if (tab === "keluar") { if (window.SP_PO_AKTIF) spMuatKeluar_(); return; }
   if (tab === "siapkan") { spMuatSiapkan_(); return; }
   if (tab === "spkrekap") { if (!window.SP_PO) spMuatDistribusi(); return; }
@@ -1935,6 +1955,155 @@ function spBatalKeluar_(idKeluar) {
  * bermasalah), tabnya memberi tahu apa adanya dan menawarkan halaman
  * terpisahnya -- bukan panel kosong yang terbaca seperti fitur rusak.
  */
+/* ============================================================
+ * TAB ORDERAN BERJALAN (v157)
+ * ============================================================
+ * Menjawab keluhan tim saat uji coba: tiap tab meminta nomor PO, tapi tidak
+ * ada tempat melihat order mana yang sedang berjalan.
+ *
+ * Datanya SUDAH ADA di memori (SP_DAFTAR_PO, dimuat sekali untuk kotak Pilih
+ * PO). Tab ini cuma menampilkannya utuh -- tidak ada rute baru, tidak ada
+ * fetch tambahan, dan tidak ada harga karena getDaftarPO memang tidak pernah
+ * mengirimkannya ke halaman produksi.
+ *
+ * Klik baris = pilih PO DAN langsung lompat ke fase kerja orang itu. Itu
+ * gunanya tab ini: bukan sekadar melihat, tapi jalan masuk ke pekerjaan.
+ * ============================================================ */
+
+/** Sisa hari ke deadline. null kalau tanggalnya tidak terbaca. */
+function spSisaHari_(iso) {
+  if (!iso) return null;
+  const t = new Date(String(iso) + "T00:00:00");
+  if (isNaN(t.getTime())) return null;
+  const kini = new Date();
+  return Math.round((t.getTime() - kini.setHours(0, 0, 0, 0)) / 86400000);
+}
+
+function spOrderanCari_() {
+  spRenderOrderan_();
+}
+
+function spOrderanToggleSelesai_() {
+  window.SP_ORD_SELESAI = !window.SP_ORD_SELESAI;
+  spRenderOrderan_();
+}
+
+/**
+ * Klik baris: pilih PO, lalu pindah ke fase yang BOLEH DIISI orang ini.
+ * Mengantar sampai depan pintu, bukan cuma menyodorkan nomornya.
+ */
+function spOrderanPilih_(idPO) {
+  spPilihPO(idPO);
+  const fase = SP_FASE_PETA.filter(function (f) {
+    if (f[0] === "sop" || f[0] === "orderan") return false;
+    return f[2].some(function (s) { return spTabEditBoleh_(s[0]); });
+  })[0];
+  if (fase) spPilihFase_(fase[0]);
+}
+
+function spRenderOrderan_() {
+  const panel = document.getElementById("sp-panel-orderan");
+  if (!panel) return;
+  const aktif = window.SP_DAFTAR_PO || [];
+  const selesai = window.SP_DAFTAR_PO_SELESAI || [];
+
+  if (!aktif.length && !selesai.length) {
+    panel.innerHTML = '<div class="sp-card"><p class="sp-info">Daftar order belum termuat. ' +
+      'Coba muat ulang halaman.</p></div>';
+    return;
+  }
+
+  const q = String((document.getElementById("sp-ord-cari") || {}).value || "")
+    .trim().toLowerCase();
+  const tampilSelesai = !!window.SP_ORD_SELESAI;
+  const sumber = tampilSelesai
+    ? aktif.concat(selesai.map(function (p) { return Object.assign({}, p, { spSelesai: true }); }))
+    : aktif;
+
+  const baris = sumber.filter(function (p) {
+    if (!q) return true;
+    return [p.idPurchaseOrder, p.noSO, p.namaKlien, (p.artikel || []).join(" ")]
+      .join(" ").toLowerCase().indexOf(q) !== -1;
+  });
+
+  // Urut deadline TERDEKAT dulu. Yang tanpa deadline ke bawah -- bukan
+  // dianggap paling mendesak hanya karena tanggalnya kosong.
+  baris.sort(function (a, b) {
+    const sa = spSisaHari_(a.deadlineIso), sb = spSisaHari_(b.deadlineIso);
+    if (sa === null && sb === null) return 0;
+    if (sa === null) return 1;
+    if (sb === null) return -1;
+    return sa - sb;
+  });
+
+  let totalPcs = 0, mendesak = 0, lewat = 0;
+  aktif.forEach(function (p) {
+    totalPcs += p.jumlah || 0;
+    const s = spSisaHari_(p.deadlineIso);
+    if (s === null) return;
+    if (s < 0) lewat++; else if (s <= 7) mendesak++;
+  });
+
+  panel.innerHTML =
+    '<div class="sp-card">' +
+      '<h3 class="sp-judul">Orderan Berjalan</h3>' +
+      '<p class="sp-info">Semua order yang belum Selesai, deadline terdekat di atas. ' +
+        'Klik satu baris untuk langsung mengerjakannya \u2014 PO-nya terpilih dan ' +
+        'halaman pindah ke tahap kerjamu.</p>' +
+
+      '<div class="sp-siap-ringkas">' +
+        '<div class="sp-siap-kotak"><span>Order berjalan</span><b>' + aktif.length + '</b></div>' +
+        '<div class="sp-siap-kotak"><span>Total pcs</span><b>' + totalPcs.toLocaleString("id-ID") + '</b></div>' +
+        '<div class="sp-siap-kotak"><span>Deadline &#8804; 7 hari</span><b>' + mendesak +
+          (lewat ? ' <small style="font-size:11px;color:#8F2C22">+' + lewat + ' lewat</small>' : '') +
+          '</b></div>' +
+      '</div>' +
+
+      '<div class="sp-ord-alat">' +
+        '<input id="sp-ord-cari" oninput="spOrderanCari_()" placeholder="Cari PO, No SO, klien, atau artikel..." ' +
+          'type="text" value="' + rjdEscapeHtml_(q) + '"/>' +
+        '<label class="sp-ord-cek"><input onchange="spOrderanToggleSelesai_()" type="checkbox"' +
+          (tampilSelesai ? ' checked="checked"' : '') + '/> Tampilkan yang sudah Selesai</label>' +
+      '</div>' +
+
+      (baris.length
+        ? '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
+            '<th>PO / Klien</th><th>Artikel</th><th class="num">Qty</th>' +
+            '<th>Deadline</th><th>Tahap</th>' +
+          '</tr></thead><tbody>' +
+          baris.map(function (p) {
+            const sisa = spSisaHari_(p.deadlineIso);
+            let tandaDl = "";
+            if (!p.spSelesai && sisa !== null) {
+              if (sisa < 0) tandaDl = '<span class="sp-ord-lewat">' + Math.abs(sisa) + ' hari lewat</span>';
+              else if (sisa <= 7) tandaDl = '<span class="sp-ord-dekat">' + sisa + ' hari lagi</span>';
+            }
+            const art = (p.artikel || []).join(", ");
+            return '<tr class="sp-ord-baris' + (p.spSelesai ? ' sp-ord-selesai' : '') + '" ' +
+              'onclick="spOrderanPilih_(\'' + rjdEscapeHtml_(p.idPurchaseOrder) + '\')">' +
+              '<td><b>' + rjdEscapeHtml_(p.idPurchaseOrder) + '</b>' +
+                (p.spSelesai ? ' <span class="sp-riw-kunci">Selesai</span>' : '') +
+                '<div class="sp-gelar-size">' + rjdEscapeHtml_(p.namaKlien || "-") +
+                (p.noSO ? ' \u00b7 ' + rjdEscapeHtml_(p.noSO) : '') + '</div></td>' +
+              '<td>' + (art ? rjdEscapeHtml_(art) : '<span class="sp-kosong">&#183;</span>') + '</td>' +
+              '<td class="num">' + (p.jumlah || 0) + '</td>' +
+              '<td>' + rjdEscapeHtml_(p.deadline || "-") +
+                (tandaDl ? '<div>' + tandaDl + '</div>' : '') + '</td>' +
+              '<td>' + (p.tahap
+                ? rjdEscapeHtml_(p.tahap)
+                : '<span class="sp-kosong">belum mulai</span>') + '</td>' +
+            '</tr>';
+          }).join("") +
+          '</tbody></table></div>'
+        : '<p class="sp-info">Tidak ada order yang cocok dengan pencarian.</p>') +
+    '</div>';
+
+  // Fokus dikembalikan ke kotak cari supaya mengetik tidak terputus tiap
+  // ketukan -- panel dirender ulang penuh setiap huruf.
+  const inp = document.getElementById("sp-ord-cari");
+  if (inp && q) { inp.focus(); inp.setSelectionRange(q.length, q.length); }
+}
+
 function spMuatSOP_() {
   const panel = document.getElementById("sp-panel-sop");
   if (!panel) return;
