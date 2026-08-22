@@ -578,7 +578,11 @@ const SP_FASE_PETA = [
   ["polamarker", "Pola & Marker", [["pola", "Pola"], ["marker", "Marker"]]],
   ["sampel",     "Sampel",        [["sampel", "Sampel"], ["approval", "Approval"]]],
   ["cutting",    "Cutting",       [["gelar", "Gelaran"], ["cutting", "Hasil Potong"]]],
-  ["loading",    "Loading",       [["bagi", "Bagi ke Line"], ["spkrekap", "SPK & Rekap"]]],
+  // v145: subtab "Siapkan Potongan" menutup celah peran yang membingungkan
+  // lantai (22 Agu). "Bagi ke Line" itu KEPUTUSAN (qty per line + target
+  // selesai); tim loading cuma MENYIAPKAN fisiknya. Dua pekerjaan berbeda
+  // sekarang punya pintunya masing-masing di dalam satu rumah.
+  ["loading",    "Loading",       [["bagi", "Bagi ke Line"], ["siapkan", "Siapkan Potongan"], ["spkrekap", "SPK & Rekap"]]],
   ["sewing",     "Sewing",        [["konfpot", "Konfirmasi Potongan"], ["setor", "Setoran ke Finishing"]]],
   ["finishing",  "Finishing",     [["konfset", "Konfirmasi Setoran"], ["qc", "QC"], ["qcring", "Ringkasan QC"]]],
   ["packing",    "Packing & Kirim", [["stok", "Stok Siap Kirim"], ["terkirim", "Terkirim"]]],
@@ -662,6 +666,12 @@ const SP_BAGIAN_TAB = {
   gelar:   "cutting",
   cutting: "cutting",
   bagi:    "loading",
+  // v145: papan kerja tim loading. Sengaja bagian yang sama dengan "bagi"
+  // untuk sekarang -- pemetaan siapa yang BOLEH membagi masih menunggu
+  // keputusan organisasi (tidak ada bagian "ppic" di SD Staff). Begitu
+  // diputuskan, cukup pindahkan entri "bagi" ke bagian pemutus; entri ini
+  // tidak perlu ikut berubah.
+  siapkan: "loading",
   setor:   "sewing",
   qc:      "qc",
   approval: ["pola", "sampel"],
@@ -992,6 +1002,7 @@ function spSwitchTab(tab) {
   if (tab === "qc") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("input"); return; }
   if (tab === "qcring") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("ringkasan"); return; }
   if (tab === "approval") { spMuatApproval_(); return; }
+  if (tab === "siapkan") { spMuatSiapkan_(); return; }
   if (tab === "spkrekap") { if (!window.SP_PO) spMuatDistribusi(); return; }
   if (tab === "stok") { spMuatStok_(); return; }
   if (tab === "terkirim") { spMuatTerkirim_(); return; }
@@ -1279,6 +1290,212 @@ function spTerapkanBagianKonf_() {
  * pilihan hanya melahirkan keadaan saling bertentangan -- persis yang
  * terjadi: berdiri di "Konfirmasi Potongan" sambil melihat alur setoran.
  */
+
+/* ============================================================
+   SIAPKAN POTONGAN -- papan kerja tim loading (v145)
+   ============================================================
+   Menjawab "hari ini saya harus menyiapkan apa saja". LINTAS PO: kartu Pilih
+   PO di atas berlaku sebagai PENYARING OPSIONAL, sama seperti tab Konfirmasi
+   (v117) -- kosong berarti tampil semua, karena orang membuka tab ini justru
+   untuk tahu apa yang menunggu.
+
+   Tab ini SENGAJA tidak bisa membagi apa pun. Pembagian tetap di subtab
+   sebelahnya. Dua pintu untuk satu keputusan adalah sumber kebingungan yang
+   pemisahan ini justru dibuat untuk menyelesaikannya.
+
+   Menandai "sudah disiapkan" BUKAN GERBANG: kepala line tetap bisa
+   konfirmasi terima walau penandaannya terlewat. Yang hilang cuma jejak
+   waktunya, bukan barangnya.
+   ============================================================ */
+
+function spMuatSiapkan_() {
+  const wadah = document.getElementById("sp-siapkan-daftar");
+  if (wadah) wadah.innerHTML = '<p class="sp-info">Memuat daftar...</p>';
+  const opsi = {};
+  // PO aktif = penyaring, kecuali pemakai minta "tampilkan semua".
+  if (!window.SP_SIAPKAN_SEMUA && window.SP_PO_AKTIF) {
+    opsi.idPurchaseOrder = window.SP_PO_AKTIF;
+  }
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getPerluDisiapkan", opsi: opsi })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) {
+      wadah.innerHTML = '<p class="sp-pesan sp-galat">' +
+        rjdEscapeHtml_((d && d.error) || "Gagal memuat daftar.") + '</p>';
+      return;
+    }
+    window.SP_SIAPKAN = d.baris || [];
+    window.SP_SIAPKAN_PILIH = {};
+    spRenderSiapkan_();
+  })
+  .catch(function () {
+    wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
+  });
+}
+
+function spSiapkanSemua_() {
+  window.SP_SIAPKAN_SEMUA = true;
+  spMuatSiapkan_();
+}
+
+/** Umur antrean dalam hari. Potongan yang lama menunggu biasanya menahan line. */
+function spSiapkanUmur_(iso) {
+  if (!iso) return null;
+  const t = new Date(String(iso) + "T00:00:00");
+  if (isNaN(t.getTime())) return null;
+  const kini = new Date();
+  return Math.floor((kini.setHours(0, 0, 0, 0) - t.getTime()) / 86400000);
+}
+
+function spSiapkanToggle_(id, el) {
+  if (!window.SP_SIAPKAN_PILIH) window.SP_SIAPKAN_PILIH = {};
+  if (el.checked) window.SP_SIAPKAN_PILIH[id] = true;
+  else delete window.SP_SIAPKAN_PILIH[id];
+  spSiapkanTombol_();
+}
+
+function spSiapkanPilihLine_(idLine, el) {
+  (window.SP_SIAPKAN || []).forEach(function (b) {
+    if (b.idLine !== idLine) return;
+    if (el.checked) window.SP_SIAPKAN_PILIH[b.idDistribusi] = true;
+    else delete window.SP_SIAPKAN_PILIH[b.idDistribusi];
+    const kotak = document.getElementById("sp-siap-cek-" + b.idDistribusi);
+    if (kotak) kotak.checked = !!el.checked;
+  });
+  spSiapkanTombol_();
+}
+
+function spSiapkanTombol_() {
+  const n = Object.keys(window.SP_SIAPKAN_PILIH || {}).length;
+  const btn = document.getElementById("sp-siapkan-btn");
+  const info = document.getElementById("sp-siapkan-info");
+  if (btn) btn.disabled = n === 0;
+  if (info) {
+    let pcs = 0;
+    (window.SP_SIAPKAN || []).forEach(function (b) {
+      if (window.SP_SIAPKAN_PILIH[b.idDistribusi]) pcs += b.totalQty || 0;
+    });
+    info.textContent = n ? (n + " baris dipilih \u00b7 " + pcs + " pcs") : "Belum ada yang dipilih";
+  }
+}
+
+function spRenderSiapkan_() {
+  const daftar = window.SP_SIAPKAN || [];
+  const wadah = document.getElementById("sp-siapkan-daftar");
+  const ringkas = document.getElementById("sp-siapkan-ringkas");
+  if (!wadah) return;
+
+  const menyaring = !window.SP_SIAPKAN_SEMUA && window.SP_PO_AKTIF;
+  const chip = menyaring
+    ? '<p class="sp-info">Disaring ke <b>' + rjdEscapeHtml_(window.SP_PO_AKTIF) + '</b>. ' +
+      '<a href="#" onclick="spSiapkanSemua_();return false;">Tampilkan semua order</a></p>'
+    : "";
+
+  if (!daftar.length) {
+    if (ringkas) ringkas.innerHTML = "";
+    wadah.innerHTML = chip + '<p class="sp-info">Tidak ada potongan yang menunggu disiapkan. ' +
+      'Semua pembagian sudah ditandai atau sudah diterima line.</p>';
+    spSiapkanTombol_();
+    return;
+  }
+
+  let totalPcs = 0;
+  const perLine = {};
+  daftar.forEach(function (b) {
+    totalPcs += b.totalQty || 0;
+    if (!perLine[b.idLine]) perLine[b.idLine] = { nama: b.namaLine, lokasi: b.lokasi, baris: [], pcs: 0 };
+    perLine[b.idLine].baris.push(b);
+    perLine[b.idLine].pcs += b.totalQty || 0;
+  });
+
+  if (ringkas) {
+    ringkas.innerHTML =
+      '<div class="sp-siap-kotak"><span>Baris menunggu</span><b>' + daftar.length + '</b></div>' +
+      '<div class="sp-siap-kotak"><span>Total pcs</span><b>' + totalPcs + '</b></div>' +
+      '<div class="sp-siap-kotak"><span>Line tujuan</span><b>' + Object.keys(perLine).length + '</b></div>';
+  }
+
+  // Dikelompokkan per LINE: tim loading menyiapkan per tujuan, satu tumpuk
+  // sekali angkut -- bukan per PO.
+  wadah.innerHTML = chip + Object.keys(perLine).map(function (idLine) {
+    const g = perLine[idLine];
+    return '<div class="sp-siap-grup">' +
+      '<div class="sp-siap-kepala">' +
+        '<label class="sp-siap-ceksemua">' +
+          '<input onchange="spSiapkanPilihLine_(\'' + rjdEscapeHtml_(idLine) + '\', this)" type="checkbox"/>' +
+          '<span><b>' + rjdEscapeHtml_(g.nama) + '</b>' +
+            (g.lokasi ? ' <small>' + rjdEscapeHtml_(g.lokasi) + '</small>' : '') + '</span>' +
+        '</label>' +
+        '<span class="sp-siap-pcs">' + g.pcs + ' pcs \u00b7 ' + g.baris.length + ' baris</span>' +
+      '</div>' +
+      g.baris.map(function (b) {
+        const per = Object.keys(b.sizeQty || {}).map(function (sz) {
+          return rjdEscapeHtml_(sz) + " " + b.sizeQty[sz];
+        }).join("  ");
+        const umur = spSiapkanUmur_(b.tanggalSerah);
+        const tandaUmur = (umur !== null && umur >= 2)
+          ? '<span class="sp-siap-lama">' + umur + ' hari</span>' : '';
+        return '<label class="sp-siap-baris">' +
+          '<input id="sp-siap-cek-' + rjdEscapeHtml_(b.idDistribusi) + '" ' +
+            'onchange="spSiapkanToggle_(\'' + rjdEscapeHtml_(b.idDistribusi) + '\', this)" type="checkbox"/>' +
+          '<span class="sp-siap-isi">' +
+            '<span class="sp-siap-judul">' + rjdEscapeHtml_(b.warna || "-") +
+              ' <small>' + rjdEscapeHtml_([b.artikel, b.style].filter(String).join(" / ")) + '</small>' +
+              tandaUmur + '</span>' +
+            '<span class="sp-siap-detail">' + rjdEscapeHtml_(b.idPurchaseOrder) +
+              (per ? ' \u00b7 ' + rjdEscapeHtml_(per) : '') + '</span>' +
+            (b.catatan ? '<span class="sp-siap-catatan">\u201c' + rjdEscapeHtml_(b.catatan) + '\u201d</span>' : '') +
+          '</span>' +
+          '<b class="sp-siap-qty">' + (b.totalQty || 0) + '</b>' +
+        '</label>';
+      }).join("") +
+    '</div>';
+  }).join("");
+
+  spSiapkanTombol_();
+}
+
+function spTandaiSiapkan_() {
+  const ids = Object.keys(window.SP_SIAPKAN_PILIH || {});
+  if (!ids.length) return;
+  let pcs = 0;
+  (window.SP_SIAPKAN || []).forEach(function (b) {
+    if (window.SP_SIAPKAN_PILIH[b.idDistribusi]) pcs += b.totalQty || 0;
+  });
+  if (!confirm("Tandai " + ids.length + " baris (" + pcs + " pcs) sebagai SUDAH DISIAPKAN?\n\n" +
+      "Namamu dan waktunya tercatat. Ini catatan penyiapan \u2014 kepala line tetap " +
+      "perlu konfirmasi terima seperti biasa.")) return;
+
+  const btn = document.getElementById("sp-siapkan-btn");
+  btn.disabled = true;
+  btn.textContent = "Menyimpan...";
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: SP_ID_TOKEN, action: "tandaiDisiapkan",
+      payload: { idDistribusi: ids }
+    })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    btn.disabled = false;
+    btn.textContent = "Tandai sudah disiapkan";
+    if (!d || !d.success) { alert((d && d.error) || "Gagal menandai."); return; }
+    let pesan = d.ditandai + " baris ditandai disiapkan.";
+    if (d.dilewati && d.dilewati.length) pesan += "\n\nDilewati: " + d.dilewati.join(", ");
+    alert(pesan);
+    spMuatSiapkan_();
+  })
+  .catch(function (e) {
+    btn.disabled = false;
+    btn.textContent = "Tandai sudah disiapkan";
+    alert(String(e));
+  });
+}
+
 function spMuatKonfMode_(jenis) {
   window.SP_KONF_JENIS = jenis;
   const sakelar = document.querySelector(".sp-konf-tabs");
