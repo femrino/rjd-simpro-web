@@ -1373,6 +1373,11 @@ function spSiapkanTombol_() {
   const btn = document.getElementById("sp-siapkan-btn");
   const info = document.getElementById("sp-siapkan-info");
   if (btn) btn.disabled = n === 0;
+  // v146: bilah aksi melayang di bawah layar, tapi cuma naik kalau ada yang
+  // dicentang. Tombol tetap di-disable saat nol pilihan sebagai jaring kedua:
+  // kelas CSS bisa gagal dimuat (jsDelivr mati), status disabled tidak.
+  const bilah = document.querySelector(".sp-siap-aksi");
+  if (bilah) bilah.classList.toggle("tampil", n > 0);
   if (info) {
     let pcs = 0;
     (window.SP_SIAPKAN || []).forEach(function (b) {

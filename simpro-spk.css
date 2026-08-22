@@ -1190,13 +1190,49 @@ body.sp-siap #sp-subtabs { visibility: visible; }
   vertical-align: middle;
 }
 
+/* v146: bilah aksi MELAYANG, tapi hanya saat ada yang dipilih.
+   ---------------------------------------------------------------
+   Tujuannya: setelah mencentang beberapa baris jauh di bawah, tombolnya
+   sudah ada di tempat -- tidak perlu menggulung balik.
+
+   Yang bikin ini tidak sesak: bilahnya BERSEMBUNYI selama belum ada yang
+   dicentang. Halaman produksi sudah punya dua bar menempel di atas (fase +
+   subtab); bilah ketiga yang menempel permanen akan memakan sepertiga layar
+   HP untuk memberi tahu "belum ada yang dipilih" -- kalimat yang tidak
+   berguna bagi siapa pun. Begitu centang pertama masuk, barulah ia naik.
+
+   position:fixed aman di sini: tidak ada ancestor panel yang memakai
+   transform/filter/perspective (yang akan membuat fixed jadi relatif ke
+   ancestor itu, bukan ke viewport). Yang memakai transform cuma
+   .sp-pratinjau-drive di dalam overlay gambar.
+
+   z-index 40: di atas isi dan bar tab (30), di bawah overlay pratinjau
+   (9999) supaya gambar layar penuh tidak tertimpa bilah. */
 .sp-siap-aksi {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 14px 0 4px;
+  padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+  background: #fff;
+  border-top: 1px solid var(--line, #E5E0D6);
+  box-shadow: 0 -6px 20px rgba(23, 33, 47, .07);
+  transform: translateY(115%);
+  transition: transform .18s ease;
+  pointer-events: none;   /* saat tersembunyi, jangan mencegat sentuhan */
 }
+.sp-siap-aksi.tampil {
+  transform: translateY(0);
+  pointer-events: auto;
+}
+/* Ruang bawah tetap disediakan walau bilah sedang sembunyi -- kalau padding
+   ikut muncul-hilang, seluruh daftar akan melompat setiap centang pertama. */
+#sp-panel-siapkan { padding-bottom: 76px; }
 .sp-siap-info {
   font-size: 12.5px;
   color: var(--ink-soft, #5F6B7A);
@@ -1206,7 +1242,10 @@ body.sp-siap #sp-subtabs { visibility: visible; }
 @media (max-width: 560px) {
   .sp-siap-ringkas { grid-template-columns: 1fr 1fr; }
   .sp-siap-kotak:last-child { grid-column: span 2; }
-  .sp-siap-aksi { flex-direction: column; align-items: stretch; gap: 8px; }
+  /* HP: info di atas, tombol lebar penuh di bawahnya -- ibu jari mudah
+     menjangkau, dan angka "n baris dipilih" tetap terbaca. */
+  .sp-siap-aksi { flex-direction: column; align-items: stretch; gap: 8px; padding-left: 14px; padding-right: 14px; }
   .sp-siap-info { text-align: center; }
   .sp-siap-aksi .sp-simpan-btn { width: 100%; margin-top: 0; }
+  #sp-panel-siapkan { padding-bottom: 128px; }
 }
