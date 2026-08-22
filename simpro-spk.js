@@ -1373,11 +1373,12 @@ function spSiapkanTombol_() {
   const btn = document.getElementById("sp-siapkan-btn");
   const info = document.getElementById("sp-siapkan-info");
   if (btn) btn.disabled = n === 0;
-  // v146: bilah aksi melayang di bawah layar, tapi cuma naik kalau ada yang
-  // dicentang. Tombol tetap di-disable saat nol pilihan sebagai jaring kedua:
-  // kelas CSS bisa gagal dimuat (jsDelivr mati), status disabled tidak.
-  const bilah = document.querySelector(".sp-siap-aksi");
-  if (bilah) bilah.classList.toggle("tampil", n > 0);
+  // [DIHAPUS v147] Dulu di sini ada toggle kelas "tampil" yang menaikkan
+  // bilah aksi hanya kalau ada baris dicentang. Aturan CSS-nya sudah
+  // dipensiunkan (bilah kini selalu terlihat), jadi barisnya ikut dibuang --
+  // kelas yang tidak lagi punya aturan hanya akan membingungkan pembaca
+  // berikutnya. Tombol tetap disabled saat nol pilihan; itu penjaga yang
+  // sebenarnya, dan tidak bergantung pada CSS yang bisa gagal dimuat.
   if (info) {
     let pcs = 0;
     (window.SP_SIAPKAN || []).forEach(function (b) {

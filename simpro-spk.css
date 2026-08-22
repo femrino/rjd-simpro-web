@@ -1190,21 +1190,26 @@ body.sp-siap #sp-subtabs { visibility: visible; }
   vertical-align: middle;
 }
 
-/* v146: bilah aksi MELAYANG, tapi hanya saat ada yang dipilih.
+/* v147: bilah aksi MELAYANG, SELALU terlihat selama tab Siapkan terbuka.
    ---------------------------------------------------------------
-   Tujuannya: setelah mencentang beberapa baris jauh di bawah, tombolnya
-   sudah ada di tempat -- tidak perlu menggulung balik.
+   v146 menyembunyikannya sampai ada yang dicentang -- syarat yang tidak
+   pernah diminta, dan di layar terbaca sebagai fitur yang tidak jadi:
+   orang membuka tab, tidak melihat bilah apa pun, lalu menyimpulkan
+   bilahnya hilang. Tidak ada yang tahu bahwa ia akan muncul kalau
+   mencentang, karena tidak ada satu pun petunjuk di layar.
 
-   Yang bikin ini tidak sesak: bilahnya BERSEMBUNYI selama belum ada yang
-   dicentang. Halaman produksi sudah punya dua bar menempel di atas (fase +
-   subtab); bilah ketiga yang menempel permanen akan memakan sepertiga layar
-   HP untuk memberi tahu "belum ada yang dipilih" -- kalimat yang tidak
-   berguna bagi siapa pun. Begitu centang pertama masuk, barulah ia naik.
+   Pelajarannya lebih umum: kalau kemunculan sebuah kontrol bergantung pada
+   tindakan yang belum dilakukan, orang tidak akan pernah menemukan bahwa
+   kontrol itu ada.
 
    position:fixed aman di sini: tidak ada ancestor panel yang memakai
    transform/filter/perspective (yang akan membuat fixed jadi relatif ke
    ancestor itu, bukan ke viewport). Yang memakai transform cuma
    .sp-pratinjau-drive di dalam overlay gambar.
+
+   Bilah ikut hilang sendiri saat pindah subtab: ia berada DI DALAM
+   #sp-panel-siapkan, dan .hidden{display:none !important} di
+   simpro-global.css membuat seluruh isinya ikut tak dirender.
 
    z-index 40: di atas isi dan bar tab (30), di bawah overlay pratinjau
    (9999) supaya gambar layar penuh tidak tertimpa bilah. */
@@ -1222,16 +1227,8 @@ body.sp-siap #sp-subtabs { visibility: visible; }
   background: #fff;
   border-top: 1px solid var(--line, #E5E0D6);
   box-shadow: 0 -6px 20px rgba(23, 33, 47, .07);
-  transform: translateY(115%);
-  transition: transform .18s ease;
-  pointer-events: none;   /* saat tersembunyi, jangan mencegat sentuhan */
 }
-.sp-siap-aksi.tampil {
-  transform: translateY(0);
-  pointer-events: auto;
-}
-/* Ruang bawah tetap disediakan walau bilah sedang sembunyi -- kalau padding
-   ikut muncul-hilang, seluruh daftar akan melompat setiap centang pertama. */
+/* Ruang bawah supaya baris terakhir daftar tidak tertutup bilah. */
 #sp-panel-siapkan { padding-bottom: 76px; }
 .sp-siap-info {
   font-size: 12.5px;
