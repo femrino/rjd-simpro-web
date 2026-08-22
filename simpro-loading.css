@@ -1,0 +1,198 @@
+/* ============================================================
+   SIMPRO -- simpro-loading.css (v144)
+   Papan kerja tim loading (loading.html).
+
+   Dipakai di komputer gudang DAN di HP. Karena itu:
+   - baris kerja berbentuk kartu, bukan tabel (tabel memaksa scroll
+     horizontal di HP, dan tim loading membacanya sambil berdiri)
+   - kotak centang dibuat besar (22px) supaya bisa ditekan dengan jari,
+     bukan ditembak dengan kursor
+   - bilah aksi menempel di bawah layar: setelah mencentang beberapa
+     baris, tombolnya harus ada di tempat tanpa perlu scroll balik
+   Variabel warna diwarisi dari simpro-global.css.
+   ============================================================ */
+
+.ld-wrap {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 20px 140px;   /* ruang bawah = tinggi bilah aksi */
+}
+
+/* ---------- kotak login ---------- */
+.ld-kotak {
+  background: #fff;
+  border: 1px solid var(--line, #E5E0D6);
+  border-radius: 16px;
+  padding: 28px 24px;
+  text-align: center;
+  max-width: 420px;
+  margin: 40px auto;
+}
+.ld-kotak h2 { margin: 0 0 8px; font-size: 20px; }
+.ld-kotak p { margin: 0 0 18px; color: var(--ink-soft, #5F6B7A); font-size: 13.5px; }
+#ld-google-btn { display: flex; justify-content: center; }
+
+/* ---------- ringkasan ---------- */
+.ld-ringkas {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.ld-ringkas-kotak {
+  background: #fff;
+  border: 1px solid var(--line, #E5E0D6);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ld-ringkas-kotak span { font-size: 11.5px; color: var(--ink-soft, #5F6B7A); }
+.ld-ringkas-kotak b { font-size: 20px; font-variant-numeric: tabular-nums; }
+
+/* ---------- kelompok per line ---------- */
+.ld-grup {
+  background: #fff;
+  border: 1px solid var(--line, #E5E0D6);
+  border-radius: 14px;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.ld-grup-kepala {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--paper, #FAF7F2);
+  border-bottom: 1px solid var(--line, #E5E0D6);
+}
+.ld-cek-semua {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.ld-cek-semua small,
+.ld-baris-judul small {
+  color: var(--ink-soft, #5F6B7A);
+  font-weight: 400;
+}
+.ld-grup-pcs {
+  font-size: 12px;
+  color: var(--ink-soft, #5F6B7A);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- baris kerja ---------- */
+.ld-baris {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line, #E5E0D6);
+  cursor: pointer;
+}
+.ld-baris:last-child { border-bottom: 0; }
+.ld-baris:hover { background: var(--paper, #FAF7F2); }
+.ld-baris input[type="checkbox"],
+.ld-cek-semua input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  margin: 0;
+  accent-color: var(--navy, #17212F);
+  cursor: pointer;
+}
+.ld-baris-isi {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.ld-baris-judul { font-size: 14px; font-weight: 600; }
+.ld-baris-detail {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--ink-soft, #5F6B7A);
+  word-break: break-word;
+}
+.ld-baris-catatan {
+  font-size: 11.5px;
+  color: var(--ink-soft, #5F6B7A);
+  font-style: italic;
+}
+.ld-baris-qty {
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+/* Antrean yang menua. Bukan hiasan: potongan yang sudah dibagi tapi belum
+   disiapkan berhari-hari biasanya berarti ada line menganggur menunggu. */
+.ld-tag-lama {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #FBEAE5;
+  color: var(--terra, #C2410C);
+  font-size: 10.5px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.ld-kosong {
+  font-size: 13px;
+  color: var(--ink-soft, #5F6B7A);
+  background: #fff;
+  border: 1px solid var(--line, #E5E0D6);
+  border-radius: 14px;
+  padding: 22px 18px;
+  text-align: center;
+}
+
+/* ---------- bilah aksi ---------- */
+.ld-aksi {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #fff;
+  border-top: 1px solid var(--line, #E5E0D6);
+  padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  z-index: 50;
+}
+.ld-aksi-info {
+  font-size: 12.5px;
+  color: var(--ink-soft, #5F6B7A);
+  font-variant-numeric: tabular-nums;
+}
+.ld-btn {
+  padding: 13px 22px;
+  background: var(--navy, #17212F);
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+.ld-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+@media (max-width: 560px) {
+  .ld-wrap { padding: 0 14px 150px; }
+  .ld-ringkas { grid-template-columns: 1fr 1fr; }
+  .ld-ringkas-kotak:last-child { grid-column: span 2; }
+  .ld-aksi { flex-direction: column; align-items: stretch; gap: 8px; }
+  .ld-aksi-info { text-align: center; }
+  .ld-btn { width: 100%; }
+}
