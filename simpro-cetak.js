@@ -122,7 +122,11 @@ function ckHandleLogin(response){
 }
 
 function ckFetchData(){
-  const jenisValid = ["invoice", "proforma", "suratjalan", "konfirmasiorder", "spk", "rekapline"];
+  const jenisValid = ["invoice", "proforma", "suratjalan", "konfirmasiorder", "spk", "rekapline",
+    // v153: surat jalan POTONGAN (bukan baju jadi). ?id= boleh dua bentuk:
+    // "SJK..." (dari SD Potongan Keluar) atau ID gelaran Panel Klien --
+    // backend yang membedakannya dari bentuk ID, jadi tautannya satu bentuk.
+    "sjpotongan"];
   // "rekapline" identitasnya di ?line=, BUKAN ?id= -- dokumennya milik LINE,
   // bukan milik satu order. Jadi syarat CK_ID sengaja dilonggarkan khusus dia.
   const punyaIdentitas = CK_JENIS === "rekapline" ? !!CK_LINE : !!CK_ID;
@@ -130,7 +134,7 @@ function ckFetchData(){
     ckTampilkanError("Link tidak lengkap/valid -- buka halaman ini lewat tombol Cetak di Portal Klien atau Dashboard, bukan diketik manual.");
     return;
   }
-  const CK_ACTION_MAP = { invoice: "getInvoiceCetak", proforma: "getProformaCetak", suratjalan: "getSuratJalanCetak", konfirmasiorder: "getKonfirmasiOrderCetak", spk: "getSPKCetak", rekapline: "getRekapLineCetak" };
+  const CK_ACTION_MAP = { invoice: "getInvoiceCetak", proforma: "getProformaCetak", suratjalan: "getSuratJalanCetak", konfirmasiorder: "getKonfirmasiOrderCetak", spk: "getSPKCetak", rekapline: "getRekapLineCetak", sjpotongan: "getSuratJalanPotonganCetak" };
   const action = CK_ACTION_MAP[CK_JENIS];
   fetch(CK_API_URL, {
     method: "POST",
@@ -154,6 +158,7 @@ function ckFetchData(){
       else if(CK_JENIS === "suratjalan") ckRenderSuratJalan(data.data);
       else if(CK_JENIS === "konfirmasiorder") ckRenderKonfirmasiOrder(data.data);
       else if(CK_JENIS === "rekapline") ckRenderRekapLine(data.data);
+      else if(CK_JENIS === "sjpotongan") ckRenderSuratJalanPotongan(data.data);
       else { CK_SPK_DATA = data.data; ckRenderSPK(); }
     }catch(errRender){
       console.error("Gagal menggambar dokumen:", errRender);
@@ -530,6 +535,60 @@ function ckRenderSuratJalan(d){
 
   document.getElementById("ck-isi").innerHTML = html;
   document.title = "Surat Jalan " + d.idPengiriman + " -- RJD Apparel";
+}
+
+/**
+ * SURAT JALAN POTONGAN (v153) -- potongan yang keluar pabrik, BUKAN baju jadi.
+ *
+ * Dua sumber bermuara ke dokumen yang sama: potongan yang diambil dari stok
+ * (SD Potongan Keluar) dan panel yang dipotong khusus (gelaran Panel Klien).
+ * Backend yang menyatukan bentuk datanya; di sini tinggal digambar.
+ *
+ * Dibedakan TEGAS dari surat jalan biasa lewat judul dan satu kalimat
+ * peringatan: yang diserahkan ini POTONGAN, bukan barang jadi. Petugas gudang
+ * dan penerima harus langsung tahu bedanya tanpa membaca rinciannya -- salah
+ * baca di sini berarti klien mengira menerima baju siap pakai.
+ */
+function ckRenderSuratJalanPotongan(d){
+  const rows = (d.items || []).map(function(it){
+    return '<tr>' +
+      '<td>' + rjdEscapeHtml_(it.artikel || "-") + '</td>' +
+      '<td>' + rjdEscapeHtml_(it.warna || "-") + '</td>' +
+      '<td>' + rjdEscapeHtml_(it.rincianSize || "") + '</td>' +
+      '<td class="num">' + (it.qty || 0) + '</td>' +
+    '</tr>';
+  }).join("");
+
+  const detail = "Kode Order: " + rjdEscapeHtml_(d.kodeOrder || "-") +
+    '<br/>Produk: ' + rjdEscapeHtml_(d.namaProduk || "-") +
+    '<br/>Jenis: ' + rjdEscapeHtml_(d.jenisKeluar || "-") +
+    (d.komponen ? '<br/>Panel: ' + rjdEscapeHtml_(d.komponen) : '') +
+    (d.keperluan ? '<br/>Keperluan: ' + rjdEscapeHtml_(d.keperluan) : '');
+
+  const html =
+    '<div class="ck-dok">' +
+      ckHeaderHtml("SURAT JALAN POTONGAN", d.noSuratJalan, d.tanggal) +
+      ckPihakHtml(d, "Detail Serah-Terima", detail) +
+      '<div class="ck-dok-catatan" style="border-color:#EBCFA0;background:#FCF3E3">' +
+        '<b>Perhatian:</b> yang diserahkan adalah <b>potongan kain</b>, bukan barang jadi. ' +
+        'Penjahitan dan penyelesaiannya di luar tanggung jawab RJD Apparel.' +
+      '</div>' +
+      '<table class="ck-dok-tabel">' +
+        '<thead><tr><th>Artikel</th><th>Warna</th><th>Rincian Size</th><th class="num">Qty</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+      '<div style="text-align:right;font-weight:700;font-size:14px;margin-bottom:20px">Total: ' +
+        (d.totalQty || 0) + ' pcs</div>' +
+      (d.catatan ? '<div class="ck-dok-catatan"><b>Catatan:</b> ' + rjdEscapeHtml_(d.catatan) + '</div>' : '') +
+      '<div class="ck-dok-ttd">' +
+        '<div class="kolom">Diserahkan oleh,<div class="garis"></div><div class="nama-ttd">RJD Apparel</div></div>' +
+        '<div class="kolom">Diterima oleh,<div class="garis"></div><div class="nama-ttd">' +
+          rjdEscapeHtml_(d.diambilOleh || (d.klien && d.klien.nama) || "") + '</div></div>' +
+      '</div>' +
+    '</div>';
+
+  document.getElementById("ck-isi").innerHTML = html;
+  document.title = "Surat Jalan Potongan " + (d.noSuratJalan || "") + " -- RJD Apparel";
 }
 
 /**

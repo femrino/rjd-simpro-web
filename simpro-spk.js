@@ -1505,7 +1505,11 @@ function spRenderRiwayatKeluar_() {
       grup.forEach(function (x) { tot += x.totalQty || 0; });
       return '<div class="sp-keluar-kartu">' +
         '<div class="sp-keluar-kepala">' +
-          '<b>' + rjdEscapeHtml_(sj) + '</b>' +
+          // v153: nomornya jadi TAUTAN CETAK. Dokumennya bukan surat jalan
+          // biasa -- isinya potongan, bukan barang jadi, dan halaman cetak
+          // menuliskannya terang-terangan supaya penerima tidak salah kira.
+          '<b><a href="/p/cetak.html?jenis=sjpotongan&amp;id=' +
+            encodeURIComponent(sj) + '" target="_blank">' + rjdEscapeHtml_(sj) + '</a></b>' +
           '<span>' + rjdEscapeHtml_(g0.jenisKeluar || "") +
             (g0.komponen ? ' \u00b7 ' + rjdEscapeHtml_(g0.komponen) : '') + '</span>' +
           '<b class="sp-keluar-qty-total">' + tot + ' pcs</b>' +
@@ -3806,8 +3810,14 @@ function spRenderDaftarGelaran_() {
         // dikira gelaran biasa dan dihitung sebagai baju.
         //
         // Warna dipilih karena selalu ada, sedangkan kolom Item bersyarat.
+        // v153: PANEL KLIEN dapat penandanya sendiri. Tanpa ini, satu-satunya
+        // cara membedakannya dari gelaran normal adalah membuka sheet --
+        // padahal efeknya ke jumlah baju berbeda total (tidak menambah), dan
+        // itu justru yang paling perlu terlihat sekilas.
+        const panelKlien = /panel/i.test(String(g.jenisGelaran || ""));
         const penanda =
           (recut ? ' <span class="sp-tag-kembali">RE-CUT</span>' : '') +
+          (panelKlien ? ' <span class="sp-tag-kembali">PANEL KLIEN</span>' : '') +
           (g.dibatalkan ? ' <span class="sp-tag-batal">DIBATALKAN</span>' : '');
         const selItem = pakaiKolomItem
           ? '<td data-label="Item">' +
@@ -3826,7 +3836,12 @@ function spRenderDaftarGelaran_() {
         // Diambil hanya kalau formatnya persis cocok. Kalau suatu saat pola ID
         // berubah, yang terjadi cuma jamnya tidak tampil -- bukan angka salah
         // yang terlanjur dipercaya.
-        const cocokId = /^(?:GLR|RCT)\d{12}$/.test(String(g.idGelaran || ""));
+        // v153: PKL (Panel Klien) ikut dikenali. Versi v149 menambah jenis
+        // gelaran ketiga tapi melewatkan pola ID di sini -- akibatnya jam
+        // gelaran panel klien tidak pernah tampil, diam-diam, karena pola
+        // yang tidak cocok memang sengaja gagal tanpa suara. Daftar keras
+        // yang harus diingat manusia, lagi.
+        const cocokId = /^(?:GLR|RCT|PKL)\d{12}$/.test(String(g.idGelaran || ""));
         const jam = cocokId
           ? String(g.idGelaran).substr(9, 2) + ":" + String(g.idGelaran).substr(11, 2)
           : "";
@@ -3855,10 +3870,19 @@ function spRenderDaftarGelaran_() {
           '<td data-label="Kain terpakai">' + g.kainTerpakai + ' ' + spEsc_(g.satuanKain) + '</td>' +
           '<td data-label="Tanggal">' + spEsc_(g.tanggal || "-") +
             (jam ? '<div class="sp-gelar-size">' + jam + '</div>' : '') + '</td>' +
+          // v153: baris PANEL KLIEN dapat tautan surat jalan -- panelnya keluar
+          // pabrik sama seperti potongan yang diambil dari stok, jadi berhak
+          // atas bukti serah-terima. Nomornya diterbitkan saat tautan dibuka
+          // (lihat pkCetakDariPanelKlien_) dan disimpan balik, jadi membukanya
+          // lagi memberi nomor yang sama.
           '<td data-label="">' + (g.dibatalkan
             ? '<span class="sp-riw-kunci">sudah dibatalkan</span>'
-            : '<button class="sp-btn-kecil" onclick="spBatalGelaran(\'' +
-              spEsc_(g.idGelaran) + '\')" type="button">Batalkan</button>') + '</td>' +
+            : ((/panel/i.test(String(g.jenisGelaran || ""))
+                ? '<a class="sp-btn-kecil" href="/p/cetak.html?jenis=sjpotongan&amp;id=' +
+                  encodeURIComponent(g.idGelaran) + '" target="_blank">Surat Jalan</a> '
+                : '') +
+              '<button class="sp-btn-kecil" onclick="spBatalGelaran(\'' +
+              spEsc_(g.idGelaran) + '\')" type="button">Batalkan</button>')) + '</td>' +
         '</tr>';
       }).join("") +
     '</tbody></table></div>' +
