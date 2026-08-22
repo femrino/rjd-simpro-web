@@ -1294,3 +1294,14 @@ body.sp-siap #sp-subtabs { visibility: visible; }
   gap: 10px; padding: 6px 0; border-top: 1px solid var(--line-soft); font-size: 13px; }
 .sp-keluar-baris small { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px; color: var(--ink-soft); }
+
+/* Aturan re-cut (v154). Dibedakan dari .sp-info biasa dengan garis kiri dan
+   latar hangat: isinya bukan keterangan, melainkan peringatan yang mencegah
+   kesalahan pencatatan paling mahal di alur ini (panel pengganti dicatat
+   sebagai pembagian baru -> hutang line yang tak akan pernah lunas). */
+.sp-gl-aturan { background: #FCF3E3; border-left: 3px solid #EBCFA0;
+  padding: 9px 12px; border-radius: 8px; margin-top: 8px; }
+
+/* Kotak "Untuk line" mengikuti lebar field lain di blok re-cut. */
+#sp-gl-untukline-blok { margin-top: 10px; }
+#sp-gl-untukline { width: 100%; }

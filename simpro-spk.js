@@ -3306,6 +3306,7 @@ function spMuatGelaran() {
     // v143: kode kain RENCANA per (warna, slot) dari order -- dipakai mengisi
     // kotak Kode Kain otomatis. Saran, bukan paksaan.
     window.SP_BAHAN_RENCANA = (hasil[2] && hasil[2].bahanRencana) || { peta: {}, semuaKode: [] };
+    window.SP_LINE_GELARAN = (hasil[2] && hasil[2].daftarLine) || [];   // v154
     window.SP_SARAN_KOMPONEN = (hasil[2] && hasil[2].saranKomponen) || [];
     window.SP_ROLL = (hasil[3] && hasil[3].kain) || [];
     spRenderFormGelaran_();
@@ -3507,6 +3508,22 @@ function spRenderFormGelaran_() {
         '<label>Kain terpakai (m)<input id="sp-gl-kain-manual" min="0" ' +
           'oninput="spHitungGelaran_()" placeholder="0" step="0.01" type="number"/></label>' +
       '</div>' +
+      // v154: kotak "Untuk Line" -- OPSIONAL. Gunanya menjawab pertanyaan yang
+      // sekarang tidak bisa dijawab sama sekali: panel apa yang paling sering
+      // cacat, dan apakah polanya menumpuk di satu line. Yang pertama menunjuk
+      // ke mutu potong, yang kedua ke cara kerja atau mesin di line itu.
+      // Kosong tidak menghalangi simpan -- memaksanya diisi hanya akan membuat
+      // orang memilih asal, dan data asal lebih buruk daripada kolom kosong.
+      '<div id="sp-gl-untukline-blok">' +
+        '<label>Untuk line <small>(opsional)</small>' +
+          '<select id="sp-gl-untukline">' +
+            '<option value="">-- tidak dicatat --</option>' +
+            (window.SP_LINE_GELARAN || []).map(function (l) {
+              return '<option value="' + spEsc_(l.idLine) + '">' + spEsc_(l.namaLine) +
+                (l.lokasi ? " (" + spEsc_(l.lokasi) + ")" : "") + '</option>';
+            }).join("") +
+          '</select></label>' +
+      '</div>' +
       '<datalist id="sp-datalist-komponen">' +
         (window.SP_SARAN_KOMPONEN || []).map(function (k) {
           return '<option value="' + spEsc_(k) + '"></option>';
@@ -3514,6 +3531,17 @@ function spRenderFormGelaran_() {
       '</datalist>' +
       '<p class="sp-info" id="sp-gl-recut-hint">Re-cut TIDAK menambah jumlah baju &#8212; bajunya sudah terhitung ' +
         'waktu dipotong pertama. Yang bertambah cuma pemakaian kain.</p>' +
+      // v154: kesalahan paling mahal di alur ini, dicegah dengan satu kalimat.
+      // Kalau panel pengganti dicatat sebagai pembagian baru, line tercatat
+      // menerima lebih banyak daripada yang akan disetorkannya -- selisihnya
+      // jadi hutang yang tidak akan pernah lunas, dan tidak ada layar mana pun
+      // yang bisa membetulkannya belakangan. Pengembalian panel cacat punya
+      // akibat kembar: pool menawarkan barang yang sudah rusak.
+      '<p class="sp-info sp-gl-aturan" id="sp-gl-aturan-recut">' +
+        '<b>Aturan:</b> panel pengganti diserahkan langsung ke line &#8212; ' +
+        'JANGAN dicatat lagi sebagai pembagian baru di tab Bagi ke Line. ' +
+        'Panel cacatnya juga jangan dikembalikan lewat form pengembalian setoran.' +
+      '</p>' +
     '</div>' +
     '<div class="sp-hitung" id="sp-gl-hasil"></div>' +
     '<button class="sp-simpan-btn" onclick="spSimpanGelaran()" type="button">Simpan Gelaran</button>';
@@ -3560,6 +3588,20 @@ function spUbahModeGelaran_() {
         : "Re-cut TIDAK menambah jumlah baju &#8212; bajunya sudah terhitung " +
           "waktu dipotong pertama. Yang bertambah cuma pemakaian kain.";
     }
+    // v154: dua hal ini cuma masuk akal untuk RE-CUT. Panel klien tidak
+    // diserahkan ke line mana pun -- menampilkan "Untuk line" di situ
+    // mengundang orang mengisinya, dan aturan soal pembagian ke line justru
+    // membingungkan karena tidak ada pembagian yang terlibat.
+    const blokLine = document.getElementById("sp-gl-untukline-blok");
+    const aturan = document.getElementById("sp-gl-aturan-recut");
+    if (blokLine) blokLine.classList.toggle("hidden", panel);
+    if (aturan) aturan.classList.toggle("hidden", panel);
+    // Nilai ikut dikosongkan saat pindah ke Panel Klien -- kotak tersembunyi
+    // yang masih menyimpan pilihan lama akan ikut terkirim diam-diam.
+    if (panel) {
+      const selLine = document.getElementById("sp-gl-untukline");
+      if (selLine) selLine.value = "";
+    }
   }
   // Penanda visual mode aktif dipasang dari sini, bukan lewat :has() di CSS --
   // selektor itu belum didukung browser lama.
@@ -3568,6 +3610,16 @@ function spUbahModeGelaran_() {
     el.classList.toggle("aktif", !!(inp && inp.checked));
   });
   spHitungGelaran_();
+}
+
+/**
+ * ID line -> nama yang bisa dibaca. Kalau daftarnya belum termuat, ID-nya
+ * dikembalikan apa adanya: menampilkan ID mentah jauh lebih baik daripada
+ * kosong, karena masih bisa dicocokkan dengan sheet.
+ */
+function spNamaLine_(idLine) {
+  const d = (window.SP_LINE_GELARAN || []).filter(function (l) { return l.idLine === idLine; })[0];
+  return d ? d.namaLine : idLine;
 }
 
 /** Mode gelaran terpilih: "Normal" | "Re-cut" | "Panel Klien". */
@@ -3707,6 +3759,7 @@ function spSimpanGelaran() {
         jenisGelaran: spModeGelaran_(),
         komponen: (document.getElementById("sp-gl-komponen") || {}).value || "",
         alasan: (document.getElementById("sp-gl-alasan") || {}).value || "",
+        untukLine: (document.getElementById("sp-gl-untukline") || {}).value || "",
         kainTerpakai: (document.getElementById("sp-gl-kain-manual") || {}).value || "",
         jumlahLapis: lapis,
         allowancePerLapis: (document.getElementById("sp-gl-allow") || {}).value,
@@ -3863,6 +3916,11 @@ function spRenderDaftarGelaran_() {
           '<td data-label="Kain">' + spEsc_(g.jenisKain || "-") +
             (g.komponen ? ' <small>(' + spEsc_(g.komponen) + ')</small>' : '') +
             (g.kodeKain ? '<div class="sp-gelar-size">' + spEsc_(g.kodeKain) + '</div>' : '') +
+            // v154: line pemohon re-cut. Ditampilkan supaya polanya kelihatan
+            // tanpa perlu membuka sheet -- "Payak lagi" tiga baris berturut
+            // adalah petunjuk yang tidak akan pernah muncul dari angka total.
+            (g.untukLine ? '<div class="sp-gelar-size">&#8594; ' +
+              spEsc_(spNamaLine_(g.untukLine)) + '</div>' : '') +
             '</td>' +
           '<td data-label="Lapis">' + (g.jumlahLapis || "&#8212;") + '</td>' +
           '<td data-label="Potongan"><b>' + g.total + '</b>' +
