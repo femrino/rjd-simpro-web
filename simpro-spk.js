@@ -162,6 +162,18 @@ function spMuatDaftarLine_() {
  * ============================================================ */
 
 function spMuatDaftarPO() {
+  // v164: keadaan pemuatan DITANDAI, tidak ditebak dari daftar kosong.
+  //
+  // Sebelumnya tab Orderan menyimpulkan "belum termuat" hanya karena
+  // arraynya kosong -- padahal kosong bisa berarti tiga hal berbeda: sedang
+  // dimuat, gagal dimuat, atau memang tidak ada order. Yang tampil selalu
+  // kalimat ketiga-tiganya: "Coba muat ulang halaman", saat yang benar cuma
+  // menunggu sebentar. Menyuruh orang memuat ulang padahal sistemnya sedang
+  // bekerja adalah cara tercepat membuat orang tidak percaya pada layar.
+  window.SP_PO_STATUS = "memuat";
+  if (window.SP_TAB === "orderan" && typeof spRenderOrderan_ === "function") {
+    spRenderOrderan_();
+  }
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getDaftarPO" })
@@ -169,7 +181,12 @@ function spMuatDaftarPO() {
   .then(function (r) { return r.json(); })
   .then(function (d) {
     if (!d || !d.success) {
-      spPesan_("sp-po-pesan", (d && d.error) || "Gagal memuat daftar PO.", true);
+      window.SP_PO_STATUS = "galat";
+      window.SP_PO_GALAT = (d && d.error) || "Gagal memuat daftar PO.";
+      spPesan_("sp-po-pesan", window.SP_PO_GALAT, true);
+      if (window.SP_TAB === "orderan" && typeof spRenderOrderan_ === "function") {
+        spRenderOrderan_();
+      }
       return;
     }
     // Order yang sudah Selesai tidak perlu dibagi lagi -- menyembunyikannya
@@ -203,12 +220,18 @@ function spMuatDaftarPO() {
     // ulang. Urutan kedatangan tidak dijamin -- panel bisa terbuka lebih dulu
     // (menampilkan "daftar belum termuat") dan tanpa ini ia akan bertahan
     // begitu sampai orang mengklik subtabnya, mengira tidak ada order apa pun.
+    window.SP_PO_STATUS = "siap";
     if (window.SP_TAB === "orderan" && typeof spRenderOrderan_ === "function") {
       spRenderOrderan_();
     }
   })
   .catch(function () {
-    spPesan_("sp-po-pesan", "Gagal menghubungi server.", true);
+    window.SP_PO_STATUS = "galat";
+    window.SP_PO_GALAT = "Gagal menghubungi server.";
+    spPesan_("sp-po-pesan", window.SP_PO_GALAT, true);
+    if (window.SP_TAB === "orderan" && typeof spRenderOrderan_ === "function") {
+      spRenderOrderan_();
+    }
   });
 }
 
@@ -2075,9 +2098,23 @@ function spRenderOrderan_() {
   const aktif = window.SP_DAFTAR_PO || [];
   const selesai = window.SP_DAFTAR_PO_SELESAI || [];
 
+  // Tiga keadaan, tiga kalimat berbeda -- bukan satu kalimat untuk semuanya.
+  const st = window.SP_PO_STATUS || "memuat";
+  if (st === "memuat") {
+    panel.innerHTML = '<div class="sp-card"><p class="sp-info">' +
+      '<span class="sp-ord-memuat"/>Memuat daftar order...</p></div>';
+    return;
+  }
+  if (st === "galat") {
+    panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' +
+      rjdEscapeHtml_(window.SP_PO_GALAT || "Gagal memuat daftar order.") + '</p>' +
+      '<p class="sp-info"><a href="#" onclick="spMuatDaftarPO();return false;">Coba lagi</a> ' +
+      '&#8212; tanpa perlu memuat ulang seluruh halaman.</p></div>';
+    return;
+  }
   if (!aktif.length && !selesai.length) {
-    panel.innerHTML = '<div class="sp-card"><p class="sp-info">Daftar order belum termuat. ' +
-      'Coba muat ulang halaman.</p></div>';
+    panel.innerHTML = '<div class="sp-card"><p class="sp-info">Belum ada order sama sekali ' +
+      'di sistem.</p></div>';
     return;
   }
 

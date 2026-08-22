@@ -1531,3 +1531,14 @@ body.sp-siap #sp-subtabs { visibility: visible; }
   }
   .sp-det-tabelwrap .sp-tabel th:first-child { background: var(--cream, #FAF7F2); }
 }
+
+/* Penanda memuat di tab Orderan (v164). Titik berputar kecil, bukan teks
+   saja: gerakan memberi tahu bahwa sistem sedang bekerja: teks diam terbaca
+   sebagai keadaan akhir, dan itu yang membuat orang menunggu lalu menyerah. */
+.sp-ord-memuat {
+  display: inline-block; width: 12px; height: 12px; margin-right: 8px;
+  border: 2px solid var(--line, #E5E0D6); border-top-color: var(--thread, #C2410C);
+  border-radius: 50%; vertical-align: -1px;
+  animation: sp-ord-putar .7s linear infinite;
+}
+@keyframes sp-ord-putar { to { transform: rotate(360deg); } }
