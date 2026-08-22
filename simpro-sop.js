@@ -440,10 +440,18 @@ function sopBaganPotonganHtml_() {
   '</div>';
 }
 
-function sopRender() {
-  const b = document.getElementById("sop-nav-logout");
-  if (b) b.classList.remove("hidden");
-
+/**
+ * Bangun HTML isi SOP. DIPISAH dari sopRender supaya bisa dipakai dua tempat:
+ * halaman /p/sop.html dan tab SOP di halaman produksi (v156). Satu sumber,
+ * dua pintu -- kalau dipisah jadi dua salinan, cepat atau lambat keduanya
+ * berbeda dan tidak ada yang tahu mana yang benar.
+ *
+ * @param opsi.tanpaNav  true untuk tab di halaman produksi: bar navigasi
+ *                       lompat menempel di atas akan bertabrakan dengan bar
+ *                       fase & subtab yang sudah menempel di sana.
+ */
+function sopIsiHtml_(opsi) {
+  const tanpaNav = !!(opsi && opsi.tanpaNav);
   const fase = SOP_FASE.map(function (f) {
     const aturan = f.aturan.map(function (a) {
       return '<li><b>' + a[0] + '</b><span>' + a[1] + '</span></li>';
@@ -486,11 +494,11 @@ function sopRender() {
     return '<a href="#sop-' + f.id + '">' + sopEsc_(f.nama) + '</a>';
   }).join("");
 
-  document.getElementById("sop-isi").innerHTML =
+  return (tanpaNav ? '' :
     '<div class="sop-nav">' + daftarIsi +
       '<a href="#sop-skenario-blok">Skenario</a>' +
-      '<button class="sop-cetak" onclick="window.print()" type="button">Cetak</button>' +
-    '</div>' +
+      '<button class="sop-cetak sp-tautan" onclick="window.print()" type="button">Cetak</button>' +
+    '</div>') +
     '<section class="sop-blok">' +
       '<h2>Alur besar</h2>' +
       '<p class="sop-info">Tiap tahap membatasi tahap berikutnya. Yang dipotong ' +
@@ -514,7 +522,12 @@ function sopRender() {
     '<p class="sop-info">Kejadian yang tidak ada tombolnya \u2014 dan cara ' +
       'mencatatnya supaya angka tetap jujur.</p>' +
     skenario;
+}
 
+function sopRender() {
+  const b = document.getElementById("sop-nav-logout");
+  if (b) b.classList.remove("hidden");
+  document.getElementById("sop-isi").innerHTML = sopIsiHtml_();
   sopShow("sop-isi");
 }
 

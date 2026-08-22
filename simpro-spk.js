@@ -575,6 +575,10 @@ function spSimpan() {
  * tab lahir kosong; masuk begitu form-nya jadi.
  */
 const SP_FASE_PETA = [
+  // v156: SOP paling kiri -- panduan kerja mestinya yang pertama terlihat
+  // orang baru. Tapi ia TIDAK dijadikan fase awal (lihat spTerapkanBagian_):
+  // yang membuka halaman ini tiap hari datang untuk bekerja, bukan membaca.
+  ["sop", "SOP", [["sop", "SOP"]]],
   ["polamarker", "Pola & Marker", [["pola", "Pola"], ["marker", "Marker"]]],
   ["sampel",     "Sampel",        [["sampel", "Sampel"], ["approval", "Approval"]]],
   ["cutting",    "Cutting",       [["gelar", "Gelaran"], ["cutting", "Hasil Potong"]]],
@@ -614,7 +618,35 @@ const SP_FASE_PETA = [
 ];
 
 /** Boleh-tidaknya satu tab untuk pemakai -- dari peta bagian, BUKAN dari DOM. */
+/**
+ * ============================================================
+ * v156: SEMUA TAB TERLIHAT, YANG DIBATASI CUMA MENGISI
+ * ============================================================
+ * Sampai v155 tab yang bukan bagian pemakai TIDAK DILAHIRKAN sama sekali.
+ * Akibatnya asimetri penuh: yang mencatat tahu, yang dicatat tidak. Kepala
+ * line tidak bisa memeriksa apakah angka yang tercatat dibagi ke dia benar,
+ * dan tim cutting tidak pernah tahu hasil potongnya berakhir di mana.
+ *
+ * Padahal pemeriksa terbaik atas sebuah catatan adalah orang yang pekerjaannya
+ * dicatat -- dan itu gratis. Sejak v156 semua tab dibuka; yang dijaga cuma
+ * kemampuan MENGISI.
+ *
+ * AMAN, bukan sekadar bisa dipaksakan: penegakan sebenarnya ada di BACKEND
+ * (BAGIAN_PER_AKSI + pastikanBagianBoleh_ di akses-role.gs), per AKSI. Yang
+ * di frontend ini lapisan kedua -- mencegah orang mengisi form panjang lalu
+ * ditolak server, dan menandai dengan jujur tab mana yang bukan miliknya.
+ *
+ * Halaman produksi seluruhnya data BARANG (qty, lokasi, tanggal). Harga, HPP,
+ * dan upah tidak pernah ada di sini -- itu sudah dipisah ke halaman lain
+ * dengan gerbang peran, dan pemisahan itu TIDAK ikut dilonggarkan.
+ */
 function spTabBoleh_(tab) {
+  void tab;
+  return true;   // v156: semua tab terlihat
+}
+
+/** Boleh MENGISI tab ini? Ini yang menggantikan peran lama spTabBoleh_. */
+function spTabEditBoleh_(tab) {
   if (window.SP_BAGIAN_SEMUA !== false) return true;   // peran belum datang / admin
   const perlu = SP_BAGIAN_TAB[tab];
   const bagian = window.SP_BAGIAN || [];
@@ -654,10 +686,14 @@ function spRenderSub_() {
   const f = SP_FASE_PETA.filter(function (x) { return x[0] === window.SP_FASE; })[0];
   if (!f) { w.innerHTML = ""; return; }
   w.innerHTML = f[2].map(function (s) {
-    if (!spTabBoleh_(s[0])) return "";
+    // v156: tab yang tidak boleh diisi tetap DILAHIRKAN, cuma diberi gembok.
+    // Penandanya di ikon, bukan warna pudar: tab pudar terbaca "rusak" atau
+    // "belum siap", padahal isinya benar-benar bisa dibaca.
+    const kunci = spTabEditBoleh_(s[0]) ? "" : ' <span class="sp-tab-kunci">&#128274;</span>';
     return '<button class="sp-tab' + (s[0] === window.SP_TAB ? ' active' : '') +
+      (kunci ? ' sp-tab-baca' : '') +
       '" data-tab="' + s[0] + '" onclick="spSwitchTab(\'' + s[0] + '\')" type="button">' +
-      s[1] + '</button>';
+      s[1] + kunci + '</button>';
   }).join("");
   // fase dengan SATU subtab: barisnya cuma mengulang nama fase -- sembunyikan
   w.style.display = f[2].filter(function (s) { return spTabBoleh_(s[0]); }).length > 1 ? "" : "none";
@@ -724,7 +760,12 @@ const SP_BAGIAN_TAB = {
   // Array = boleh salah satu.
   konfpot: "sewing",
   konfset: "finishing",
-  riw:     null        // selalu tampil
+  riw:     null,       // selalu tampil
+  // SOP boleh dibaca siapa pun. Nilainya null berarti tidak ada bagian yang
+  // "memilikinya" -- itu juga yang membuat spTerapkanBagian_ tidak pernah
+  // mendaratkan orang di sini: pencarian fase awal mencari fase yang BOLEH
+  // DIISI, dan SOP tidak diisi siapa-siapa.
+  sop:     null
 };
 
 /**
@@ -763,13 +804,21 @@ function spTerapkanBagian_(d) {
   spRenderFase_();
   spRenderSub_();
 
-  // Kalau tab yang sedang aktif ternyata bukan milik bagiannya, pindah ke
-  // subtab pertama yang boleh dari fase pertama yang boleh. Tanpa ini,
-  // pemakai melihat panel kosong -- terlihat seperti halaman rusak.
-  if (!spTabBoleh_(spTabAktif_())) {
-    const f = SP_FASE_PETA.filter(spFaseBoleh_)[0];
-    if (f) spPilihFase_(f[0]);
-  }
+  // v156: semua tab terlihat, jadi tidak ada lagi panel kosong yang perlu
+  // dihindari. Yang tersisa: MENDARATKAN orang di fase yang memang miliknya.
+  // Tanpa ini, tim cutting selalu membuka halaman di fase Pola (atau SOP)
+  // dan harus menggeser bar tiap kali -- kerja harian jadi lebih panjang
+  // untuk keuntungan nol.
+  const faseSekarang = spFaseDariTab_(spTabAktif_());
+  const faseMilikku = SP_FASE_PETA.filter(function (f) {
+    return f[2].some(function (s) { return spTabEditBoleh_(s[0]); });
+  })[0];
+  const sudahDiMilikku = faseSekarang && SP_FASE_PETA
+    .filter(function (f) { return f[0] === faseSekarang; })[0]
+    && SP_FASE_PETA.filter(function (f) { return f[0] === faseSekarang; })[0][2]
+      .some(function (s) { return spTabEditBoleh_(s[0]); });
+  if (faseMilikku && !sudahDiMilikku) spPilihFase_(faseMilikku[0]);
+  spSegarkanBaca_(window.SP_TAB);
 
   // Sub-tab Konfirmasi ikut disaring begitu peran datang -- panelnya mungkin
   // sudah terbuka sebelum jawaban peran tiba.
@@ -783,7 +832,7 @@ function spTerapkanBagian_(d) {
     info.id = "sp-bagian-info";
     info.className = "sp-bagian-info";
     info.textContent = "Anda terdaftar di bagian: " + bagian.join(", ") +
-      ". Form bagian lain disembunyikan.";
+      ". Tab lain bisa dilihat, tapi tidak bisa diisi (bertanda \u{1F512}).";
     wadah.parentNode.insertBefore(info, wadah.nextSibling);
   }
 }
@@ -1071,6 +1120,73 @@ function spPanduanHtml_(tab) {
   '</details>';
 }
 
+/* ============================================================
+   MODE BACA-SAJA (v156)
+   ============================================================
+   Dipasang ke panel tab yang bukan bagian pemakai. Tiga hal, urut dari yang
+   paling penting:
+
+   1. BANNER di atas panel -- orang harus tahu KENAPA tombolnya mati, bukan
+      mengira halamannya rusak lalu mencari jalan lain.
+   2. Isian dimatikan -- mencegah orang mengetik panjang lalu ditolak server.
+   3. Tombol EDIT dimatikan; tombol BACA dan tautan tetap hidup.
+
+   Pembeda tombol edit vs baca sengaja memakai DAFTAR PUTIH kelas yang boleh
+   tetap hidup, bukan daftar hitam tombol yang harus mati: tombol baru yang
+   lahir kelak akan default MATI di mode ini. Salah arah yang aman -- tombol
+   baca yang tak sengaja mati cuma merepotkan, tombol edit yang tak sengaja
+   hidup membuat orang mengisi data yang bukan haknya.
+
+   Tautan <a> (cetak SPK, surat jalan) tidak pernah disentuh: itu membuka
+   dokumen, bukan menulis apa pun.
+   ============================================================ */
+
+/** Kelas tombol yang TETAP HIDUP di mode baca-saja -- semuanya membaca. */
+const SP_TOMBOL_BACA = ["sp-tab", "sp-konf-tab", "sp-tautan", "sp-mode-sub"];
+
+function spPanelBacaSaja_(panel, tab) {
+  if (!panel) return;
+  const bolehEdit = spTabEditBoleh_(tab);
+
+  // Banner: dipasang sekali, dibuang lagi kalau ternyata boleh mengedit
+  // (peran bisa datang terlambat -- jawaban server tiba setelah panel dibuka).
+  const idBanner = "sp-baca-banner-" + tab;
+  const lama = document.getElementById(idBanner);
+  if (bolehEdit) {
+    if (lama) lama.remove();
+    panel.querySelectorAll("[data-sp-kunci]").forEach(function (el) {
+      el.disabled = false;
+      el.removeAttribute("data-sp-kunci");
+    });
+    return;
+  }
+  if (!lama) {
+    const perlu = SP_BAGIAN_TAB[tab];
+    const namaBagian = (Array.isArray(perlu) ? perlu.join(" / ") : String(perlu || "")).toUpperCase();
+    const b = document.createElement("div");
+    b.id = idBanner;
+    b.className = "sp-baca-banner";
+    b.innerHTML = '<b>&#128274; Hanya bisa dilihat.</b> Tab ini diisi bagian <b>' +
+      spEsc_(namaBagian) + '</b>. Kamu bisa memeriksa angkanya di sini &#8212; ' +
+      'kalau ada yang tidak cocok, sampaikan ke bagian itu.';
+    panel.insertAdjacentElement("afterbegin", b);
+  }
+
+  // Isian & tombol edit dimatikan. Ditandai data-sp-kunci supaya bisa
+  // dinyalakan lagi tanpa menyentuh elemen yang memang disabled karena
+  // alasan lain (mis. tombol simpan yang mati karena qty masih nol).
+  panel.querySelectorAll("input, select, textarea, button").forEach(function (el) {
+    if (el.disabled) return;                       // sudah mati, bukan urusan kita
+    if (el.tagName === "BUTTON") {
+      const kelas = String(el.className || "");
+      const baca = SP_TOMBOL_BACA.some(function (k) { return kelas.indexOf(k) !== -1; });
+      if (baca) return;
+    }
+    el.disabled = true;
+    el.setAttribute("data-sp-kunci", "1");
+  });
+}
+
 /** Sisipkan panduan ke panel tab yang sedang aktif, sekali saja per panel. */
 function spPasangPanduan_(tab) {
   // v155: panel dicari dengan KONVENSI yang sama dengan spSwitchTab
@@ -1084,6 +1200,39 @@ function spPasangPanduan_(tab) {
   if (!panel || panel.querySelector(".sp-panduan")) return;
   const html = spPanduanHtml_(tab);
   if (html) panel.insertAdjacentHTML("afterbegin", html);
+}
+
+/**
+ * Segarkan mode baca-saja untuk tab yang sedang terbuka.
+ *
+ * Dipanggil dari dua arah: saat tab dibuka, dan lewat MutationObserver saat
+ * isi panel dirender belakangan (hampir semua panel diisi SETELAH data tiba
+ * dari server). Tanpa pengamat, tombol yang lahir sesudah pengunciannya
+ * berjalan akan hidup -- dan itu justru tombol simpan, karena form biasanya
+ * dirender paling akhir.
+ */
+function spSegarkanBaca_(tab) {
+  const t = tab || window.SP_TAB;
+  if (!t) return;
+  const ALIAS = { konfpot: "konf", konfset: "konf", qcring: "qc" };
+  const panel = document.getElementById("sp-panel-" + (ALIAS[t] || t));
+  if (!panel) return;
+  spPanelBacaSaja_(panel, t);
+
+  // Pengamat dipasang sekali per panel. Ia hanya menyalakan penjadwalan
+  // ringan (requestAnimationFrame) supaya render besar tidak memicu
+  // penguncian puluhan kali dalam satu tarikan napas.
+  if (panel.dataset.spAmatBaca) return;
+  panel.dataset.spAmatBaca = "1";
+  if (typeof MutationObserver !== "function") return;
+  let jadwal = null;
+  new MutationObserver(function () {
+    if (jadwal) return;
+    jadwal = requestAnimationFrame(function () {
+      jadwal = null;
+      if (window.SP_TAB === t) spPanelBacaSaja_(panel, t);
+    });
+  }).observe(panel, { childList: true, subtree: true });
 }
 
 function spSwitchTab(tab) {
@@ -1124,6 +1273,10 @@ function spSwitchTab(tab) {
   // Panduan disisipkan saat tab pertama kali dibuka, bukan saat halaman
   // dimuat -- sembilan blok panduan sekaligus di DOM tidak ada gunanya.
   spPasangPanduan_(tab);
+  // v156: mode baca-saja dipasang SESUDAH panel terbuka. Isi panel banyak yang
+  // dirender belakangan (setelah data tiba), jadi ini diulang di spSegarkanBaca_
+  // yang dipanggil renderer -- sekali di sini saja tidak cukup.
+  spSegarkanBaca_(tab);
   // ---- Buka-tutup panel: WILDCARD, bukan daftar keras (v105) ----
   // Dulu sembilan getElementById eksplisit -- dan panel KESEPULUH (sp-panel-qc,
   // v103) lupa didaftarkan: kelas hidden-nya tidak pernah dilepas, tab QC
@@ -1151,7 +1304,10 @@ function spSwitchTab(tab) {
   // = tampil semua (orang membukanya justru untuk tahu apa yang menunggu);
   // PO terpilih = daftar tersaring, dengan chip "tampilkan semua" untuk
   // melepas saringan tanpa mengganggu PO aktif tab lain.
-  if (kartuPO) kartuPO.classList.toggle("hidden", tab === "riw");
+  // v156: SOP ikut menyembunyikan kartu PO -- panduan kerja tidak ada
+  // hubungannya dengan order mana pun, dan kartu yang tetap tampil di situ
+  // mengundang orang mengira SOP-nya berbeda per PO.
+  if (kartuPO) kartuPO.classList.toggle("hidden", tab === "riw" || tab === "sop");
 
   if (tab === "konfpot") { spMuatKonfMode_("potongan"); return; }
   if (tab === "konfset") { spMuatKonfMode_("setoran"); return; }
@@ -1160,6 +1316,7 @@ function spSwitchTab(tab) {
   if (tab === "qc") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("input"); return; }
   if (tab === "qcring") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("ringkasan"); return; }
   if (tab === "approval") { spMuatApproval_(); return; }
+  if (tab === "sop") { spMuatSOP_(); return; }
   if (tab === "keluar") { if (window.SP_PO_AKTIF) spMuatKeluar_(); return; }
   if (tab === "siapkan") { spMuatSiapkan_(); return; }
   if (tab === "spkrekap") { if (!window.SP_PO) spMuatDistribusi(); return; }
@@ -1768,6 +1925,27 @@ function spBatalKeluar_(idKeluar) {
     spMuatKeluar_();
   })
   .catch(function (e) { alert(String(e)); });
+}
+
+/**
+ * Tab SOP (v156). Isinya dirender oleh simpro-sop.js -- berkas yang sama
+ * dengan halaman /p/sop.html, jadi tidak ada dua versi SOP yang bisa berbeda.
+ *
+ * Kalau berkasnya belum dimuat (template belum diperbarui, atau jsDelivr
+ * bermasalah), tabnya memberi tahu apa adanya dan menawarkan halaman
+ * terpisahnya -- bukan panel kosong yang terbaca seperti fitur rusak.
+ */
+function spMuatSOP_() {
+  const panel = document.getElementById("sp-panel-sop");
+  if (!panel) return;
+  if (panel.dataset.spTerisi === "1") return;   // cukup sekali, isinya statis
+  if (typeof sopIsiHtml_ !== "function") {
+    panel.innerHTML = '<div class="sp-card"><p class="sp-info">Panduan belum bisa dimuat ' +
+      'di sini. Buka <a href="/p/sop.html" target="_blank">halaman SOP</a> sebagai gantinya.</p></div>';
+    return;
+  }
+  panel.innerHTML = '<div class="sp-card sop-embed">' + sopIsiHtml_({ tanpaNav: true }) + '</div>';
+  panel.dataset.spTerisi = "1";
 }
 
 function spMuatSiapkan_() {

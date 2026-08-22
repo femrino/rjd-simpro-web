@@ -1305,3 +1305,32 @@ body.sp-siap #sp-subtabs { visibility: visible; }
 /* Kotak "Untuk line" mengikuti lebar field lain di blok re-cut. */
 #sp-gl-untukline-blok { margin-top: 10px; }
 #sp-gl-untukline { width: 100%; }
+
+/* ============================================================
+   MODE BACA-SAJA & TAB SOP (v156)
+   ============================================================ */
+
+/* Gembok pada tab yang tidak bisa diisi. Ikon, BUKAN warna pudar: tab pudar
+   terbaca "rusak" atau "belum siap", padahal isinya benar-benar bisa dibaca
+   dan memang dimaksudkan untuk dibaca. */
+.sp-tab-kunci { font-size: 9px; opacity: .55; margin-left: 2px; }
+.sp-tab-baca { font-weight: 500; }
+
+/* Banner baca-saja. Nada NETRAL, bukan merah: ini bukan kesalahan pemakai
+   dan bukan peringatan bahaya -- cuma keterangan siapa pemilik form ini. */
+.sp-baca-banner {
+  background: #F2F5F8; border-left: 3px solid #9FB2C6; border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 14px;
+  font-size: 12.5px; color: var(--ink-soft, #5F6B7A); line-height: 1.55;
+}
+.sp-baca-banner b { color: var(--ink, #17212F); }
+
+/* Isian yang terkunci: jelas mati, tapi teksnya tetap terbaca -- orang
+   membuka tab ini justru untuk MEMBACA angkanya. */
+#sp-panel-sop .sop-blok, #sp-panel-sop .sop-fase, #sp-panel-sop .sop-skenario {
+  border: 0; padding-left: 0; padding-right: 0; margin-bottom: 18px;
+  border-top: 1px solid var(--line-soft, #EFEBE2); border-radius: 0;
+  padding-top: 16px;
+}
+#sp-panel-sop .sop-blok:first-child { border-top: 0; padding-top: 0; }
+#sp-panel-sop .sop-judul-besar { font-size: 18px; }
