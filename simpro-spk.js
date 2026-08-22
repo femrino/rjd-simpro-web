@@ -6693,21 +6693,7 @@ function spMuatStok_() {
     let html = '<div class="sp-card"><h3 class="sp-judul">Stok Siap Kirim</h3>' +
       '<p class="sp-info"><b>Siap = lolos QC Finishing &#8722; terkirim.</b> Nol input baru: angka ini turunan dari QC dan Surat Jalan. ' +
       'Angka MINUS berarti ada barang terkirim yang lolos QC-nya belum dicatat &#8212; sinyal disiplin QC, sengaja tidak disembunyikan. ' +
-      '<button class="sp-btn-kecil" onclick="spMuatStok_()" type="button">Segarkan</button></p>' +
-      // v168: JEMBATAN ke halaman Surat Jalan, PO sudah terbawa.
-      //
-      // Keluhannya bukan "harus dua halaman", tapi harus MENCARI PO YANG SAMA
-      // sekali lagi di halaman kedua -- nomor yang barusan dilihat diketik
-      // ulang dari ingatan, dan itu titik paling mudah salah ketik.
-      //
-      // Tautan, bukan tombol: membuka di tab baru supaya angka stok di sini
-      // tetap terbuka sebagai rujukan saat mengisi surat jalannya.
-      '<div class="sp-stok-jembatan">' +
-        '<a class="sp-tautan-kotak" href="/p/pengiriman.html?po=' +
-          encodeURIComponent(po) + '" target="_blank" rel="noopener">' +
-          'Buat Surat Jalan untuk PO ini &#8250;</a>' +
-        '<span class="sp-stok-jembatan-ket">Terbuka di tab baru, PO sudah terpilih di sana.</span>' +
-      '</div>';
+      '<button class="sp-btn-kecil" onclick="spMuatStok_()" type="button">Segarkan</button></p>';
     if (!(d.baris || []).length) {
       html += '<p class="sp-info">Belum ada QC tahap Finishing untuk PO ini &#8212; stok siap kirim lahir dari sana. ' +
         'Catat inspeksi Finishing di tab <b>Finishing &#8250; QC</b> dulu.</p></div>';
@@ -6735,7 +6721,23 @@ function spMuatStok_() {
       }).join("") +
       '</tbody></table></div>' +
       '<p class="sp-info" style="margin-top:10px">Total: lolos <b>' + d.totalLolos +
-      '</b> &#183; terkirim <b>' + d.totalTerkirim + '</b> &#183; siap kirim <b>' + d.totalSiap + '</b> pcs.</p></div>';
+      '</b> &#183; terkirim <b>' + d.totalTerkirim + '</b> &#183; siap kirim <b>' + d.totalSiap + '</b> pcs.</p>' +
+      // v169: JEMBATAN ke halaman Surat Jalan, PO sudah terbawa.
+      //
+      // DI BAWAH daftar, bukan di atasnya. v168 menaruhnya sesudah paragraf
+      // pengantar -- yang secara kode terlihat seperti "akhir kepala panel",
+      // tapi di layar jadi tombol besar yang menghalangi angka stoknya.
+      // Urutan membaca di tab ini: lihat angka, putuskan apa yang dikirim,
+      // BARU buat surat jalan. Tombol di atas membalik urutan itu.
+      //
+      // Posisinya kini sama dengan tombol aksi di fase Loading -- satu
+      // kebiasaan untuk seluruh halaman: aksi utama selalu di bawah isinya.
+      '<div class="sp-stok-jembatan">' +
+        '<a class="sp-tautan-kotak" href="/p/pengiriman.html?po=' +
+          encodeURIComponent(po) + '" target="_blank" rel="noopener">' +
+          'Buat Surat Jalan untuk PO ini &#8250;</a>' +
+        '<span class="sp-stok-jembatan-ket">Terbuka di tab baru, PO sudah terpilih di sana.</span>' +
+      '</div></div>';
     panel.innerHTML = html;
   })
   .catch(function () {

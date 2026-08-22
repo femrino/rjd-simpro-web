@@ -1539,9 +1539,13 @@ body.sp-siap #sp-subtabs { visibility: visible; }
 
 /* ---- Jembatan ke Surat Jalan (v168) ---- */
 
-/* Ditaruh SESUDAH tabel stok, bukan di kepala panel: orang membaca angkanya
-   dulu, memutuskan apa yang mau dikirim, BARU membuat surat jalan. Tombol di
-   atas tabel mengundang klik sebelum angkanya dibaca. */
+/* Ditaruh SESUDAH daftar stok, bukan di kepala panel (diperbaiki v169 --
+   v168 menaruhnya di atas dan tombol besar itu menghalangi angkanya).
+
+   Urutan membaca di tab ini: lihat angka, putuskan apa yang mau dikirim,
+   BARU buat surat jalan. Posisinya kini sama dengan tombol aksi di fase
+   Loading: satu kebiasaan untuk seluruh halaman, aksi utama selalu di bawah
+   isi yang jadi dasar keputusannya. */
 .sp-stok-jembatan {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   margin-top: 18px; padding-top: 16px;
