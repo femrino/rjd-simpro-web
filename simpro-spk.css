@@ -1484,3 +1484,15 @@ body.sp-siap #sp-subtabs { visibility: visible; }
   .sp-det-kepala { grid-template-columns: 1fr 1fr; padding: 12px 13px; gap: 9px 14px; }
   .sp-det-item { padding: 12px 13px; }
 }
+
+/* Penanda arah di ujung baris order (v161). Bukan tombol: barisnya sendiri
+   yang bisa diklik, dan tanda ini cuma memberi tahu bahwa mengkliknya
+   membawa ke suatu tempat. Di layar sempit disembunyikan -- kartu sudah
+   jelas bisa ditekan, dan panah di baris terakhir kartu justru bikin bingung. */
+.sp-ord-panah {
+  text-align: right; color: var(--ink-soft, #5F6B7A);
+  font-size: 20px; line-height: 1; width: 24px;
+}
+@media (max-width: 760px) {
+  #sp-panel-orderan .sp-tabel-kartu td.sp-ord-panah { display: none; }
+}

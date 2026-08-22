@@ -2031,23 +2031,33 @@ function spOrderanUrut_(nilai) {
 }
 
 /**
- * Klik baris: pilih PO, lalu pindah ke fase yang BOLEH DIISI orang ini.
- * Mengantar sampai depan pintu, bukan cuma menyodorkan nomornya.
+ * Klik baris: pilih PO, lalu buka DETAIL ORDER-nya.
+ *
+ * v161 memperbaiki dua hal sekaligus.
+ *
+ * (a) Perilakunya salah sasaran. Versi v157 melompat ke "fase kerja" orang
+ *     ini, dengan anggapan yang mengklik sudah tahu ordernya apa dan tinggal
+ *     mengerjakan. Nyatanya sebaliknya: orang mengklik justru untuk TAHU --
+ *     ordernya apa, warnanya apa, standar kliennya bagaimana. Melempar dia
+ *     ke form kosong menjawab pertanyaan yang tidak diajukan.
+ *
+ * (b) Pencariannya cacat untuk peran FULL/ADMIN. "Fase pertama yang boleh
+ *     diisi" hanya bermakna kalau bagiannya sempit; bagi yang boleh mengisi
+ *     semuanya, fase pertama selalu Pola & Marker -- dan itulah yang terjadi
+ *     di layar. Bug ini tidak akan pernah terlihat oleh staf berbagian
+ *     tunggal, jadi bisa bertahan lama tanpa ada yang melaporkannya.
+ *
+ * Detail Order tidak punya masalah itu: ia sama benarnya untuk semua peran.
  */
 function spOrderanPilih_(idPO) {
   spPilihPO(idPO);
-  const fase = SP_FASE_PETA.filter(function (f) {
-    if (f[0] === "sop" || f[0] === "orderan") return false;
-    return f[2].some(function (s) { return spTabEditBoleh_(s[0]); });
-  })[0];
-  if (fase) spPilihFase_(fase[0]);
-}
-
-/** Pilih PO lalu buka subtab Detail Order -- untuk yang mau LIHAT dulu. */
-function spLihatDetailOrder_(idPO) {
-  spPilihPO(idPO);
   spSwitchTab("detailorder");
 }
+
+/* [DIHAPUS v161] spLihatDetailOrder_ -- klik baris sendiri sekarang membuka
+   Detail Order, jadi fungsi ini tidak punya pemanggil lagi. Dibuang, bukan
+   ditinggalkan: fungsi tanpa pemanggil membuat pembaca berikutnya mencari-cari
+   dari mana ia dipakai. */
 
 function spRenderOrderan_() {
   const panel = document.getElementById("sp-panel-orderan");
@@ -2200,14 +2210,12 @@ function spRenderOrderan_() {
               '<td data-label="Tahap">' + (p.tahap
                 ? rjdEscapeHtml_(p.tahap)
                 : '<span class="sp-kosong">belum mulai</span>') + '</td>' +
-              // Dua aksi dari satu baris: klik baris = KERJAKAN (lompat ke
-              // fase kerja), tombol ini = LIHAT dulu. stopPropagation supaya
-              // menekan tombol tidak sekaligus memicu klik barisnya.
-              '<td data-label="" class="sp-td-aksi">' +
-                '<button class="sp-btn-kecil" type="button" ' +
-                  'onclick="event.stopPropagation();spLihatDetailOrder_(\'' +
-                  rjdEscapeHtml_(p.idPurchaseOrder) + '\')">Detail</button>' +
-              '</td>' +
+              // v161: tombol "Detail" DIBUANG. Setelah klik baris sendiri
+              // membuka detail, tombol itu cuma target kedua untuk aksi yang
+              // sama -- dan tombol yang mengulang perilaku barisnya membuat
+              // orang ragu apakah keduanya berbeda. Diganti tanda panah:
+              // penunjuk arah, bukan tombol.
+              '<td data-label="" class="sp-td-aksi sp-ord-panah">&#8250;</td>' +
             '</tr>';
           }).join("") +
           '</tbody></table></div>'
