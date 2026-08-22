@@ -2139,7 +2139,11 @@ function spRenderOrderan_() {
       '</div>' +
 
       (baris.length
-        ? '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
+        // v159: sp-tabel-kartu -- di bawah 760px tabel berubah jadi kartu,
+        // satu order satu kartu. Enam kolom di HP membuat tiap kolom
+        // selebar dua-tiga huruf: "260819/Khoi ro Ummah" terpotong di
+        // tengah kata, dan satu baris jadi setinggi layar.
+        ? '<div class="sp-tabelwrap"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
             '<th>PO / Klien</th><th>Artikel</th><th class="num">Qty</th>' +
             '<th>Masuk</th><th>Deadline</th><th>Tahap</th>' +
           '</tr></thead><tbody>' +
@@ -2150,23 +2154,34 @@ function spRenderOrderan_() {
               if (sisa < 0) tandaDl = '<span class="sp-ord-lewat">' + Math.abs(sisa) + ' hari lewat</span>';
               else if (sisa <= 7) tandaDl = '<span class="sp-ord-dekat">' + sisa + ' hari lagi</span>';
             }
-            const art = (p.artikel || []).join(", ");
+            // Artikel dipangkas: satu order seragam bisa punya 4-5 artikel,
+            // dan menulis semuanya membuat satu baris setinggi layar tanpa
+            // menambah keputusan apa pun. Sisanya tetap bisa dicari lewat
+            // kotak pencarian -- yang menyaring daftar LENGKAP, bukan yang
+            // tampil.
+            const daftarArt = p.artikel || [];
+            const art = daftarArt.slice(0, 2).map(rjdEscapeHtml_).join(", ") +
+              (daftarArt.length > 2 ? ' <span class="sp-ord-lebih">+' +
+                (daftarArt.length - 2) + ' lainnya</span>' : '');
             return '<tr class="sp-ord-baris' +
               (p.spSelesai || p.spBatal ? ' sp-ord-selesai' : '') + '" ' +
               'onclick="spOrderanPilih_(\'' + rjdEscapeHtml_(p.idPurchaseOrder) + '\')">' +
-              '<td><b>' + rjdEscapeHtml_(p.idPurchaseOrder) + '</b>' +
+              '<td data-label="Order"><b>' + rjdEscapeHtml_(p.idPurchaseOrder) + '</b>' +
                 (p.spSelesai ? ' <span class="sp-riw-kunci">Selesai</span>' : '') +
                 (p.spBatal ? ' <span class="sp-tag-batal">DIBATALKAN</span>' : '') +
                 '<div class="sp-gelar-size">' + rjdEscapeHtml_(p.namaKlien || "-") +
                 (p.noSO ? ' \u00b7 ' + rjdEscapeHtml_(p.noSO) : '') + '</div></td>' +
-              '<td>' + (art ? rjdEscapeHtml_(art) : '<span class="sp-kosong">&#183;</span>') + '</td>' +
-              '<td class="num">' + (p.jumlah || 0) + '</td>' +
+              // art sudah memuat markup (span "+N lainnya"), jadi bagian
+              // teksnya di-escape saat dirakit -- bukan di sini.
+              '<td data-label="Artikel">' + (daftarArt.length
+                ? art : '<span class="sp-kosong">&#183;</span>') + '</td>' +
+              '<td class="num" data-label="Qty">' + (p.jumlah || 0) + '</td>' +
               // Tanggal masuk ditampilkan karena jadi dasar urutan default --
               // urutan yang dasarnya tak terlihat bikin orang mengira acak.
-              '<td>' + rjdEscapeHtml_(p.tanggalPesanan || "-") + '</td>' +
-              '<td>' + rjdEscapeHtml_(p.deadline || "-") +
-                (tandaDl ? '<div>' + tandaDl + '</div>' : '') + '</td>' +
-              '<td>' + (p.tahap
+              '<td data-label="Masuk">' + rjdEscapeHtml_(p.tanggalPesanan || "-") + '</td>' +
+              '<td data-label="Deadline">' + rjdEscapeHtml_(p.deadline || "-") +
+                (tandaDl ? ' ' + tandaDl : '') + '</td>' +
+              '<td data-label="Tahap">' + (p.tahap
                 ? rjdEscapeHtml_(p.tahap)
                 : '<span class="sp-kosong">belum mulai</span>') + '</td>' +
             '</tr>';

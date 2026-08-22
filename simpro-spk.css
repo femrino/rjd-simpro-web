@@ -1375,3 +1375,35 @@ body.sp-siap #sp-subtabs { visibility: visible; }
 }
 .sp-ord-dekat { background: #FCF3E3; color: #8A5D1F; }
 .sp-ord-lewat { background: #FBEAE5; color: #8F2C22; }
+
+/* ---- Tab Orderan di layar sempit (v159) ---- */
+
+.sp-ord-lebih { font-size: 11px; color: var(--ink-soft, #5F6B7A); white-space: nowrap; }
+
+@media (max-width: 760px) {
+  /* Bilah alat menumpuk penuh: dropdown setengah lebar bersebelahan lebih
+     sempit daripada isinya ("Deadline terdekat" terpotong jadi "Deadline
+     ter..."), dan pilihan yang tidak terbaca sama saja dengan tidak ada. */
+  .sp-ord-alat { flex-direction: column; align-items: stretch; gap: 8px; }
+  .sp-ord-alat input[type="text"], .sp-ord-alat select { width: 100%; min-width: 0; }
+
+  /* Ringkasan tiga kotak jadi satu baris rapat. Angkanya kecil-kecil (28,
+     9.214, 1) jadi tidak butuh kotak selebar layar masing-masing -- dan tiga
+     kotak bertumpuk mendorong daftar ordernya keluar layar. */
+  #sp-panel-orderan .sp-siap-ringkas { grid-template-columns: repeat(3, 1fr); gap: 7px; }
+  #sp-panel-orderan .sp-siap-kotak { padding: 8px 9px; }
+  #sp-panel-orderan .sp-siap-kotak span { font-size: 10px; line-height: 1.25; }
+  #sp-panel-orderan .sp-siap-kotak b { font-size: 16px; }
+  #sp-panel-orderan .sp-siap-kotak:last-child { grid-column: auto; }
+
+  /* Kartu order: baris Order dibuat menonjol -- itu yang dicari mata lebih
+     dulu, dan tanpa penekanan ia tenggelam di antara lima baris lain yang
+     bentuknya sama. */
+  #sp-panel-orderan .sp-tabel-kartu tr { padding: 13px 15px; cursor: pointer; }
+  #sp-panel-orderan .sp-tabel-kartu td[data-label="Order"] { flex-direction: column; gap: 2px; }
+  #sp-panel-orderan .sp-tabel-kartu td[data-label="Order"]::before { display: none; }
+  #sp-panel-orderan .sp-tabel-kartu td[data-label="Order"] b { font-size: 15px; }
+  #sp-panel-orderan .sp-tabel-kartu td[data-label="Qty"] { text-align: left; }
+  /* Deadline & penandanya sebaris, tidak terpotong jadi dua. */
+  #sp-panel-orderan .sp-tabel-kartu td[data-label="Deadline"] { flex-wrap: wrap; }
+}
