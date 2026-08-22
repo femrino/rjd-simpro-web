@@ -951,3 +951,72 @@ footer{padding:28px 0;background:var(--ink)}
    jadi kolom ini sekelas dengan nama kain -- bukan pelengkap. */
 .rjd-modal .of-f-kk-warna { flex: 1 1 120px; }
 
+
+/* ============================================================
+   PENANDA MEMUAT -- SETIKAN JAHIT (v166)
+   ============================================================
+   Satu gerakan, dipakai di SEMUA tempat yang menunggu data.
+
+   Kenapa satu, bukan animasi berbeda per konteks: semua animasi loading
+   menyampaikan pesan yang persis sama ("tunggu sebentar"), jadi variasi cuma
+   menambah hal yang harus dipelajari tanpa menambah informasi. Yang membuat
+   sebuah sistem terasa hidup justru satu gerakan khas yang dipakai konsisten
+   sampai orang mengenalinya.
+
+   Bentuknya setikan mesin jahit: garis putus-putus yang berjalan. Dipilih
+   karena tiga hal sekaligus:
+     - langsung terbaca sebagai milik konveksi, bukan spinner generik
+     - gerakannya HORIZONTAL, tidak berputar, jadi tidak pernah menyeret teks
+       ikut miring (pelajaran mahal dari <span/> yang tidak tertutup)
+     - CSS murni, nol gambar, nol berkas tambahan
+
+   Lahir dari bug: spinner v164 membuat kalimat "Memuat daftar order..."
+   berputar seperti baling-baling kipas. Yang rusak diperbaiki, idenya
+   disimpan.
+   ============================================================ */
+
+.rjd-muat {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 6px 0;
+}
+.rjd-muat-teks {
+  font-size: 13px;
+  color: var(--ink-soft, #5F6B7A);
+}
+/* Garis setikan. Lebarnya dibatasi supaya tidak membentang selebar layar --
+   jahitan sepanjang 180px terbaca sebagai "sedang mengerjakan sesuatu",
+   sedangkan yang selebar layar terbaca sebagai bilah progres yang macet. */
+.rjd-muat-jahit {
+  height: 3px;
+  width: 180px;
+  max-width: 60%;
+  border-radius: 2px;
+  background-image: repeating-linear-gradient(90deg,
+    var(--thread, #C2410C) 0 11px,
+    transparent 11px 20px);
+  background-size: 20px 100%;
+  animation: rjd-jahit-jalan .55s linear infinite;
+}
+@keyframes rjd-jahit-jalan {
+  to { background-position: 20px 0; }
+}
+
+/* Varian sebaris, untuk tempat sempit (di dalam tombol atau sel tabel). */
+.rjd-muat-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--ink-soft, #5F6B7A);
+}
+.rjd-muat-inline .rjd-muat-jahit { width: 64px; max-width: none; }
+
+/* Hormati pemakai yang mematikan animasi di sistemnya. Jahitannya berhenti
+   berjalan tapi TETAP TAMPIL sebagai garis putus-putus -- tandanya masih ada,
+   cuma diam. Menghilangkannya sama sekali akan membuat mereka kehilangan
+   satu-satunya petunjuk bahwa sistem sedang bekerja. */
+@media (prefers-reduced-motion: reduce) {
+  .rjd-muat-jahit { animation: none; }
+}

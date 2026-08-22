@@ -161,6 +161,24 @@ function spMuatDaftarLine_() {
  * hasil, bukan <select> native -- pola yang sama dengan pemilih PO di qc.html.
  * ============================================================ */
 
+/**
+ * Penanda memuat: teks + setikan jahit berjalan (v166).
+ *
+ * Satu bentuk untuk SEMUA tempat yang menunggu data. Sebelumnya tiap tempat
+ * menulis <p class="sp-info">Memuat ...</p> sendiri -- teks diam yang terbaca
+ * sebagai keadaan akhir, bukan proses, dan itu yang membuat orang menunggu
+ * sebentar lalu menyimpulkan halamannya rusak.
+ *
+ * Kelasnya ada di simpro-global.css supaya halaman lain bisa ikut memakainya
+ * tanpa menyalin apa pun.
+ */
+function spMuatHtml_(teks) {
+  return '<div class="rjd-muat">' +
+    '<span class="rjd-muat-teks">' + spEsc_(teks || "Memuat...") + '</span>' +
+    '<span class="rjd-muat-jahit"></span>' +
+  '</div>';
+}
+
 function spMuatDaftarPO() {
   // v164: keadaan pemuatan DITANDAI, tidak ditebak dari daftar kosong.
   //
@@ -1417,7 +1435,7 @@ function spSwitchTab(tab) {
 
 function spMuatCutting() {
   const wadah = document.getElementById("sp-cut-tabel");
-  if (wadah) wadah.innerHTML = '<p class="sp-info">Memuat rincian PO...</p>';
+  if (wadah) wadah.innerHTML = spMuatHtml_("Memuat rincian PO...");
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({
@@ -1732,7 +1750,7 @@ function spMuatKeluar_() {
   const idPO = window.SP_PO_AKTIF;
   if (!idPO) return;
   const wadah = document.getElementById("sp-keluar-tabel");
-  if (wadah) wadah.innerHTML = '<p class="sp-info">Memuat rincian PO...</p>';
+  if (wadah) wadah.innerHTML = spMuatHtml_("Memuat rincian PO...");
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getPOUntukPotonganKeluar", idPurchaseOrder: idPO })
@@ -2101,8 +2119,20 @@ function spRenderOrderan_() {
   // Tiga keadaan, tiga kalimat berbeda -- bukan satu kalimat untuk semuanya.
   const st = window.SP_PO_STATUS || "memuat";
   if (st === "memuat") {
-    panel.innerHTML = '<div class="sp-card"><p class="sp-info">' +
-      '<span class="sp-ord-memuat"/>Memuat daftar order...</p></div>';
+    // v166: <span/> DIGANTI <span></span>.
+    //
+    // Penulisan self-closing itu sah di XML (template Blogger memang menuntut
+    // begitu), tapi HTML tidak mengenalnya untuk elemen non-void. Browser
+    // membaca '<span class="x"/>' sebagai span yang TIDAK PERNAH DITUTUP,
+    // jadi teks sesudahnya masuk ke dalam span -- dan ikut kena
+    // animation: rotate(360deg). Hasilnya kalimat "Memuat daftar order..."
+    // berputar seperti baling-baling kipas.
+    //
+    // Kebiasaan menulis XML terbawa ke string HTML adalah jebakan yang wajar
+    // di proyek ini: template .xml dan innerHTML JS ditulis berselang-seling
+    // sepanjang hari, dan keduanya TIDAK memakai aturan yang sama.
+    panel.innerHTML = '<div class="sp-card">' +
+      spMuatHtml_("Memuat daftar order...") + '</div>';
     return;
   }
   if (st === "galat") {
@@ -2218,7 +2248,11 @@ function spRenderOrderan_() {
         // tengah kata, dan satu baris jadi setinggi layar.
         ? '<div class="sp-tabelwrap"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
             '<th>PO / Klien</th><th>Artikel</th><th class="num">Qty</th>' +
-            '<th>Masuk</th><th>Deadline</th><th>Tahap</th><th/>' +
+            // <th></th>, bukan <th/> -- alasan sama dengan spinner di atas.
+            // Di sini akibatnya kebetulan tidak terlihat karena </tr> tepat
+            // sesudahnya memaksa browser menutupnya, tapi bergantung pada
+            // penyelamatan tak sengaja bukan cara menulis markup.
+            '<th>Masuk</th><th>Deadline</th><th>Tahap</th><th></th>' +
           '</tr></thead><tbody>' +
           baris.map(function (p) {
             const sisa = spSisaHari_(p.deadlineIso);
@@ -2307,7 +2341,7 @@ function spMuatDetailOrder_() {
   }
   if (window.SP_DETAIL_PO === idPO && window.SP_DETAIL) { spRenderDetailOrder_(); return; }
 
-  panel.innerHTML = '<div class="sp-card"><p class="sp-info">Memuat detail order...</p></div>';
+  panel.innerHTML = '<div class="sp-card">' + spMuatHtml_("Memuat detail order...") + '</div>';
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getSPKCetak", id: idPO })
@@ -2517,7 +2551,7 @@ function spMuatSOP_() {
 
 function spMuatSiapkan_() {
   const wadah = document.getElementById("sp-siapkan-daftar");
-  if (wadah) wadah.innerHTML = '<p class="sp-info">Memuat daftar...</p>';
+  if (wadah) wadah.innerHTML = spMuatHtml_("Memuat daftar...");
   const opsi = {};
   // PO aktif = penyaring, kecuali pemakai minta "tampilkan semua".
   if (!window.SP_SIAPKAN_SEMUA && window.SP_PO_AKTIF) {
@@ -2733,7 +2767,7 @@ function spSwitchKonf(jenis) {
 
 function spMuatKonfirmasi() {
   const wadah = document.getElementById("sp-konf-daftar");
-  if (wadah) wadah.innerHTML = '<p class="sp-info">Memuat daftar...</p>';
+  if (wadah) wadah.innerHTML = spMuatHtml_("Memuat daftar...");
   const idLine = (document.getElementById("sp-konf-line") || {}).value || "";
   const jenis = window.SP_KONF_JENIS || "potongan";
 
@@ -2985,7 +3019,7 @@ function spSwitchRiwayat(jenis) {
 function spMuatRiwayat() {
   const jenis = window.SP_RIW_JENIS || SP_RIW_JENIS_AWAL;
   const wadah = document.getElementById("sp-riw-daftar");
-  if (wadah) wadah.innerHTML = '<p class="sp-info">Memuat riwayat...</p>';
+  if (wadah) wadah.innerHTML = spMuatHtml_("Memuat riwayat...");
 
   const cari = (document.getElementById("sp-riw-cari") || {}).value || "";
   fetch(SP_API_URL, {
@@ -3216,7 +3250,7 @@ function spMuatSetoran() {
     spHitungTotalSetor();
     return;
   }
-  if (wadah) wadah.innerHTML = '<p class="sp-info">Memuat...</p>';
+  if (wadah) wadah.innerHTML = spMuatHtml_("Memuat...");
 
   fetch(SP_API_URL, {
     method: "POST",
@@ -3613,7 +3647,7 @@ function spMuatMarker() {
     document.getElementById("sp-marker-form").innerHTML = "";
     return;
   }
-  document.getElementById("sp-marker-daftar").innerHTML = '<p class="sp-info">Memuat...</p>';
+  document.getElementById("sp-marker-daftar").innerHTML = spMuatHtml_("Memuat...");
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getMarkerPO",
@@ -3770,7 +3804,7 @@ function spMuatSemuaMarker_(paksa) {
     document.head.appendChild(st);
   }
   if (window.SP_SEMUA_MARKER && !paksa) { spRenderSemuaMarker_(); return; }
-  wadah.innerHTML = '<p class="sp-info">Memuat daftar semua marker...</p>';
+  wadah.innerHTML = spMuatHtml_("Memuat daftar semua marker...");
 
   fetch(SP_API_URL, {
     method: "POST",
@@ -4136,7 +4170,7 @@ function spMuatGelaran() {
     document.getElementById("sp-kain-rekap").innerHTML = "";
     return;
   }
-  document.getElementById("sp-gelar-form").innerHTML = '<p class="sp-info">Memuat...</p>';
+  document.getElementById("sp-gelar-form").innerHTML = spMuatHtml_("Memuat...");
   Promise.all([
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
       idToken: SP_ID_TOKEN, action: "getMarkerPO", idPurchaseOrder: window.SP_PO_AKTIF }) })
@@ -5390,7 +5424,7 @@ function spMuatTahap(jenis) {
     wadah.innerHTML = '<p class="sp-info">Pilih Purchase Order dulu.</p>';
     return;
   }
-  wadah.innerHTML = '<p class="sp-info">Memuat...</p>';
+  wadah.innerHTML = spMuatHtml_("Memuat...");
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getProgresTahapPO",
@@ -6414,7 +6448,7 @@ function spMuatApproval_() {
       '<p class="sp-info">Pilih Purchase Order dulu lewat kartu di atas.</p></div>';
     return;
   }
-  panel.innerHTML = '<div class="sp-card"><p class="sp-info">Memuat approval sampel...</p></div>';
+  panel.innerHTML = '<div class="sp-card">' + spMuatHtml_("Memuat approval sampel...") + '</div>';
   Promise.all([
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
       idToken: SP_ID_TOKEN, action: "getPOUntukCutting", idPurchaseOrder: po }) })
@@ -6539,7 +6573,7 @@ function spMuatTerkirim_() {
       '<p class="sp-info">Pilih Purchase Order dulu lewat kartu di atas.</p></div>';
     return;
   }
-  panel.innerHTML = '<div class="sp-card"><p class="sp-info">Memuat daftar kiriman...</p></div>';
+  panel.innerHTML = '<div class="sp-card">' + spMuatHtml_("Memuat daftar kiriman...") + '</div>';
   fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
     idToken: SP_ID_TOKEN, action: "getStokSiapKirim", idPurchaseOrder: po }) })
   .then(function (r) { return r.json(); })
