@@ -1262,3 +1262,35 @@ body.sp-siap #sp-subtabs { visibility: visible; }
   .sp-siap-aksi .sp-simpan-btn { width: 100%; margin-top: 0; }
   #sp-panel-siapkan { padding-bottom: 128px; }
 }
+
+/* ============================================================
+   POTONGAN KELUAR (v150)
+   ============================================================
+   Kotak qty meminjam bentuk .sp-qty (form pembagian) supaya dua form yang
+   isinya sama-sama "warna x size" terasa satu keluarga. Kelas dipisah,
+   bukan dipakai ulang, karena spHitungKeluar_ menyapu ".sp-keluar-qty" --
+   memakai kelas yang sama berarti hitungan dua form saling menimpa saat
+   keduanya pernah dirender di halaman yang sama.
+   ============================================================ */
+
+.sp-keluar-qty { width: 58px; padding: 6px 4px; border: 1px solid var(--line-soft);
+  border-radius: 7px; font-family: 'Inter', sans-serif; font-size: 13px;
+  text-align: center; color: var(--ink); }
+.sp-keluar-qty:focus { outline: none; border-color: var(--ink); }
+.sp-keluar-qty.sp-lebih { border-color: var(--thread); background: #FDECEA; color: #8F2C22; }
+
+/* Riwayat: satu kartu = satu serah-terima (satu nomor surat jalan), berisi
+   beberapa baris warna. Dikelompokkan begitu karena yang dibatalkan orang
+   adalah serahannya, bukan barisnya satu per satu. */
+.sp-keluar-kartu { border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 14px; margin-top: 10px; background: var(--white); }
+.sp-keluar-kepala { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap; }
+.sp-keluar-kepala b { font-size: 13.5px; }
+.sp-keluar-kepala span { font-size: 11.5px; color: var(--ink-soft); }
+.sp-keluar-qty-total { font-variant-numeric: tabular-nums; }
+.sp-keluar-meta { font-size: 11.5px; color: var(--ink-soft); margin: 4px 0 8px; }
+.sp-keluar-baris { display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 6px 0; border-top: 1px solid var(--line-soft); font-size: 13px; }
+.sp-keluar-baris small { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px; color: var(--ink-soft); }

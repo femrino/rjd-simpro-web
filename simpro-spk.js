@@ -577,7 +577,9 @@ function spSimpan() {
 const SP_FASE_PETA = [
   ["polamarker", "Pola & Marker", [["pola", "Pola"], ["marker", "Marker"]]],
   ["sampel",     "Sampel",        [["sampel", "Sampel"], ["approval", "Approval"]]],
-  ["cutting",    "Cutting",       [["gelar", "Gelaran"], ["cutting", "Hasil Potong"]]],
+  // v150: "Potongan Keluar" ditaruh di fase CUTTING, bukan Loading -- potongan
+  // yang diambil klien memang pergi sebelum sempat masuk pembagian ke line.
+  ["cutting",    "Cutting",       [["gelar", "Gelaran"], ["cutting", "Hasil Potong"], ["keluar", "Potongan Keluar"]]],
   // v145: subtab "Siapkan Potongan" menutup celah peran yang membingungkan
   // lantai (22 Agu). "Bagi ke Line" itu KEPUTUSAN (qty per line + target
   // selesai); tim loading cuma MENYIAPKAN fisiknya. Dua pekerjaan berbeda
@@ -665,6 +667,10 @@ const SP_BAGIAN_TAB = {
   marker:  "pola",
   gelar:   "cutting",
   cutting: "cutting",
+  // Dua bagian: barangnya ada di gudang potongan (cutting), keputusan
+  // melepasnya ke klien ada di PPIC/kepala produksi. Keduanya perlu bisa
+  // membukanya -- yang satu menyerahkan fisiknya, yang satu memutuskan.
+  keluar:  ["cutting", "ppic"],
   // v149: "Bagi ke Line" adalah KEPUTUSAN (qty per line + target selesai),
   // dan yang memutuskan adalah kepala produksi/PPIC. Sampai v148 entri ini
   // berbunyi "loading" -- sistem menyuruh tim loading memutuskan hal yang
@@ -1012,6 +1018,7 @@ function spSwitchTab(tab) {
   if (tab === "qc") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("input"); return; }
   if (tab === "qcring") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("ringkasan"); return; }
   if (tab === "approval") { spMuatApproval_(); return; }
+  if (tab === "keluar") { if (window.SP_PO_AKTIF) spMuatKeluar_(); return; }
   if (tab === "siapkan") { spMuatSiapkan_(); return; }
   if (tab === "spkrekap") { if (!window.SP_PO) spMuatDistribusi(); return; }
   if (tab === "stok") { spMuatStok_(); return; }
@@ -1317,6 +1324,305 @@ function spTerapkanBagianKonf_() {
    konfirmasi terima walau penandaannya terlewat. Yang hilang cuma jejak
    waktunya, bukan barangnya.
    ============================================================ */
+
+/* ============================================================
+ * POTONGAN KELUAR -- potongan yang diambil klien (v150)
+ * ============================================================
+ * Dua kejadian, satu form:
+ *   Set Lengkap -- klien menjahit sendiri (kejar deadline photoshoot)
+ *   Panel       -- klien minta panel saja dari potongan yang sudah ada
+ *
+ * Efek keduanya ke pool sama: sekian pcs tidak akan jadi baju di sini. Yang
+ * berbeda cuma keterangannya, dan itu perlu dicatat supaya pertanyaan "kenapa
+ * 20 pcs Dusty Pink berkurang" bisa dijawab setahun lagi tanpa menebak.
+ *
+ * Panel yang DIPOTONG KHUSUS bukan di sini -- itu mode "Panel klien" di tab
+ * Gelaran. Kainnya bertambah, potongannya tidak pernah masuk pool.
+ *
+ * Sisa yang boleh dikeluarkan dihitung BACKEND dengan rumus yang sama persis
+ * dengan form pembagian (keduanya mengambil dari pool yang sama), lalu
+ * dikurangi lagi dengan yang sudah pernah keluar.
+ * ============================================================ */
+
+function spMuatKeluar_() {
+  const idPO = window.SP_PO_AKTIF;
+  if (!idPO) return;
+  const wadah = document.getElementById("sp-keluar-tabel");
+  if (wadah) wadah.innerHTML = '<p class="sp-info">Memuat rincian PO...</p>';
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getPOUntukPotonganKeluar", idPurchaseOrder: idPO })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) {
+      wadah.innerHTML = '<p class="sp-pesan sp-galat">' +
+        rjdEscapeHtml_((d && d.error) || "Gagal memuat rincian PO.") + '</p>';
+      return;
+    }
+    window.SP_KELUAR = d;
+    spRenderKeluar_();
+  })
+  .catch(function () {
+    wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
+  });
+}
+
+/** Mode terpilih: "Set Lengkap" | "Panel". */
+function spKeluarJenis_() {
+  const r = document.querySelector('input[name="sp-keluar-jenis"]:checked');
+  return (r && r.value) ? r.value : "Set Lengkap";
+}
+
+function spUbahJenisKeluar_() {
+  const panel = spKeluarJenis_() === "Panel";
+  const blok = document.getElementById("sp-keluar-panel-blok");
+  if (blok) blok.classList.toggle("hidden", !panel);
+  document.querySelectorAll("#sp-keluar-mode .sp-mode-opsi").forEach(function (el) {
+    const inp = el.querySelector("input");
+    el.classList.toggle("aktif", !!(inp && inp.checked));
+  });
+}
+
+function spRenderKeluar_() {
+  const po = window.SP_KELUAR;
+  const wadah = document.getElementById("sp-keluar-tabel");
+  if (!po || !wadah) return;
+
+  // Kolom size yang benar-benar dipakai PO ini saja.
+  const dipakai = {};
+  (po.baris || []).forEach(function (b) {
+    Object.keys(b.sizeQty || {}).forEach(function (sz) { dipakai[sz] = true; });
+  });
+  const kolom = (po.sizeKolom || []).filter(function (sz) { return dipakai[sz]; });
+  window.SP_KELUAR_KOLOM = kolom;
+
+  wadah.innerHTML =
+    '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
+      '<th>Artikel / Warna</th>' +
+      kolom.map(function (sz) { return '<th class="num">' + rjdEscapeHtml_(sz) + '</th>'; }).join("") +
+      '<th class="num">Total</th>' +
+    '</tr></thead><tbody>' +
+    (po.baris || []).map(function (b, i, semua) {
+      const habis = b.totalSisa <= 0;
+      const kunciItem = [b.artikel, b.style].filter(Boolean).join(" / ") || "(tanpa nama)";
+      const kunciSebelum = i > 0
+        ? ([semua[i-1].artikel, semua[i-1].style].filter(Boolean).join(" / ") || "(tanpa nama)")
+        : null;
+      let kepala = "";
+      if (kunciItem !== kunciSebelum) {
+        let sisaItem = 0, keluarItem = 0;
+        semua.forEach(function (x) {
+          const k = [x.artikel, x.style].filter(Boolean).join(" / ") || "(tanpa nama)";
+          if (k !== kunciItem) return;
+          sisaItem += (x.totalSisa > 0 ? x.totalSisa : 0);
+          keluarItem += (x.totalSudahKeluar || 0);
+        });
+        kepala = '<tr class="sp-grup-item"><td colspan="' + (kolom.length + 2) + '">' +
+          rjdEscapeHtml_(kunciItem) +
+          '<span class="sp-grup-sisa">tersedia ' + sisaItem + ' pcs' +
+          (keluarItem ? ' \u00b7 sudah keluar ' + keluarItem : '') + '</span></td></tr>';
+      }
+      return kepala + '<tr' + (habis ? ' class="sp-habis"' : '') + '>' +
+        '<td><div class="sp-warna">' + rjdEscapeHtml_(b.warna || "-") + '</div>' +
+          '<div class="sp-sisa-info">' + (habis ? 'tidak ada yang tersedia'
+            : ('tersedia ' + b.totalSisa + ' pcs')) +
+          ((b.totalSudahKeluar || 0) ? ' \u00b7 keluar ' + b.totalSudahKeluar : '') +
+          '</div></td>' +
+        kolom.map(function (sz) {
+          const order = b.sizeQty[sz] || 0;
+          const sisa = b.sisa[sz] === undefined ? 0 : b.sisa[sz];
+          if (!order) return '<td class="num sp-kosong">&#183;</td>';
+          if (sisa <= 0) return '<td class="num sp-kosong" title="tidak ada yang tersedia">0</td>';
+          return '<td class="num"><input class="sp-keluar-qty" type="number" min="0" max="' + sisa + '"' +
+            ' data-baris="' + i + '" data-size="' + rjdEscapeHtml_(sz) + '"' +
+            ' oninput="spHitungKeluar_()" placeholder="0"/>' +
+            '<div class="sp-maks">/' + sisa + '</div></td>';
+        }).join("") +
+        '<td class="num sp-total-baris" id="sp-keluar-tot-' + i + '">0</td>' +
+      '</tr>';
+    }).join("") +
+    '</tbody></table></div>';
+
+  // Tanggal default hari ini
+  const t = new Date();
+  const inp = document.getElementById("sp-keluar-tanggal");
+  if (inp && !inp.value) {
+    inp.value = t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") +
+      "-" + String(t.getDate()).padStart(2, "0");
+  }
+  spRenderRiwayatKeluar_();
+  spUbahJenisKeluar_();
+  spHitungKeluar_();
+}
+
+function spRenderRiwayatKeluar_() {
+  const po = window.SP_KELUAR;
+  const el = document.getElementById("sp-keluar-riwayat");
+  if (!el) return;
+  const riw = (po && po.riwayatKeluar) || [];
+  if (!riw.length) {
+    el.innerHTML = '<p class="sp-info">Belum ada potongan yang keluar untuk PO ini.</p>';
+    return;
+  }
+  // Dikelompokkan per NOMOR SURAT JALAN -- satu serah-terima ke klien bisa
+  // berisi beberapa warna, dan yang dibatalkan orang adalah serahannya,
+  // bukan barisnya satu per satu.
+  const perSJ = {};
+  riw.forEach(function (b) {
+    const k = b.noSuratJalan || "(tanpa nomor)";
+    if (!perSJ[k]) perSJ[k] = [];
+    perSJ[k].push(b);
+  });
+  el.innerHTML = '<div class="sp-ringkas-judul">Sudah keluar (' + po.totalKeluar + ' pcs)</div>' +
+    Object.keys(perSJ).map(function (sj) {
+      const grup = perSJ[sj];
+      const g0 = grup[0];
+      let tot = 0;
+      grup.forEach(function (x) { tot += x.totalQty || 0; });
+      return '<div class="sp-keluar-kartu">' +
+        '<div class="sp-keluar-kepala">' +
+          '<b>' + rjdEscapeHtml_(sj) + '</b>' +
+          '<span>' + rjdEscapeHtml_(g0.jenisKeluar || "") +
+            (g0.komponen ? ' \u00b7 ' + rjdEscapeHtml_(g0.komponen) : '') + '</span>' +
+          '<b class="sp-keluar-qty-total">' + tot + ' pcs</b>' +
+        '</div>' +
+        '<div class="sp-keluar-meta">' +
+          rjdEscapeHtml_(g0.tanggal || "") +
+          (g0.diambilOleh ? ' \u00b7 diambil ' + rjdEscapeHtml_(g0.diambilOleh) : '') +
+          (g0.keperluan ? ' \u00b7 ' + rjdEscapeHtml_(g0.keperluan) : '') +
+        '</div>' +
+        grup.map(function (x) {
+          const per = Object.keys(x.sizeQty || {}).map(function (sz) {
+            return rjdEscapeHtml_(sz) + " " + x.sizeQty[sz];
+          }).join("  ");
+          return '<div class="sp-keluar-baris">' +
+            '<span>' + rjdEscapeHtml_(x.warna || "-") +
+              ' <small>' + rjdEscapeHtml_(per) + '</small></span>' +
+            '<button class="sp-btn-kecil" onclick="spBatalKeluar_(\'' +
+              rjdEscapeHtml_(x.idKeluar) + '\')" type="button">Batalkan</button>' +
+          '</div>';
+        }).join("") +
+      '</div>';
+    }).join("");
+}
+
+function spHitungKeluar_() {
+  const perBaris = {};
+  let total = 0;
+  document.querySelectorAll(".sp-keluar-qty").forEach(function (inp) {
+    const i = inp.dataset.baris;
+    const v = Number(inp.value) || 0;
+    const maks = Number(inp.max) || 0;
+    // Ditandai di layar; backend tetap menolak juga (pengaman berlapis).
+    inp.classList.toggle("sp-lebih", v > maks);
+    perBaris[i] = (perBaris[i] || 0) + v;
+    total += v;
+  });
+  ((window.SP_KELUAR && window.SP_KELUAR.baris) || []).forEach(function (b, i) {
+    const el = document.getElementById("sp-keluar-tot-" + i);
+    if (el) el.textContent = perBaris[i] || 0;
+  });
+  const tot = document.getElementById("sp-keluar-total");
+  if (tot) tot.textContent = total;
+  const btn = document.getElementById("sp-keluar-simpan");
+  if (btn) btn.disabled = total <= 0;
+}
+
+function spSimpanKeluar_() {
+  const po = window.SP_KELUAR;
+  if (!po) return;
+  const jenis = spKeluarJenis_();
+  const diambil = (document.getElementById("sp-keluar-diambil") || {}).value || "";
+  const komponen = (document.getElementById("sp-keluar-komponen") || {}).value || "";
+  if (!String(diambil).trim()) {
+    alert("Nama yang mengambil wajib diisi.\n\nIni bukti serah-terima ke klien."); return;
+  }
+  if (jenis === "Panel" && !String(komponen).trim()) {
+    alert("Panel yang diambil wajib diisi.\n\nMisal: Badan Depan, Lengan."); return;
+  }
+
+  // Rakit per baris warna, hanya yang berisi.
+  const perBaris = {};
+  document.querySelectorAll(".sp-keluar-qty").forEach(function (inp) {
+    const v = Number(inp.value) || 0;
+    if (v <= 0) return;
+    const i = inp.dataset.baris;
+    if (!perBaris[i]) perBaris[i] = {};
+    perBaris[i][inp.dataset.size] = v;
+  });
+  const baris = Object.keys(perBaris).map(function (i) {
+    const b = po.baris[i];
+    return {
+      noSO: b.noSO || "", brand: b.brand || "", artikel: b.artikel || "",
+      style: b.style || "", warna: b.warna || "",
+      detailAllSize: b.detailAllSize || "", sizeQty: perBaris[i]
+    };
+  });
+  if (!baris.length) { alert("Belum ada qty yang diisi."); return; }
+
+  let total = 0;
+  baris.forEach(function (b) {
+    Object.keys(b.sizeQty).forEach(function (sz) { total += b.sizeQty[sz]; });
+  });
+  if (!confirm("Catat " + total + " pcs keluar sebagai " + jenis + "?\n\n" +
+      "Potongan ini TIDAK akan kembali jadi baju di sini: jumlah yang bisa " +
+      "dibagi ke line dan yang bisa dikirim ikut berkurang.")) return;
+
+  const btn = document.getElementById("sp-keluar-simpan");
+  btn.disabled = true;
+  btn.textContent = "Menyimpan...";
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: SP_ID_TOKEN, action: "simpanPotonganKeluar",
+      payload: {
+        idPurchaseOrder: po.idPurchaseOrder,
+        jenisKeluar: jenis,
+        komponen: komponen,
+        diambilOleh: diambil,
+        keperluan: (document.getElementById("sp-keluar-keperluan") || {}).value || "",
+        tanggal: (document.getElementById("sp-keluar-tanggal") || {}).value || "",
+        catatan: (document.getElementById("sp-keluar-catatan") || {}).value || "",
+        baris: baris
+      }
+    })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    btn.disabled = false;
+    btn.textContent = "Simpan Potongan Keluar";
+    if (!d || !d.success) { alert((d && d.error) || "Gagal menyimpan."); return; }
+    alert("Tercatat: " + d.totalQty + " pcs keluar.\nNomor surat jalan: " + d.noSuratJalan);
+    // PO aktif dimuat ulang: sisa di tab Bagi ke Line ikut berubah, dan
+    // membiarkan angka lama di layar adalah cara termudah membuat orang
+    // membagi barang yang sudah tidak ada.
+    window.SP_PO = null;
+    spMuatKeluar_();
+  })
+  .catch(function (e) {
+    btn.disabled = false;
+    btn.textContent = "Simpan Potongan Keluar";
+    alert(String(e));
+  });
+}
+
+function spBatalKeluar_(idKeluar) {
+  if (!confirm("Batalkan baris " + idKeluar + "?\n\n" +
+      "Barisnya tidak dihapus \u2014 statusnya jadi Dibatalkan, dan potongannya " +
+      "kembali dihitung tersedia.")) return;
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "batalkanPotonganKeluar", idKeluar: idKeluar })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) { alert((d && d.error) || "Gagal membatalkan."); return; }
+    window.SP_PO = null;
+    spMuatKeluar_();
+  })
+  .catch(function (e) { alert(String(e)); });
+}
 
 function spMuatSiapkan_() {
   const wadah = document.getElementById("sp-siapkan-daftar");
