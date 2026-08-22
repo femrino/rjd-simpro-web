@@ -926,6 +926,123 @@ const SP_PANDUAN = {
        "dikonfirmasi bagian finishing."]
     ]
   },
+  // v155: tab yang lahir setelah SP_PANDUAN pertama dibuat.
+  konfpot: {
+    judul: "Cara mengonfirmasi potongan",
+    isi: [
+      ["Ini serah-terima, bukan formalitas",
+       "Selisih jumlah paling murah diselesaikan di titik ini. Sesudah potongannya " +
+       "dijahit, tidak ada yang bisa membuktikan berapa yang benar-benar diterima."],
+      ["Hitung dulu, baru konfirmasi",
+       "Kalau jumlahnya beda, pilih \"Ada selisih\" dan tulis angka sebenarnya — " +
+       "jangan dikonfirmasi cocok lalu dibereskan lisan."],
+      ["Kotak masuk ini LINTAS ORDER",
+       "Tanpa memilih PO, yang tampil semua yang menunggu. Memilih PO cuma menyaring."],
+      ["Panel cacat: minta re-cut, jangan dikembalikan",
+       "Potongan yang dikembalikan otomatis bisa dibagi lagi ke line lain — " +
+       "dan panel cacat tidak boleh sampai ke sana."]
+    ]
+  },
+  konfset: {
+    judul: "Cara mengonfirmasi setoran",
+    isi: [
+      ["Yang dikonfirmasi di sini boleh diperiksa QC",
+       "Kalau QC mengeluh barangnya ada tapi tidak bisa dipilih, biasanya setorannya " +
+       "belum dikonfirmasi di sini."],
+      ["Selisih dicatat apa adanya",
+       "Angka yang dirapikan membuat kebocoran tidak pernah terlihat, dan biayanya " +
+       "tetap ditanggung — cuma tidak diketahui dari mana."]
+    ]
+  },
+  siapkan: {
+    judul: "Cara memakai Siapkan Potongan",
+    isi: [
+      ["Daftar ini pekerjaan hari ini, LINTAS ORDER",
+       "Dikelompokkan per line tujuan, bukan per PO — satu tumpuk untuk satu line, " +
+       "sekali angkut."],
+      ["Menandai TIDAK wajib",
+       "Kepala line tetap bisa konfirmasi terima walau penandaan terlewat. Yang " +
+       "hilang cuma jejak waktunya, bukan barangnya."],
+      ["Label merah = sudah lama menunggu",
+       "Potongan yang sudah dibagi tapi belum disiapkan berhari-hari biasanya berarti " +
+       "ada line sedang menganggur menunggu."],
+      ["Tab ini tidak membagi apa pun",
+       "Pembagian ada di tab sebelah dan itu wewenang kepala produksi/PPIC."]
+    ]
+  },
+  keluar: {
+    judul: "Cara mencatat Potongan Keluar",
+    isi: [
+      ["Hanya untuk potongan yang SUDAH ADA di gudang",
+       "Kalau panelnya harus dipotong dulu, itu bukan di sini — pakai mode " +
+       "\"Panel klien\" di tab Gelaran. Salah tempat = kain terhitung dua kali."],
+      ["Qty dihitung dalam PCS BAJU, bukan lembar panel",
+       "Set yang panelnya diambil tidak bisa jadi baju lagi, jadi satu set hilang " +
+       "penuh dari hitungan."],
+      ["Catat SEBELUM barangnya dibawa",
+       "Kalau terlambat, sistem masih menawarkan barang yang sudah pergi — dan " +
+       "itu persis saat orang membaginya ke line."],
+      ["Potongan yang dipegang line tidak bisa diambil",
+       "Tarik dulu lewat pengembalian setoran. Sisa di sini hanya menghitung yang " +
+       "masih ada di gudang."],
+      ["Yang dikeluarkan mengurangi jumlah yang bisa dikirim",
+       "Itu bukan selisih yang perlu dicari-cari nanti — itu kesepakatan."]
+    ]
+  },
+  qc: {
+    judul: "Cara mengisi QC",
+    isi: [
+      ["Yang bisa diperiksa = yang sudah dikonfirmasi diterima finishing",
+       "Barang yang belum dikonfirmasi tidak akan muncul di daftar."],
+      ["Lolos QC yang menentukan stok siap kirim",
+       "Berapa pun yang sudah dijahit, yang belum diperiksa tidak akan bisa dikirim."],
+      ["Reject dicatat apa adanya",
+       "Ini satu-satunya sumber angka mutu. Yang dirapikan di sini membuat masalah " +
+       "produksi tidak pernah ketemu akarnya."]
+    ]
+  },
+  approval: {
+    judul: "Cara mengisi Approval",
+    isi: [
+      ["Tiap putaran revisi dicatat terpisah",
+       "Sampel yang bolak-balik tiga kali perlu terlihat tiga kali — itu bahan " +
+       "bicara kalau klien menuntut jadwal cepat."],
+      ["Tanggal approval jadi titik mulai produksi",
+       "Memotong sebelum approval adalah risiko yang ditanggung sendiri; sistem " +
+       "tidak menahannya, tapi jejaknya tercatat."]
+    ]
+  },
+  spkrekap: {
+    judul: "Cara memakai SPK & Rekap",
+    isi: [
+      ["SPK = dokumen kerja PO ini untuk satu line",
+       "Isinya jatah line itu saja, bukan seluruh order."],
+      ["Rekap Line = semua PO yang dipegang satu line",
+       "Dipakai kepala line untuk melihat beban kerjanya lintas order."],
+      ["Cetak setelah pembagian final",
+       "Mencetak lalu membagi ulang membuat dua lembar beredar dengan angka berbeda."]
+    ]
+  },
+  stok: {
+    judul: "Cara membaca Stok Siap Kirim",
+    isi: [
+      ["Angka ini TURUNAN, bukan saldo yang diisi",
+       "Stok siap kirim = lolos QC − sudah terkirim. Kalau terasa salah, yang " +
+       "keliru salah satu kejadiannya — cari di QC atau di pengiriman."],
+      ["Minus tidak disembunyikan",
+       "Angka minus berarti terkirim melebihi yang lolos QC. Itu bukan tampilan " +
+       "yang perlu dirapikan, itu masalah yang perlu ditelusuri."]
+    ]
+  },
+  terkirim: {
+    judul: "Cara membaca Terkirim",
+    isi: [
+      ["Daftar ini sumber angka invoice",
+       "Yang tidak tercatat terkirim tidak akan pernah tertagih."],
+      ["Surat jalan bisa dicetak ulang kapan saja",
+       "Nomornya tetap sama — tidak ada dokumen kembar untuk satu pengiriman."]
+    ]
+  },
   riw: {
     judul: "Cara memakai Riwayat",
     isi: [
@@ -956,12 +1073,14 @@ function spPanduanHtml_(tab) {
 
 /** Sisipkan panduan ke panel tab yang sedang aktif, sekali saja per panel. */
 function spPasangPanduan_(tab) {
-  const peta = {
-    pola: "sp-panel-pola", sampel: "sp-panel-sampel", marker: "sp-panel-marker",
-    gelar: "sp-panel-gelar", cutting: "sp-panel-cutting", bagi: "sp-panel-bagi",
-    setor: "sp-panel-setor", konf: "sp-panel-konf", riw: "sp-panel-riw"
-  };
-  const panel = document.getElementById(peta[tab]);
+  // v155: panel dicari dengan KONVENSI yang sama dengan spSwitchTab
+  // (id panel = "sp-panel-" + tab, dengan alias untuk tab bermode), bukan
+  // daftar keras. Daftar lama membuat tab yang lahir kemudian diam-diam
+  // kehilangan panduannya: konfpot/konfset sejak v116, siapkan sejak v145,
+  // keluar sejak v150 -- tidak ada satu pun yang melempar error, panduannya
+  // cuma tidak pernah muncul.
+  const ALIAS = { konfpot: "konf", konfset: "konf", qcring: "qc" };
+  const panel = document.getElementById("sp-panel-" + (ALIAS[tab] || tab));
   if (!panel || panel.querySelector(".sp-panduan")) return;
   const html = spPanduanHtml_(tab);
   if (html) panel.insertAdjacentHTML("afterbegin", html);

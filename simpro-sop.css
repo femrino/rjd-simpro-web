@@ -1,0 +1,143 @@
+/* ============================================================
+   SIMPRO -- simpro-sop.css (v155)
+   Halaman SOP lantai produksi.
+
+   Dua pemakaian yang berbeda kebutuhannya:
+   - dibaca di layar (HP di lantai, komputer di kantor) -> lebar terbatas,
+     ukuran huruf besar, bagan bisa digulung horizontal
+   - DICETAK dan ditempel di dinding line -> aturan @media print membuang
+     header, menu, dan tombol; warna kotak tetap terbaca hitam-putih karena
+     yang membedakan garis tepinya, bukan latar berwarna
+   ============================================================ */
+
+.sop-wrap { max-width: 920px; margin: 0 auto; padding: 0 20px 80px; }
+
+/* ---------- login ---------- */
+.sop-kotak {
+  background: #fff; border: 1px solid var(--line, #E5E0D6); border-radius: 16px;
+  padding: 28px 24px; text-align: center; max-width: 420px; margin: 40px auto;
+}
+.sop-kotak h2 { margin: 0 0 8px; font-size: 20px; }
+.sop-kotak p { margin: 0 0 18px; color: var(--ink-soft, #5F6B7A); font-size: 13.5px; }
+#sop-google-btn { display: flex; justify-content: center; }
+
+/* ---------- navigasi lompat ---------- */
+.sop-nav {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+  background: var(--paper, #FAF7F2); border-bottom: 1px solid var(--line, #E5E0D6);
+  padding: 10px 0; margin-bottom: 18px;
+}
+.sop-nav a {
+  font-size: 12px; padding: 5px 11px; border-radius: 999px;
+  background: #fff; border: 1px solid var(--line, #E5E0D6);
+  color: var(--ink, #17212F); text-decoration: none; white-space: nowrap;
+}
+.sop-nav a:hover { border-color: var(--thread, #C2410C); color: var(--thread, #C2410C); }
+.sop-cetak {
+  margin-left: auto; font-size: 12px; padding: 6px 14px; border-radius: 999px;
+  background: var(--navy, #17212F); color: #fff; border: 0; cursor: pointer;
+}
+
+/* ---------- blok ---------- */
+.sop-blok {
+  background: #fff; border: 1px solid var(--line, #E5E0D6); border-radius: 14px;
+  padding: 18px 20px; margin-bottom: 16px;
+}
+.sop-blok h2 { margin: 0 0 6px; font-size: 17px; }
+.sop-info { font-size: 13px; color: var(--ink-soft, #5F6B7A); margin: 0 0 14px; }
+.sop-judul-besar { font-size: 20px; margin: 28px 0 12px; }
+
+/* ---------- bagan ---------- */
+/* Digulung horizontal di layar sempit, bukan diperkecil sampai tak terbaca.
+   Membaca sambil menggeser jauh lebih baik daripada menebak huruf 6px. */
+.sop-bagan-wrap { overflow-x: auto; padding-bottom: 6px; }
+.sop-bagan-wrap svg { display: block; }
+
+/* ---------- daftar aturan ---------- */
+.sop-daftar { list-style: none; margin: 0; padding: 0; }
+.sop-daftar li {
+  padding: 9px 0; border-top: 1px solid var(--line-soft, #EFEBE2);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.sop-daftar li:first-child { border-top: 0; }
+.sop-daftar b { font-size: 13.5px; }
+.sop-daftar span { font-size: 12.5px; color: var(--ink-soft, #5F6B7A); line-height: 1.55; }
+.sop-besi li b { color: var(--thread, #C2410C); }
+
+/* ---------- fase ---------- */
+.sop-fase {
+  background: #fff; border: 1px solid var(--line, #E5E0D6); border-radius: 14px;
+  padding: 16px 20px 18px; margin-bottom: 14px;
+}
+.sop-fase-kepala {
+  border-left: 4px solid; padding-left: 12px; margin-bottom: 10px;
+}
+.sop-fase-kepala h3 { margin: 0; font-size: 17px; }
+.sop-fase-tab {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px; color: var(--ink-soft, #5F6B7A); margin-top: 2px;
+}
+.sop-fase-meta { font-size: 12.5px; color: var(--ink-soft, #5F6B7A); margin-bottom: 6px; }
+.sop-fase-inti { font-size: 13.5px; margin: 0 0 12px; line-height: 1.6; }
+
+/* Kotak "yang sering salah" dibedakan tegas: isinya bukan keterangan,
+   melainkan biaya yang sudah pernah dibayar. */
+.sop-salah {
+  margin-top: 14px; background: #FCF3E3; border-left: 3px solid #EBCFA0;
+  border-radius: 8px; padding: 10px 14px;
+}
+.sop-salah-judul {
+  font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: #8A5D1F; margin-bottom: 4px;
+}
+.sop-salah ul { list-style: none; margin: 0; padding: 0; }
+.sop-salah li { display: flex; flex-direction: column; gap: 2px; padding: 5px 0; }
+.sop-salah b { font-size: 13px; }
+.sop-salah span { font-size: 12.5px; color: var(--ink-soft, #5F6B7A); line-height: 1.55; }
+
+/* ---------- skenario ---------- */
+.sop-skenario {
+  background: #fff; border: 1px solid var(--line, #E5E0D6); border-radius: 14px;
+  padding: 16px 20px 18px; margin-bottom: 14px;
+}
+.sop-skenario h3 { margin: 0 0 4px; font-size: 16px; }
+.sop-tanya {
+  font-size: 13px; color: var(--thread, #C2410C); font-weight: 600; margin: 0 0 12px;
+}
+.sop-tabelwrap { overflow-x: auto; }
+.sop-tabel { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.sop-tabel th {
+  text-align: left; padding: 8px 10px; background: var(--paper, #FAF7F2);
+  font-size: 11px; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--ink-soft, #5F6B7A); border-bottom: 1px solid var(--line, #E5E0D6);
+  white-space: nowrap;
+}
+.sop-tabel td {
+  padding: 9px 10px; border-bottom: 1px solid var(--line-soft, #EFEBE2);
+  vertical-align: top; line-height: 1.5;
+}
+.sop-tabel td:first-child { font-weight: 600; }
+.sop-tabel tr:last-child td { border-bottom: 0; }
+
+@media (max-width: 620px) {
+  .sop-wrap { padding: 0 14px 60px; }
+  .sop-nav { gap: 5px; }
+  .sop-nav a { font-size: 11.5px; padding: 4px 9px; }
+  .sop-tabel { font-size: 12px; }
+}
+
+/* ---------- cetak ---------- */
+/* SOP yang ditempel di dinding line: buang semua yang tidak berguna di kertas,
+   dan jangan biarkan satu fase terpotong di antara dua halaman. */
+@media print {
+  .db-header, .bg-canvas, .hero, .sop-nav, .sop-cetak { display: none !important; }
+  .sop-wrap { max-width: 100%; padding: 0; }
+  .sop-blok, .sop-fase, .sop-skenario {
+    border: 1px solid #999; break-inside: avoid; page-break-inside: avoid;
+    margin-bottom: 10px;
+  }
+  .sop-judul-besar { break-before: page; page-break-before: always; }
+  .sop-salah { background: #f4f4f4; border-left-color: #999; }
+  a { text-decoration: none; color: #000; }
+}
