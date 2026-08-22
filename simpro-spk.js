@@ -596,8 +596,17 @@ const SP_FASE_PETA = [
   // basisnya. Menaruhnya di fase berbeda menyembunyikan hubungan itu, dan
   // orang yang hendak membagi 990 pcs tidak melihat bahwa 30 sudah keluar.
   //
-  // Urutan: dua yang dipakai harian di depan, yang jarang di belakang.
-  ["loading",    "Loading",       [["bagi", "Bagi ke Line"], ["siapkan", "Siapkan Potongan"], ["keluar", "Potongan Keluar"], ["spkrekap", "SPK & Rekap"]]],
+  // v152: urutan mengikuti SIFAT pekerjaan, bukan seberapa sering dipakai --
+  // prinsip yang sama dengan alasan tab ini pindah fase:
+  //
+  //     1-2  Bagi ke Line + Potongan Keluar  -> dua pintu keluar pool (KEPUTUSAN)
+  //     3    Siapkan Potongan                -> EKSEKUSI fisik
+  //     4    SPK & Rekap                     -> DOKUMEN
+  //
+  // Dua pintu pool berdampingan itu yang penting: orang yang hendak membagi
+  // 990 pcs melihat "Potongan Keluar" persis di sebelahnya, jadi pertanyaan
+  // "apa ada yang sudah keluar?" muncul sebelum ia membagi, bukan sesudah.
+  ["loading",    "Loading",       [["bagi", "Bagi ke Line"], ["keluar", "Potongan Keluar"], ["siapkan", "Siapkan Potongan"], ["spkrekap", "SPK & Rekap"]]],
   ["sewing",     "Sewing",        [["konfpot", "Konfirmasi Potongan"], ["setor", "Setoran ke Finishing"]]],
   ["finishing",  "Finishing",     [["konfset", "Konfirmasi Setoran"], ["qc", "QC"], ["qcring", "Ringkasan QC"]]],
   ["packing",    "Packing & Kirim", [["stok", "Stok Siap Kirim"], ["terkirim", "Terkirim"]]],
