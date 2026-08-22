@@ -1349,11 +1349,16 @@ body.sp-siap #sp-subtabs { visibility: visible; }
   font-family: inherit; font-size: 13.5px;
 }
 .sp-ord-alat input[type="text"]:focus { outline: none; border-color: var(--ink, #17212F); }
-.sp-ord-cek {
-  display: flex; align-items: center; gap: 7px;
-  font-size: 12.5px; color: var(--ink-soft, #5F6B7A); cursor: pointer; white-space: nowrap;
+/* v158: dua dropdown (status + urutan) menggantikan sakelar "tampilkan
+   Selesai". Sengaja dropdown, bukan deret tombol: pilihannya saling
+   meniadakan, dan deret tombol yang saling meniadakan sering dikira bisa
+   dipilih lebih dari satu. */
+.sp-ord-alat select {
+  padding: 10px 12px; border: 1px solid var(--line, #E5E0D6); border-radius: 10px;
+  font-family: inherit; font-size: 13px; background: #fff; color: var(--ink, #17212F);
+  cursor: pointer;
 }
-.sp-ord-cek input { width: 17px; height: 17px; accent-color: var(--navy, #17212F); }
+.sp-ord-alat select:focus { outline: none; border-color: var(--ink, #17212F); }
 
 /* Seluruh baris bisa diklik -- target sebesar itu penting di HP yang dipegang
    sambil berdiri, jauh lebih mudah daripada mengejar satu tautan kecil. */

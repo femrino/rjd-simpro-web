@@ -179,12 +179,25 @@ function spMuatDaftarPO() {
     // dan picker menjawab "tidak ditemukan" seolah datanya lenyap. Mengetik
     // NOMOR PO-nya adalah niat eksplisit; untuk itu pintunya tetap terbuka
     // (lihat spCariPO).
+    // v158: TIGA kelompok, bukan dua.
+    //
+    // Versi lama cuma memisahkan "selesai" dari sisanya -- akibatnya order
+    // BATAL ikut terhitung berjalan, muncul di kotak Pilih PO, dan ikut
+    // ditawarkan untuk dikerjakan. Order yang sudah dibatalkan adalah satu-
+    // satunya yang benar-benar TIDAK BOLEH disentuh siapa pun, jadi justru
+    // itu yang paling tidak boleh nyasar ke daftar kerja.
+    //
+    // Pencocokan sengaja longgar (regex, bukan sama-dengan): sheet memakai
+    // "Batal" dan "Dibatalkan" bergantian, dan sebagian order lama tertulis
+    // "Cancel". Menuntut satu ejaan persis berarti sebagian order batal tetap
+    // lolos ke daftar kerja tanpa ada yang menyadarinya.
     const semuaPO = d.daftar || [];
+    const stat_ = function (p) { return String(p.status || "").toLowerCase().trim(); };
+    window.SP_DAFTAR_PO_SELESAI = semuaPO.filter(function (p) { return stat_(p) === "selesai"; });
+    window.SP_DAFTAR_PO_BATAL = semuaPO.filter(function (p) { return /batal|cancel/.test(stat_(p)); });
     window.SP_DAFTAR_PO = semuaPO.filter(function (p) {
-      return String(p.status || "").toLowerCase() !== "selesai";
-    });
-    window.SP_DAFTAR_PO_SELESAI = semuaPO.filter(function (p) {
-      return String(p.status || "").toLowerCase() === "selesai";
+      const s = stat_(p);
+      return s !== "selesai" && !/batal|cancel/.test(s);
     });
   })
   .catch(function () {
@@ -210,6 +223,14 @@ function spCariPO() {
       hasil.push(Object.assign({}, p, { spSelesai: true }));
     }
   });
+  // v158: order BATAL juga tetap bisa dibuka -- tapi hanya lewat nomor PO,
+  // sama seperti yang Selesai. Kadang perlu dilihat riwayatnya; yang tidak
+  // boleh adalah ia nongol saat orang sekadar menjelajah cari pekerjaan.
+  (window.SP_DAFTAR_PO_BATAL || []).forEach(function (p) {
+    if (String(p.idPurchaseOrder || "").toLowerCase().indexOf(q) !== -1) {
+      hasil.push(Object.assign({}, p, { spBatal: true }));
+    }
+  });
   const potong = hasil.slice(0, 25);
 
   dd.classList.remove("hidden");
@@ -222,7 +243,8 @@ function spCariPO() {
       '" onclick="spPilihPO(this.dataset.id)"' +
       (p.spSelesai ? ' style="opacity:.75"' : '') + '>' +
       '<div class="sp-po-opsi-id">' + rjdEscapeHtml_(p.idPurchaseOrder) +
-        (p.spSelesai ? ' <span style="font-weight:600;color:#8F2C22">&#183; Selesai</span>' : '') + '</div>' +
+        (p.spSelesai ? ' <span style="font-weight:600;color:#8F2C22">&#183; Selesai</span>' : '') +
+        (p.spBatal ? ' <span style="font-weight:600;color:#8F2C22">&#183; DIBATALKAN</span>' : '') + '</div>' +
       '<div class="sp-po-opsi-sub">' + rjdEscapeHtml_(p.namaKlien) +
         ' &#183; ' + (p.jumlah || 0) + ' pcs' +
         (p.deadline ? ' &#183; deadline ' + rjdEscapeHtml_(p.deadline) : '') +
@@ -1983,8 +2005,18 @@ function spOrderanCari_() {
   spRenderOrderan_();
 }
 
-function spOrderanToggleSelesai_() {
-  window.SP_ORD_SELESAI = !window.SP_ORD_SELESAI;
+/**
+ * v158: filter status menggantikan sakelar "tampilkan Selesai".
+ * "berjalan" | "selesai" | "batal" | "semua"
+ */
+function spOrderanFilter_(nilai) {
+  window.SP_ORD_STATUS = nilai || "berjalan";
+  spRenderOrderan_();
+}
+
+/** v158: "baru" (tanggal pesanan terbaru) | "deadline" (terdekat). */
+function spOrderanUrut_(nilai) {
+  window.SP_ORD_URUT = nilai || "baru";
   spRenderOrderan_();
 }
 
@@ -2015,10 +2047,23 @@ function spRenderOrderan_() {
 
   const q = String((document.getElementById("sp-ord-cari") || {}).value || "")
     .trim().toLowerCase();
-  const tampilSelesai = !!window.SP_ORD_SELESAI;
-  const sumber = tampilSelesai
-    ? aktif.concat(selesai.map(function (p) { return Object.assign({}, p, { spSelesai: true }); }))
-    : aktif;
+  const status = window.SP_ORD_STATUS || "berjalan";
+  const urut = window.SP_ORD_URUT || "baru";
+  const batal = window.SP_DAFTAR_PO_BATAL || [];
+
+  const tandai_ = function (arr, kunci) {
+    return arr.map(function (p) {
+      const o = Object.assign({}, p);
+      o[kunci] = true;
+      return o;
+    });
+  };
+  let sumber;
+  if (status === "selesai") sumber = tandai_(selesai, "spSelesai");
+  else if (status === "batal") sumber = tandai_(batal, "spBatal");
+  else if (status === "semua") {
+    sumber = aktif.concat(tandai_(selesai, "spSelesai")).concat(tandai_(batal, "spBatal"));
+  } else sumber = aktif;
 
   const baris = sumber.filter(function (p) {
     if (!q) return true;
@@ -2026,16 +2071,32 @@ function spRenderOrderan_() {
       .join(" ").toLowerCase().indexOf(q) !== -1;
   });
 
-  // Urut deadline TERDEKAT dulu. Yang tanpa deadline ke bawah -- bukan
-  // dianggap paling mendesak hanya karena tanggalnya kosong.
+  // v158: default TERBARU DI ATAS. Yang dicari orang di lantai hampir selalu
+  // order yang baru masuk -- itu yang belum hafal nomornya. Urutan deadline
+  // tetap tersedia karena berguna untuk pertanyaan yang berbeda ("mana yang
+  // harus dikejar duluan"), tapi bukan pertanyaan yang membawa orang ke sini.
+  //
+  // Tanpa tanggal selalu ke BAWAH di kedua mode -- bukan dianggap paling baru
+  // atau paling mendesak hanya karena datanya kosong.
   baris.sort(function (a, b) {
-    const sa = spSisaHari_(a.deadlineIso), sb = spSisaHari_(b.deadlineIso);
-    if (sa === null && sb === null) return 0;
-    if (sa === null) return 1;
-    if (sb === null) return -1;
-    return sa - sb;
+    if (urut === "deadline") {
+      const sa = spSisaHari_(a.deadlineIso), sb = spSisaHari_(b.deadlineIso);
+      if (sa === null && sb === null) return 0;
+      if (sa === null) return 1;
+      if (sb === null) return -1;
+      return sa - sb;
+    }
+    const ta = String(a.tanggalPesananIso || ""), tb = String(b.tanggalPesananIso || "");
+    if (!ta && !tb) return 0;
+    if (!ta) return 1;
+    if (!tb) return -1;
+    return tb.localeCompare(ta);   // terbaru dulu
   });
 
+  // Ringkasan SELALU dari kelompok berjalan, tidak ikut berubah saat filter
+  // digeser ke Selesai/Batal: "berapa yang sedang dikerjakan" adalah angka
+  // yang sama sepanjang hari, dan angka ringkasan yang berubah-ubah mengikuti
+  // filter membuat orang mengira jumlah ordernya berubah.
   let totalPcs = 0, mendesak = 0, lewat = 0;
   aktif.forEach(function (p) {
     totalPcs += p.jumlah || 0;
@@ -2062,31 +2123,47 @@ function spRenderOrderan_() {
       '<div class="sp-ord-alat">' +
         '<input id="sp-ord-cari" oninput="spOrderanCari_()" placeholder="Cari PO, No SO, klien, atau artikel..." ' +
           'type="text" value="' + rjdEscapeHtml_(q) + '"/>' +
-        '<label class="sp-ord-cek"><input onchange="spOrderanToggleSelesai_()" type="checkbox"' +
-          (tampilSelesai ? ' checked="checked"' : '') + '/> Tampilkan yang sudah Selesai</label>' +
+        '<select onchange="spOrderanFilter_(this.value)" title="Status order">' +
+          [["berjalan", "Berjalan"], ["selesai", "Selesai"], ["batal", "Dibatalkan"], ["semua", "Semua"]]
+            .map(function (o) {
+              return '<option value="' + o[0] + '"' +
+                (status === o[0] ? ' selected="selected"' : '') + '>' + o[1] + '</option>';
+            }).join("") +
+        '</select>' +
+        '<select onchange="spOrderanUrut_(this.value)" title="Urutan">' +
+          [["baru", "Terbaru dulu"], ["deadline", "Deadline terdekat"]].map(function (o) {
+            return '<option value="' + o[0] + '"' +
+              (urut === o[0] ? ' selected="selected"' : '') + '>' + o[1] + '</option>';
+          }).join("") +
+        '</select>' +
       '</div>' +
 
       (baris.length
         ? '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
             '<th>PO / Klien</th><th>Artikel</th><th class="num">Qty</th>' +
-            '<th>Deadline</th><th>Tahap</th>' +
+            '<th>Masuk</th><th>Deadline</th><th>Tahap</th>' +
           '</tr></thead><tbody>' +
           baris.map(function (p) {
             const sisa = spSisaHari_(p.deadlineIso);
             let tandaDl = "";
-            if (!p.spSelesai && sisa !== null) {
+            if (!p.spSelesai && !p.spBatal && sisa !== null) {
               if (sisa < 0) tandaDl = '<span class="sp-ord-lewat">' + Math.abs(sisa) + ' hari lewat</span>';
               else if (sisa <= 7) tandaDl = '<span class="sp-ord-dekat">' + sisa + ' hari lagi</span>';
             }
             const art = (p.artikel || []).join(", ");
-            return '<tr class="sp-ord-baris' + (p.spSelesai ? ' sp-ord-selesai' : '') + '" ' +
+            return '<tr class="sp-ord-baris' +
+              (p.spSelesai || p.spBatal ? ' sp-ord-selesai' : '') + '" ' +
               'onclick="spOrderanPilih_(\'' + rjdEscapeHtml_(p.idPurchaseOrder) + '\')">' +
               '<td><b>' + rjdEscapeHtml_(p.idPurchaseOrder) + '</b>' +
                 (p.spSelesai ? ' <span class="sp-riw-kunci">Selesai</span>' : '') +
+                (p.spBatal ? ' <span class="sp-tag-batal">DIBATALKAN</span>' : '') +
                 '<div class="sp-gelar-size">' + rjdEscapeHtml_(p.namaKlien || "-") +
                 (p.noSO ? ' \u00b7 ' + rjdEscapeHtml_(p.noSO) : '') + '</div></td>' +
               '<td>' + (art ? rjdEscapeHtml_(art) : '<span class="sp-kosong">&#183;</span>') + '</td>' +
               '<td class="num">' + (p.jumlah || 0) + '</td>' +
+              // Tanggal masuk ditampilkan karena jadi dasar urutan default --
+              // urutan yang dasarnya tak terlihat bikin orang mengira acak.
+              '<td>' + rjdEscapeHtml_(p.tanggalPesanan || "-") + '</td>' +
               '<td>' + rjdEscapeHtml_(p.deadline || "-") +
                 (tandaDl ? '<div>' + tandaDl + '</div>' : '') + '</td>' +
               '<td>' + (p.tahap
