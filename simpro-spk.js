@@ -199,6 +199,13 @@ function spMuatDaftarPO() {
       const s = stat_(p);
       return s !== "selesai" && !/batal|cancel/.test(s);
     });
+    // v163: kalau tab Orderan sedang terbuka saat daftarnya baru tiba, render
+    // ulang. Urutan kedatangan tidak dijamin -- panel bisa terbuka lebih dulu
+    // (menampilkan "daftar belum termuat") dan tanpa ini ia akan bertahan
+    // begitu sampai orang mengklik subtabnya, mengira tidak ada order apa pun.
+    if (window.SP_TAB === "orderan" && typeof spRenderOrderan_ === "function") {
+      spRenderOrderan_();
+    }
   })
   .catch(function () {
     spPesan_("sp-po-pesan", "Gagal menghubungi server.", true);
@@ -838,6 +845,23 @@ function spTerapkanBagian_(d) {
   // Line yang dipegang staf ini -- dipakai untuk membatasi pembatalan setoran.
   window.SP_ID_LINE = (d && d.idLine) ? d.idLine : [];
   window.SP_BAGIAN_SEMUA = semua;
+
+  // v163: PENDARATAN DIPINDAH KE SINI, sebelum jalan pintas peran-penuh.
+  //
+  // v162 menaruhnya di bawah, setelah "if (semua) ... return" -- akibatnya
+  // justru peran FULL/ADMIN yang tidak pernah mendarat di mana pun: panel
+  // awalnya tetap kosong sampai orang mengklik subtabnya sendiri. Staf
+  // berbagian sempit tidak mengalaminya, jadi bug ini hanya terlihat oleh
+  // orang yang paling jarang melaporkan bug: yang punya akses penuh.
+  //
+  // Pelajaran yang berulang hari ini: kode yang bercabang menurut peran harus
+  // diperiksa dari KEDUA cabang. Cabang "istimewa" justru yang paling sering
+  // ketinggalan karena ia ditulis sebagai jalan pintas.
+  if (!window.SP_SUDAH_MENDARAT) {
+    window.SP_SUDAH_MENDARAT = true;
+    spPilihFase_("orderan");
+  }
+
   if (semua) { spRenderFase_(); spRenderSub_(); return; }
 
   // v110: penyaringan lewat PETA (spTabBoleh_ membaca SP_BAGIAN yang barusan
@@ -848,24 +872,6 @@ function spTerapkanBagian_(d) {
   spRenderFase_();
   spRenderSub_();
 
-  // v162: pendaratan SELALU di fase ORDERAN, apa pun bagiannya.
-  //
-  // v156 mendaratkan orang di fase yang boleh diisinya. Terdengar masuk akal,
-  // tapi salah dari dua sisi: bagi peran full/admin "fase pertama yang boleh"
-  // selalu Pola & Marker (semua fase boleh), dan bagi siapa pun form kerja
-  // yang terbuka duluan itu FORM KOSONG -- belum ada PO yang dipilih, jadi
-  // tidak ada yang bisa dikerjakan di situ.
-  //
-  // Yang selalu berguna sebagai halaman pembuka justru daftar order: ia
-  // menjawab "ada pekerjaan apa hari ini" tanpa perlu memilih apa pun dulu,
-  // dan dari situ satu klik membawa ke detail lalu ke tahap kerjanya.
-  //
-  // Hanya berlaku saat halaman BARU dimuat: kalau orang sudah berpindah tab
-  // sendiri (mis. jawaban peran datang terlambat), pilihannya dihormati.
-  if (!window.SP_SUDAH_MENDARAT) {
-    window.SP_SUDAH_MENDARAT = true;
-    spPilihFase_("orderan");
-  }
   spSegarkanBaca_(window.SP_TAB);
 
   // Sub-tab Konfirmasi ikut disaring begitu peran datang -- panelnya mungkin
@@ -6330,6 +6336,19 @@ function qcRenderRingkasan_(d) {
       ? true : window.SP_BAGIAN_SEMUA;
     spRenderFase_();
     spRenderSub_();
+    // v163: panel awal DIISI di sini, tidak menunggu klik.
+    //
+    // Komentar lama di atas menyatakan spSwitchTab sengaja tidak dipanggil --
+    // dan itu benar SELAMA panel awal berupa form statis yang markupnya sudah
+    // ada di template (dulu: Gelaran). Panel Orderan dirender JS, jadi tanpa
+    // pemanggilan ini ia tetap kosong sampai orang mengklik subtabnya, dan
+    // kartu Pilih PO ikut tertinggal tampil karena spSwitchTab juga yang
+    // mengaturnya.
+    //
+    // Aman dipanggil di sini: tab orderan cuma membaca memori, tidak menembak
+    // server. Kalau daftarnya belum tiba, panel menampilkan keadaan itu apa
+    // adanya dan dirender ulang begitu datanya masuk (lihat spMuatDaftarPO).
+    spSwitchTab(window.SP_TAB);
   };
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", mulai);
