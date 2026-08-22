@@ -1496,3 +1496,38 @@ body.sp-siap #sp-subtabs { visibility: visible; }
 @media (max-width: 760px) {
   #sp-panel-orderan .sp-tabel-kartu td.sp-ord-panah { display: none; }
 }
+
+/* ---- Detail Order: penyempurnaan v162 ---- */
+
+/* Catatan & standar klien ditampilkan APA ADANYA termasuk baris barunya.
+   Isinya hampir selalu spesifikasi bernomor yang di Form Order diketik satu
+   baris per poin; diratakan jadi paragraf, poin-poinnya menyatu dan justru
+   bagian yang paling tidak boleh salah baca jadi paling sulit dibaca.
+
+   pre-wrap, bukan pre: baris yang memang panjang tetap boleh membungkus
+   sendiri, yang dipertahankan cuma baris baru yang diketik orangnya. */
+.sp-det-pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;   /* URL panjang tanpa spasi tidak menjebol kotak */
+}
+.sp-det-catatan.sp-det-pre { font-style: normal; }
+
+/* Tabel warna x size TIDAK berubah jadi kartu di layar sempit -- kolomnya
+   sedikit dan isinya angka pendek, jadi digeser sedikit jauh lebih ringkas
+   daripada digulung empat baris per warna. */
+.sp-det-tabelwrap { -webkit-overflow-scrolling: touch; }
+@media (max-width: 760px) {
+  .sp-det-tabelwrap table { min-width: 100%; }
+  .sp-det-tabelwrap .sp-tabel { font-size: 12px; }
+  .sp-det-tabelwrap .sp-tabel th,
+  .sp-det-tabelwrap .sp-tabel td { padding: 7px 8px; white-space: nowrap; }
+  /* Kolom warna menempel di kiri saat tabel digeser -- tanpa ini, menggeser
+     ke kanan membuat angkanya kehilangan nama warnanya. */
+  .sp-det-tabelwrap .sp-tabel th:first-child,
+  .sp-det-tabelwrap .sp-tabel td:first-child {
+    position: sticky; left: 0; z-index: 1;
+    background: var(--white, #fff);
+    box-shadow: 1px 0 0 var(--line-soft, #EFEBE2);
+  }
+  .sp-det-tabelwrap .sp-tabel th:first-child { background: var(--cream, #FAF7F2); }
+}

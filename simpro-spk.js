@@ -848,20 +848,24 @@ function spTerapkanBagian_(d) {
   spRenderFase_();
   spRenderSub_();
 
-  // v156: semua tab terlihat, jadi tidak ada lagi panel kosong yang perlu
-  // dihindari. Yang tersisa: MENDARATKAN orang di fase yang memang miliknya.
-  // Tanpa ini, tim cutting selalu membuka halaman di fase Pola (atau SOP)
-  // dan harus menggeser bar tiap kali -- kerja harian jadi lebih panjang
-  // untuk keuntungan nol.
-  const faseSekarang = spFaseDariTab_(spTabAktif_());
-  const faseMilikku = SP_FASE_PETA.filter(function (f) {
-    return f[2].some(function (s) { return spTabEditBoleh_(s[0]); });
-  })[0];
-  const sudahDiMilikku = faseSekarang && SP_FASE_PETA
-    .filter(function (f) { return f[0] === faseSekarang; })[0]
-    && SP_FASE_PETA.filter(function (f) { return f[0] === faseSekarang; })[0][2]
-      .some(function (s) { return spTabEditBoleh_(s[0]); });
-  if (faseMilikku && !sudahDiMilikku) spPilihFase_(faseMilikku[0]);
+  // v162: pendaratan SELALU di fase ORDERAN, apa pun bagiannya.
+  //
+  // v156 mendaratkan orang di fase yang boleh diisinya. Terdengar masuk akal,
+  // tapi salah dari dua sisi: bagi peran full/admin "fase pertama yang boleh"
+  // selalu Pola & Marker (semua fase boleh), dan bagi siapa pun form kerja
+  // yang terbuka duluan itu FORM KOSONG -- belum ada PO yang dipilih, jadi
+  // tidak ada yang bisa dikerjakan di situ.
+  //
+  // Yang selalu berguna sebagai halaman pembuka justru daftar order: ia
+  // menjawab "ada pekerjaan apa hari ini" tanpa perlu memilih apa pun dulu,
+  // dan dari situ satu klik membawa ke detail lalu ke tahap kerjanya.
+  //
+  // Hanya berlaku saat halaman BARU dimuat: kalau orang sudah berpindah tab
+  // sendiri (mis. jawaban peran datang terlambat), pilihannya dihormati.
+  if (!window.SP_SUDAH_MENDARAT) {
+    window.SP_SUDAH_MENDARAT = true;
+    spPilihFase_("orderan");
+  }
   spSegarkanBaca_(window.SP_TAB);
 
   // Sub-tab Konfirmasi ikut disaring begitu peran datang -- panelnya mungkin
@@ -2288,7 +2292,16 @@ function spDetailTabelItem_(it) {
   const adaNonStandar = (it.warnaList || []).some(function (w) {
     return w.detailAllSizeParsed && w.detailAllSizeParsed.length;
   });
-  return '<div class="sp-tabelwrap"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
+  // v162: TETAP TABEL di layar sempit, tidak berubah jadi kartu.
+  //
+  // Kartu masuk akal untuk tabel berkolom banyak dan berteks panjang (daftar
+  // order). Di sini kebalikannya: kolomnya sedikit dan isinya angka pendek,
+  // jadi satu kartu per warna memakan empat baris untuk menyampaikan "Brown
+  // S 28 M 29" -- sepuluh warna jadi empat puluh baris yang harus digulung,
+  // padahal seluruhnya muat dalam satu tabel yang digeser sedikit.
+  //
+  // Membandingkan qty antar warna juga cuma mungkin kalau angkanya sekolom.
+  return '<div class="sp-tabelwrap sp-det-tabelwrap"><table class="sp-tabel"><thead><tr>' +
       '<th>Warna</th>' +
       kolom.map(function (sz) { return '<th class="num">' + rjdEscapeHtml_(sz) + '</th>'; }).join("") +
       (adaNonStandar ? '<th>Size lain</th>' : '') +
@@ -2345,8 +2358,18 @@ function spRenderDetailOrder_() {
       '</div>' +
       // Catatan & gambar melekat pada ITEM, bukan order -- itu sebabnya
       // ditampilkan di sini, bukan digabung ke catatan umum di bawah.
-      (it.catatanOrder ? '<p class="sp-det-catatan">&#8220;' +
-        rjdEscapeHtml_(it.catatanOrder) + '&#8221;</p>' : '') +
+      // v162: catatan ditampilkan APA ADANYA termasuk baris barunya (kelas
+      // sp-det-pre -> white-space: pre-wrap). Isi catatan hampir selalu
+      // spesifikasi bernomor ("1. Panjang depan 160cm  2. Panjang tali...")
+      // yang di Form Order diketik satu baris per poin. Diratakan jadi satu
+      // paragraf, poin-poinnya menyatu dan orang harus membacanya berulang
+      // untuk memisahkan mana ukuran mana -- padahal ini justru bagian yang
+      // paling tidak boleh salah baca.
+      //
+      // Tanda kutip DIBUANG: pada teks bernomor multi-baris ia tidak lagi
+      // menandai kutipan, cuma menambah karakter di awal angka.
+      (it.catatanOrder ? '<p class="sp-det-catatan sp-det-pre">' +
+        rjdEscapeHtml_(it.catatanOrder) + '</p>' : '') +
       ((it.kainArtikel && it.kainArtikel.length)
         ? '<p class="sp-det-kain"><b>Kain:</b> ' +
           it.kainArtikel.map(function (k) {
@@ -2390,8 +2413,27 @@ function spRenderDetailOrder_() {
       // Standar klien & asal kain ditaruh DI ATAS rincian item: keduanya
       // mengubah cara seluruh order dikerjakan, jadi harus terbaca sebelum
       // orang tenggelam di angka size.
-      (d.standarKlien ? '<div class="sp-det-blok sp-det-standar"><h4>Standar klien</h4>' +
-        '<p>' + rjdEscapeHtml_(d.standarKlien) + '</p></div>' : '') +
+      // v162: standarKlien adalah OBJEK { url, catatan } dari profil-klien.gs,
+      // bukan teks. Versi v160 merendernya langsung sehingga layar menampilkan
+      // "[object Object]" -- kesalahan yang tidak akan pernah dilaporkan
+      // sebagai bug oleh orang lantai; mereka cuma menganggap bagian itu rusak
+      // lalu berhenti membacanya.
+      //
+      // Isinya standar TETAP klien (mis. "jahitan rantai, label di dalam"),
+      // berlaku untuk semua ordernya -- itu sebabnya disimpan di profil klien,
+      // bukan per order.
+      (function () {
+        const sk = d.standarKlien;
+        if (!sk) return "";
+        const catatan = (typeof sk === "string") ? sk : String(sk.catatan || "");
+        const url = (typeof sk === "string") ? "" : String(sk.url || "");
+        if (!catatan && !url) return "";
+        return '<div class="sp-det-blok sp-det-standar"><h4>Standar klien</h4>' +
+          (catatan ? '<p class="sp-det-pre">' + rjdEscapeHtml_(catatan) + '</p>' : '') +
+          (url ? '<div class="sp-det-tautan"><a href="' + rjdEscapeHtml_(url) +
+            '" target="_blank">Buka dokumen standar</a></div>' : '') +
+          '</div>';
+      })() +
       (d.kainDariKlien
         ? '<div class="sp-det-blok sp-det-standar"><h4>Kain dari klien</h4>' +
           '<p>Kain disediakan klien. Kekurangan kain bukan tanggung jawab RJD &#8212; ' +
@@ -2405,9 +2447,9 @@ function spRenderDetailOrder_() {
       '</div>' +
 
       (d.catatanKlien ? '<div class="sp-det-blok"><h4>Catatan klien</h4>' +
-        '<p class="sp-det-catatan">&#8220;' + rjdEscapeHtml_(d.catatanKlien) + '&#8221;</p></div>' : '') +
+        '<p class="sp-det-catatan sp-det-pre">' + rjdEscapeHtml_(d.catatanKlien) + '</p></div>' : '') +
       (d.catatanAdmin ? '<div class="sp-det-blok"><h4>Catatan admin</h4>' +
-        '<p class="sp-det-catatan">&#8220;' + rjdEscapeHtml_(d.catatanAdmin) + '&#8221;</p></div>' : '') +
+        '<p class="sp-det-catatan sp-det-pre">' + rjdEscapeHtml_(d.catatanAdmin) + '</p></div>' : '') +
       lampiran +
 
       '<div class="sp-det-tautan sp-det-cetak">' +
@@ -6278,8 +6320,12 @@ function qcRenderRingkasan_(d) {
 (function spInitDuaTingkat_() {
   const mulai = function () {
     if (!document.getElementById("sp-tabs")) return;
-    if (window.SP_FASE === undefined) window.SP_FASE = "cutting";
-    if (window.SP_TAB === undefined) window.SP_TAB = "gelar";
+    // v162: pembuka halaman = ORDERAN. Nilai lama ("cutting"/"gelar") lahir
+    // sebelum tab Orderan ada, waktu satu-satunya isi halaman ini memang
+    // form kerja. Sekarang membuka di form kosong berarti pertanyaan pertama
+    // orang -- "ada pekerjaan apa" -- justru tidak terjawab di layar pertama.
+    if (window.SP_FASE === undefined) window.SP_FASE = "orderan";
+    if (window.SP_TAB === undefined) window.SP_TAB = "orderan";
     window.SP_BAGIAN_SEMUA = (window.SP_BAGIAN_SEMUA === undefined)
       ? true : window.SP_BAGIAN_SEMUA;
     spRenderFase_();
