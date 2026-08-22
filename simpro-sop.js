@@ -499,6 +499,38 @@ function sopIsiHtml_(opsi) {
       '<a href="#sop-skenario-blok">Skenario</a>' +
       '<button class="sop-cetak sp-tautan" onclick="window.print()" type="button">Cetak</button>' +
     '</div>') +
+    // v170: blok pembuka -- APA NAMA SISTEM INI, dan kenapa dua pintu.
+    //
+    // Tim selama ini menyebutnya "AppSheet" karena itu satu-satunya nama yang
+    // pernah mereka lihat: nama SIMPRO cuma muncul sekali di pesan login.
+    // Yang lebih berbahaya dari salah sebut adalah kesimpulan yang mengikuti:
+    // kalau HP dan komputer disebut sebagai dua sistem, orang akan mengira
+    // datanya juga dua -- lalu muncul pertanyaan seperti "itu sudah masuk web
+    // belum, tadi kan cuma di AppSheet", padahal itu baris yang sama persis.
+    //
+    // Blok ini menjelaskan sekali, di tempat yang dibaca orang baru.
+    '<section class="sop-blok sop-blok-nama">' +
+      '<h2>Namanya SIMPRO</h2>' +
+      '<p class="sop-info">Satu sistem, dua pintu masuk. Keduanya membaca dan ' +
+        'menulis data yang <b>sama persis</b> &#8212; yang berbeda cuma layarnya.</p>' +
+      '<div class="sop-pintu">' +
+        '<div class="sop-pintu-kotak">' +
+          '<b>SIMPRO di HP</b>' +
+          '<span>Aplikasi di lapangan. Untuk mencatat sambil berdiri di ' +
+            'dekat mesin: hasil potong, setoran, absensi.</span>' +
+        '</div>' +
+        '<div class="sop-pintu-kotak">' +
+          '<b>SIMPRO di komputer</b>' +
+          '<span>Halaman web ini. Untuk pekerjaan yang butuh layar lebar: ' +
+            'membagi ke line, membuat surat jalan, melihat seluruh order.</span>' +
+        '</div>' +
+      '</div>' +
+      '<p class="sop-info sop-nama-tekan">Sebut <b>SIMPRO</b>, bukan ' +
+        '&#8220;AppSheet&#8221; atau &#8220;web&#8221;. Menyebutnya dua nama ' +
+        'membuat orang mengira datanya juga dua &#8212; lalu ada yang mencatat ' +
+        'ulang hal yang sudah tercatat, atau menunggu data ' +
+        '&#8220;pindah&#8221; padahal tidak ada yang perlu pindah.</p>' +
+    '</section>' +
     '<section class="sop-blok">' +
       '<h2>Alur besar</h2>' +
       '<p class="sop-info">Tiap tahap membatasi tahap berikutnya. Yang dipotong ' +

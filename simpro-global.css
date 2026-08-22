@@ -1081,3 +1081,42 @@ footer{padding:28px 0;background:var(--ink)}
   .rjd-muat-jahit::before { animation: none; width: 55%; }
   .rjd-muat-jahit::after { animation: none; left: 55%; }
 }
+
+/* ============================================================
+   NAMA SISTEM DI HEADER (v170)
+   ============================================================
+   Sampai v169 nama "SIMPRO" muncul TEPAT SATU KALI di seluruh antarmuka --
+   di pesan login, yang dibaca sekali seumur akun. Yang dilihat tim tiap hari
+   cuma "AppSheet" (nama app di HP) dan "Lantai Produksi" (judul halaman).
+
+   Akibatnya bisa ditebak: tim menyebutnya "AppSheet". Mereka tidak salah
+   menyebut -- mereka menyebut satu-satunya nama yang mereka lihat.
+
+   Menaruh namanya di header memperbaiki akar itu, bukan gejalanya. Sebuah
+   sistem yang tidak pernah menyebut namanya sendiri tidak bisa berharap
+   orang menyebutnya.
+
+   Dibuat KECIL dan sekunder dengan sengaja: ini penanda identitas, bukan
+   judul. Logo RJD tetap yang utama; nama sistem berdiri di sampingnya
+   seperti label pada mesin.
+   ============================================================ */
+
+.rjd-nama-sistem {
+  margin-left: 9px;
+  padding-left: 10px;
+  border-left: 1px solid var(--line, #E5E0D6);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  color: var(--ink-soft, #5F6B7A);
+  align-self: center;
+  white-space: nowrap;
+}
+
+/* Di layar sempit header sudah padat (logo + tombol + menu). Nama sistem
+   yang ikut berdesakan akan mendorong tombol keluar layar, jadi
+   disembunyikan: di HP nama app-nya sendiri sudah SIMPRO. */
+@media (max-width: 520px) {
+  .rjd-nama-sistem { display: none; }
+}

@@ -141,3 +141,44 @@
   .sop-salah { background: #f4f4f4; border-left-color: #999; }
   a { text-decoration: none; color: #000; }
 }
+
+/* ---- Blok pembuka: nama sistem & dua pintu (v170) ---- */
+
+/* Ditandai berbeda dari blok lain: ini bukan aturan kerja, tapi pengenalan.
+   Orang baru membacanya sekali dan tidak kembali; yang sudah lama akan
+   melewatinya. Keduanya terlayani kalau bloknya terlihat jelas berbeda. */
+.sop-blok-nama {
+  background: linear-gradient(180deg, #FCF3E3 0%, #fff 100%);
+  border-color: #EBCFA0;
+}
+.sop-blok-nama h2 { color: #8A5D1F; }
+
+.sop-pintu {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  margin: 14px 0 12px;
+}
+.sop-pintu-kotak {
+  background: #fff;
+  border: 1px solid var(--line, #E5E0D6);
+  border-radius: 12px;
+  padding: 13px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.sop-pintu-kotak b { font-size: 14px; }
+.sop-pintu-kotak span {
+  font-size: 12.5px;
+  color: var(--ink-soft, #5F6B7A);
+  line-height: 1.55;
+}
+
+/* Kalimat penegasan cara menyebut. Diberi garis kiri supaya terbaca sebagai
+   instruksi, bukan keterangan yang boleh dilewati. */
+.sop-nama-tekan {
+  border-left: 3px solid var(--thread, #C2410C);
+  padding-left: 12px;
+  margin-bottom: 0 !important;
+}
