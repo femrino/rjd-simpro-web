@@ -99,6 +99,48 @@ function krMulaiIsi_() {
   });
   window.KR_DAFTAR = null;
   krMuat();
+
+  // ============================================================
+  // v168: JEMBATAN DARI HALAMAN PRODUKSI
+  // ============================================================
+  // Tab "Stok Siap Kirim" di /p/produksi.html punya tombol yang membuka
+  // halaman ini dengan ?po=... -- supaya orang yang baru saja melihat stok
+  // tidak perlu MENCARI PO YANG SAMA sekali lagi di sini.
+  //
+  // Itu keluhan yang sebenarnya: bukan "harus dua halaman", tapi harus
+  // mengetik ulang nomor yang barusan dilihat. Jembatan menutup jarak itu
+  // tanpa memindahkan apa pun.
+  //
+  // Dipilih daripada memindahkan seluruh halaman ini ke produksi karena
+  // langkah yang bisa dibatalkan lebih murah daripada langkah yang benar:
+  // kalau kelak dipindah beneran, tombolnya tetap berguna sebagai pintasan.
+  krBukaDariTautan_();
+}
+
+/**
+ * Baca ?po=... dan langsung buka tab Buat Surat Jalan dengan PO itu terpilih.
+ *
+ * Parameter DIBERSIHKAN dari URL sesudah dipakai (history.replaceState):
+ * tanpa itu, memuat ulang halaman berjam-jam kemudian akan melompat lagi ke
+ * PO lama -- padahal orangnya sudah mengerjakan hal lain.
+ */
+function krBukaDariTautan_() {
+  let po = "";
+  try {
+    po = new URLSearchParams(window.location.search).get("po") || "";
+  } catch (e) { return; }        // browser tua: jembatan mati, halaman tetap normal
+  po = String(po).trim();
+  if (!po) return;
+
+  krSwitchTab("buat");
+  // Rincian PO dimuat lewat rute yang sama dengan pilihan manual, jadi tidak
+  // ada jalur kedua yang bisa berbeda perilakunya.
+  krPilihPO(po);
+
+  try {
+    const bersih = window.location.pathname + window.location.hash;
+    window.history.replaceState({}, "", bersih);
+  } catch (e) { /* tidak fatal */ }
 }
 
 function krMuat(){
