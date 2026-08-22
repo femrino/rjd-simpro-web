@@ -665,7 +665,17 @@ const SP_BAGIAN_TAB = {
   marker:  "pola",
   gelar:   "cutting",
   cutting: "cutting",
-  bagi:    "loading",
+  // v149: "Bagi ke Line" adalah KEPUTUSAN (qty per line + target selesai),
+  // dan yang memutuskan adalah kepala produksi/PPIC. Sampai v148 entri ini
+  // berbunyi "loading" -- sistem menyuruh tim loading memutuskan hal yang
+  // bukan wewenangnya, dan itulah akar kebingungan yang mereka laporkan.
+  //
+  // Bagian "ppic" belum tentu ada isinya di SD Staff, dan memang tidak perlu:
+  // kepala produksi berperan full/produksi sehingga lolos semua gerbang
+  // (lihat spTerapkanBagian_). Entri ini justru bekerja dengan MENUTUP tab
+  // bagi dari bagian "loading". Kalau kelak ada staf PPIC yang bukan full,
+  // tinggal isi bagiannya "ppic" -- tanpa menyentuh kode.
+  bagi:    "ppic",
   // v145: papan kerja tim loading. Sengaja bagian yang sama dengan "bagi"
   // untuk sekarang -- pemetaan siapa yang BOLEH membagi masih menunggu
   // keputusan organisasi (tidak ada bagian "ppic" di SD Staff). Begitu
@@ -3080,6 +3090,14 @@ function spRenderFormGelaran_() {
       '<label class="sp-mode-opsi"><input name="sp-gl-jenis" onchange="spUbahModeGelaran_()" ' +
         'type="radio" value="Re-cut"/>' +
         '<span><b>Re-cut</b><small>ganti panel cacat &#183; kain saja</small></span></label>' +
+      // v149: panel yang dipotong khusus atas permintaan klien (biasanya
+      // mengejar photoshoot, dijahit sendiri di tempat mereka). Mekanismenya
+      // sama dengan re-cut, tapi ARTINYA berlawanan -- re-cut itu pemborosan
+      // yang ingin ditekan, ini pekerjaan yang diminta. Dipisah supaya angka
+      // "kain untuk mengganti panel cacat" tidak tercemar.
+      '<label class="sp-mode-opsi"><input name="sp-gl-jenis" onchange="spUbahModeGelaran_()" ' +
+        'type="radio" value="Panel Klien"/>' +
+        '<span><b>Panel klien</b><small>diminta klien &#183; kain saja</small></span></label>' +
     '</div>' +
     '<div class="sp-grid3">' +
       '<label>Marker<select id="sp-gl-marker" onchange="spMarkerGelaranGanti_()">' +
@@ -3149,10 +3167,10 @@ function spRenderFormGelaran_() {
     // kalau operator berganti mode bolak-balik.
     '<div class="sp-recut-blok hidden" id="sp-gl-recut">' +
       '<div class="sp-grid3">' +
-        '<label>Komponen yang diganti' +
+        '<label id="sp-gl-lbl-komponen">Komponen yang diganti' +
           '<input id="sp-gl-komponen" list="sp-datalist-komponen" ' +
             'placeholder="mis. Lengan" type="text"/></label>' +
-        '<label>Alasan<input id="sp-gl-alasan" placeholder="mis. kain sobek" type="text"/></label>' +
+        '<label id="sp-gl-lbl-alasan">Alasan<input id="sp-gl-alasan" placeholder="mis. kain sobek" type="text"/></label>' +
         '<label>Kain terpakai (m)<input id="sp-gl-kain-manual" min="0" ' +
           'oninput="spHitungGelaran_()" placeholder="0" step="0.01" type="number"/></label>' +
       '</div>' +
@@ -3161,7 +3179,7 @@ function spRenderFormGelaran_() {
           return '<option value="' + spEsc_(k) + '"></option>';
         }).join("") +
       '</datalist>' +
-      '<p class="sp-info">Re-cut TIDAK menambah jumlah baju &#8212; bajunya sudah terhitung ' +
+      '<p class="sp-info" id="sp-gl-recut-hint">Re-cut TIDAK menambah jumlah baju &#8212; bajunya sudah terhitung ' +
         'waktu dipotong pertama. Yang bertambah cuma pemakaian kain.</p>' +
     '</div>' +
     '<div class="sp-hitung" id="sp-gl-hasil"></div>' +
@@ -3176,9 +3194,40 @@ function spRenderFormGelaran_() {
  */
 /** Mode gelaran berubah -> tampilkan/sembunyikan blok re-cut, hitung ulang. */
 function spUbahModeGelaran_() {
-  const recut = spModeRecut_();
+  const mode = spModeGelaran_();
+  // Re-cut dan Panel Klien berbagi SATU blok isian -- yang dibutuhkan sama
+  // persis (komponen, alasan, kain manual). Yang berbeda cuma kata-katanya,
+  // dan itu penting: "komponen yang diganti" tidak masuk akal untuk panel
+  // yang diserahkan ke klien.
+  const bukanBaju = (mode === "Re-cut" || mode === "Panel Klien");
   const blok = document.getElementById("sp-gl-recut");
-  if (blok) blok.classList.toggle("hidden", !recut);
+  if (blok) blok.classList.toggle("hidden", !bukanBaju);
+  if (bukanBaju) {
+    const panel = mode === "Panel Klien";
+    const lblK = document.getElementById("sp-gl-lbl-komponen");
+    const lblA = document.getElementById("sp-gl-lbl-alasan");
+    const inpK = document.getElementById("sp-gl-komponen");
+    const inpA = document.getElementById("sp-gl-alasan");
+    const hint = document.getElementById("sp-gl-recut-hint");
+    // Teks label diganti lewat childNodes[0] supaya elemen <input> di
+    // dalamnya tidak ikut tertimpa -- innerHTML akan menghapusnya berikut
+    // isian yang sudah diketik.
+    if (lblK && lblK.childNodes[0]) {
+      lblK.childNodes[0].nodeValue = panel ? "Panel yang diserahkan" : "Komponen yang diganti";
+    }
+    if (lblA && lblA.childNodes[0]) {
+      lblA.childNodes[0].nodeValue = panel ? "Keperluan" : "Alasan";
+    }
+    if (inpK) inpK.placeholder = panel ? "mis. Badan Depan" : "mis. Lengan";
+    if (inpA) inpA.placeholder = panel ? "mis. photoshoot klien" : "mis. kain sobek";
+    if (hint) {
+      hint.innerHTML = panel
+        ? "Panel ini keluar pabrik dan tidak akan kembali jadi baju di sini. " +
+          "Jumlah baju TIDAK bertambah &#8212; yang bertambah cuma pemakaian kain."
+        : "Re-cut TIDAK menambah jumlah baju &#8212; bajunya sudah terhitung " +
+          "waktu dipotong pertama. Yang bertambah cuma pemakaian kain.";
+    }
+  }
   // Penanda visual mode aktif dipasang dari sini, bukan lewat :has() di CSS --
   // selektor itu belum didukung browser lama.
   document.querySelectorAll(".sp-mode-opsi").forEach(function (el) {
@@ -3188,9 +3237,16 @@ function spUbahModeGelaran_() {
   spHitungGelaran_();
 }
 
-function spModeRecut_() {
+/** Mode gelaran terpilih: "Normal" | "Re-cut" | "Panel Klien". */
+function spModeGelaran_() {
   const r = document.querySelector('input[name="sp-gl-jenis"]:checked');
-  return !!(r && r.value === "Re-cut");
+  return (r && r.value) ? r.value : "Normal";
+}
+
+/** Dua mode yang memakai kain tanpa menghasilkan baju baru. */
+function spModeRecut_() {
+  const m = spModeGelaran_();
+  return m === "Re-cut" || m === "Panel Klien";
 }
 
 /**
@@ -3281,11 +3337,14 @@ function spSimpanGelaran() {
   const recut = spModeRecut_();
 
   if (recut) {
+    const panel = spModeGelaran_() === "Panel Klien";
     if (!(document.getElementById("sp-gl-komponen") || {}).value) {
-      alert("Komponen yang diganti wajib diisi.\n\nMisal: Lengan, Badan Depan."); return;
+      alert(panel
+        ? "Panel yang diserahkan wajib diisi.\n\nMisal: Badan Depan, Lengan."
+        : "Komponen yang diganti wajib diisi.\n\nMisal: Lengan, Badan Depan."); return;
     }
     if (!sel.value && !Number((document.getElementById("sp-gl-kain-manual") || {}).value)) {
-      alert("Re-cut tanpa marker: isi kain terpakai."); return;
+      alert((panel ? "Panel klien" : "Re-cut") + " tanpa marker: isi kain terpakai."); return;
     }
   } else {
     if (!sel || !sel.value) { alert("Marker wajib dipilih."); return; }
@@ -3308,7 +3367,11 @@ function spSimpanGelaran() {
         idMarker: sel.value,
         warna: warna,
         jenisKain: (document.getElementById("sp-gl-kain") || {}).value || "",
-        jenisGelaran: spModeRecut_() ? "Re-cut" : "Normal",
+        // v149: kirim MODE apa adanya. Versi lama memampatkannya jadi
+        // boolean ("Re-cut" atau "Normal") -- begitu mode ketiga lahir,
+        // Panel Klien akan tersimpan sebagai Re-cut dan mencemari justru
+        // angka yang pemisahannya dibuat untuk melindunginya.
+        jenisGelaran: spModeGelaran_(),
         komponen: (document.getElementById("sp-gl-komponen") || {}).value || "",
         alasan: (document.getElementById("sp-gl-alasan") || {}).value || "",
         kainTerpakai: (document.getElementById("sp-gl-kain-manual") || {}).value || "",
