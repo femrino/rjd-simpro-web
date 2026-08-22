@@ -1190,17 +1190,24 @@ body.sp-siap #sp-subtabs { visibility: visible; }
   vertical-align: middle;
 }
 
-/* v147: bilah aksi MELAYANG, SELALU terlihat selama tab Siapkan terbuka.
-   ---------------------------------------------------------------
-   v146 menyembunyikannya sampai ada yang dicentang -- syarat yang tidak
-   pernah diminta, dan di layar terbaca sebagai fitur yang tidak jadi:
-   orang membuka tab, tidak melihat bilah apa pun, lalu menyimpulkan
-   bilahnya hilang. Tidak ada yang tahu bahwa ia akan muncul kalau
-   mencentang, karena tidak ada satu pun petunjuk di layar.
+/* v148: bilah aksi MELAYANG, naik dari bawah saat ada baris dicentang.
+   ===============================================================
+   KEPUTUSAN SADAR SETELAH MEMBANDINGKAN KEDUANYA DI LAYAR NYATA --
+   JANGAN "diperbaiki" lagi tanpa mencoba dua-duanya dulu.
 
-   Pelajarannya lebih umum: kalau kemunculan sebuah kontrol bergantung pada
-   tindakan yang belum dilakukan, orang tidak akan pernah menemukan bahwa
-   kontrol itu ada.
+   Riwayatnya: v146 memakai pola ini, v147 mengubahnya jadi selalu terlihat,
+   v148 mengembalikannya. Alasan dikembalikan: gerakan naiknya BERFUNGSI
+   sebagai umpan balik -- mata langsung tahu ada yang siap ditandai, tanpa
+   perlu membaca angka apa pun. Bilah yang diam permanen tidak memberi
+   sinyal itu, dan di HP ia memakan ruang untuk mengumumkan "belum ada yang
+   dipilih" -- kalimat yang tidak berguna bagi siapa pun.
+
+   Kekhawatiran v147 (orang tidak tahu bilahnya ada) tidak terbukti jadi
+   masalah nyata: alur kerja tab ini memang mencentang dulu baru menandai,
+   dan teks pengantar panel sudah menuntun "Centang yang fisiknya sudah
+   siap, lalu tandai". Yang sempat terlihat seperti fitur hilang adalah
+   pengujian tampilan tanpa mencentang apa pun -- bukan cara tab ini
+   dipakai bekerja.
 
    position:fixed aman di sini: tidak ada ancestor panel yang memakai
    transform/filter/perspective (yang akan membuat fixed jadi relatif ke
@@ -1227,8 +1234,17 @@ body.sp-siap #sp-subtabs { visibility: visible; }
   background: #fff;
   border-top: 1px solid var(--line, #E5E0D6);
   box-shadow: 0 -6px 20px rgba(23, 33, 47, .07);
+  transform: translateY(115%);
+  transition: transform .18s ease;
+  pointer-events: none;   /* saat tersembunyi, jangan mencegat sentuhan */
 }
-/* Ruang bawah supaya baris terakhir daftar tidak tertutup bilah. */
+.sp-siap-aksi.tampil {
+  transform: translateY(0);
+  pointer-events: auto;
+}
+/* Ruang bawah tetap disediakan walau bilah sedang sembunyi -- kalau padding
+   ikut muncul-hilang, seluruh daftar melompat setiap centang pertama dan
+   posisi baca hilang. */
 #sp-panel-siapkan { padding-bottom: 76px; }
 .sp-siap-info {
   font-size: 12.5px;

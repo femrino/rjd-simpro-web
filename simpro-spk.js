@@ -1373,12 +1373,14 @@ function spSiapkanTombol_() {
   const btn = document.getElementById("sp-siapkan-btn");
   const info = document.getElementById("sp-siapkan-info");
   if (btn) btn.disabled = n === 0;
-  // [DIHAPUS v147] Dulu di sini ada toggle kelas "tampil" yang menaikkan
-  // bilah aksi hanya kalau ada baris dicentang. Aturan CSS-nya sudah
-  // dipensiunkan (bilah kini selalu terlihat), jadi barisnya ikut dibuang --
-  // kelas yang tidak lagi punya aturan hanya akan membingungkan pembaca
-  // berikutnya. Tombol tetap disabled saat nol pilihan; itu penjaga yang
-  // sebenarnya, dan tidak bergantung pada CSS yang bisa gagal dimuat.
+  // v148: bilah aksi melayang naik dari bawah begitu ada baris dicentang.
+  // Gerakannya bagian dari umpan balik, bukan hiasan -- lihat catatan
+  // panjang di .sp-siap-aksi (simpro-spk.css) sebelum mengubah pola ini.
+  //
+  // Tombol tetap di-disable saat nol pilihan sebagai jaring kedua: kelas CSS
+  // bisa gagal dimuat (jsDelivr bermasalah), status disabled tidak.
+  const bilah = document.querySelector(".sp-siap-aksi");
+  if (bilah) bilah.classList.toggle("tampil", n > 0);
   if (info) {
     let pcs = 0;
     (window.SP_SIAPKAN || []).forEach(function (b) {
