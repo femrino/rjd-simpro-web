@@ -1,0 +1,148 @@
+/* ============================================================
+   SIMPRO -- simpro-upah.css (v171)
+   Halaman Upah Borongan.
+
+   Nada sengaja lebih tenang daripada halaman produksi: tidak ada warna
+   peringatan kecuali memang ada yang perlu diwaspadai, dan angka rupiah
+   diberi ruang. Halaman ini dibaca sambil menghitung uang orang, bukan
+   sambil berdiri di dekat mesin.
+   ============================================================ */
+
+.up-wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px 80px; }
+
+/* ---------- login ---------- */
+.up-kotak-login {
+  background: #fff; border: 1px solid var(--line, #E5E0D6); border-radius: 16px;
+  padding: 28px 24px; text-align: center; max-width: 420px; margin: 40px auto;
+}
+.up-kotak-login h2 { margin: 0 0 8px; font-size: 20px; }
+.up-kotak-login p { margin: 0 0 18px; color: var(--ink-soft, #5F6B7A); font-size: 13.5px; }
+#up-google-btn { display: flex; justify-content: center; }
+
+/* ---------- bilah periode ---------- */
+.up-alat {
+  display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;
+  background: #fff; border: 1px solid var(--line, #E5E0D6); border-radius: 14px;
+  padding: 16px 18px; margin-bottom: 16px;
+}
+.up-alat label {
+  display: flex; flex-direction: column; gap: 5px;
+  font-size: 12px; color: var(--ink-soft, #5F6B7A);
+}
+.up-alat input {
+  padding: 9px 12px; border: 1px solid var(--line, #E5E0D6); border-radius: 9px;
+  font-family: inherit; font-size: 13.5px;
+}
+.up-alat input:focus { outline: none; border-color: var(--ink, #17212F); }
+.up-btn {
+  padding: 10px 20px; border-radius: 10px; border: 0; cursor: pointer;
+  background: var(--navy, #17212F); color: #fff; font-weight: 700; font-size: 13.5px;
+}
+.up-btn:hover { background: var(--thread, #C2410C); }
+.up-cari { flex: 1; min-width: 180px; }
+
+.up-kartu {
+  background: #fff; border: 1px solid var(--line, #E5E0D6);
+  border-radius: 14px; padding: 18px 20px;
+}
+
+/* ---------- lingkup terbatas (kepala line) ---------- */
+/* Ditampilkan tegas, bukan sebagai catatan kaki: kepala line harus tahu bahwa
+   angka yang dilihatnya BUKAN total pabrik, supaya tidak salah menyimpulkan
+   berapa yang dikeluarkan perusahaan. */
+.up-lingkup {
+  background: #F2F5F8; border-left: 3px solid #9FB2C6; border-radius: 8px;
+  padding: 11px 14px; margin-bottom: 14px;
+  font-size: 12.5px; color: var(--ink-soft, #5F6B7A); line-height: 1.55;
+}
+.up-lingkup b { color: var(--ink, #17212F); }
+
+/* ---------- ringkasan ---------- */
+.up-ringkas {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px; margin-bottom: 16px;
+}
+.up-kotak {
+  border: 1px solid var(--line, #E5E0D6); border-radius: 12px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 3px;
+}
+.up-kotak span { font-size: 11px; color: var(--ink-soft, #5F6B7A); }
+.up-kotak b { font-size: 17px; font-variant-numeric: tabular-nums; }
+/* Total upah dibedakan: itu satu-satunya angka yang dipakai memutuskan. */
+.up-kotak-utama { background: var(--paper, #FAF7F2); border-color: var(--thread, #C2410C); }
+.up-kotak-utama b { color: var(--thread, #C2410C); font-size: 19px; }
+
+/* ---------- peringatan ---------- */
+/* Proses tanpa tarif = angka upah LEBIH KECIL dari yang seharusnya dibayar.
+   Diberi warna kuat dan ditaruh SEBELUM tabel: di bawah tabel ia akan dibaca
+   sesudah keputusan transfer terlanjur diambil. */
+.up-waspada {
+  background: #FCF3E3; border-left: 3px solid #EBCFA0; border-radius: 8px;
+  padding: 12px 15px; margin-bottom: 14px; font-size: 13px; line-height: 1.6;
+}
+.up-waspada-lembut { background: #F2F5F8; border-left-color: #9FB2C6; }
+.up-waspada ul { list-style: none; margin: 8px 0 0; padding: 0; }
+.up-waspada li {
+  display: flex; justify-content: space-between; gap: 10px;
+  padding: 4px 0; border-top: 1px solid rgba(0, 0, 0, .06); font-size: 12.5px;
+}
+.up-waspada li span { color: var(--ink-soft, #5F6B7A); white-space: nowrap; }
+.up-waspada .up-info { margin: 8px 0 0; }
+
+/* ---------- tabel ---------- */
+.up-tabelwrap { overflow-x: auto; }
+.up-tabel { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.up-tabel th {
+  text-align: left; padding: 9px 10px; background: var(--paper, #FAF7F2);
+  font-size: 11px; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--ink-soft, #5F6B7A); border-bottom: 1px solid var(--line, #E5E0D6);
+  white-space: nowrap;
+}
+.up-tabel th.num, .up-tabel td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.up-tabel td { padding: 10px; border-bottom: 1px solid var(--line-soft, #EFEBE2); vertical-align: top; }
+.up-baris-klik { cursor: pointer; }
+.up-baris-klik:hover { background: var(--paper, #FAF7F2); }
+.up-sub { font-size: 11.5px; color: var(--ink-soft, #5F6B7A); margin-top: 2px; }
+.up-rek { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+
+.up-tag {
+  display: inline-block; padding: 1px 7px; border-radius: 999px;
+  background: #F2F5F8; color: var(--ink-soft, #5F6B7A);
+  font-size: 10.5px; font-weight: 700;
+}
+.up-tag-warn { background: #FCF3E3; color: #8A5D1F; }
+
+/* Rincian per operator: latar berbeda supaya jelas ia MILIK baris di atasnya,
+   bukan baris operator berikutnya. */
+.up-rinci > td { background: var(--paper, #FAF7F2); padding: 0 10px 10px; }
+.up-tabel-rinci { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.up-tabel-rinci td {
+  padding: 7px 8px; border-bottom: 1px solid var(--line-soft, #EFEBE2); vertical-align: top;
+}
+.up-tabel-rinci td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.up-tabel-rinci tr:last-child td { border-bottom: 0; }
+
+.up-info { font-size: 12.5px; color: var(--ink-soft, #5F6B7A); }
+.up-galat {
+  font-size: 13px; color: #8F2C22; background: #FDECEA;
+  border-radius: 8px; padding: 12px 14px; margin: 0;
+}
+
+@media (max-width: 620px) {
+  .up-wrap { padding: 0 14px 60px; }
+  .up-alat { flex-direction: column; align-items: stretch; }
+  .up-alat label, .up-cari { width: 100%; }
+  .up-ringkas { grid-template-columns: 1fr 1fr; }
+  .up-kotak-utama { grid-column: span 2; }
+  .up-tabel { font-size: 12.5px; }
+  .up-tabel td, .up-tabel th { padding: 8px 7px; }
+}
+
+/* Cetak: daftar upah sering dicetak sebagai lampiran bukti pembayaran. */
+@media print {
+  .db-header, .bg-canvas, .hero, .up-alat { display: none !important; }
+  .up-wrap { max-width: 100%; padding: 0; }
+  .up-kartu { border: 0; padding: 0; }
+  .up-rinci { display: none; }   /* rincian dilipat: lampiran cukup totalnya */
+  .up-tabel { font-size: 11px; }
+}
