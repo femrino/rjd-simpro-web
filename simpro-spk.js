@@ -669,7 +669,14 @@ const SP_FASE_PETA = [
   ["orderan", "Orderan", [["orderan", "Orderan Berjalan"], ["detailorder", "Detail Order"]]],
   ["polamarker", "Pola & Marker", [["pola", "Pola"], ["marker", "Marker"]]],
   ["sampel",     "Sampel",        [["sampel", "Sampel"], ["approval", "Approval"]]],
-  ["cutting",    "Cutting",       [["gelar", "Gelaran"], ["cutting", "Hasil Potong"]]],
+  // v181: QC pindah ke rumah pemiliknya. Tiga pintu, SATU panel fisik
+  // sp-panel-qc (alias, pola konfpot/konfset v116), tahap TERKUNCI per pintu.
+  // Alasannya sederhana: tim cutting tidak akan pernah membuka fase Finishing
+  // untuk mencatat cacat potong -- selama formnya di sana, QC Potong kosong
+  // selamanya (terbukti: 0 catatan sampai v180). Keputusan 24 Agu 2026:
+  // Potong & Jahit self-check oleh timnya, Finishing tetap orang QC --
+  // pagarnya ditegakkan backend per tahap (pastikanBagianTahapQC_).
+  ["cutting",    "Cutting",       [["gelar", "Gelaran"], ["cutting", "Hasil Potong"], ["qcpot", "QC Potong"]]],
   // v145: subtab "Siapkan Potongan" menutup celah peran yang membingungkan
   // lantai (22 Agu). "Bagi ke Line" itu KEPUTUSAN (qty per line + target
   // selesai); tim loading cuma MENYIAPKAN fisiknya. Dua pekerjaan berbeda
@@ -699,8 +706,8 @@ const SP_FASE_PETA = [
   // 990 pcs melihat "Potongan Keluar" persis di sebelahnya, jadi pertanyaan
   // "apa ada yang sudah keluar?" muncul sebelum ia membagi, bukan sesudah.
   ["loading",    "Loading",       [["bagi", "Bagi ke Line"], ["keluar", "Potongan Keluar"], ["siapkan", "Siapkan Potongan"], ["spkrekap", "SPK & Rekap"]]],
-  ["sewing",     "Sewing",        [["konfpot", "Konfirmasi Potongan"], ["setor", "Setoran ke Finishing"]]],
-  ["finishing",  "Finishing",     [["konfset", "Konfirmasi Setoran"], ["qc", "QC"], ["qcring", "Ringkasan QC"]]],
+  ["sewing",     "Sewing",        [["konfpot", "Konfirmasi Potongan"], ["qcjahit", "QC Jahit"], ["setor", "Setoran ke Finishing"]]],
+  ["finishing",  "Finishing",     [["konfset", "Konfirmasi Setoran"], ["qc", "QC Finishing"], ["qcring", "Ringkasan QC"]]],
   ["packing",    "Packing & Kirim", [["stok", "Stok Siap Kirim"], ["terkirim", "Terkirim"]]],
   ["riw",        "Riwayat",       [["riw", "Riwayat"]]]
 ];
@@ -836,7 +843,12 @@ const SP_BAGIAN_TAB = {
   // tidak perlu ikut berubah.
   siapkan: "loading",
   setor:   "sewing",
+  // v181: cermin pagar backend (QC_BAGIAN_PER_TAHAP di qc-inspeksi.gs).
+  // Potong & Jahit self-check timnya; Finishing tetap qc saja -- gerbang
+  // stok -> surat jalan -> tagihan tidak ikut dilonggarkan.
   qc:      "qc",
+  qcpot:   ["cutting", "qc"],
+  qcjahit: ["sewing", "qc"],
   approval: ["pola", "sampel"],
   spkrekap: "loading",
   stok:    ["finishing", "gudang"],   // kursi gudang disiapkan duluan
@@ -1134,15 +1146,49 @@ const SP_PANDUAN = {
     ]
   },
   qc: {
-    judul: "Cara mengisi QC",
+    judul: "Cara mengisi QC Finishing",
     isi: [
       ["Yang bisa diperiksa = yang sudah dikonfirmasi diterima finishing",
        "Barang yang belum dikonfirmasi tidak akan muncul di daftar."],
       ["Lolos QC yang menentukan stok siap kirim",
        "Berapa pun yang sudah dijahit, yang belum diperiksa tidak akan bisa dikirim."],
+      ["Isi juga yang sempat cacat lalu diperbaiki",
+       "Barang yang sudah beres tetap dihitung lolos. Angka perbaikannya yang " +
+       "memberi tahu di mana waktu kerja ulang terbuang."],
       ["Reject dicatat apa adanya",
        "Ini satu-satunya sumber angka mutu. Yang dirapikan di sini membuat masalah " +
        "produksi tidak pernah ketemu akarnya."]
+    ]
+  },
+  // v181: panduan pintu self-check. Nadanya sengaja "untuk kalian sendiri",
+  // bukan "setor laporan ke atas" -- form yang terasa sebagai kewajiban
+  // administratif akan berhenti diisi begitu tidak ada yang menagih.
+  qcpot: {
+    judul: "Cara mengisi QC Potong",
+    isi: [
+      ["Catat sebelum potongan dibagi ke line",
+       "Cacat yang ketahuan sesudah dibagi jauh lebih mahal: sudah tercampur " +
+       "dan sudah jalan."],
+      ["Angka jujur, bukan angka bagus",
+       "Catatan ini deteksi dini untuk tim sendiri -- salah ukuran pola dan kain " +
+       "cacat yang tercatat itulah yang membuat marker dan bahan diperbaiki."],
+      ["Cacat potong tidak memotong stok",
+       "Stok siap kirim dihitung dari QC Finishing. Di sini tidak ada angka yang " +
+       "menghukum siapa pun."]
+    ]
+  },
+  qcjahit: {
+    judul: "Cara mengisi QC Jahit",
+    isi: [
+      ["Catat sebelum setoran ke finishing",
+       "Setoran yang bersih dari awal tidak bolak-balik -- ini yang membuat " +
+       "target line tercapai tanpa lembur menambal."],
+      ["Isi juga yang sempat cacat lalu diperbaiki",
+       "Barang yang sudah beres tetap lolos. Angka perbaikannya menunjukkan " +
+       "proses mana yang paling sering minta kerja ulang."],
+      ["Finishing memeriksa barang yang sama",
+       "Angka di sini akan bersanding dengan temuan QC Finishing per line -- " +
+       "yang jujur dari awal tidak pernah perlu menjelaskan selisih."]
     ]
   },
   approval: {
@@ -1290,7 +1336,7 @@ function spPasangPanduan_(tab) {
   // kehilangan panduannya: konfpot/konfset sejak v116, siapkan sejak v145,
   // keluar sejak v150 -- tidak ada satu pun yang melempar error, panduannya
   // cuma tidak pernah muncul.
-  const ALIAS = { konfpot: "konf", konfset: "konf", qcring: "qc" };
+  const ALIAS = { konfpot: "konf", konfset: "konf", qcring: "qc", qcpot: "qc", qcjahit: "qc" };
   const panel = document.getElementById("sp-panel-" + (ALIAS[tab] || tab));
   if (!panel || panel.querySelector(".sp-panduan")) return;
   const html = spPanduanHtml_(tab);
@@ -1309,7 +1355,7 @@ function spPasangPanduan_(tab) {
 function spSegarkanBaca_(tab) {
   const t = tab || window.SP_TAB;
   if (!t) return;
-  const ALIAS = { konfpot: "konf", konfset: "konf", qcring: "qc" };
+  const ALIAS = { konfpot: "konf", konfset: "konf", qcring: "qc", qcpot: "qc", qcjahit: "qc" };
   const panel = document.getElementById("sp-panel-" + (ALIAS[t] || t));
   if (!panel) return;
   spPanelBacaSaja_(panel, t);
@@ -1382,7 +1428,7 @@ function spSwitchTab(tab) {
   // Alias panel (v116): konfpot & konfset adalah DUA PINTU ke SATU panel
   // fisik sp-panel-konf -- subtab yang menentukan modenya, bukan sakelar
   // internal (sakelar lama dipensiunkan, lihat spMuatKonfMode_).
-  const SP_PANEL_ALIAS = { konfpot: "konf", konfset: "konf", qcring: "qc" };
+  const SP_PANEL_ALIAS = { konfpot: "konf", konfset: "konf", qcring: "qc", qcpot: "qc", qcjahit: "qc" };
   const idPanelTujuan = "sp-panel-" + (SP_PANEL_ALIAS[tab] || tab);
   document.querySelectorAll("[id^='sp-panel-']").forEach(function (p) {
     p.classList.toggle("hidden", p.id !== idPanelTujuan);
@@ -1414,7 +1460,13 @@ function spSwitchTab(tab) {
   if (tab === "konfset") { spMuatKonfMode_("setoran"); return; }
   if (tab === "pola" || tab === "sampel") { spMuatTahap(tab); return; }
   if (tab === "marker") { spMuatMarker(); spMuatSemuaMarker_(); return; }
-  if (tab === "qc") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("input"); return; }
+  // v181: tiga pintu, satu panel, tahap terkunci per pintu. Pintu Finishing
+  // IKUT dikunci -- kalau cuma Potong & Jahit yang terkunci, pintu Finishing
+  // masih menampilkan pemilih tahap dan orang bisa mencatat Potong dari sana,
+  // menghidupkan lagi kebingungan yang justru mau ditutup.
+  if (tab === "qc") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("input"); qcKunciTahap_("Finishing"); return; }
+  if (tab === "qcpot") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("input"); qcKunciTahap_("Potong"); return; }
+  if (tab === "qcjahit") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("input"); qcKunciTahap_("Jahit"); return; }
   if (tab === "qcring") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("ringkasan"); return; }
   if (tab === "approval") { spMuatApproval_(); return; }
   if (tab === "sop") { spMuatSOP_(); return; }
@@ -6355,6 +6407,34 @@ function qcSwitchTab(tab) {
 }
 
 // ============ MODE A: FORM INPUT ============
+
+/**
+ * v181: kunci tahap sesuai pintu yang dibuka. Pemilih tahap disembunyikan --
+ * pintunya yang menentukan, bukan tombol. Markup pemilih SENGAJA dibiarkan
+ * di template sebagai jaring pengaman versi: kalau template baru berjalan
+ * dengan JS lama (yang tidak memanggil fungsi ini), pemilihnya tetap tampil
+ * dan form tetap bisa dipakai seperti v180.
+ *
+ * Panduan panel ikut ditukar per pintu: spPasangPanduan_ hanya memasang
+ * SEKALI per panel (guard querySelector .sp-panduan), padahal panel qc
+ * sekarang dipakai tiga pintu -- tanpa penukaran ini, pintu yang dibuka
+ * pertama menentukan panduan untuk semuanya.
+ */
+function qcKunciTahap_(tahap) {
+  window.QC_TAHAP_KUNCI = tahap || "";
+  const toggle = document.getElementById("qc-tahap-toggle");
+  const field = toggle ? toggle.closest(".qc-field") : null;
+  if (field) field.classList.toggle("hidden", !!tahap);
+  if (tahap) qcPilihTahap(tahap);
+
+  const panel = document.getElementById("sp-panel-qc");
+  if (panel && typeof spPanduanHtml_ === "function") {
+    const lama = panel.querySelector(".sp-panduan");
+    if (lama) lama.remove();
+    const html = spPanduanHtml_(window.SP_TAB);
+    if (html) panel.insertAdjacentHTML("afterbegin", html);
+  }
+}
 
 function qcPilihTahap(tahap) {
   QC_TAHAP_DIPILIH = tahap;
