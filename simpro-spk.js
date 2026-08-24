@@ -5963,7 +5963,13 @@ function qcCariTersedia_() {
 
 function qcTampilTersedia_() {
   // hint hidup di bawah field Qty Diperiksa, dibuat sekali
-  const inp = document.getElementById("qc-diperiksa");
+  //
+  // v180 -- BUG DIPERBAIKI: id yang dicari "qc-diperiksa", padahal input di
+  // template ber-id "qc-periksa". getElementById mengembalikan null, fungsi
+  // langsung return, dan hint jumlah tersedia (fitur v121) TIDAK PERNAH SEKALI
+  // PUN TAMPIL sejak dipasang. Tidak ada error di console -- kegagalan senyap,
+  // jenis yang cuma ketahuan kalau ada yang menelusuri id satu per satu.
+  const inp = document.getElementById("qc-periksa");
   if (!inp) return;
   const field = inp.closest(".qc-field");
   if (!field) return;
@@ -6366,30 +6372,93 @@ function qcPilihTahap(tahap) {
   if (hint) hint.classList.add("hidden");
 }
 
+/**
+ * ============================================================
+ * v180 -- TIGA ANGKA MUTU, SATU ISIAN BARU
+ * ============================================================
+ * Temuan lapangan: tim mencatat QC SESUDAH barang cacat diperbaiki, jadi
+ * hasilnya selalu "diperiksa 100, lolos 100, cacat 0". Angka stoknya benar,
+ * tapi data mutunya hilang seluruhnya.
+ *
+ * Yang hilang cuma SATU angka -- berapa yang sempat cacat lalu diperbaiki --
+ * jadi tambahannya juga satu isian, bukan satu form baru:
+ *
+ *     afkir     = diperiksa - lolos            (turunan, tidak diketik)
+ *     ditemukan = afkir + diperbaiki           (turunan, tidak diketik)
+ *
+ * Rumus gerbang TIDAK tersentuh: stok siap kirim tetap dari Qty Lolos per
+ * size di tahap Finishing.
+ */
 function qcRecalc() {
   // Qty Lolos berubah -> pembanding rincian size ikut berubah.
   if (typeof qcHitungTotalSize_ === "function") setTimeout(qcHitungTotalSize_, 0);
   const p = Number(document.getElementById("qc-periksa").value) || 0;
   const l = Number(document.getElementById("qc-lolos").value) || 0;
-  const c = Math.max(p - l, 0);
+  const b = Math.max(Number((document.getElementById("qc-perbaiki") || {}).value) || 0, 0);
+  const afkir = Math.max(p - l, 0);
+  const ditemukan = afkir + b;
+
   const box = document.getElementById("qc-cacat-angka");
-  box.textContent = c;
-  box.parentElement.classList.toggle("qc-cacat-nol", c === 0);
-  qcUpdatePreviewKeputusan_(p, c);
+  box.textContent = ditemukan;
+  box.parentElement.classList.toggle("qc-cacat-nol", ditemukan === 0);
+
+  // Rincian ditaruh di elemen SENDIRI di bawah kotak, bukan span ketiga di
+  // dalamnya: .qc-cacat-box di simpro-qc.css memakai span:first-child dan
+  // span:last-child: menambah span ketiga akan memindahkan gaya angka besar
+  // ke elemen yang salah.
+  const rinci = document.getElementById("qc-cacat-rinci");
+  if (rinci) {
+    if (b > l && l >= 0 && p > 0) {
+      rinci.textContent = "Qty diperbaiki (" + b + ") tidak boleh lebih besar dari Qty Lolos (" +
+        l + ") -- barang yang diperbaiki berakhir sebagai barang lolos.";
+      rinci.className = "qc-hint qc-cacat-rinci-salah";
+    } else if (ditemukan === 0) {
+      rinci.textContent = p > 0
+        ? "Belum ada cacat tercatat. Kalau tadi ada yang sempat cacat lalu diperbaiki, isi kolom di atas -- angka itu yang selama ini tidak pernah tersimpan."
+        : "";
+      rinci.className = "qc-hint";
+    } else {
+      rinci.textContent = b + " diperbaiki \u00B7 " + afkir + " afkir";
+      rinci.className = "qc-hint";
+    }
+  }
+
+  // Isian tidak masuk akal (diperbaiki > lolos): JANGAN tampilkan pratinjau
+  // keputusan. Angka turunannya ikut mustahil ("cacat ditemukan 105%"), dan
+  // pratinjau mustahil di sebelah peringatan merah cuma membuat checker ragu
+  // mana yang harus dipercaya. Satu pesan saja: yang merah.
+  if (b > l) {
+    const prev = document.getElementById("qc-keputusan-preview");
+    if (prev) prev.classList.remove("show");
+    return;
+  }
+  qcUpdatePreviewKeputusan_(p, afkir, b);
 }
 
-function qcUpdatePreviewKeputusan_(qtyDiperiksa, qtyCacat) {
+/**
+ * Keputusan dihitung dari AFKIR, bukan dari cacat ditemukan -- sama dengan
+ * backend, dan disengaja. Keputusan menjawab "barangnya boleh lanjut atau
+ * tidak", dan barang yang cacat lalu diperbaiki memang boleh lanjut. Kalau
+ * dasarnya cacat ditemukan, batch yang 30% cacat tapi SELURUHNYA sudah beres
+ * berlabel "Reject-Rework" -- dan checker cepat belajar mengabaikan labelnya.
+ */
+function qcUpdatePreviewKeputusan_(qtyDiperiksa, qtyAfkir, qtyDiperbaiki) {
   const el = document.getElementById("qc-keputusan-preview");
   if (!qtyDiperiksa) { el.classList.remove("show"); return; }
   const batas = (QC_MASTER && QC_MASTER.batasToleransiDefect) || 0.10;
-  const rate = qtyCacat / qtyDiperiksa;
+  const rate = qtyAfkir / qtyDiperiksa;
+  const ditemukan = qtyAfkir + (qtyDiperbaiki || 0);
   let kelas, teks;
-  if (qtyCacat === 0) {
-    kelas = "lolos"; teks = "Lolos -- tidak ada cacat ditemukan.";
+  if (qtyAfkir === 0) {
+    kelas = "lolos"; teks = "Lolos -- tidak ada yang diafkir.";
   } else if (rate <= batas) {
-    kelas = "bersyarat"; teks = "Lolos bersyarat -- defect rate " + (rate * 100).toFixed(1) + "%, di bawah batas toleransi " + (batas * 100).toFixed(0) + "%.";
+    kelas = "bersyarat"; teks = "Lolos bersyarat -- afkir " + (rate * 100).toFixed(1) + "%, di bawah batas toleransi " + (batas * 100).toFixed(0) + "%.";
   } else {
-    kelas = "reject"; teks = "Reject-Rework -- defect rate " + (rate * 100).toFixed(1) + "%, di atas batas toleransi " + (batas * 100).toFixed(0) + "%.";
+    kelas = "reject"; teks = "Reject-Rework -- afkir " + (rate * 100).toFixed(1) + "%, di atas batas toleransi " + (batas * 100).toFixed(0) + "%.";
+  }
+  if (ditemukan > qtyAfkir) {
+    teks += " Cacat ditemukan " + ((ditemukan / qtyDiperiksa) * 100).toFixed(1) +
+      "% termasuk yang diperbaiki -- itu beban kerja ulang, bukan penentu keputusan.";
   }
   el.className = "qc-keputusan-preview show " + kelas;
   el.textContent = teks;
@@ -6434,10 +6503,14 @@ function qcResetForm_() {
   document.getElementById("qc-operator").value = "";
   document.getElementById("qc-periksa").value = "";
   document.getElementById("qc-lolos").value = "";
+  const perbaiki = document.getElementById("qc-perbaiki");
+  if (perbaiki) perbaiki.value = "";
   document.getElementById("qc-detail-rows").innerHTML = "";
   document.getElementById("qc-keputusan-override").value = "";
   document.getElementById("qc-catatan").value = "";
   document.getElementById("qc-cacat-angka").textContent = "0";
+  const rinci = document.getElementById("qc-cacat-rinci");
+  if (rinci) { rinci.textContent = ""; rinci.className = "qc-hint"; }
   document.getElementById("qc-keputusan-preview").classList.remove("show");
   // Tahap SENGAJA TIDAK direset -- checker biasanya periksa banyak PO
   // berturut-turut di tahap yang SAMA, jadi lebih cepat kalau tetap terpilih.
@@ -6447,7 +6520,11 @@ function qcSubmitInspeksi() {
   // Pra-cek v121 (server tetap penjaga sesungguhnya)
   if ((window.QC_TAHAP_DIPILIH || QC_TAHAP_DIPILIH) === "Finishing") {
     const t = qcCariTersedia_();
-    const qd = Number((document.getElementById("qc-diperiksa") || {}).value) || 0;
+    // v180 -- BUG DIPERBAIKI: id salah (lihat qcTampilTersedia_), jadi qd
+    // selalu 0 dan pra-cek ini tidak pernah menyala. Server tetap menolak,
+    // tapi checker menerima pesan mentah dari server, bukan peringatan ramah
+    // yang menyebut apa yang harus dilakukan.
+    const qd = Number((document.getElementById("qc-periksa") || {}).value) || 0;
     if (t && qd > t.tersedia) {
       alert("Qty diperiksa (" + qd + ") melebihi yang tersedia untuk QC (" + t.tersedia +
         " pcs)." + (t.menunggu > 0
@@ -6464,7 +6541,11 @@ function qcSubmitInspeksi() {
   const idLine = (document.getElementById("qc-line") || {}).value || "";
   const qtyDiperiksa = Number(document.getElementById("qc-periksa").value) || 0;
   const qtyLolos = Number(document.getElementById("qc-lolos").value) || 0;
-  const qtyCacat = Math.max(qtyDiperiksa - qtyLolos, 0);
+  // v180. Elemen bisa saja belum ada kalau template tertinggal satu rilis --
+  // dalam kasus itu nilainya 0 dan perilakunya persis seperti v179.
+  const qtyDiperbaiki = Math.max(Number((document.getElementById("qc-perbaiki") || {}).value) || 0, 0);
+  const qtyAfkir = Math.max(qtyDiperiksa - qtyLolos, 0);
+  const qtyCacat = qtyAfkir + qtyDiperbaiki;   // cacat DITEMUKAN
   const detailCacat = qcKumpulkanDetailCacat_();
   const totalDetail = detailCacat.reduce(function (s, d) { return s + d.qty; }, 0);
   const lolosPerSize = qcKumpulkanLolosPerSize_();
@@ -6481,11 +6562,21 @@ function qcSubmitInspeksi() {
   }
   if (qtyDiperiksa <= 0) return qcTampilkanError_("Qty diperiksa harus lebih dari 0.");
   if (qtyLolos < 0 || qtyLolos > qtyDiperiksa) return qcTampilkanError_("Qty lolos tidak masuk akal (harus 0..Qty Diperiksa).");
+  // Aturan yang sama ditegakkan backend; ini supaya checker tahu sebelum
+  // menekan simpan, bukan sesudah.
+  if (qtyDiperbaiki > qtyLolos) {
+    return qcTampilkanError_("Qty diperbaiki (" + qtyDiperbaiki + ") tidak boleh lebih besar dari Qty Lolos (" +
+      qtyLolos + "). Barang yang diperbaiki berakhir sebagai barang lolos.");
+  }
   if (qtyLolos > 0 && totalSize !== qtyLolos) {
     return qcTampilkanError_("Rincian qty lolos per size (" + totalSize + ") harus sama dengan Qty Lolos (" + qtyLolos + ").");
   }
+  // v180: pembandingnya cacat DITEMUKAN (afkir + diperbaiki), bukan afkir saja.
+  // Justru itu yang dicari: "jahitan miring 5 pcs, semuanya diperbaiki" adalah
+  // temuan mutu yang berguna, dan sebelumnya tidak punya tempat sama sekali.
   if (qtyCacat > 0 && totalDetail !== qtyCacat) {
-    return qcTampilkanError_("Total qty jenis cacat (" + totalDetail + ") harus sama dengan Qty Cacat (" + qtyCacat + "). Cek lagi rincian jenis cacat.");
+    return qcTampilkanError_("Total qty jenis cacat (" + totalDetail + ") harus sama dengan cacat ditemukan (" +
+      qtyCacat + " = " + qtyAfkir + " afkir + " + qtyDiperbaiki + " diperbaiki). Cek lagi rincian jenis cacat.");
   }
 
   const btn = document.getElementById("qc-submit-btn");
@@ -6508,6 +6599,7 @@ function qcSubmitInspeksi() {
         warna: QC_WARNA_DIPILIH.warna || "",
         qtyDiperiksa: qtyDiperiksa,
         qtyLolos: qtyLolos,
+        qtyDiperbaiki: qtyDiperbaiki,
         lolosPerSize: lolosPerSize,
         detailCacat: detailCacat,
         catatan: document.getElementById("qc-catatan").value.trim(),

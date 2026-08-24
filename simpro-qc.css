@@ -104,6 +104,13 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 
 .qc-hint { font-size: 11.5px; color: var(--ink-soft); font-style: italic; margin: 4px 0 0; }
 
+/* v180 -- rincian di bawah kotak cacat: "5 diperbaiki - 0 afkir".
+   SENGAJA elemen terpisah, bukan span ketiga di dalam .qc-cacat-box: kotak itu
+   memakai span:first-child & span:last-child, jadi span ketiga akan memindahkan
+   gaya angka besar ke elemen yang salah. */
+#qc-cacat-rinci { margin: -10px 0 16px; font-style: normal; }
+#qc-cacat-rinci.qc-cacat-rinci-salah { color: var(--thread, #B23B2E); font-weight: 700; }
+
 .qc-keputusan-preview { margin-top: 8px; padding: 10px 12px; border-radius: 9px; font-size: 12.5px;
   display: none; align-items: center; gap: 8px; }
 .qc-keputusan-preview.show { display: flex; }
