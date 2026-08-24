@@ -4775,6 +4775,13 @@ function spRenderFormGelaran_() {
                 (l.lokasi ? " (" + spEsc_(l.lokasi) + ")" : "") + '</option>';
             }).join("") +
           '</select></label>' +
+        // v185: jejak sesi QC Potong yang minta re-cut ini. Terisi otomatis
+        // dari QC Potong terakhir yang berafkir (window.SP_RECUT_QC_GELARAN);
+        // boleh diedit/dihapus. Nilainya menyambung baris kain ini dengan
+        // baris koreksi dan baris potong pengganti di SD Hasil Cutting.
+        '<label>Dari QC Potong <small>(opsional, ID QC)</small>' +
+          '<input type="text" id="sp-gl-recut-qc" placeholder="mis. QC-..." value="' +
+            spEsc_((window.SP_RECUT_QC_GELARAN && window.SP_RECUT_QC_GELARAN.idQC) || "") + '"/></label>' +
       '</div>' +
       '<datalist id="sp-datalist-komponen">' +
         (window.SP_SARAN_KOMPONEN || []).map(function (k) {
@@ -4847,6 +4854,12 @@ function spUbahModeGelaran_() {
     const blokLine = document.getElementById("sp-gl-untukline-blok");
     const aturan = document.getElementById("sp-gl-aturan-recut");
     if (blokLine) blokLine.classList.toggle("hidden", panel);
+    // v185: form bisa saja sudah dirender SEBELUM QC Potong disimpan -- isi
+    // prefill saat mode Re-cut dipilih, hanya kalau kotaknya masih kosong.
+    const kotakQC = document.getElementById("sp-gl-recut-qc");
+    if (!panel && kotakQC && !kotakQC.value && window.SP_RECUT_QC_GELARAN) {
+      kotakQC.value = window.SP_RECUT_QC_GELARAN.idQC || "";
+    }
     if (aturan) aturan.classList.toggle("hidden", panel);
     // Nilai ikut dikosongkan saat pindah ke Panel Klien -- kotak tersembunyi
     // yang masih menyimpan pilihan lama akan ikut terkirim diam-diam.
@@ -5012,6 +5025,7 @@ function spSimpanGelaran() {
         komponen: (document.getElementById("sp-gl-komponen") || {}).value || "",
         alasan: (document.getElementById("sp-gl-alasan") || {}).value || "",
         untukLine: (document.getElementById("sp-gl-untukline") || {}).value || "",
+        recutDariQC: (document.getElementById("sp-gl-recut-qc") || {}).value || "",   // v185
         kainTerpakai: (document.getElementById("sp-gl-kain-manual") || {}).value || "",
         jumlahLapis: lapis,
         allowancePerLapis: (document.getElementById("sp-gl-allow") || {}).value,
@@ -5029,6 +5043,12 @@ function spSimpanGelaran() {
     alert("Gelaran tersimpan.\n" + d.totalPotongan + " potongan " +
       (document.getElementById("sp-gl-kain") || {}).value + ", kain " +
       d.kainTerpakai + " " + d.satuanKain);
+    // v185: satu prefill untuk satu gelaran re-cut. Kalau dibiarkan, gelaran
+    // re-cut berikutnya (kejadian lain) ikut tercap QC yang sama.
+    const qcDipakai = (document.getElementById("sp-gl-recut-qc") || {}).value || "";
+    if (window.SP_RECUT_QC_GELARAN && qcDipakai === window.SP_RECUT_QC_GELARAN.idQC) {
+      window.SP_RECUT_QC_GELARAN = null;
+    }
     spMuatGelaran();
   })
   .catch(function (e) { alert(e.message || e); })
@@ -5488,7 +5508,9 @@ function spRenderRecut_() {
         '<td data-label="Kain">' + spEsc_(kain) + '</td>' +
         '<td data-label="Jumlah">' + (r.qty || 0) + ' pcs</td>' +
         '<td data-label="Kain terpakai">' + (r.kain || 0) + ' m</td>' +
-        '<td data-label="Alasan">' + spEsc_(r.alasan || "-") + '</td></tr>');
+        '<td data-label="Alasan">' + spEsc_(r.alasan || "-") +
+          (r.recutDariQC ? ' <span class="sp-tag-kembali">' + spEsc_(r.recutDariQC) + '</span>' : '') +   // v185
+        '</td></tr>');
     });
   });
 
@@ -7112,6 +7134,12 @@ function qcSubmitInspeksi() {
           brand: QC_WARNA_DIPILIH.brand || "", artikel: QC_WARNA_DIPILIH.artikel || "",
           style: QC_WARNA_DIPILIH.style || "", warna: QC_WARNA_DIPILIH.warna || ""
         };
+        // v185: prefill TERPISAH untuk form Gelaran (buku kain). SP_RECUT_PENDING
+        // hidup-mati bersama tombol "Buat re-cut" (buku baju); yang ini bertahan
+        // sampai gelaran re-cut dengan ID ini tersimpan, urutan mana pun yang
+        // dipilih kepala cutting.
+        window.SP_RECUT_QC_GELARAN = { idQC: d.idQC, afkir: afkirPotong,
+          warna: QC_WARNA_DIPILIH.warna || "" };
         // v184: laporkan nasib koreksinya -- gagal harus KELIHATAN, karena
         // artinya sheet perlu dibetulkan tangan.
         const kor = d.koreksiCutting;
