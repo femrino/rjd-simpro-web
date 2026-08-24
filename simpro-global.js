@@ -3226,6 +3226,10 @@ function rjdTandaiPeranSelesai_(peran, area) {
   if (document.body.hasAttribute("data-peran")) return;  // sudah ditandai duluan
   document.body.setAttribute("data-peran", peran || "publik");
   document.body.setAttribute("data-area", (area || []).join(" "));
+  // v175: jalur ini dipakai halaman publik/klien dan saat peran tidak diketahui.
+  // Ditandai "lintas" supaya form tidak ikut tersembunyi di halaman yang memang
+  // tidak punya sistem bagian sama sekali.
+  document.body.setAttribute("data-bagian", "lintas");
 }
 
 function rjdTerapkanPeranKeMenu() {
@@ -3466,6 +3470,28 @@ function rjdPasangMenuPeran_(d) {
   // diinginkan (nilai dari server lebih benar daripada nilai sementara).
   document.body.setAttribute("data-peran", d.peran || "publik");
   document.body.setAttribute("data-area", area.join(" "));
+
+  // v175: BAGIAN ikut ditandai -- penanda ketiga, untuk menyembunyikan FORM
+  // yang memang akan ditolak (bukan sekadar menu).
+  //
+  // Datanya sudah lama dikirim getPeranSaya_ (bagian + lintasBagian), tapi
+  // belum pernah sampai ke CSS. Akibatnya form seperti "Buat Surat Jalan"
+  // tetap terbuka lebar untuk bagian mana pun: orang mengisi tanggal, metode,
+  // kurir, qty per warna -- lalu ditolak di detik terakhir. Penolakannya
+  // benar; yang salah adalah membiarkannya sampai sejauh itu.
+  //
+  // "lintas" dipakai untuk peran full/admin yang memang menembus semua bagian.
+  // Ditulis sebagai NILAI BAGIAN, bukan atribut terpisah, supaya satu selektor
+  // CSS cukup: [data-bagian~="gudang"], [data-bagian~="lintas"].
+  var bagian = (d && d.bagian) || [];
+  var penanda = bagian.slice();
+  if (d && d.lintasBagian) penanda.push("lintas");
+  // Kolom Bagian KOSONG = semua bagian (fail-safe di backend, lihat
+  // bagianStaff_). Ditandai "lintas" juga supaya frontend tidak lebih ketat
+  // daripada servernya -- form yang disembunyikan padahal servernya menerima
+  // adalah kebalikan dari yang kita mau.
+  if (!bagian.length) penanda.push("lintas");
+  document.body.setAttribute("data-bagian", penanda.join(" "));
 }
 
 /**

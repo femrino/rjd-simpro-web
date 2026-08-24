@@ -198,7 +198,21 @@ function dbRenderDaftarPO(){
     '<div class="db-po-jumlah">' + hasil.length + ' dari ' + semua.length + ' PO</div>' +
     '<div class="db-po-tabelwrap"><table class="db-po-tabel"><thead><tr>' +
       '<th>PO</th><th>Klien</th><th>Artikel</th><th class="num">Qty</th>' +
-      '<th>Deadline</th><th>Status</th><th>Asal</th><th>Proforma</th><th>Cetak</th>' +
+      // v174: dua kolom terakhir DISEMBUNYIKAN SEKOLOM untuk peran tanpa area
+      // "keuangan" -- header DAN selnya, supaya tabel tidak bergeser.
+      //
+      // v173 baru menyembunyikan tautannya, dan itu justru lebih buruk:
+      // kolomnya tinggal separuh isi dengan titik pemisah menggantung, dan
+      // pembacanya harus menebak apakah barisnya rusak atau memang begitu.
+      // Kolom yang kosong untuk semua orang lebih baik tidak ada sama sekali.
+      //
+      // Kolom Cetak ikut disembunyikan walau SPK sebenarnya boleh dicetak staf
+      // produksi (area "produksi"): halaman Orderan bagi mereka adalah tempat
+      // MELIHAT, bukan bertindak, dan SPK tetap tersedia di dua tempat yang
+      // memang tempat kerjanya -- Detail Order dan tab SPK & Rekap.
+      '<th>Deadline</th><th>Status</th><th>Asal</th>' +
+      '<th class="rjd-kolom-keuangan">Proforma</th>' +
+      '<th class="rjd-kolom-keuangan">Cetak</th>' +
     '</tr></thead><tbody>' +
     hasil.map(function(p){
       const artikel = (p.artikel || []).length
@@ -268,15 +282,14 @@ function dbRenderDaftarPO(){
         '<td>' + rjdEscapeHtml_(p.status || "-") + '</td>' +
         '<td><span class="db-po-asal ' + (p.sumber === "form" ? "form" : "") + '">' +
           (p.sumber === "form" ? "Form Order" : "Langsung") + '</span></td>' +
-        '<td class="db-po-cetak">' + proforma + '</td>' +
-        '<td class="db-po-cetak">' + cetak +
+        '<td class="db-po-cetak rjd-kolom-keuangan">' + proforma + '</td>' +
+        '<td class="db-po-cetak rjd-kolom-keuangan">' + cetak +
           (p.siapCetakSPK
-            // v172: kelas rjd-aksi-keuangan -- disembunyikan CSS untuk peran
-            // yang tidak punya area "keuangan" (lihat simpro-global.css).
-            // Sebelumnya tombol ini SELALU dirender: staf produksi melihat
-            // "Edit" lalu mengkliknya, dan baru ditolak setelah formulirnya
-            // terbuka. Backend memang menahan, tapi menawarkan sesuatu yang
-            // pasti ditolak membuat orang mengira sistemnya rusak.
+            // Kelas rjd-aksi-keuangan DIPERTAHANKAN walau kolomnya sudah
+            // disembunyikan: dua lapis yang saling menopang, dan kalau kelak
+            // kolom Cetak dibuka lagi untuk staf produksi (supaya bisa cetak
+            // SPK dari sini), tautan Edit-nya tetap tertutup tanpa perlu
+            // diingat lagi.
             ? ' &#183; <a class="rjd-aksi-keuangan" href="#" onclick="dbBukaEditPO(\'' + rjdEscapeHtml_(p.idPurchaseOrder).replace(/'/g, "") + '\'); return false;">Edit</a>'
             : '') + '</td>' +
       '</tr>';

@@ -1148,8 +1148,62 @@ footer{padding:28px 0;background:var(--ink)}
 .rjd-aksi-keuangan { display: none; }
 body[data-area~="keuangan"] .rjd-aksi-keuangan { display: inline; }
 
+/* KOLOM tabel yang hanya untuk pemilik area keuangan (v174).
+   Dipakai pada <th> DAN <td> di indeks yang sama -- kalau cuma salah satu,
+   tabelnya bergeser dan tiap sel jatuh ke bawah header yang salah.
+
+   Menyembunyikan sekolom lebih baik daripada menyembunyikan isinya saja:
+   kolom yang tinggal separuh isi dengan pemisah menggantung memaksa pembaca
+   menebak apakah barisnya rusak atau memang begitu. */
+.rjd-kolom-keuangan { display: none; }
+body[data-area~="keuangan"] th.rjd-kolom-keuangan,
+body[data-area~="keuangan"] td.rjd-kolom-keuangan { display: table-cell; }
+
 /* Varian untuk tombol yang memang berbentuk blok/tombol, bukan tautan
    sebaris. Dipisah karena display:inline akan merusak tata letaknya. */
 body[data-area~="keuangan"] button.rjd-aksi-keuangan,
 body[data-area~="keuangan"] .rjd-aksi-keuangan-blok { display: inline-block; }
 .rjd-aksi-keuangan-blok { display: none; }
+
+/* ============================================================
+   FORM YANG BERGANTUNG BAGIAN (v175)
+   ============================================================
+   Melengkapi .rjd-aksi-keuangan (yang berbasis AREA). Yang ini berbasis
+   BAGIAN -- pertanyaan yang berbeda:
+
+     area   -> boleh MELIHAT apa   (keuangan / produksi / pajak / penggajian)
+     bagian -> boleh MENGISI apa   (cutting / gudang / sewing / ...)
+
+   Dipakai untuk menyembunyikan FORM, bukan menu. Bedanya penting: menu yang
+   salah cuma membuang satu klik, sedangkan form yang salah membuat orang
+   mengisi tanggal, metode, kurir, dan qty per warna -- lalu ditolak di detik
+   terakhir. Penolakannya benar; membiarkannya sampai sejauh itu yang tidak.
+
+   Cara pakai: beri elemen kelas rjd-bagian-<nama>, misalnya
+   rjd-bagian-gudang. Ia tampil kalau body[data-bagian] memuat "gudang" ATAU
+   "lintas" (peran full/admin, atau kolom Bagian kosong).
+
+   LAPIS KEDUA, bukan penjaga -- penolakan sebenarnya di pastikanBagianBoleh_.
+   ============================================================ */
+
+.rjd-bagian-gudang { display: none; }
+
+/* :not(.hidden) WAJIB.
+   Tanpa itu, aturan ini (spesifisitas 0-2-1) mengalahkan .hidden (0-1-0) --
+   dan panel yang dipakai berpindah tab akan tampil TERUS untuk bagian yang
+   berhak, bahkan saat tab lain sedang aktif. Kelas .hidden dipakai di seluruh
+   sistem sebagai sakelar tampil/sembunyi; aturan berbasis peran tidak boleh
+   menembusnya. */
+body[data-bagian~="gudang"] .rjd-bagian-gudang:not(.hidden),
+body[data-bagian~="lintas"] .rjd-bagian-gudang:not(.hidden) { display: block; }
+
+/* Varian sebaris (tab, tombol) -- display:block akan merusak barisnya. */
+body[data-bagian~="gudang"] .rjd-bagian-gudang.rjd-bagian-inline:not(.hidden),
+body[data-bagian~="lintas"] .rjd-bagian-gudang.rjd-bagian-inline:not(.hidden) { display: inline-block; }
+
+/* Keterangan pengganti untuk yang tidak berhak: muncul TEPAT di tempat form
+   yang hilang, supaya tidak ada ruang kosong yang terbaca sebagai kerusakan.
+   Kebalikan aturannya -- tampil kalau bagiannya TIDAK cocok. */
+.rjd-bagian-lain { display: block; }
+body[data-bagian~="gudang"] .rjd-bagian-lain,
+body[data-bagian~="lintas"] .rjd-bagian-lain { display: none; }
