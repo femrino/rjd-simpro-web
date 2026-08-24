@@ -1145,6 +1145,39 @@ const SP_PANDUAN = {
        "Itu bukan selisih yang perlu dicari-cari nanti — itu kesepakatan."]
     ]
   },
+  qcring: {
+    judul: "Cara membaca Ringkasan QC",
+    isi: [
+      ["Defect rate akan NAIK setelah form baru dipakai -- itu kabar baik",
+       "Dulu pembilangnya cuma afkir; sekarang termasuk yang sempat diperbaiki. " +
+       "Mutu tidak memburuk, mutu akhirnya kelihatan."],
+      ["Tiga angka, tiga pertanyaan",
+       "Afkir = barang hilang (ongkos bahan). Tingkat perbaikan = waktu kerja " +
+       "ulang. Cacat ditemukan = keduanya -- ukuran mutu proses."],
+      ["Angka per line untuk belajar, bukan menghukum",
+       "Line dengan perbaikan tinggi butuh dicek prosesnya, bukan orangnya. " +
+       "Angka self-check jangan pernah dipakai memotong upah."]
+    ]
+  },
+  orderan: {
+    judul: "Cara membaca Orderan Berjalan",
+    isi: [
+      ["Kartu PO di atas adalah kunci semua tab",
+       "Pilih PO di sini dulu -- form Gelaran sampai QC mengikuti PO yang aktif."],
+      ["Urutan tab mengikuti urutan barang",
+       "Order -> Pola & Marker -> Cutting -> Sewing -> Finishing -> Kirim. Kalau " +
+       "bingung mencatat di mana, ikuti di mana barangnya sekarang."]
+    ]
+  },
+  detailorder: {
+    judul: "Cara membaca Detail Order",
+    isi: [
+      ["Rincian warna + size dari Rincian SO",
+       "Angka order di sini jadi pembanding semua tahap: potong, bagi, setor, QC."],
+      ["Ada yang janggal? Lapor admin, jangan dikira-kira",
+       "Rincian yang salah menular ke seluruh rantai -- betulkan di sumbernya."]
+    ]
+  },
   qc: {
     judul: "Cara mengisi QC Finishing",
     isi: [
@@ -1155,6 +1188,9 @@ const SP_PANDUAN = {
       ["Isi juga yang sempat cacat lalu diperbaiki",
        "Barang yang sudah beres tetap dihitung lolos. Angka perbaikannya yang " +
        "memberi tahu di mana waktu kerja ulang terbuang."],
+      ["Belum selesai diperbaiki? Isi kolom ditahan",
+       "Jangan dipaksa memilih lolos atau afkir. Nasib akhirnya dicatat nanti " +
+       "lewat tombol di spanduk keranjang -- boleh dicicil."],
       ["Reject dicatat apa adanya",
        "Ini satu-satunya sumber angka mutu. Yang dirapikan di sini membuat masalah " +
        "produksi tidak pernah ketemu akarnya."]
@@ -1172,6 +1208,12 @@ const SP_PANDUAN = {
       ["Angka jujur, bukan angka bagus",
        "Catatan ini deteksi dini untuk tim sendiri -- salah ukuran pola dan kain " +
        "cacat yang tercatat itulah yang membuat marker dan bahan diperbaiki."],
+      ["Panel rusak dari line juga dicatat di sini",
+       "Line setor sisa panelnya sebagai Dikembalikan, lalu cutting mencatat " +
+       "afkirnya di form ini -- bukan di QC Jahit."],
+      ["Centang koreksi + tombol re-cut menuntaskan bukunya",
+       "Koreksi mengeluarkan panel mati dari sisa boleh dibagi; re-cut memotong " +
+       "penggantinya dengan jejak QC yang sama."],
       ["Cacat potong tidak memotong stok",
        "Stok siap kirim dihitung dari QC Finishing. Di sini tidak ada angka yang " +
        "menghukum siapa pun."]
@@ -1186,6 +1228,10 @@ const SP_PANDUAN = {
       ["Isi juga yang sempat cacat lalu diperbaiki",
        "Barang yang sudah beres tetap lolos. Angka perbaikannya menunjukkan " +
        "proses mana yang paling sering minta kerja ulang."],
+      ["Panel rusak BUKAN cacat jahit -- jangan catat di sini",
+       "Setor panelnya sebagai Dikembalikan (catatan: panel rusak), biar cutting " +
+       "yang mencatat afkirnya di QC Potong. Defect rate line tidak boleh " +
+       "menanggung dosa cutting."],
       ["Finishing memeriksa barang yang sama",
        "Angka di sini akan bersanding dengan temuan QC Finishing per line -- " +
        "yang jujur dari awal tidak pernah perlu menjelaskan selisih."]
@@ -6643,12 +6689,62 @@ function qcRecalc() {
   // keputusan. Angka turunannya ikut mustahil ("cacat ditemukan 105%"), dan
   // pratinjau mustahil di sebelah peringatan merah cuma membuat checker ragu
   // mana yang harus dipercaya. Satu pesan saja: yang merah.
+  qcRenderKoreksiCutting_(afkir);
+
   if (b > l || l + t > p) {
     const prev = document.getElementById("qc-keputusan-preview");
     if (prev) prev.classList.remove("show");
     return;
   }
   qcUpdatePreviewKeputusan_(p, afkir, b + t);
+}
+
+/**
+ * v184 -- blok koreksi Hasil Potong. Tampil HANYA di tahap Potong dengan
+ * afkir > 0. Checkbox default AKTIF (alur dominan: hasil potong dicatat dulu,
+ * QC belakangan -- jadi panel afkir hampir selalu sudah terhitung); dimatikan
+ * kalau panelnya memang belum pernah masuk catatan potong. Salah ke arah
+ * mana pun: nonaktif = kolam menggendut (panel hantu), aktif keliru = kolam
+ * kurus (konservatif, ketahuan saat panel fisiknya ketemu) -- arah kedua
+ * yang lebih aman, makanya jadi default.
+ *
+ * Rincian SIZE wajib: kolam "boleh dibagi" dihitung per size, koreksi tanpa
+ * size cuma membetulkan totalnya sambil membiarkan angka per size bohong.
+ * Checker memegang panelnya -- dia tahu size-nya.
+ */
+function qcRenderKoreksiCutting_(afkir) {
+  const wadah = document.getElementById("qc-koreksi-wrap");
+  if (!wadah) return;
+  const tampil = (QC_TAHAP_DIPILIH === "Potong") && afkir > 0 && QC_MODE_SESI === "baru";
+  wadah.classList.toggle("hidden", !tampil);
+  if (!tampil) { wadah.dataset.afkir = "0"; return; }
+
+  const sizes = QC_WARNA_DIPILIH ? Object.keys(QC_WARNA_DIPILIH.sizeQty || {}) : [];
+  // Dirender ulang hanya saat daftar size berubah -- supaya angka yang sudah
+  // diketik tidak hilang tiap kali qcRecalc jalan.
+  if (wadah.dataset.sizes !== sizes.join("|")) {
+    wadah.dataset.sizes = sizes.join("|");
+    wadah.innerHTML =
+      '<label class="qc-koreksi-cek"><input checked="checked" id="qc-koreksi-aktif" type="checkbox"/> ' +
+      'Kurangi Hasil Potong otomatis (panel afkir ini sudah terhitung di catatan potong)</label>' +
+      '<div class="qc-size-grid">' + sizes.map(function (sz) {
+        return '<div class="qc-size-sel"><label>' + rjdEscapeHtml_(sz) + '</label>' +
+          '<input class="qc-kor-size" data-size="' + rjdEscapeHtml_(sz) +
+          '" min="0" oninput="qcRecalc()" placeholder="0" type="number"/></div>';
+      }).join("") + '</div>' +
+      '<p class="qc-hint" id="qc-koreksi-hint"></p>';
+  }
+  wadah.dataset.afkir = String(afkir);
+  let tot = 0;
+  document.querySelectorAll(".qc-kor-size").forEach(function (i) { tot += Number(i.value) || 0; });
+  const hint = document.getElementById("qc-koreksi-hint");
+  const aktif = (document.getElementById("qc-koreksi-aktif") || {}).checked;
+  if (hint) {
+    hint.textContent = !aktif ? "Nonaktif -- Hasil Potong tidak disentuh."
+      : (tot === afkir ? "Rincian size pas (" + tot + " dari " + afkir + " pcs afkir)."
+        : "Isi size panel afkir: " + tot + " dari " + afkir + " pcs.");
+    hint.className = "qc-hint" + (aktif && tot !== afkir ? " qc-cacat-rinci-salah" : "");
+  }
 }
 
 /**
@@ -6768,6 +6864,20 @@ function qcSubmitPenyelesaian_() {
  * spTerapkanRecutPending_ yang memandu di sana. Baris re-cut tetap baris
  * potong Normal biasa; bedanya cuma jejak "Re-cut Dari QC" di sheet.
  */
+/** v184: kumpulkan isi blok koreksi. null di luar tahap Potong / tanpa afkir. */
+function qcKumpulkanKoreksi_(afkir) {
+  const wadah = document.getElementById("qc-koreksi-wrap");
+  if (!wadah || wadah.classList.contains("hidden") || QC_TAHAP_DIPILIH !== "Potong" || !(afkir > 0)) return null;
+  const perSize = {};
+  let tot = 0;
+  document.querySelectorAll(".qc-kor-size").forEach(function (i) {
+    const v = Number(i.value) || 0;
+    if (v > 0) { perSize[i.dataset.size] = v; tot += v; }
+  });
+  return { aktif: !!(document.getElementById("qc-koreksi-aktif") || {}).checked,
+    afkirPerSize: perSize, totalSize: tot };
+}
+
 function qcKeRecut_() {
   if (!window.QC_RECUT_SIAP) return;
   window.SP_RECUT_PENDING = window.QC_RECUT_SIAP;
@@ -6933,6 +7043,13 @@ function qcSubmitInspeksi() {
     return qcTampilkanError_("Qty lolos (" + qtyLolos + ") + qty ditahan (" + qtyDitahan +
       ") melebihi qty diperiksa (" + qtyDiperiksa + "). Cek lagi angkanya.");
   }
+  // v184: koreksi aktif wajib rinciannya pas -- server menolak juga, ini
+  // supaya ketahuan sebelum tombol dipencet.
+  const korKirim = qcKumpulkanKoreksi_(qtyAfkir);
+  if (korKirim && korKirim.aktif && korKirim.totalSize !== qtyAfkir) {
+    return qcTampilkanError_("Rincian size panel afkir (" + korKirim.totalSize +
+      ") harus sama dengan afkir (" + qtyAfkir + "), atau matikan centang koreksi.");
+  }
   if (qtyLolos > 0 && totalSize !== qtyLolos) {
     return qcTampilkanError_("Rincian qty lolos per size (" + totalSize + ") harus sama dengan Qty Lolos (" + qtyLolos + ").");
   }
@@ -6966,6 +7083,7 @@ function qcSubmitInspeksi() {
         qtyLolos: qtyLolos,
         qtyDiperbaiki: qtyDiperbaiki,
         qtyDitahan: qtyDitahan,
+        koreksiCutting: qcKumpulkanKoreksi_(qtyAfkir),
         lolosPerSize: lolosPerSize,
         detailCacat: detailCacat,
         catatan: document.getElementById("qc-catatan").value.trim(),
@@ -6991,8 +7109,15 @@ function qcSubmitInspeksi() {
           brand: QC_WARNA_DIPILIH.brand || "", artikel: QC_WARNA_DIPILIH.artikel || "",
           style: QC_WARNA_DIPILIH.style || "", warna: QC_WARNA_DIPILIH.warna || ""
         };
+        // v184: laporkan nasib koreksinya -- gagal harus KELIHATAN, karena
+        // artinya sheet perlu dibetulkan tangan.
+        const kor = d.koreksiCutting;
+        const infoKor = !kor ? ""
+          : (kor.sukses ? " Hasil Potong dikurangi " + kor.totalDikurangkan + " pcs otomatis."
+            : ' <b class="qc-kor-gagal">Koreksi Hasil Potong GAGAL: ' + rjdEscapeHtml_(kor.error || "") +
+              " -- kurangi manual di SD Hasil Cutting.</b>");
         el.innerHTML = "Tersimpan (" + rjdEscapeHtml_(d.idQC) + ") -- " + rjdEscapeHtml_(d.keputusan) +
-          ", defect rate " + d.defectRate + "%. <b>" + afkirPotong + " pcs afkir potong perlu diganti.</b>" +
+          ", defect rate " + d.defectRate + "%." + infoKor + " <b>" + afkirPotong + " pcs afkir potong perlu diganti.</b>" +
           '<button class="qc-recut-btn" onclick="qcKeRecut_()" type="button">Buat re-cut ' + afkirPotong + ' pcs &#8594;</button>';
       } else {
         el.textContent = "Tersimpan (" + d.idQC + ") -- " + d.keputusan + ", defect rate " + d.defectRate + "%.";

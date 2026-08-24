@@ -314,17 +314,42 @@ const SOP_SKENARIO = [
     ]
   },
   {
-    judul: "Panel cacat ketahuan saat menjahit",
-    tanya: "Panelnya diganti atau tidak?",
+    // v184: kartu ini DITULIS ULANG. Versi lama (v155) menyuruh line "tetap
+    // menyetor penuh" dan melarang pengembalian -- sebelum ada QC Potong,
+    // keranjang ditahan, koreksi otomatis, dan tombol Buat re-cut. Sekarang
+    // tiap fakta punya bukunya sendiri, jadi tidak ada lagi yang perlu
+    // dipura-purakan penuh.
+    judul: "Panel cacat ketahuan saat menjahit (contoh: loading 100, jadi 98, rusak 2)",
+    tanya: "Urutannya tiga langkah -- jangan ada yang dilompati:",
     baris: [
-      ["Diganti (hampir selalu)",
-       "Cutting \u203a Gelaran \u203a mode <b>Re-cut</b>, isi komponen + alasan + line",
-       "Kain naik, jumlah baju tetap. Line tetap menyetor penuh. " +
-       "<b>Panel pengganti diserahkan langsung \u2014 jangan dicatat sebagai pembagian baru.</b>"],
-      ["Tidak bisa diganti (kain habis)",
-       "Line menyetor kurang; selisihnya dijelaskan di catatan setoran",
-       "Jangan dikembalikan lewat form pengembalian \u2014 barangnya cacat, dan pool " +
-       "akan menawarkannya ke line berikutnya."]
+      ["1. Line: setor hasil nyata",
+       "Sewing \u203a Setoran: <b>98 Jadi Baju</b>, lalu <b>2 Dikembalikan</b> dengan catatan \"panel rusak\"",
+       "WIP line jadi nol dan persen selesai dihitung dari 98 \u2014 line tidak menanggung dosa cutting. " +
+       "<b>Jangan catat 2 pcs itu di QC Jahit</b>: panel rusak bukan cacat jahitan."],
+      ["2. Cutting: catat afkirnya",
+       "Cutting \u203a <b>QC Potong</b>: diperiksa 2, lolos 0, jenis \"panel rusak\", catatan asal line-nya. " +
+       "<b>Centang koreksi</b> + isi size panelnya",
+       "Koreksi otomatis mengeluarkan panel mati dari \"sisa boleh dibagi\" \u2014 tanpa ini, " +
+       "sistem menawarkan panel rusak ke line berikutnya."],
+      ["3. Cutting: potong penggantinya",
+       "Tekan tombol <b>Buat re-cut 2 pcs</b> yang muncul setelah simpan \u2192 isi qty di baris tersorot " +
+       "\u2192 bagi ke line seperti biasa",
+       "Jejak QC tercatat otomatis di baris potongnya. Kain gelaran penggantinya tetap dicatat " +
+       "di Gelaran seperti potong biasa."]
+    ]
+  },
+  {
+    judul: "Barang QC belum selesai diperbaiki saat mau dicatat (PO besar dicicil)",
+    tanya: "Jangan dipaksa memilih lolos atau afkir:",
+    baris: [
+      ["Saat mencatat QC",
+       "Isi kolom <b>Qty ditahan</b> sejumlah yang masih di keranjang perbaikan",
+       "Barang ditahan belum masuk stok siap kirim, dan tidak terhitung afkir."],
+      ["Saat perbaikannya selesai",
+       "Buka pintu QC yang sama \u2192 spanduk \"N pcs masih di keranjang\" \u2192 <b>Selesaikan sekarang</b> " +
+       "\u2192 isi berapa akhirnya lolos (per size) dan berapa akhirnya afkir",
+       "Boleh dicicil; sisanya tetap tercatat. Cacat BARU yang ketemu saat memperbaiki " +
+       "dicatat lewat sesi inspeksi biasa, bukan di sini."]
     ]
   },
   {
