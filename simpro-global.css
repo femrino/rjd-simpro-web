@@ -1120,3 +1120,36 @@ footer{padding:28px 0;background:var(--ink)}
 @media (max-width: 520px) {
   .rjd-nama-sistem { display: none; }
 }
+
+/* ============================================================
+   TOMBOL AKSI YANG BERGANTUNG AREA (v172)
+   ============================================================
+   Masalah yang diperbaiki: di halaman Orderan, tombol "Terbitkan Proforma"
+   dan "Edit" SELALU dirender. Staf produksi melihatnya, mengklik, lalu
+   ditolak backend. Penolakannya benar -- tapi menawarkan sesuatu yang pasti
+   ditolak membuat orang mengira sistemnya rusak, bukan mengira dirinya tidak
+   berhak.
+
+   Dipakai penanda yang SUDAH ADA: rjdPasangMenuPeran_ menulis daftar area ke
+   body[data-area], dipisah spasi. Selektor ~= cocok persis untuk daftar
+   semacam itu, jadi tidak perlu JS tambahan di tiap halaman.
+
+   INI LAPIS KEDUA, bukan penjaga. Yang menolak tetap backend
+   (AREA_PER_AKSI + BAGIAN_PER_AKSI di akses-role.gs). Menyembunyikan tombol
+   di layar tidak menghalangi siapa pun yang membuka alat pengembang, dan
+   memang tidak dimaksudkan untuk itu.
+
+   FAIL-SAFE KE TERSEMBUNYI: selama body belum punya data-area (jawaban peran
+   dari server belum tiba), tombolnya ikut tersembunyi. Arah yang benar --
+   tombol yang terlambat muncul cuma merepotkan sesaat, sedangkan tombol yang
+   sempat terlihat lalu hilang membuat orang mengira ia kehilangan akses.
+   ============================================================ */
+
+.rjd-aksi-keuangan { display: none; }
+body[data-area~="keuangan"] .rjd-aksi-keuangan { display: inline; }
+
+/* Varian untuk tombol yang memang berbentuk blok/tombol, bukan tautan
+   sebaris. Dipisah karena display:inline akan merusak tata letaknya. */
+body[data-area~="keuangan"] button.rjd-aksi-keuangan,
+body[data-area~="keuangan"] .rjd-aksi-keuangan-blok { display: inline-block; }
+.rjd-aksi-keuangan-blok { display: none; }

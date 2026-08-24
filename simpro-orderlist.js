@@ -227,7 +227,7 @@ function dbRenderDaftarPO(){
       if (!p.siapCetakProforma) {
         proforma = '<span class="db-po-kosong" title="Isi dulu rincian warna &amp; size di SD Rincian Sales Order">-</span>';
       } else if (!p.idProforma) {
-        proforma = '<a href="#" class="db-po-terbit" onclick="olTerbitkanProforma(\'' +
+        proforma = '<a href="#" class="db-po-terbit rjd-aksi-keuangan" onclick="olTerbitkanProforma(\'' +
           rjdEscapeHtml_(p.idPurchaseOrder).replace(/'/g, "") + '\', false); return false;">Terbitkan</a>';
       } else {
         // TIDAK menampilkan indikator "nilai berubah" di sini, walau datanya
@@ -244,7 +244,7 @@ function dbRenderDaftarPO(){
             rjdEscapeHtml_(p.idProforma) +
             (p.versiProforma > 1 ? ' v' + p.versiProforma : '') +
           '</div>' +
-          ' &#183; <a href="#" class="db-po-terbit" onclick="olTerbitkanProforma(\'' +
+          ' &#183; <a href="#" class="db-po-terbit rjd-aksi-keuangan" onclick="olTerbitkanProforma(\'' +
             rjdEscapeHtml_(p.idPurchaseOrder).replace(/'/g, "") + '\', true); return false;">Revisi</a>';
       }
       return '<tr>' +
@@ -271,7 +271,13 @@ function dbRenderDaftarPO(){
         '<td class="db-po-cetak">' + proforma + '</td>' +
         '<td class="db-po-cetak">' + cetak +
           (p.siapCetakSPK
-            ? ' &#183; <a href="#" onclick="dbBukaEditPO(\'' + rjdEscapeHtml_(p.idPurchaseOrder).replace(/'/g, "") + '\'); return false;">Edit</a>'
+            // v172: kelas rjd-aksi-keuangan -- disembunyikan CSS untuk peran
+            // yang tidak punya area "keuangan" (lihat simpro-global.css).
+            // Sebelumnya tombol ini SELALU dirender: staf produksi melihat
+            // "Edit" lalu mengkliknya, dan baru ditolak setelah formulirnya
+            // terbuka. Backend memang menahan, tapi menawarkan sesuatu yang
+            // pasti ditolak membuat orang mengira sistemnya rusak.
+            ? ' &#183; <a class="rjd-aksi-keuangan" href="#" onclick="dbBukaEditPO(\'' + rjdEscapeHtml_(p.idPurchaseOrder).replace(/'/g, "") + '\'); return false;">Edit</a>'
             : '') + '</td>' +
       '</tr>';
     }).join("") +
