@@ -121,6 +121,16 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   border-radius: 8px; padding: 6px 12px; cursor: pointer; }
 .qc-ditahan-banner button:hover, .qc-py-kepala button:hover { background: var(--navy); color: var(--white); }
 
+/* v183 -- sambungan cacat potong ke re-cut. Baris warna target disorot,
+   bukan diisi otomatis: afkir dicatat total, pembagian per size keputusan
+   kepala cutting. Sorotnya cukup jelas tanpa berteriak. */
+tr.sp-recut-target > td { background: #FBF3E4 !important; }
+tr.sp-recut-target > td:first-child { box-shadow: inset 3px 0 0 #C9972B; }
+.qc-recut-btn { display: block; margin-top: 8px; font-size: 12px; font-weight: 700;
+  color: var(--white); background: var(--navy); border: 1px solid var(--navy);
+  border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.qc-recut-btn:hover { opacity: .88; }
+
 .qc-keputusan-preview { margin-top: 8px; padding: 10px 12px; border-radius: 9px; font-size: 12.5px;
   display: none; align-items: center; gap: 8px; }
 .qc-keputusan-preview.show { display: flex; }

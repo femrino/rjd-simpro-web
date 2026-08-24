@@ -1579,7 +1579,8 @@ function spRenderFormCutting() {
           '<span class="sp-grup-sisa">order ' + orderItem + ' &#183; potong ' + potongItem + '</span></td></tr>';
       }
       return kepala + '<tr data-artikel="' + rjdEscapeHtml_(b.artikel || "") +
-        '" data-style="' + rjdEscapeHtml_(b.style || "") + '">' +
+        '" data-style="' + rjdEscapeHtml_(b.style || "") +
+        '" data-warna="' + rjdEscapeHtml_(b.warna || "") + '">' +
         '<td><div class="sp-warna">' + rjdEscapeHtml_(b.warna || "-") + '</div>' +
           '<div class="sp-sisa-info">order ' + b.totalOrder + ' &#183; potong ' + b.totalPotong +
             (b.totalPotong ? (s === 0 ? ' (pas)' : (s > 0 ? ' (+' + s + ' overcut)' : ' (' + s + ')')) : '') +
@@ -1605,6 +1606,7 @@ function spRenderFormCutting() {
       "-" + String(t.getDate()).padStart(2, "0");
   }
   spHitungTotalCutting();
+  spTerapkanRecutPending_();   // v183: pemandu re-cut ikut tiap render ulang
 }
 
 function spHitungTotalCutting() {
@@ -1663,6 +1665,9 @@ function spSimpanCutting() {
         kainDipakai: (document.getElementById("sp-cut-kain") || {}).value || "",
         satuanKain: (document.getElementById("sp-cut-satuan") || {}).value || "meter",
         catatan: (document.getElementById("sp-cut-catatan") || {}).value || "",
+        // v183: jejak re-cut ikut hanya kalau sesi ini memang lahir dari
+        // tombol "Buat re-cut" -- potong biasa tidak membawa apa-apa.
+        recutDariQC: (window.SP_RECUT_PENDING && window.SP_RECUT_PENDING.idQC) || "",
         baris: barisKirim
       }
     })
@@ -1685,6 +1690,10 @@ function spSimpanCutting() {
     // memakai angka lama dan pembagian berikutnya dihitung dari dasar salah.
     window.SP_CUT = null;
     window.SP_PO = null;
+    // v183: satu jejak untuk satu penyimpanan. Kalau pending tidak dihapus,
+    // potongan biasa berikutnya ikut tercap re-cut QC yang sama.
+    window.SP_RECUT_PENDING = null;
+    spTerapkanRecutPending_();
     spMuatCutting();
   })
   .catch(function () {
@@ -6753,6 +6762,59 @@ function qcSubmitPenyelesaian_() {
     });
 }
 
+/**
+ * v183: sambungan cacat potong -> re-cut. Membawa konteks QC ke subtab Hasil
+ * Potong (fase yang sama, PO yang sama -- kartu PO aktif tidak berubah), lalu
+ * spTerapkanRecutPending_ yang memandu di sana. Baris re-cut tetap baris
+ * potong Normal biasa; bedanya cuma jejak "Re-cut Dari QC" di sheet.
+ */
+function qcKeRecut_() {
+  if (!window.QC_RECUT_SIAP) return;
+  window.SP_RECUT_PENDING = window.QC_RECUT_SIAP;
+  window.QC_RECUT_SIAP = null;
+  spSwitchTab("cutting");
+}
+
+/**
+ * Dipanggil di akhir render tabel Hasil Potong. Tiga hal: spanduk pemandu,
+ * catatan terisi jejak, baris warna yang cocok disorot. Qty per size SENGAJA
+ * tidak diisi otomatis -- afkir QC dicatat total (bukan per size), jadi
+ * pembagian ulangnya memang keputusan kepala cutting, bukan tebakan sistem.
+ */
+function spTerapkanRecutPending_() {
+  const lamaB = document.getElementById("sp-recut-banner");
+  const pend = window.SP_RECUT_PENDING;
+  if (!pend) { if (lamaB) lamaB.remove(); return; }
+
+  const panel = document.getElementById("sp-panel-cutting");
+  if (!panel) return;
+  let b = lamaB;
+  if (!b) {
+    b = document.createElement("div");
+    b.id = "sp-recut-banner";
+    b.className = "qc-ditahan-banner";
+    const anchor = panel.querySelector(".sp-panduan");
+    if (anchor) anchor.insertAdjacentElement("afterend", b);
+    else panel.insertAdjacentElement("afterbegin", b);
+  }
+  b.innerHTML = '<b>Re-cut ' + pend.afkir + ' pcs</b> pengganti afkir potong ' +
+    rjdEscapeHtml_(pend.idQC) + ' -- warna <b>' + rjdEscapeHtml_(pend.warna || "-") + '</b>' +
+    (pend.artikel ? ' (' + rjdEscapeHtml_(pend.artikel) + ')' : '') +
+    '. Isi qty di baris yang disorot; pembagian per size terserah kepala cutting, totalnya ' +
+    pend.afkir + ' pcs. Jejak QC tercatat otomatis saat disimpan.' +
+    '<button onclick="window.SP_RECUT_PENDING=null; spTerapkanRecutPending_();" type="button">Batal, potong biasa saja</button>';
+
+  const kw = qcKunciWarnaFE_(pend.brand, pend.artikel, pend.style, pend.warna);
+  document.querySelectorAll("#sp-panel-cutting tr[data-warna]").forEach(function (tr) {
+    const cocok = qcKunciWarnaFE_("", tr.dataset.artikel, tr.dataset.style, tr.dataset.warna)
+      === qcKunciWarnaFE_("", pend.artikel, pend.style, pend.warna);
+    tr.classList.toggle("sp-recut-target", cocok);
+  });
+
+  const cat = document.getElementById("sp-cut-catatan");
+  if (cat && !cat.value) cat.value = "Re-cut " + pend.idQC + " (" + pend.afkir + " pcs, warna " + (pend.warna || "-") + ")";
+}
+
 function qcTambahBarisCacat() {
   if (!QC_TAHAP_DIPILIH) {
     const hint = document.getElementById("qc-detail-hint");
@@ -6920,7 +6982,21 @@ function qcSubmitInspeksi() {
         return;
       }
       const el = document.getElementById("qc-submit-sukses");
-      el.textContent = "Tersimpan (" + d.idQC + ") -- " + d.keputusan + ", defect rate " + d.defectRate + "%.";
+      // v183: cacat potong -> tombol "Buat re-cut". Konteks warna DIREKAM
+      // SEBELUM qcResetForm_ menghapusnya -- tombolnya dipencet sesudah reset.
+      const afkirPotong = (QC_TAHAP_DIPILIH === "Potong" && d.qtyAfkir > 0) ? d.qtyAfkir : 0;
+      if (afkirPotong && QC_WARNA_DIPILIH) {
+        window.QC_RECUT_SIAP = {
+          idQC: d.idQC, afkir: afkirPotong,
+          brand: QC_WARNA_DIPILIH.brand || "", artikel: QC_WARNA_DIPILIH.artikel || "",
+          style: QC_WARNA_DIPILIH.style || "", warna: QC_WARNA_DIPILIH.warna || ""
+        };
+        el.innerHTML = "Tersimpan (" + rjdEscapeHtml_(d.idQC) + ") -- " + rjdEscapeHtml_(d.keputusan) +
+          ", defect rate " + d.defectRate + "%. <b>" + afkirPotong + " pcs afkir potong perlu diganti.</b>" +
+          '<button class="qc-recut-btn" onclick="qcKeRecut_()" type="button">Buat re-cut ' + afkirPotong + ' pcs &#8594;</button>';
+      } else {
+        el.textContent = "Tersimpan (" + d.idQC + ") -- " + d.keputusan + ", defect rate " + d.defectRate + "%.";
+      }
       el.classList.remove("hidden");
       qcResetForm_();
       // Operator baru yang barusan diketik ikut masuk daftar autocomplete
