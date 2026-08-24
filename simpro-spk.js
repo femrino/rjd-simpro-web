@@ -3086,6 +3086,16 @@ const SP_TERCATAT_PROFIL = {
     aksiMuat: "getRiwayatCutting",
     aksiBatal: "batalkanHasilCutting",
     kunciId: "idCutting",
+    // v179: nama kolom qty & tanggal BERBEDA di tiap jenis, dan itu harus
+    // ditulis di sini, bukan ditebak dengan rantai `a || b || c`.
+    //
+    // Versi v178 memakai `k.totalQty || k.total || 0` -- rantai itu tidak
+    // pernah melempar error, cuma menghasilkan 0 dan "-" untuk cutting, dan
+    // angka nol di daftar catatan terbaca seperti data yang memang nol.
+    // Ditulis eksplisit supaya kalau kelak ada jenis baru yang namanya lain
+    // lagi, kolomnya kosong dengan jelas -- bukan diam-diam nol.
+    kunciQty: "totalPotong",
+    kunciTanggal: "tanggalPotong",
     kosong: "Belum ada hasil potong untuk PO ini.",
     // Disegarkan sesudah batal: qty hasil potong adalah BATAS yang boleh
     // dibagi ke line, jadi form pembagian yang masih memakai angka lama akan
@@ -3098,6 +3108,8 @@ const SP_TERCATAT_PROFIL = {
     aksiMuat: "getRiwayatDistribusi",
     aksiBatal: "batalkanDistribusi",
     kunciId: "idDistribusi",
+    kunciQty: "totalQty",
+    kunciTanggal: "tanggalSerah",
     kosong: "Belum ada pembagian untuk PO ini.",
     segarkan: function () { if (typeof spMuatDistribusi === "function") spMuatDistribusi(); }
   },
@@ -3107,16 +3119,36 @@ const SP_TERCATAT_PROFIL = {
     aksiMuat: "getRiwayatSetoran",
     aksiBatal: "batalkanSetoran",
     kunciId: "idSetoran",
+    kunciQty: "total",
+    kunciTanggal: "tanggal",
     kosong: "Belum ada setoran untuk PO ini.",
     segarkan: function () { if (typeof spMuatSetoran === "function") spMuatSetoran(); }
   }
 };
 
-/** Rincian size jadi teks pendek: "S 5  M 5". */
+/**
+ * Rincian size jadi teks pendek: "S 5  M 5".
+ *
+ * v179: DUA BENTUK yang harus dilayani, dan itu bukan pilihan gaya --
+ * rutenya memang mengirim berbeda:
+ *   setoran            -> k.sizeQty = { S: 5, M: 5 }     (objek)
+ *   cutting/distribusi -> k.rincian = [{size,qty}, ...]  (array)
+ *
+ * Versi v178 cuma membaca sizeQty, jadi rincian cutting dan pembagian hilang
+ * tanpa jejak. Ditangani di satu tempat supaya tiga pemanggilnya tidak perlu
+ * tahu bedanya.
+ */
 function spTercatatSize_(k) {
-  const sq = k.sizeQty || {};
-  return Object.keys(sq).filter(function (s) { return Number(sq[s]) > 0; })
-    .map(function (s) { return spEsc_(s) + " " + sq[s]; }).join("  ");
+  if (k && k.sizeQty && Object.keys(k.sizeQty).length) {
+    const sq = k.sizeQty;
+    return Object.keys(sq).filter(function (s) { return Number(sq[s]) > 0; })
+      .map(function (s) { return spEsc_(s) + " " + sq[s]; }).join("  ");
+  }
+  if (k && Array.isArray(k.rincian)) {
+    return k.rincian.filter(function (x) { return Number(x.qty) > 0; })
+      .map(function (x) { return spEsc_(x.size) + " " + x.qty; }).join("  ");
+  }
+  return "";
 }
 
 function spMuatTercatat_(jenis) {
@@ -3191,7 +3223,12 @@ function spRenderTercatat_(jenis) {
       const boleh = (typeof spBolehBatalRiwayat_ === "function")
         ? spBolehBatalRiwayat_(jenis, k) : true;
       const sz = spTercatatSize_(k);
-      const item = [k.artikel, k.style, k.warna].filter(String).join(" / ") || "-";
+      // k.artikel dari rute riwayat SUDAH gabungan brand/artikel/style --
+      // menambahkan k.style lagi menghasilkan "Inara Dress / / Butter" dengan
+      // garis miring ganda. Warna dipisah karena ia yang paling dicari mata
+      // saat memeriksa catatan.
+      const item = spEsc_(k.artikel || "-") +
+        (k.warna ? ' &#183; <b>' + spEsc_(k.warna) + '</b>' : '');
       // Arah panah membedakan dua hal yang angkanya sama-sama "pcs":
       // distribusi keluar ke line, setoran masuk dari line.
       const line = k.namaLine
@@ -3203,10 +3240,11 @@ function spRenderTercatat_(jenis) {
           (k.status && !dibatalkan
             ? '<div class="sp-gelar-size">' + spEsc_(k.status) + '</div>' : '') +
           '</td>' +
-        '<td data-label="Item">' + spEsc_(item) + line +
+        '<td data-label="Item">' + item + line +
           (sz ? '<div class="sp-gelar-size">' + sz + '</div>' : '') + '</td>' +
-        '<td class="num" data-label="Qty"><b>' + (k.totalQty || k.total || 0) + '</b></td>' +
-        '<td data-label="Tanggal">' + spEsc_(k.tanggal || "-") + '</td>' +
+        '<td class="num" data-label="Qty"><b>' +
+          (Number(k[p.kunciQty]) || 0) + '</b></td>' +
+        '<td data-label="Tanggal">' + spEsc_(k[p.kunciTanggal] || "-") + '</td>' +
         '<td data-label="" class="sp-td-aksi">' +
           (dibatalkan
             ? '<span class="sp-riw-kunci">sudah dibatalkan</span>'
