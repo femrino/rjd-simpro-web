@@ -1420,6 +1420,13 @@ function spSwitchTab(tab) {
   if (tab === "sop") { spMuatSOP_(); return; }
   if (tab === "orderan") { spRenderOrderan_(); return; }
   if (tab === "detailorder") { spMuatDetailOrder_(); return; }
+  if (tab === "setor") {
+    // v177: daftar setoran tercatat dimuat SEKALIGUS saat tab dibuka, bukan
+    // menunggu line dipilih. Koreksi sering justru dilakukan tanpa niat
+    // menyetor apa pun -- memaksa memilih line dulu berarti menyuruh orang
+    // menyiapkan input untuk sesuatu yang ingin dibatalkannya.
+    if (window.SP_PO_AKTIF) spMuatSetoranTercatat_();
+  }
   if (tab === "keluar") { if (window.SP_PO_AKTIF) spMuatKeluar_(); return; }
   if (tab === "siapkan") { spMuatSiapkan_(); return; }
   if (tab === "spkrekap") { if (!window.SP_PO) spMuatDistribusi(); return; }
@@ -3044,6 +3051,161 @@ function spMuatRiwayat() {
   .catch(function () {
     wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
   });
+}
+
+/* ============================================================
+ * SETORAN TERCATAT DI TABNYA SENDIRI (v177)
+ * ============================================================
+ * Sampai v176, membatalkan setoran yang salah input mengharuskan orang pindah
+ * ke tab Riwayat -- padahal tab itu jarang dibuka untuk keperluan lain.
+ * Akibatnya koreksi terasa jauh, dan yang jauh cenderung ditunda.
+ *
+ * Pola ini bukan hal baru: Gelaran, Marker, Roll, Progres Tahap, dan Potongan
+ * Keluar SUDAH punya daftar tercatat + tombol Batalkan di tabnya masing-masing.
+ * Justru tiga catatan yang PALING SERING diinput (potong, bagi, setor) yang
+ * tertinggal -- karena ketiganya lahir lebih dulu, sebelum polanya mapan.
+ *
+ * Yang dikerjakan di sini SETORAN dulu, sebagai contoh untuk dua sisanya.
+ *
+ * SENGAJA MEMAKAI RUTE YANG SAMA (getRiwayatSetoran + batalkanSetoran) dan
+ * aturan boleh-batal yang sama (spBolehBatalRiwayat_). Menulis jalur kedua
+ * berarti suatu saat dua tempat berbeda perilakunya, dan yang satu diperbaiki
+ * sedangkan yang lain tidak.
+ * ============================================================ */
+
+/** Muat setoran tercatat untuk PO aktif. Dipanggil setelah panel setoran siap. */
+function spMuatSetoranTercatat_() {
+  const wadah = document.getElementById("sp-setor-tercatat");
+  if (!wadah) return;
+  const idPO = window.SP_PO_AKTIF;
+  if (!idPO) { wadah.innerHTML = ""; return; }
+
+  wadah.innerHTML = '<div class="sp-card">' +
+    (typeof spMuatHtml_ === "function"
+      ? spMuatHtml_("Memuat setoran tercatat...")
+      : '<p class="sp-info">Memuat...</p>') + '</div>';
+
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: SP_ID_TOKEN,
+      action: "getRiwayatSetoran",
+      opsi: { idPurchaseOrder: idPO }
+    })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) {
+      wadah.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' +
+        rjdEscapeHtml_((d && d.error) || "Gagal memuat setoran tercatat.") + '</p></div>';
+      return;
+    }
+    window.SP_SETOR_TERCATAT = d.daftar || d.data || [];
+    spRenderSetoranTercatat_();
+  })
+  .catch(function () {
+    wadah.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' +
+      'Gagal menghubungi server.</p></div>';
+  });
+}
+
+function spRenderSetoranTercatat_() {
+  const wadah = document.getElementById("sp-setor-tercatat");
+  if (!wadah) return;
+  const daftar = window.SP_SETOR_TERCATAT || [];
+
+  if (!daftar.length) {
+    wadah.innerHTML = '<div class="sp-card">' +
+      '<h3 class="sp-judul">Setoran Tercatat</h3>' +
+      '<p class="sp-info">Belum ada setoran untuk PO ini.</p></div>';
+    return;
+  }
+
+  const aktif = daftar.filter(function (k) { return k.status !== "Dibatalkan"; }).length;
+  const batal = daftar.length - aktif;
+
+  wadah.innerHTML = '<div class="sp-card">' +
+    '<h3 class="sp-judul">Setoran Tercatat</h3>' +
+    '<p class="sp-info">' + aktif + ' setoran tercatat' +
+      (batal ? ' &#183; ' + batal + ' dibatalkan' : '') +
+      '. Salah input? Batalkan lalu catat ulang &#8212; barisnya tidak dihapus, ' +
+      'supaya jelas pernah ada kesalahan.</p>' +
+    '<div class="sp-tabelwrap"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
+      '<th>Setoran</th><th>Item</th><th class="num">Qty</th><th>Tanggal</th><th/>' +
+    '</tr></thead><tbody>' +
+    daftar.map(function (k, i) {
+      const dibatalkan = k.status === "Dibatalkan";
+      // Aturan boleh-batal DIPINJAM dari tab Riwayat, bukan ditulis ulang:
+      // setoran hanya boleh dibatalkan line yang menginputnya, dan aturan itu
+      // sudah dirumuskan sekali di sana.
+      const boleh = (typeof spBolehBatalRiwayat_ === "function")
+        ? spBolehBatalRiwayat_("setoran", k) : true;
+      const sz = (k.sizeQty && Object.keys(k.sizeQty).length)
+        ? Object.keys(k.sizeQty).filter(function (s) { return k.sizeQty[s] > 0; })
+            .map(function (s) { return spEsc_(s) + " " + k.sizeQty[s]; }).join("  ")
+        : "";
+      return '<tr' + (dibatalkan ? ' class="sp-ord-selesai"' : '') + '>' +
+        '<td data-label="Setoran"><b>' + spEsc_(k.idSetoran || "-") + '</b>' +
+          (dibatalkan ? ' <span class="sp-tag-batal">DIBATALKAN</span>' : '') +
+          (k.namaLine ? '<div class="sp-gelar-size">' + spEsc_(k.namaLine) + '</div>' : '') +
+          '</td>' +
+        '<td data-label="Item">' +
+          spEsc_([k.artikel, k.style, k.warna].filter(String).join(" / ") || "-") +
+          (sz ? '<div class="sp-gelar-size">' + sz + '</div>' : '') + '</td>' +
+        '<td class="num" data-label="Qty"><b>' + (k.totalQty || k.total || 0) + '</b></td>' +
+        '<td data-label="Tanggal">' + spEsc_(k.tanggal || "-") + '</td>' +
+        '<td data-label="" class="sp-td-aksi">' +
+          (dibatalkan
+            ? '<span class="sp-riw-kunci">sudah dibatalkan</span>'
+            : (boleh
+              ? '<button class="sp-btn-kecil" type="button" ' +
+                'onclick="spBatalSetoranTercatat_(' + i + ')">Batalkan</button>'
+              : '<span class="sp-riw-kunci">bukan line-mu</span>')) +
+        '</td>' +
+      '</tr>';
+    }).join("") +
+    '</tbody></table></div></div>';
+}
+
+/**
+ * Batalkan dari daftar di tab Setoran.
+ *
+ * Ditulis terpisah dari spBatalkanCatatan (tab Riwayat) HANYA karena sumber
+ * arraynya berbeda -- rute API, isi konfirmasi, dan alasan-wajibnya sama
+ * persis. Kalau kelak salah satunya berubah, yang lain harus ikut.
+ */
+function spBatalSetoranTercatat_(i) {
+  const k = (window.SP_SETOR_TERCATAT || [])[i];
+  if (!k) return;
+  const id = k.idSetoran;
+
+  const alasan = prompt("Batalkan setoran " + id + "?\n\n" +
+    "Barisnya TIDAK dihapus \u2014 ditandai batal dan tidak ikut dihitung, " +
+    "supaya jelas pernah ada kesalahan.\n\nAlasan pembatalan:");
+  if (alasan === null) return;
+  if (!alasan.trim()) { alert("Alasan wajib diisi."); return; }
+
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: SP_ID_TOKEN,
+      action: "batalkanSetoran",
+      payload: { idSetoran: id, alasan: alasan.trim() }
+    })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) {
+      alert((d && d.error) || "Gagal membatalkan setoran.");
+      return;
+    }
+    // Dua-duanya disegarkan: daftar tercatat DAN form setoran. Qty yang
+    // dibatalkan mengubah sisa yang boleh disetor, dan form yang masih
+    // menampilkan angka lama akan menolak input yang sebenarnya sah.
+    spMuatSetoranTercatat_();
+    if (typeof spMuatSetoran === "function") spMuatSetoran();
+  })
+  .catch(function () { alert("Gagal menghubungi server."); });
 }
 
 function spRenderRiwayat() {
