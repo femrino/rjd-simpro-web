@@ -132,6 +132,22 @@ function krBukaDariTautan_() {
   po = String(po).trim();
   if (!po) return;
 
+  // v175: jembatan TIDAK BOLEH menembus gerbang bagian.
+  //
+  // Tab "Buat Surat Jalan" disembunyikan CSS untuk yang bukan bagian gudang,
+  // tapi fungsi ini memanggil krSwitchTab langsung -- kalau tidak diperiksa,
+  // tautan ?po=... dari halaman produksi akan membuka panel yang seharusnya
+  // tidak terlihat. Menyembunyikan pintu tidak ada gunanya kalau ada lorong
+  // yang menuju ke ruangan yang sama.
+  //
+  // Penandanya body[data-bagian] (v175). "lintas" = peran full/admin atau
+  // kolom Bagian kosong. Kalau penandanya BELUM ADA -- jawaban peran belum
+  // tiba -- jembatan tetap dijalankan: gerbang sesungguhnya ada di backend,
+  // dan menahan orang yang berhak lebih merugikan daripada membuka tab yang
+  // isinya tetap akan ditolak saat disimpan.
+  const tanda = document.body.getAttribute("data-bagian");
+  if (tanda !== null && !/\b(gudang|lintas)\b/.test(tanda)) return;
+
   krSwitchTab("buat");
   // Rincian PO dimuat lewat rute yang sama dengan pilihan manual, jadi tidak
   // ada jalur kedua yang bisa berbeda perilakunya.
