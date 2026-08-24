@@ -3127,6 +3127,21 @@ var LP_ORDER_EDIT_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"
 
 /** Halaman -> area yang dibutuhkan. Halaman tanpa entri = boleh semua. */
 var RJD_AREA_HALAMAN = {
+  // v172: Upah Borongan BELUM DIPUBLIKASIKAN ke tim. Sistem tarifnya masih
+  // disetel (Master Operator belum dibuat, CT masih terangkat oleh magang),
+  // dan halaman upah yang dibuka sebelum angkanya benar akan menimbulkan
+  // pertanyaan yang tidak bisa dijawab -- lalu kepercayaan pada angkanya
+  // hilang sebelum sempat dipakai.
+  //
+  // Areanya "penggajian" -- area TERSENDIRI, bukan menumpang "keuangan".
+  // Upah per operator adalah data ORANG: peran admin/CS punya area keuangan
+  // dan memang perlu (tagihan, harga), tapi upah rekan kerja hal berbeda.
+  // Yang punya area ini cuma "full" dan "finance" (v172).
+  //
+  // GERBANG SESUNGGUHNYA ada di backend (PERAN_BOLEH_UPAH_PENUH di
+  // penggajian-borongan.gs). Baris ini cuma menyembunyikan TAUTANNYA, supaya
+  // tidak ada yang mengklik sesuatu yang pasti menolaknya.
+  "/p/upah.html":          "penggajian",
   "/p/invoice.html":       "keuangan",
   "/p/kalkulator-harga.html": "keuangan",
   "/p/laporan-omset.html": "pajak",
