@@ -1564,3 +1564,9 @@ body.sp-siap #sp-subtabs { visibility: visible; }
   .sp-tautan-kotak { text-align: center; }
   .sp-stok-jembatan-ket { text-align: center; }
 }
+
+/* v186: tautan SPK per serahan (batch) di ringkasan "Sudah dibagi ke" & kartu riwayat */
+.sp-ringkas-batch { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 2px 0 6px 12px; }
+.sp-ringkas-batch a { font-size: 10.5px; color: var(--ink-soft); text-decoration: underline dotted; }
+.sp-riw-cetak { margin-top: 6px; }
+.sp-riw-cetak a { font-size: 11px; font-weight: 600; }

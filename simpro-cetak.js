@@ -81,6 +81,7 @@ const CK_ID = ckGetQueryParam("id");
 // dari SD Distribusi Potongan. Tanpa parameter ini, dokumennya SPK PO penuh
 // seperti sebelumnya -- tautan cetak lama tidak berubah perilakunya.
 const CK_LINE = ckGetQueryParam("line");
+const CK_BATCH = ckGetQueryParam("batch");   // v186: SPK per serahan (prefix ID Distribusi)
 let CK_ID_TOKEN = null;
 let CK_AUTO_LOGIN = false; // true kalau token dipakai berasal dari sesi tersimpan, bukan login barusan
 
@@ -138,7 +139,7 @@ function ckFetchData(){
   const action = CK_ACTION_MAP[CK_JENIS];
   fetch(CK_API_URL, {
     method: "POST",
-    body: JSON.stringify({ idToken: CK_ID_TOKEN, action: action, id: CK_ID, line: CK_LINE || "" })
+    body: JSON.stringify({ idToken: CK_ID_TOKEN, action: action, id: CK_ID, line: CK_LINE || "", batch: CK_BATCH || "" })
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
@@ -1169,12 +1170,20 @@ function ckSPKLineHtml_(line, ringkasan){
       '</div>' +
       '<div class="ck-spk-line-qty">' +
         '<div class="angka">' + line.totalQtyLine + '</div>' +
-        '<div class="ket">pcs jatah line ini</div>' +
+        '<div class="ket">' + (line.batch ? 'pcs serahan ini' : 'pcs jatah line ini') + '</div>' +
       '</div>' +
     '</div>' +
     '<div class="ck-spk-line-bagi">' +
-      'Jatah ini <b>' + line.persenDariPO + '%</b> dari total PO ' + line.totalQtyPO + ' pcs' +
-      (line.serahTerakhir ? ' &#183; serah terakhir ' + rjdEscapeHtml_(line.serahTerakhir) : '') +
+      // v186: mode batch -- kertas ini untuk SATU serahan. Total jatah line dari
+      // semua serahan tetap ditulis supaya kepala line tahu ini bagian ke berapa.
+      (line.batch
+        ? '<b>Serahan ' + line.batch.urutan + ' dari ' + line.batch.dariBatch + '</b>' +
+          (line.batch.tanggalSerah ? ' &#183; ' + rjdEscapeHtml_(line.batch.tanggalSerah) : '') +
+          ' &#183; ' + rjdEscapeHtml_(line.batch.idBatch) +
+          ' &#183; total jatah ' + rjdEscapeHtml_(line.namaLine) + ' di PO ini ' + line.totalQtyLineSeluruh + ' pcs' +
+          ' (' + line.persenDariPO + '% dari PO ' + line.totalQtyPO + ' pcs untuk serahan ini)'
+        : 'Jatah ini <b>' + line.persenDariPO + '%</b> dari total PO ' + line.totalQtyPO + ' pcs' +
+          (line.serahTerakhir ? ' &#183; serah terakhir ' + rjdEscapeHtml_(line.serahTerakhir) : '')) +
       (lain.length
         ? '. Sisanya di ' + lain.map(function(r){
             return rjdEscapeHtml_(r.namaLine) + ' (' + r.qty + ')';
@@ -1360,6 +1369,7 @@ function ckRenderSPK(){
 
   document.getElementById("ck-isi").innerHTML = html;
   document.title = "SPK " + nomorSPK + (d.line ? " - " + d.line.namaLine : "") +
+    (d.line && d.line.batch ? " - serahan " + d.line.batch.urutan : "") +
     (modePerItem ? " - Item " + (idxAktif + 1) : "") + " -- RJD Apparel";
 }
 

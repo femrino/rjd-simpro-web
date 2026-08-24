@@ -409,7 +409,16 @@ function spRenderForm() {
           '<a href="/p/cetak.html?jenis=spk&amp;id=' + encodeURIComponent(po.idPurchaseOrder) +
             '&amp;line=' + encodeURIComponent(l.idLine) + '" target="_blank">Cetak SPK</a>' +
           '<a class="sp-rekap-link" href="/p/cetak.html?jenis=rekapline&amp;line=' +
-            encodeURIComponent(l.idLine) + '" target="_blank">Rekap Line</a></div>';
+            encodeURIComponent(l.idLine) + '" target="_blank">Rekap Line</a></div>' +
+          // v186: satu tautan per serahan (batch). "Cetak SPK" di atas = gabungan.
+          ((l.batch || []).length > 1
+            ? '<div class="sp-ringkas-batch">' + l.batch.map(function (b, n) {
+                return '<a href="/p/cetak.html?jenis=spk&amp;id=' + encodeURIComponent(po.idPurchaseOrder) +
+                  '&amp;line=' + encodeURIComponent(l.idLine) + '&amp;batch=' + encodeURIComponent(b.idBatch) +
+                  '" target="_blank">serahan ' + (n + 1) + ' &#183; ' + rjdEscapeHtml_(b.tanggalSerah || "-") +
+                  ' &#183; ' + b.qty + ' pcs</a>';
+              }).join("") + '</div>'
+            : '');
       }).join("") + '</div>';
     rk.classList.remove("hidden");
   } else {
@@ -577,9 +586,15 @@ function spSimpan() {
       '<div class="sp-sukses-isi">' +
         '<b>' + h.totalQty + ' pcs</b> tersimpan untuk <b>' + rjdEscapeHtml_(h.namaLine) + '</b>' +
         ' (' + h.jumlahBaris + ' baris warna).' +
+        // v186: tautan utama = SPK BATCH INI (yang barusan disimpan). Kertas
+        // yang ikut ke tumpukan potongan harus memuat tumpukan itu saja.
         '<a class="sp-cetak-btn" target="_blank" href="/p/cetak.html?jenis=spk&amp;id=' +
+          encodeURIComponent(h.idPurchaseOrder) + '&amp;line=' + encodeURIComponent(h.idLine) +
+          (h.idBatch ? '&amp;batch=' + encodeURIComponent(h.idBatch) : '') + '">' +
+          'Cetak SPK serahan ini' + '</a>' +
+        '<a class="sp-tautan" target="_blank" href="/p/cetak.html?jenis=spk&amp;id=' +
           encodeURIComponent(h.idPurchaseOrder) + '&amp;line=' + encodeURIComponent(h.idLine) + '">' +
-          'Cetak SPK ' + rjdEscapeHtml_(h.namaLine) + '</a>' +
+          'SPK gabungan ' + rjdEscapeHtml_(h.namaLine) + '</a>' +
       '</div>';
     kotak.classList.remove("hidden");
     // Muat ulang supaya kolom sisa & ringkasan line ikut ter-update -- kalau
@@ -3475,6 +3490,13 @@ function spRenderRiwayat() {
                         rjdEscapeHtml_(SP_RIW_BAGIAN[jenis] || "-")) + '</span>'))) +
       '</div>' +
       (k.catatan ? '<div class="sp-riw-catatan">' + rjdEscapeHtml_(k.catatan) + '</div>' : '') +
+      // v186: SPK untuk serahan INI saja. Batch = prefix ID Distribusi sebelum "-".
+      (jenis === "distribusi" && !dibatalkan && id
+        ? '<div class="sp-riw-cetak"><a href="/p/cetak.html?jenis=spk&amp;id=' +
+            encodeURIComponent(k.idPurchaseOrder) + '&amp;line=' + encodeURIComponent(k.idLine || "") +
+            '&amp;batch=' + encodeURIComponent(String(id).split("-")[0]) +
+            '" target="_blank">Cetak SPK serahan ini</a></div>'
+        : '') +
     '</div>';
   }).join("");
 }
