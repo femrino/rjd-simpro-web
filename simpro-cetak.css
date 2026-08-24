@@ -7,12 +7,23 @@
  * DIMUAT DI : cetak
  * ============================================================ */
 
-/* FIX: cabang cetak nggak punya aturan body sendiri, jadi kena
-   body{padding-top:68px} global -- itu sumber padding 68 di box model & jarak
-   kosong di atas header cetak. Halaman cetak nggak pakai nav fixed, jadi
-   dinolkan. @media print di bawah juga sudah override padding-top:0, tapi ini
-   buat tampilan LAYAR (sebelum dicetak). */
-body { padding-top: 0; }
+/* FIX: cabang cetak kena body{padding-top:68px} dari simpro-global.css --
+   itu sumber padding 68 di box model & jarak kosong di atas header cetak.
+   Halaman ini TIDAK pakai nav fixed (.ck-scr-header position:relative), jadi
+   kompensasi itu tidak dibutuhkan sama sekali.
+
+   v175 -- KENAPA PERBAIKAN LAMA TIDAK JALAN:
+   Aturan di bawah dulu ditulis `body { padding-top: 0 }`, dan itu KALAH
+   SPESIFISITAS. Global memakai `body:has(nav) { padding-top: 68px }` (0-0-2)
+   sedangkan `body` cuma (0-0-1) -- jadi yang menang tetap 68, apa pun urutan
+   pemuatan berkasnya. Halaman ini PUNYA <nav class='ck-scr-header'>, jadi
+   selektor global itu memang cocok.
+
+   Diperbaiki dengan mencocokkan bentuk selektornya, bukan dengan !important:
+   !important akan ikut menembus @media print dan aturan lain yang mungkin
+   memang perlu menimpanya nanti. */
+body,
+body:has(nav) { padding-top: 0; }
 /* Latar beranimasi dipindah ke simpro-global.css sebagai master
    (.bg-canvas/.float-shape/.particle), dipakai bersama semua halaman.
    Blok lokal .ck-scr-bg* dihapus -- dulu warnanya dipaksa pakai
