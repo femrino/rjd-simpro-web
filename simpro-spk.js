@@ -1214,6 +1214,9 @@ const SP_PANDUAN = {
       ["Centang koreksi + tombol re-cut menuntaskan bukunya",
        "Koreksi mengeluarkan panel mati dari sisa boleh dibagi; re-cut memotong " +
        "penggantinya dengan jejak QC yang sama."],
+      ["Kain penggantinya: Gelaran mode Re-cut, BUKAN Normal",
+       "Gelaran Normal menaikkan set lengkap dan meninggalkan panel hantu " +
+       "\"belum dicatat\". Mode Re-cut hanya menambah pemakaian kain."],
       ["Cacat potong tidak memotong stok",
        "Stok siap kirim dihitung dari QC Finishing. Di sini tidak ada angka yang " +
        "menghukum siapa pun."]

@@ -331,11 +331,17 @@ const SOP_SKENARIO = [
        "<b>Centang koreksi</b> + isi size panelnya",
        "Koreksi otomatis mengeluarkan panel mati dari \"sisa boleh dibagi\" \u2014 tanpa ini, " +
        "sistem menawarkan panel rusak ke line berikutnya."],
-      ["3. Cutting: potong penggantinya",
-       "Tekan tombol <b>Buat re-cut 2 pcs</b> yang muncul setelah simpan \u2192 isi qty di baris tersorot " +
-       "\u2192 bagi ke line seperti biasa",
-       "Jejak QC tercatat otomatis di baris potongnya. Kain gelaran penggantinya tetap dicatat " +
-       "di Gelaran seperti potong biasa."]
+      ["3. Cutting: catat KAIN penggantinya",
+       "Cutting \u203a Gelaran \u203a mode <b>Re-cut</b> (BUKAN Normal): komponen yang diganti, alasan, " +
+       "kain terpakai, kotak \u201cUntuk Line\u201d diisi line pemohon",
+       "Ini buku KAIN. Mode Re-cut menambah pemakaian kain tanpa menambah set lengkap. " +
+       "<b>Kalau dicatat sebagai gelaran Normal</b>, set lengkap naik 2 dan panel hantu " +
+       "\u201c2 pcs belum dicatat\u201d menggantung selamanya."],
+      ["4. Cutting: potong penggantinya",
+       "Tekan tombol <b>Buat re-cut 2 pcs</b> yang muncul setelah simpan QC \u2192 isi qty di baris tersorot " +
+       "(kolom kain dikosongkan) \u2192 bagi ke line seperti biasa",
+       "Ini buku BAJU. Koreksi \u22122 lalu re-cut +2 dengan jejak QC yang sama = pool kembali utuh. " +
+       "Langkah 3 dan 4 mencatat hal berbeda (kain vs baju) \u2014 keduanya wajib, dan tidak ada yang terhitung dua kali."]
     ]
   },
   {
