@@ -5983,6 +5983,11 @@ function qcShow() { /* sengaja kosong -- lihat komentar */ }
    Qty Diperiksa SEBELUM operator mengetik; pengaman kerasnya di server
    (submitInspeksiQC) -- pra-cek di sini cuma sopan santun. */
 let QC_TERSEDIA = null;   // baris getTersediaQC utk PO aktif
+// v182: keranjang ditahan PO aktif + mode sesi form.
+// "baru" = inspeksi biasa; "penyelesaian" = menutup keranjang (baris
+// pembukuan: diperiksa 0, ditahan negatif). Mode diganti lewat spanduk.
+let QC_DITAHAN = null;
+let QC_MODE_SESI = "baru";
 
 function qcKunciWarnaFE_(brand, artikel, style, warna) {
   return [brand, artikel, style, warna].map(function (x) {
@@ -6002,6 +6007,61 @@ function qcMuatTersedia_() {
     qcTampilTersedia_();
   })
   .catch(function () { qcTampilTersedia_(); });
+}
+
+function qcMuatDitahan_() {
+  QC_DITAHAN = null;
+  const po = (QC_PO_TERPILIH && QC_PO_TERPILIH.idPurchaseOrder) || window.SP_PO_AKTIF || "";
+  if (!po) { qcTampilDitahan_(); return; }
+  fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
+    idToken: SP_ID_TOKEN, action: "getDitahanQC", idPurchaseOrder: po }) })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d.error) QC_DITAHAN = d.baris || [];
+    qcTampilDitahan_();
+  })
+  .catch(function () { qcTampilDitahan_(); });
+}
+
+/** Keranjang terbuka untuk tahap + warna yang sedang dipilih. */
+function qcCariDitahan_() {
+  if (!QC_DITAHAN || !QC_WARNA_DIPILIH) return null;
+  const tahap = window.QC_TAHAP_DIPILIH || QC_TAHAP_DIPILIH || "";
+  const w = QC_WARNA_DIPILIH;
+  const kunci = tahap + "|" + qcKunciWarnaFE_(w.brand, w.artikel, w.style, w.warna);
+  return QC_DITAHAN.filter(function (b) {
+    return (b.tahap + "|" + qcKunciWarnaFE_(b.brand, b.artikel, b.style, b.warna)) === kunci;
+  })[0] || null;
+}
+
+/**
+ * Spanduk keranjang: tampil hanya kalau tahap+warna terpilih PUNYA barang
+ * ditahan yang belum diselesaikan. Elemen dibuat sekali, pola sama dengan
+ * qcTampilTersedia_ -- template tidak perlu markup baru untuk spanduknya.
+ */
+function qcTampilDitahan_() {
+  const acuan = document.getElementById("qc-warna");
+  if (!acuan) return;
+  const field = acuan.closest(".qc-field");
+  if (!field) return;
+  let b = document.getElementById("qc-ditahan-banner");
+  if (!b) {
+    b = document.createElement("div");
+    b.id = "qc-ditahan-banner";
+    b.className = "qc-ditahan-banner hidden";
+    field.insertAdjacentElement("afterend", b);
+  }
+  const k = qcCariDitahan_();
+  if (!k || !(k.terbuka > 0) || QC_MODE_SESI === "penyelesaian") {
+    b.classList.add("hidden");
+    if (QC_MODE_SESI !== "penyelesaian") qcSetModeSesi_("baru");
+    return;
+  }
+  b.classList.remove("hidden");
+  b.innerHTML = '<b>' + k.terbuka + ' pcs masih di keranjang perbaikan</b> untuk warna ini' +
+    (k.idLine ? ' (terakhir di line ' + rjdEscapeHtml_(k.idLine) + ')' : '') +
+    '. Sebelum diselesaikan, barang itu tidak masuk stok siap kirim.' +
+    '<button onclick="qcSetModeSesi_(\'penyelesaian\')" type="button">Selesaikan sekarang</button>';
 }
 
 function qcCariTersedia_() {
@@ -6260,6 +6320,7 @@ function qcMuatRincianPO_(idPO) {
     qcIsiDropdownItem_();
     qcIsiDropdownWarna_();
     qcMuatTersedia_();
+    qcMuatDitahan_();
   })
   .catch(function () {
     if (sel) sel.innerHTML = '<option value="">Gagal memuat warna</option>';
@@ -6284,6 +6345,10 @@ function qcIsiDropdownWarna_() {
 
 function qcPilihWarna() {
   setTimeout(qcTampilTersedia_, 0);   // v121: hint tersedia ikut warna
+  // v182: spanduk keranjang ikut warna; ganti warna membatalkan mode penyelesaian.
+  setTimeout(function () {
+    if (QC_MODE_SESI !== "baru") qcSetModeSesi_("baru"); else qcTampilDitahan_();
+  }, 0);
   const v = document.getElementById("qc-warna").value;
   QC_WARNA_DIPILIH = (v === "" || !QC_RINCIAN_PO) ? null : QC_RINCIAN_PO.baris[Number(v)];
   qcRenderSizeLolos_();
@@ -6436,9 +6501,59 @@ function qcKunciTahap_(tahap) {
   }
 }
 
+/**
+ * v182: pindah antara sesi inspeksi biasa dan sesi PENYELESAIAN keranjang.
+ *
+ * Mode penyelesaian menyembunyikan isian yang tidak relevan (diperiksa,
+ * diperbaiki, ditahan, jenis cacat, override keputusan) -- cacatnya sudah
+ * tercatat di sesi asal, yang ditanya di sini cuma NASIB AKHIR barang
+ * keranjang: berapa akhirnya lolos (per size, karena masuk stok siap kirim)
+ * dan berapa akhirnya diafkir. Sisanya pembukuan otomatis di backend.
+ */
+function qcSetModeSesi_(mode) {
+  QC_MODE_SESI = mode === "penyelesaian" ? "penyelesaian" : "baru";
+  const py = QC_MODE_SESI === "penyelesaian";
+
+  const sembunyi_ = function (id, ya) {
+    const el = document.getElementById(id);
+    const field = el ? el.closest(".qc-field") : null;
+    if (field) field.classList.toggle("hidden", ya);
+  };
+  sembunyi_("qc-periksa", py);
+  sembunyi_("qc-perbaiki", py);
+  sembunyi_("qc-ditahan", py);
+  sembunyi_("qc-detail-rows", py);
+  sembunyi_("qc-keputusan-override", py);
+  const kotakCacat = document.querySelector(".qc-cacat-box");
+  if (kotakCacat) kotakCacat.classList.toggle("hidden", py);
+
+  const lblLolos = document.querySelector('label[for="qc-lolos"]');
+  if (lblLolos) lblLolos.textContent = py ? "Akhirnya lolos (selesai diperbaiki)" : "Qty lolos";
+  sembunyi_("qc-py-afkir", !py);
+
+  const kepala = document.getElementById("qc-py-kepala");
+  if (kepala) {
+    kepala.classList.toggle("hidden", !py);
+    if (py) {
+      const k = qcCariDitahan_();
+      kepala.innerHTML = '<b>Menyelesaikan keranjang perbaikan</b> -- terbuka ' +
+        ((k && k.terbuka) || 0) + ' pcs. Boleh dicicil; sisanya tetap tercatat ditahan. ' +
+        '<button onclick="qcSetModeSesi_(\'baru\')" type="button">Batal, kembali ke inspeksi biasa</button>';
+    }
+  }
+  const btn = document.getElementById("qc-submit-btn");
+  if (btn) btn.textContent = py ? "Simpan penyelesaian" : "Simpan inspeksi";
+  const afkirEl = document.getElementById("qc-py-afkir");
+  if (afkirEl && !py) afkirEl.value = "";
+  qcTampilDitahan_();
+  qcRecalc();
+}
+
 function qcPilihTahap(tahap) {
   QC_TAHAP_DIPILIH = tahap;
   setTimeout(qcTampilTersedia_, 0);   // v121: hint hanya utk Finishing
+  // v182: ganti tahap = keranjang yang relevan ikut ganti; mode kembali normal.
+  if (QC_MODE_SESI !== "baru") qcSetModeSesi_("baru"); else setTimeout(qcTampilDitahan_, 0);
   document.querySelectorAll(".qc-tahap-btn").forEach(function (b) {
     b.classList.toggle("active", b.dataset.t === tahap);
   });
@@ -6472,11 +6587,19 @@ function qcPilihTahap(tahap) {
 function qcRecalc() {
   // Qty Lolos berubah -> pembanding rincian size ikut berubah.
   if (typeof qcHitungTotalSize_ === "function") setTimeout(qcHitungTotalSize_, 0);
+  // v182 mode penyelesaian: kotak cacat & pratinjau tidak relevan -- yang
+  // dihitung cuma sisa keranjang, ditampilkan di kepala mode.
+  if (QC_MODE_SESI === "penyelesaian") {
+    const prev0 = document.getElementById("qc-keputusan-preview");
+    if (prev0) prev0.classList.remove("show");
+    return;
+  }
   const p = Number(document.getElementById("qc-periksa").value) || 0;
   const l = Number(document.getElementById("qc-lolos").value) || 0;
   const b = Math.max(Number((document.getElementById("qc-perbaiki") || {}).value) || 0, 0);
-  const afkir = Math.max(p - l, 0);
-  const ditemukan = afkir + b;
+  const t = Math.max(Number((document.getElementById("qc-ditahan") || {}).value) || 0, 0);
+  const afkir = Math.max(p - l - t, 0);
+  const ditemukan = afkir + b + t;
 
   const box = document.getElementById("qc-cacat-angka");
   box.textContent = ditemukan;
@@ -6488,7 +6611,10 @@ function qcRecalc() {
   // ke elemen yang salah.
   const rinci = document.getElementById("qc-cacat-rinci");
   if (rinci) {
-    if (b > l && l >= 0 && p > 0) {
+    if (l + t > p && p > 0) {
+      rinci.textContent = "Qty lolos (" + l + ") + ditahan (" + t + ") melebihi qty diperiksa (" + p + "). Cek lagi angkanya.";
+      rinci.className = "qc-hint qc-cacat-rinci-salah";
+    } else if (b > l && l >= 0 && p > 0) {
       rinci.textContent = "Qty diperbaiki (" + b + ") tidak boleh lebih besar dari Qty Lolos (" +
         l + ") -- barang yang diperbaiki berakhir sebagai barang lolos.";
       rinci.className = "qc-hint qc-cacat-rinci-salah";
@@ -6498,7 +6624,8 @@ function qcRecalc() {
         : "";
       rinci.className = "qc-hint";
     } else {
-      rinci.textContent = b + " diperbaiki \u00B7 " + afkir + " afkir";
+      rinci.textContent = b + " diperbaiki \u00B7 " + afkir + " afkir" +
+        (t > 0 ? " \u00B7 " + t + " ditahan (nasibnya dicatat lewat sesi penyelesaian)" : "");
       rinci.className = "qc-hint";
     }
   }
@@ -6507,12 +6634,12 @@ function qcRecalc() {
   // keputusan. Angka turunannya ikut mustahil ("cacat ditemukan 105%"), dan
   // pratinjau mustahil di sebelah peringatan merah cuma membuat checker ragu
   // mana yang harus dipercaya. Satu pesan saja: yang merah.
-  if (b > l) {
+  if (b > l || l + t > p) {
     const prev = document.getElementById("qc-keputusan-preview");
     if (prev) prev.classList.remove("show");
     return;
   }
-  qcUpdatePreviewKeputusan_(p, afkir, b);
+  qcUpdatePreviewKeputusan_(p, afkir, b + t);
 }
 
 /**
@@ -6542,6 +6669,88 @@ function qcUpdatePreviewKeputusan_(qtyDiperiksa, qtyAfkir, qtyDiperbaiki) {
   }
   el.className = "qc-keputusan-preview show " + kelas;
   el.textContent = teks;
+}
+
+/**
+ * v182: kirim sesi PENYELESAIAN keranjang. Dua angka nasib akhir: lolos
+ * (per size, masuk stok siap kirim) dan afkir. Boleh dicicil -- backend
+ * memastikan tidak melebihi keranjang terbuka, frontend cuma mengingatkan
+ * lebih awal.
+ */
+function qcSubmitPenyelesaian_() {
+  const idPO = QC_PO_TERPILIH ? QC_PO_TERPILIH.idPurchaseOrder : "";
+  const idLine = (document.getElementById("qc-line") || {}).value || "";
+  const qtyLolos = Math.max(Number((document.getElementById("qc-lolos") || {}).value) || 0, 0);
+  const qtyAfkir = Math.max(Number((document.getElementById("qc-py-afkir") || {}).value) || 0, 0);
+  const total = qtyLolos + qtyAfkir;
+  const lolosPerSize = qcKumpulkanLolosPerSize_();
+  const totalSize = Object.keys(lolosPerSize).reduce(function (a, k) { return a + lolosPerSize[k]; }, 0);
+  const k = qcCariDitahan_();
+
+  if (!idPO) return qcTampilkanError_("Pilih PO dulu.");
+  if (!QC_TAHAP_DIPILIH) return qcTampilkanError_("Pilih tahap dulu.");
+  if (!QC_WARNA_DIPILIH) return qcTampilkanError_("Pilih warna dulu.");
+  if (QC_TAHAP_DIPILIH !== "Potong" && !idLine) {
+    return qcTampilkanError_("Pilih line untuk tahap " + QC_TAHAP_DIPILIH + ".");
+  }
+  if (total <= 0) return qcTampilkanError_("Isi berapa yang akhirnya lolos dan/atau diafkir.");
+  if (k && total > k.terbuka) {
+    return qcTampilkanError_("Mau menyelesaikan " + total + " pcs, tapi keranjang warna ini tinggal " +
+      k.terbuka + " pcs. Barang cacat BARU dicatat lewat sesi inspeksi biasa.");
+  }
+  if (qtyLolos > 0 && totalSize !== qtyLolos) {
+    return qcTampilkanError_("Rincian qty lolos per size (" + totalSize +
+      ") harus sama dengan yang akhirnya lolos (" + qtyLolos + ").");
+  }
+
+  const btn = document.getElementById("qc-submit-btn");
+  btn.disabled = true;
+  btn.textContent = "Menyimpan...";
+
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: SP_ID_TOKEN,
+      action: "submitInspeksiQC",
+      payload: {
+        jenisSesi: "penyelesaian",
+        idPurchaseOrder: idPO,
+        tahap: QC_TAHAP_DIPILIH,
+        idLine: idLine,
+        operator: document.getElementById("qc-operator").value.trim(),
+        brand: QC_WARNA_DIPILIH.brand || "",
+        artikel: QC_WARNA_DIPILIH.artikel || "",
+        style: QC_WARNA_DIPILIH.style || "",
+        warna: QC_WARNA_DIPILIH.warna || "",
+        qtyLolos: qtyLolos,
+        qtyAfkir: qtyAfkir,
+        lolosPerSize: lolosPerSize,
+        catatan: document.getElementById("qc-catatan").value.trim()
+      }
+    })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      btn.disabled = false;
+      if (!d || !d.success) {
+        btn.textContent = "Simpan penyelesaian";
+        qcTampilkanError_((d && d.error) || "Gagal menyimpan penyelesaian. Coba lagi.");
+        return;
+      }
+      const el = document.getElementById("qc-submit-sukses");
+      el.textContent = "Keranjang ditutup " + (qtyLolos + qtyAfkir) + " pcs (" + d.idQC + ") -- " +
+        qtyLolos + " lolos, " + qtyAfkir + " afkir" +
+        (d.sisaTerbuka > 0 ? ". Sisa ditahan: " + d.sisaTerbuka + " pcs." : ". Keranjang habis.");
+      el.classList.remove("hidden");
+      qcSetModeSesi_("baru");
+      qcResetForm_();
+      qcMuatDitahan_();   // spanduk menyegarkan diri dengan sisa terbaru
+    })
+    .catch(function () {
+      btn.disabled = false;
+      btn.textContent = "Simpan penyelesaian";
+      qcTampilkanError_("Gagal menghubungi server. Coba beberapa saat lagi.");
+    });
 }
 
 function qcTambahBarisCacat() {
@@ -6585,6 +6794,10 @@ function qcResetForm_() {
   document.getElementById("qc-lolos").value = "";
   const perbaiki = document.getElementById("qc-perbaiki");
   if (perbaiki) perbaiki.value = "";
+  const tahan = document.getElementById("qc-ditahan");
+  if (tahan) tahan.value = "";
+  const pyAfkir = document.getElementById("qc-py-afkir");
+  if (pyAfkir) pyAfkir.value = "";
   document.getElementById("qc-detail-rows").innerHTML = "";
   document.getElementById("qc-keputusan-override").value = "";
   document.getElementById("qc-catatan").value = "";
@@ -6616,6 +6829,11 @@ function qcSubmitInspeksi() {
   document.getElementById("qc-submit-error").classList.add("hidden");
   document.getElementById("qc-submit-sukses").classList.add("hidden");
 
+  // v182: mode penyelesaian punya jalurnya sendiri -- payload berbeda,
+  // validasi berbeda, dan tidak menyentuh pengaman tersedia-Finishing
+  // (barangnya sudah terhitung diperiksa di sesi asal).
+  if (QC_MODE_SESI === "penyelesaian") return qcSubmitPenyelesaian_();
+
   const idPO = QC_PO_TERPILIH ? QC_PO_TERPILIH.idPurchaseOrder : "";
   const operator = document.getElementById("qc-operator").value.trim();
   const idLine = (document.getElementById("qc-line") || {}).value || "";
@@ -6624,8 +6842,9 @@ function qcSubmitInspeksi() {
   // v180. Elemen bisa saja belum ada kalau template tertinggal satu rilis --
   // dalam kasus itu nilainya 0 dan perilakunya persis seperti v179.
   const qtyDiperbaiki = Math.max(Number((document.getElementById("qc-perbaiki") || {}).value) || 0, 0);
-  const qtyAfkir = Math.max(qtyDiperiksa - qtyLolos, 0);
-  const qtyCacat = qtyAfkir + qtyDiperbaiki;   // cacat DITEMUKAN
+  const qtyDitahan = Math.max(Number((document.getElementById("qc-ditahan") || {}).value) || 0, 0);
+  const qtyAfkir = Math.max(qtyDiperiksa - qtyLolos - qtyDitahan, 0);
+  const qtyCacat = qtyAfkir + qtyDiperbaiki + qtyDitahan;   // cacat DITEMUKAN
   const detailCacat = qcKumpulkanDetailCacat_();
   const totalDetail = detailCacat.reduce(function (s, d) { return s + d.qty; }, 0);
   const lolosPerSize = qcKumpulkanLolosPerSize_();
@@ -6647,6 +6866,10 @@ function qcSubmitInspeksi() {
   if (qtyDiperbaiki > qtyLolos) {
     return qcTampilkanError_("Qty diperbaiki (" + qtyDiperbaiki + ") tidak boleh lebih besar dari Qty Lolos (" +
       qtyLolos + "). Barang yang diperbaiki berakhir sebagai barang lolos.");
+  }
+  if (qtyLolos + qtyDitahan > qtyDiperiksa) {
+    return qcTampilkanError_("Qty lolos (" + qtyLolos + ") + qty ditahan (" + qtyDitahan +
+      ") melebihi qty diperiksa (" + qtyDiperiksa + "). Cek lagi angkanya.");
   }
   if (qtyLolos > 0 && totalSize !== qtyLolos) {
     return qcTampilkanError_("Rincian qty lolos per size (" + totalSize + ") harus sama dengan Qty Lolos (" + qtyLolos + ").");
@@ -6680,6 +6903,7 @@ function qcSubmitInspeksi() {
         qtyDiperiksa: qtyDiperiksa,
         qtyLolos: qtyLolos,
         qtyDiperbaiki: qtyDiperbaiki,
+        qtyDitahan: qtyDitahan,
         lolosPerSize: lolosPerSize,
         detailCacat: detailCacat,
         catatan: document.getElementById("qc-catatan").value.trim(),

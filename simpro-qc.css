@@ -111,6 +111,16 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 #qc-cacat-rinci { margin: -10px 0 16px; font-style: normal; }
 #qc-cacat-rinci.qc-cacat-rinci-salah { color: var(--thread, #B23B2E); font-weight: 700; }
 
+/* v182 -- spanduk keranjang ditahan + kepala mode penyelesaian.
+   Warna peringatan lembut (bukan merah error): keranjang bukan kesalahan,
+   cuma pekerjaan yang belum tuntas -- merah membuat orang takut mencatat. */
+.qc-ditahan-banner, .qc-py-kepala { border-radius: 10px; padding: 11px 14px; margin: 0 0 16px;
+  font-size: 12.5px; line-height: 1.5; background: #FBF3E4; border: 1px solid #E5CFA3; color: #6B5218; }
+.qc-ditahan-banner button, .qc-py-kepala button { display: block; margin-top: 8px; font-size: 12px;
+  font-weight: 700; color: var(--navy); background: var(--white); border: 1px solid var(--navy);
+  border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.qc-ditahan-banner button:hover, .qc-py-kepala button:hover { background: var(--navy); color: var(--white); }
+
 .qc-keputusan-preview { margin-top: 8px; padding: 10px 12px; border-radius: 9px; font-size: 12.5px;
   display: none; align-items: center; gap: 8px; }
 .qc-keputusan-preview.show { display: flex; }
