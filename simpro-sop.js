@@ -102,7 +102,7 @@ function sopMulai() {
  * ditambahkan di sini, lalu MD dibuat ulang; jangan pernah menulis SOP di
  * dua tempat.
  */
-const SOP_VERSI = "v197 \u00b7 25 Agustus 2026";
+const SOP_VERSI = "v198 \u00b7 25 Agustus 2026";
 
 /** Rantai utama: siapa mencatat apa, di tab mana. Urutan = urutan kejadian. */
 const SOP_RANTAI_TAB = [
@@ -118,7 +118,8 @@ const SOP_RANTAI_TAB = [
    "Pembanding = qty potong, bukan qty order. <b>Satu kali Simpan = satu serahan = satu SPK</b> \u2014 " +
    "cetak \u201cSPK serahan ini\u201d dan ikutkan ke tumpukannya; \u201cSPK gabungan\u201d hanya untuk rekap"],
   ["6", "Konfirmasi terima", "Sewing \u203a Konfirmasi Potongan", "Kepala line",
-   "Cocok \u2192 Diterima; tidak cocok \u2192 <b>Ada Selisih</b> hari itu juga"],
+   "<b>Hitung dulu, baru centang.</b> Yang cocok dicentang lalu \u201cTerima sesuai\u201d sekali untuk semua; " +
+   "yang tidak cocok \u2192 <b>Ada Selisih</b> di kartunya, hari itu juga. Jangan mencentang yang belum dihitung"],
   ["7", "QC Jahit", "Sewing \u203a QC Jahit", "Kepala line",
    "Self-check sebelum setor. Cacat jahitan saja \u2014 panel rusak bukan di sini (lihat skenario panel cacat)"],
   ["8", "Setoran", "Sewing \u203a Setoran ke Finishing", "Kepala line",

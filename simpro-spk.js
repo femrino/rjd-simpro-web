@@ -3121,13 +3121,29 @@ function spRenderKonfirmasi() {
     return;
   }
 
+  // v198: pilih-semua yang TAMPIL (menghormati saringan line & PO). Kalau
+  // menyaring per line lalu "pilih semua", yang tercentang hanya line itu.
+  const semuaTampilDipilih = daftar.every(function (k) {
+    return (window.SP_KONF_PILIH || {})[k.idDistribusi || k.idSetoran];
+  });
+  chip += '<label class="sp-konf-ceksemua"><input type="checkbox"' + (semuaTampilDipilih ? ' checked' : '') +
+    ' onchange="spKonfCentangSemua_(this.checked)"/>' +
+    '<span>Pilih semua yang tampil <small>(' + daftar.length + ' bundel)</small></span></label>';
+
   wadah.innerHTML = chip + daftar.map(function (k) {
     // indeks HARUS menunjuk ke SP_KONF asli -- tombol Terima/Selisih membaca
     // window.SP_KONF[i]; indeks daftar tersaring akan salah kartu.
     const i = semua.indexOf(k);
     const sizes = Object.keys(k.sizeQty || {});
-    return '<div class="sp-konf-kartu" id="sp-konf-' + i + '">' +
+    const idK = k.idDistribusi || k.idSetoran || "";
+    const dicentang = !!(window.SP_KONF_PILIH || {})[idK];
+    return '<div class="sp-konf-kartu' + (dicentang ? ' dipilih' : '') + '" id="sp-konf-' + i + '">' +
       '<div class="sp-konf-head">' +
+        // v198: centang = "bundel ini cocok, terima nanti sekaligus". Kotaknya
+        // di kepala kartu, bukan mengganti tombol: per kartu tetap bisa
+        // diterima satuan atau ditandai selisih seperti sebelumnya.
+        '<label class="sp-konf-cek"><input type="checkbox" data-id="' + rjdEscapeHtml_(idK) + '"' +
+          (dicentang ? ' checked' : '') + ' onchange="spKonfCentang_(this)"/></label>' +
         '<div>' +
           '<div class="sp-konf-line">' + rjdEscapeHtml_(k.namaLine || k.idLine || "-") + '</div>' +
           // Nama field berbeda antara dua sumber: distribusi memakai
@@ -3182,6 +3198,107 @@ function spRenderKonfirmasi() {
       '</div>' +
     '</div>';
   }).join("");
+  spKonfTombolMassal_();
+}
+
+/* ============================================================
+ * v198 -- KONFIRMASI MASSAL "terima sesuai"
+ * ============================================================
+ * Di lantai, kepala line memegang 5-10 bundel yang sudah dihitung dan cocok
+ * semua. Sebelumnya: klik Terima, tunggu 2-3 detik, daftar dimuat ulang,
+ * cari kartu berikutnya, klik lagi. Untuk 10 bundel, setengah menit menatap
+ * layar -- dan orang mulai malas mengonfirmasi, padahal konfirmasi adalah
+ * satu-satunya bukti bahwa angka loading benar.
+ *
+ * Sekarang: centang yang cocok, tekan sekali. "Ada selisih" SENGAJA tetap
+ * per kartu -- ia butuh angka per size dan alasan, dan justru tidak boleh
+ * dikerjakan terburu-buru.
+ *
+ * Pilihan disimpan per ID (bukan indeks) supaya bertahan saat daftar
+ * dirender ulang oleh saringan line/PO.
+ */
+function spKonfCentang_(cb) {
+  if (!window.SP_KONF_PILIH) window.SP_KONF_PILIH = {};
+  const id = cb.dataset.id;
+  if (cb.checked) window.SP_KONF_PILIH[id] = true; else delete window.SP_KONF_PILIH[id];
+  const kartu = cb.closest(".sp-konf-kartu");
+  if (kartu) kartu.classList.toggle("dipilih", cb.checked);
+  spKonfTombolMassal_();
+}
+
+function spKonfCentangSemua_(nyala) {
+  if (!window.SP_KONF_PILIH) window.SP_KONF_PILIH = {};
+  document.querySelectorAll("#sp-konf-daftar .sp-konf-cek input").forEach(function (cb) {
+    cb.checked = nyala;
+    const id = cb.dataset.id;
+    if (nyala) window.SP_KONF_PILIH[id] = true; else delete window.SP_KONF_PILIH[id];
+    const kartu = cb.closest(".sp-konf-kartu");
+    if (kartu) kartu.classList.toggle("dipilih", nyala);
+  });
+  spKonfTombolMassal_();
+}
+
+function spKonfTombolMassal_() {
+  const pilih = window.SP_KONF_PILIH || {};
+  const semua = window.SP_KONF || [];
+  let n = 0, pcs = 0;
+  semua.forEach(function (k) {
+    const id = k.idDistribusi || k.idSetoran;
+    if (pilih[id]) { n++; pcs += Number(k.totalQty != null ? k.totalQty : k.total) || 0; }
+  });
+  const bilah = document.querySelector(".sp-konf-aksi-massal");
+  const btn = document.getElementById("sp-konf-massal-btn");
+  const info = document.getElementById("sp-konf-massal-info");
+  if (bilah) bilah.classList.toggle("tampil", n > 0);
+  if (btn) { btn.disabled = n === 0; btn.textContent = "Terima sesuai " + (n ? "(" + n + ")" : ""); }
+  if (info) info.textContent = n ? (n + " bundel dicentang \u00b7 " + pcs + " pcs") : "Belum ada yang dicentang";
+}
+
+function spKonfirmasiMassal_() {
+  const ids = Object.keys(window.SP_KONF_PILIH || {});
+  if (!ids.length) return;
+  const elNama = document.getElementById("sp-konf-nama");
+  const nama = ((elNama || {}).value || "").trim();
+  if (!nama) {
+    alert("Isi dulu \"Nama yang menerima\" di atas.\n\nSatu nama dipakai untuk semua bundel yang dicentang.");
+    if (elNama) elNama.focus();
+    return;
+  }
+  if (!confirm("Terima " + ids.length + " bundel sesuai angka yang tercatat?\n\n" +
+      "Pastikan semuanya SUDAH dihitung. Yang jumlahnya berbeda jangan dicentang -- pakai \"Ada selisih\" di kartunya.")) return;
+
+  const setoran = (window.SP_KONF_JENIS || "potongan") === "setoran";
+  const btn = document.getElementById("sp-konf-massal-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Menyimpan " + ids.length + " bundel..."; }
+
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: SP_ID_TOKEN,
+      action: setoran ? "konfirmasiTerimaSetoranMassal" : "konfirmasiTerimaMassal",
+      payload: { ids: ids, diterimaOleh: nama }
+    })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (h) {
+    if (!h || !h.success) {
+      alert((h && h.error) || "Gagal menyimpan konfirmasi.");
+      spKonfTombolMassal_();
+      return;
+    }
+    // Yang berhasil dilepas dari pilihan; yang gagal TETAP tercentang supaya
+    // kelihatan dan bisa dicoba lagi (atau ditangani satuan).
+    (h.berhasil || []).forEach(function (id) { delete window.SP_KONF_PILIH[id]; });
+    let pesan = h.diterima + " bundel diterima.";
+    if (h.gagal && h.gagal.length) {
+      pesan += "\n\n" + h.gagal.length + " GAGAL (masih tercentang):\n" +
+        h.gagal.map(function (g) { return "\u2022 " + g.id + ": " + g.error; }).join("\n");
+    }
+    alert(pesan);
+    window.SP_PO = null;   // alokasi bisa berubah -> cache Bagi ke Line dibuang
+    spMuatKonfirmasi();
+  })
+  .catch(function () { alert("Gagal menghubungi server."); spKonfTombolMassal_(); });
 }
 
 function spBukaSelisih(i) {
@@ -3274,6 +3391,7 @@ function spKirimKonfirmasi_(payload) {
     // Konfirmasi mengubah alokasi (kalau ada koreksi), jadi cache tab Bagi ke
     // Line dikosongkan -- kalau tidak, sisa di sana memakai angka sebelum koreksi.
     window.SP_PO = null;
+    if (window.SP_KONF_PILIH) delete window.SP_KONF_PILIH[payload.idDistribusi];   // v198
     spMuatKonfirmasi();
   })
   .catch(function () { alert("Gagal menghubungi server."); });

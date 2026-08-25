@@ -1678,3 +1678,30 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 .sp-det-thumb-gagal:hover { border-color: var(--thread, #C2410C); color: var(--thread, #C2410C); }
 
 .sp-det-cetak-btn { font-size: 13px; padding: 9px 18px; border-radius: 9px; }
+
+/* ===== v198: konfirmasi massal "terima sesuai" ===== */
+.sp-konf-head { align-items: flex-start; }
+.sp-konf-cek { display: flex; align-items: center; padding-top: 2px; margin-right: 10px; cursor: pointer; }
+.sp-konf-cek input[type="checkbox"], .sp-konf-ceksemua input[type="checkbox"] {
+  width: 22px; height: 22px; margin: 0; accent-color: var(--ink, #17212F); cursor: pointer;
+}
+.sp-konf-kartu.dipilih { border-color: var(--ink, #17212F); background: var(--paper, #FAF7F2); }
+.sp-konf-ceksemua {
+  display: flex; align-items: center; gap: 10px; cursor: pointer;
+  padding: 10px 12px; margin: 0 0 10px; border: 1px dashed var(--line, #E5E0D6);
+  border-radius: 10px; font-size: 13px; font-weight: 600; color: var(--ink);
+}
+.sp-konf-ceksemua small { font-weight: 400; color: var(--ink-soft, #5F6B7A); }
+/* Bilah aksi melayang -- pola sama dengan .sp-siap-aksi (Siapkan Potongan),
+   diduplikasi dengan nama sendiri supaya kedua panel bisa berubah terpisah. */
+.sp-konf-aksi-massal {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+  background: #fff; border-top: 1px solid var(--line, #E5E0D6);
+  box-shadow: 0 -6px 20px rgba(23, 33, 47, .07);
+  transform: translateY(115%); transition: transform .18s ease; pointer-events: none;
+}
+.sp-konf-aksi-massal.tampil { transform: translateY(0); pointer-events: auto; }
+.sp-konf-massal-info { font-size: 13px; color: var(--ink-soft, #5F6B7A); }
+#sp-panel-konf { padding-bottom: 76px; }
