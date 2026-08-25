@@ -102,7 +102,7 @@ function sopMulai() {
  * ditambahkan di sini, lalu MD dibuat ulang; jangan pernah menulis SOP di
  * dua tempat.
  */
-const SOP_VERSI = "v196 \u00b7 25 Agustus 2026";
+const SOP_VERSI = "v197 \u00b7 25 Agustus 2026";
 
 /** Rantai utama: siapa mencatat apa, di tab mana. Urutan = urutan kejadian. */
 const SOP_RANTAI_TAB = [
@@ -147,6 +147,17 @@ const SOP_ANGKA_MUTU_CATATAN =
   "ditemukan (afkir + diperbaiki + ditahan). <b>Jenis cacat yang belum ada di daftar boleh " +
   "diketik sendiri</b> \u2014 pilih \u201c+ Jenis lain\u201d di dropdown. Tulis apa adanya; sistem " +
   "menyamakan ejaannya dengan yang sudah ada dan memasukkannya ke daftar untuk dipakai berikutnya.";
+
+/** v197: tiga keputusan QC -- label untuk manusia, bukan pintu sistem. */
+const SOP_KEPUTUSAN = [
+  ["Lolos", "Afkir = 0", "Semua yang diperiksa boleh lanjut, termasuk yang sempat cacat lalu diperbaiki. Tidak ada tindakan."],
+  ["Lolos Bersyarat", "Ada afkir, \u2264 batas toleransi (10%)", "Batch boleh lanjut; yang afkir keluar dari batch (di Potong: centang koreksi + re-cut). Kepala line/cutting cukup tahu."],
+  ["Reject-Rework", "Afkir > batas toleransi", "Yang lolos tetap lolos, tapi batch ini menandai <b>cara kerjanya</b> bermasalah \u2014 kepala produksi turun mencari akar masalah sebelum batch berikutnya dikerjakan dengan cara yang sama."]
+];
+const SOP_KEPUTUSAN_CATATAN =
+  "Keputusan adalah <b>label untuk manusia, bukan pintu sistem</b>: stok siap kirim tetap dihitung dari Qty Lolos per size. " +
+  "Dihitung dari afkir, bukan dari cacat ditemukan. Checker boleh mengganti rekomendasi sistem; " +
+  "<b>memilih yang lebih longgar wajib beralasan di Catatan</b> (sistem menolak tanpa alasan), memperketat tidak perlu alasan.";
 
 /** Dua buku re-cut -- bukan dobel, dua hal berbeda. */
 const SOP_DUA_BUKU = [
@@ -671,6 +682,13 @@ function sopIsiHtml_(opsi) {
     }).join("") +
     '</tbody></table></div><p class="sop-info">' + SOP_ANGKA_MUTU_CATATAN + '</p>';
 
+  const keputusan = '<div class="sop-tabelwrap"><table class="sop-tabel">' +
+    '<thead><tr><th>Keputusan</th><th>Kapan</th><th>Artinya</th></tr></thead><tbody>' +
+    SOP_KEPUTUSAN.map(function (r) {
+      return '<tr><td data-label="Keputusan">' + sopEsc_(r[0]) + '</td><td data-label="Kapan">' + r[1] +
+        '</td><td data-label="Artinya">' + r[2] + '</td></tr>';
+    }).join("") + '</tbody></table></div><p class="sop-info">' + SOP_KEPUTUSAN_CATATAN + '</p>';
+
   const duaBuku = '<div class="sop-tabelwrap"><table class="sop-tabel">' +
     '<thead><tr><th>Buku</th><th>Tab</th><th>Mencatat</th><th>Menambah set lengkap?</th></tr></thead><tbody>' +
     SOP_DUA_BUKU.map(function (r) {
@@ -751,6 +769,9 @@ function sopIsiHtml_(opsi) {
     '</section>' +
     '<section class="sop-blok">' +
       '<h2>Form QC \u2014 empat angka mutu</h2>' + angkaMutu +
+    '</section>' +
+    '<section class="sop-blok">' +
+      '<h2>Keputusan QC \u2014 tiga label, satu pertanyaan</h2>' + keputusan +
     '</section>' +
     '<section class="sop-blok">' +
       '<h2>Dua buku re-cut \u2014 bukan dobel, dua hal berbeda</h2>' + duaBuku +

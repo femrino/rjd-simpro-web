@@ -238,3 +238,16 @@ tr.sp-recut-target > td:first-child { box-shadow: inset 3px 0 0 #C9972B; }
   margin-top: 8px; padding-top: 8px; border-top: 1px dashed currentColor;
   font-size: 12px; font-weight: 400; opacity: .95;
 }
+
+/* v197: keputusan -- legenda & penanda catatan wajib */
+.qc-legenda { margin-top: 8px; font-size: 12px; color: var(--ink-soft); }
+.qc-legenda summary { cursor: pointer; font-weight: 600; color: var(--ink); font-size: 12px; }
+.qc-legenda dl { margin: 8px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 5px 12px; }
+.qc-legenda dt { font-weight: 700; white-space: nowrap; }
+.qc-legenda dt.lolos { color: #2C6B3F; }
+.qc-legenda dt.bersyarat { color: #8A5D1F; }
+.qc-legenda dt.reject { color: #8F2C22; }
+.qc-legenda dd { margin: 0; }
+.qc-legenda .qc-legenda-catatan { grid-column: 1 / -1; margin-top: 4px; font-style: italic; }
+.qc-field textarea.qc-wajib { border-color: var(--thread, #B23B2E); }
+@media (max-width: 480px) { .qc-legenda dl { grid-template-columns: 1fr; } .qc-legenda dd { margin-bottom: 4px; } }

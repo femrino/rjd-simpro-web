@@ -27,7 +27,7 @@ const sandbox = {
 sandbox.window.window = sandbox.window;
 vm.createContext(sandbox);
 vm.runInContext(kode + "\n;this.__sop = { SOP_VERSI, SOP_RANTAI_TAB, SOP_PAGAR_QC, SOP_ATURAN_BESI, " +
-  "SOP_ANGKA_MUTU, SOP_ANGKA_MUTU_CATATAN, SOP_DUA_BUKU, SOP_DUA_BUKU_CATATAN, SOP_FASE, SOP_SKENARIO, SOP_CEK_MINGGUAN };",
+  "SOP_ANGKA_MUTU, SOP_ANGKA_MUTU_CATATAN, SOP_KEPUTUSAN, SOP_KEPUTUSAN_CATATAN, SOP_DUA_BUKU, SOP_DUA_BUKU_CATATAN, SOP_FASE, SOP_SKENARIO, SOP_CEK_MINGGUAN };",
   sandbox, { filename: sumber });
 const S = sandbox.__sop;
 
@@ -65,7 +65,10 @@ out.push("**" + md(S.SOP_PAGAR_QC) + "**");
 out.push("\n---\n\n## 3. Form QC \u2014 empat angka mutu\n");
 out.push(tabel(["Isian", "Arti"], S.SOP_ANGKA_MUTU));
 out.push(md(S.SOP_ANGKA_MUTU_CATATAN));
-out.push("\n### 3a. Dua buku re-cut \u2014 bukan dobel, dua hal berbeda\n");
+out.push("\n### 3a. Keputusan QC \u2014 tiga label, satu pertanyaan\n");
+out.push(tabel(["Keputusan", "Kapan", "Artinya"], S.SOP_KEPUTUSAN));
+out.push(md(S.SOP_KEPUTUSAN_CATATAN));
+out.push("\n### 3b. Dua buku re-cut \u2014 bukan dobel, dua hal berbeda\n");
 out.push(tabel(["Buku", "Tab", "Mencatat", "Menambah set lengkap?"], S.SOP_DUA_BUKU));
 out.push(md(S.SOP_DUA_BUKU_CATATAN));
 out.push("\n---\n\n## 4. Per fase\n");

@@ -7043,6 +7043,47 @@ function qcUpdatePreviewKeputusan_(qtyDiperiksa, qtyAfkir, qtyDiperbaiki) {
   }
   el.className = "qc-keputusan-preview show " + kelas;
   el.textContent = teks;
+  // v197: rekomendasi disimpan supaya handler override bisa membandingkan.
+  window.QC_REKOMENDASI = kelas === "lolos" ? "Lolos" : (kelas === "bersyarat" ? "Lolos Bersyarat" : "Reject-Rework");
+  qcGantiKeputusan_();
+}
+
+/**
+ * v197 -- override keputusan.
+ * Memilih yang LEBIH LONGGAR dari rekomendasi wajib beralasan di Catatan
+ * (backend menolak kalau kosong). Memperketat tidak perlu alasan. Di sini
+ * cuma diberi tahu lebih awal supaya orang tidak menulis alasannya SETELAH
+ * ditolak -- label Catatan ikut berubah jadi "(wajib)".
+ */
+const QC_URUTAN_KEPUTUSAN = ["Lolos", "Lolos Bersyarat", "Reject-Rework"];
+
+function qcGantiKeputusan_() {
+  const sel = document.getElementById("qc-keputusan-override");
+  const hint = document.getElementById("qc-keputusan-hint");
+  const lblCatatan = document.querySelector('label[for="qc-catatan"]');
+  const kotak = document.getElementById("qc-catatan");
+  if (!sel || !hint) return;
+  const pilih = sel.value;
+  const rek = window.QC_REKOMENDASI || "";
+  const longgar = pilih && rek &&
+    QC_URUTAN_KEPUTUSAN.indexOf(pilih) < QC_URUTAN_KEPUTUSAN.indexOf(rek);
+  if (!pilih) {
+    hint.textContent = rek
+      ? "Yang tersimpan: " + rek + " (rekomendasi sistem)."
+      : "Isi qty diperiksa dulu; rekomendasi muncul otomatis.";
+    hint.className = "qc-hint";
+  } else if (longgar) {
+    hint.textContent = "Lebih longgar dari rekomendasi (" + rek + "). Tulis alasannya di Catatan -- tanpa alasan, sistem menolak.";
+    hint.className = "qc-hint qc-cacat-rinci-salah";
+  } else if (pilih === rek) {
+    hint.textContent = "Sama dengan rekomendasi sistem.";
+    hint.className = "qc-hint";
+  } else {
+    hint.textContent = "Lebih ketat dari rekomendasi (" + rek + "). Tidak perlu alasan -- lebih hati-hati selalu boleh.";
+    hint.className = "qc-hint";
+  }
+  if (lblCatatan) lblCatatan.textContent = longgar ? "Catatan (wajib -- alasan melonggarkan keputusan)" : "Catatan (opsional)";
+  if (kotak) kotak.classList.toggle("qc-wajib", !!longgar);
 }
 
 /**
@@ -7303,6 +7344,8 @@ function qcResetForm_() {
   const rinci = document.getElementById("qc-cacat-rinci");
   if (rinci) { rinci.textContent = ""; rinci.className = "qc-hint"; }
   document.getElementById("qc-keputusan-preview").classList.remove("show");
+  window.QC_REKOMENDASI = "";
+  qcGantiKeputusan_();
   // Tahap SENGAJA TIDAK direset -- checker biasanya periksa banyak PO
   // berturut-turut di tahap yang SAMA, jadi lebih cepat kalau tetap terpilih.
 }
