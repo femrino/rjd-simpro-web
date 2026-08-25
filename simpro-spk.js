@@ -377,6 +377,168 @@ function spMuatDistribusi() {
  * ke angka itu (max). Petugas tidak perlu menghitung sendiri berapa yang masih
  * boleh dibagi -- itu justru sumber kesalahan yang mau dihilangkan.
  */
+/* ============================================================
+ * v192 -- DAFTAR SPK PER LINE: kartu, pencarian, pratinjau dalam halaman
+ * ============================================================
+ * Sebelumnya satu baris datar per line, serahannya berjejer sebagai tautan
+ * bergaris bawah yang membungkus ke baris berikutnya. Pada PO dengan 6 line
+ * x 6 serahan, mata tidak punya tempat berpijak: nama line, qty, dan tautan
+ * semuanya seukuran. Sekarang tiap line jadi kartu, serahan jadi chip
+ * bernomor, dan ada kotak cari begitu linenya lebih dari empat.
+ *
+ * Tautan cetak dibuka sebagai PRATINJAU di dalam halaman (iframe
+ * /p/cetak.html, origin sama sehingga sesi login ikut terbaca) -- bukan tab
+ * baru. Mencetak enam SPK berarti enam tab yang harus ditutup satu per satu,
+ * dan orang kehilangan tempatnya di halaman produksi. Tombol "Buka tab baru"
+ * tetap ada untuk yang memang mau menyimpan berkasnya.
+ *
+ * Data tombol dititipkan lewat atribut data-*, BUKAN dirangkai ke dalam
+ * onclick: nama line yang mengandung apostrof (mis. "Bu Ta'ah") akan memutus
+ * string JavaScript-nya dan tombolnya mati tanpa pesan apa pun.
+ */
+function spDaftarSPKRangkaHtml_(jumlahLine) {
+  const cari = jumlahLine > 4
+    ? '<input class="sp-spk-cari" id="sp-spk-cari" type="search" ' +
+      'placeholder="Cari line..." oninput="spRenderDaftarSPK_()" autocomplete="off"/>'
+    : '';
+  return '<div class="sp-spk-kepala">' +
+      '<div class="sp-ringkas-judul">Sudah dibagi ke ' +
+        '<span class="sp-spk-hitung">' + jumlahLine + ' line</span></div>' +
+      cari +
+    '</div>' +
+    '<div class="sp-spk-list" id="sp-spk-list"></div>';
+}
+
+function spRenderDaftarSPK_() {
+  const wadah = document.getElementById("sp-spk-list");
+  if (!wadah) return;
+  const idPO = window.SP_SPK_PO || "";
+  const kotak = document.getElementById("sp-spk-cari");
+  const cari = kotak ? kotak.value.trim().toLowerCase() : "";
+  const daftar = (window.SP_SPK_LINE || []).filter(function (l) {
+    return !cari || String(l.namaLine || "").toLowerCase().indexOf(cari) !== -1;
+  });
+
+  if (!daftar.length) {
+    wadah.innerHTML = '<p class="sp-info">Tidak ada line bernama &#8220;' +
+      rjdEscapeHtml_(cari) + '&#8221; di PO ini.</p>';
+    return;
+  }
+
+  // Tombol pratinjau: seluruh datanya lewat data-*, dibaca spPratinjauDari_.
+  function tombol_(kelas, teks, url, judul, sub) {
+    return '<button class="' + kelas + '" type="button" onclick="spPratinjauDari_(this)" ' +
+      'data-url="' + spEsc_(url) + '" data-judul="' + spEsc_(judul) + '" ' +
+      'data-sub="' + spEsc_(sub) + '">' + teks + '</button>';
+  }
+
+  wadah.innerHTML = daftar.map(function (l) {
+    const urlGabung = "/p/cetak.html?jenis=spk&id=" + encodeURIComponent(idPO) +
+      "&line=" + encodeURIComponent(l.idLine);
+    const urlRekap = "/p/cetak.html?jenis=rekapline&line=" + encodeURIComponent(l.idLine);
+    const batch = l.batch || [];
+    // Chip serahan hanya kalau LEBIH DARI SATU: pada satu serahan, SPK
+    // gabungan dan SPK serahan isinya identik -- dua tombol, satu dokumen.
+    const chip = batch.length > 1
+      ? '<div class="sp-spk-batch">' +
+          '<span class="sp-spk-batch-lbl">' + batch.length + ' serahan</span>' +
+          batch.map(function (b, n) {
+            return tombol_("sp-batch-chip",
+              '<b>' + (n + 1) + '</b>' + rjdEscapeHtml_(b.tanggalSerah || "-") +
+                '<span>' + b.qty + ' pcs</span>',
+              urlGabung + "&batch=" + encodeURIComponent(b.idBatch),
+              "SPK " + l.namaLine + " \u00b7 serahan " + (n + 1),
+              (b.tanggalSerah || "-") + " \u00b7 " + b.qty + " pcs");
+          }).join("") +
+        '</div>'
+      : '';
+
+    return '<div class="sp-spk-kartu">' +
+      '<div class="sp-spk-atas">' +
+        '<div class="sp-spk-nama">' + rjdEscapeHtml_(l.namaLine) +
+          (l.targetSelesai
+            ? '<span class="sp-ringkas-target">target ' + rjdEscapeHtml_(l.targetSelesai) + '</span>'
+            : '<span class="sp-ringkas-target kosong">target belum diisi</span>') +
+        '</div>' +
+        '<div class="sp-spk-qty">' + l.qty + '<span>pcs</span></div>' +
+      '</div>' +
+      '<div class="sp-spk-aksi">' +
+        tombol_("sp-spk-btn utama", batch.length > 1 ? "SPK gabungan" : "Cetak SPK",
+          urlGabung, "SPK " + l.namaLine, "seluruh jatah line di PO ini") +
+        tombol_("sp-spk-btn", "Rekap Line", urlRekap,
+          "Rekap Line " + l.namaLine, "semua PO yang dipegang line ini") +
+      '</div>' + chip +
+    '</div>';
+  }).join("");
+}
+
+function spPratinjauDari_(btn) {
+  if (!btn) return;
+  spPratinjauDok_(btn.dataset.url, btn.dataset.judul, btn.dataset.sub);
+}
+
+/**
+ * Pratinjau dokumen cetak DI DALAM halaman. Iframe menunjuk /p/cetak.html di
+ * origin yang sama, jadi sesi (db_session) terbaca tanpa login ulang, dan
+ * print() dari sini mencetak isi iframe -- bukan halaman produksi di
+ * belakangnya.
+ *
+ * NAMA sengaja *Dok_ , bukan *Pratinjau_ : spTutupPratinjau_/#sp-pratinjau
+ * sudah dipakai pratinjau GAMBAR marker sejak v128. Dua fungsi bernama sama
+ * di satu berkas tidak melempar error apa pun -- yang belakangan menang
+ * diam-diam, dan pratinjau marker akan mati tanpa jejak.
+ */
+function spPratinjauDok_(url, judul, sub) {
+  if (!url) return;
+  spTutupPratinjauDok_();   // satu pratinjau saja pada satu waktu
+  const ov = document.createElement("div");
+  ov.className = "rjd-modal-overlay";
+  ov.id = "sp-dok-ov";
+  ov.innerHTML =
+    '<div class="rjd-modal sp-dok">' +
+      '<div class="rjd-modal-head">' +
+        '<div><div class="rjd-modal-title">' + rjdEscapeHtml_(judul || "Dokumen") + '</div>' +
+          '<div class="rjd-modal-sub">' + rjdEscapeHtml_(sub || "") + '</div></div>' +
+        '<button class="rjd-modal-close" onclick="spTutupPratinjauDok_()" type="button" ' +
+          'aria-label="Tutup">&#10005;</button>' +
+      '</div>' +
+      '<div class="rjd-modal-body sp-dok-body">' +
+        '<div class="sp-dok-muat" id="sp-dok-muat">Memuat dokumen...</div>' +
+        '<iframe id="sp-dok-frame" title="Pratinjau dokumen" src="' + spEsc_(url) + '"></iframe>' +
+      '</div>' +
+      '<div class="rjd-modal-foot">' +
+        '<a class="sp-spk-btn" href="' + spEsc_(url) + '" rel="noopener" target="_blank">Buka tab baru</a>' +
+        '<button class="sp-spk-btn utama" onclick="spCetakPratinjauDok_()" type="button">Cetak</button>' +
+      '</div>' +
+    '</div>';
+  ov.addEventListener("click", function (e) { if (e.target === ov) spTutupPratinjauDok_(); });
+  document.body.appendChild(ov);
+  const f = document.getElementById("sp-dok-frame");
+  if (f) f.addEventListener("load", function () {
+    const m = document.getElementById("sp-dok-muat");
+    if (m) m.remove();
+  });
+  document.body.style.overflow = "hidden";
+  document.addEventListener("keydown", spEscDok_);
+}
+
+function spEscDok_(e) { if (e.key === "Escape") spTutupPratinjauDok_(); }
+
+function spTutupPratinjauDok_() {
+  const ov = document.getElementById("sp-dok-ov");
+  if (!ov) return;
+  ov.remove();
+  document.body.style.overflow = "";
+  document.removeEventListener("keydown", spEscDok_);
+}
+
+function spCetakPratinjauDok_() {
+  const f = document.getElementById("sp-dok-frame");
+  if (!f || !f.contentWindow) { alert("Dokumen belum selesai dimuat."); return; }
+  f.contentWindow.focus();
+  f.contentWindow.print();
+}
+
 function spRenderForm() {
   const po = window.SP_PO;
   if (!po) return;
@@ -393,33 +555,14 @@ function spRenderForm() {
     spPesan_("sp-po-pesan", "Belum ada line terdaftar. Isi dulu sheet SD Master Line.", true);
   }
 
-  // Ringkasan pembagian yang sudah ada
+  // Ringkasan pembagian yang sudah ada -- v192: kartu per line, kotak cari,
+  // dan pratinjau dokumen di dalam halaman. Lihat spRenderDaftarSPK_.
   const rk = document.getElementById("sp-ringkas");
   if ((po.perLine || []).length) {
-    rk.innerHTML = '<div class="sp-ringkas-judul">Sudah dibagi ke</div>' +
-      '<div class="sp-ringkas-list">' +
-      po.perLine.map(function (l) {
-        // Dua tautan, dua peran: SPK = dokumen kerja PO ini untuk line itu;
-        // Rekap = semua PO yang dipegang line itu (lintas order).
-        return '<div class="sp-ringkas-item"><span>' + rjdEscapeHtml_(l.namaLine) +
-          (l.targetSelesai
-            ? ' <span class="sp-ringkas-target">target ' + rjdEscapeHtml_(l.targetSelesai) + '</span>'
-            : ' <span class="sp-ringkas-target kosong">target belum diisi</span>') + '</span>' +
-          '<b>' + l.qty + ' pcs</b>' +
-          '<a href="/p/cetak.html?jenis=spk&amp;id=' + encodeURIComponent(po.idPurchaseOrder) +
-            '&amp;line=' + encodeURIComponent(l.idLine) + '" target="_blank">Cetak SPK</a>' +
-          '<a class="sp-rekap-link" href="/p/cetak.html?jenis=rekapline&amp;line=' +
-            encodeURIComponent(l.idLine) + '" target="_blank">Rekap Line</a></div>' +
-          // v186: satu tautan per serahan (batch). "Cetak SPK" di atas = gabungan.
-          ((l.batch || []).length > 1
-            ? '<div class="sp-ringkas-batch">' + l.batch.map(function (b, n) {
-                return '<a href="/p/cetak.html?jenis=spk&amp;id=' + encodeURIComponent(po.idPurchaseOrder) +
-                  '&amp;line=' + encodeURIComponent(l.idLine) + '&amp;batch=' + encodeURIComponent(b.idBatch) +
-                  '" target="_blank">serahan ' + (n + 1) + ' &#183; ' + rjdEscapeHtml_(b.tanggalSerah || "-") +
-                  ' &#183; ' + b.qty + ' pcs</a>';
-              }).join("") + '</div>'
-            : '');
-      }).join("") + '</div>';
+    window.SP_SPK_PO = po.idPurchaseOrder;
+    window.SP_SPK_LINE = po.perLine;
+    rk.innerHTML = spDaftarSPKRangkaHtml_(po.perLine.length);
+    spRenderDaftarSPK_();
     rk.classList.remove("hidden");
   } else {
     rk.innerHTML = '';

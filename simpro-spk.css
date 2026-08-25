@@ -1570,3 +1570,72 @@ body.sp-siap #sp-subtabs { visibility: visible; }
 .sp-ringkas-batch a { font-size: 10.5px; color: var(--ink-soft); text-decoration: underline dotted; }
 .sp-riw-cetak { margin-top: 6px; }
 .sp-riw-cetak a { font-size: 11px; font-weight: 600; }
+
+/* ===== v192: daftar SPK per line -- kartu, pencarian, pratinjau dokumen =====
+   Kelas sengaja berawalan .sp-spk-* dan .sp-dok-* : .sp-pratinjau* sudah
+   dipakai pratinjau GAMBAR marker, dan .sp-ringkas-item masih dipakai
+   ringkasan hasil potong & setoran di tab lain. */
+.sp-spk-kepala { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.sp-spk-hitung { font-weight: 400; letter-spacing: 0; text-transform: none; opacity: .7; }
+.sp-spk-cari {
+  margin-left: auto; width: 190px; max-width: 45%; padding: 6px 10px; font-size: 12.5px;
+  font-family: inherit; color: var(--ink); background: var(--white);
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.sp-spk-cari:focus { outline: none; border-color: var(--ink); }
+
+.sp-spk-kartu {
+  background: var(--white); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; margin-bottom: 8px;
+}
+.sp-spk-atas { display: flex; align-items: baseline; gap: 10px; }
+.sp-spk-nama { font-size: 14.5px; font-weight: 700; color: var(--ink); flex: 1 1 auto; }
+.sp-spk-nama .sp-ringkas-target { display: block; font-weight: 400; margin-top: 1px; }
+.sp-spk-qty { font-size: 19px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+.sp-spk-qty span { font-size: 10.5px; font-weight: 600; color: var(--ink-soft); margin-left: 3px; }
+
+.sp-spk-aksi { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.sp-spk-btn {
+  font-size: 12px; font-weight: 700; font-family: inherit; cursor: pointer;
+  padding: 6px 12px; border-radius: 7px; text-decoration: none;
+  background: var(--white); color: var(--ink); border: 1px solid var(--line);
+}
+.sp-spk-btn:hover { border-color: var(--ink); }
+.sp-spk-btn.utama { background: var(--ink); color: var(--white); border-color: var(--ink); }
+.sp-spk-btn.utama:hover { opacity: .88; }
+
+.sp-spk-batch {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+  margin-top: 9px; padding-top: 9px; border-top: 1px dashed var(--line);
+}
+.sp-spk-batch-lbl {
+  font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--ink-soft); margin-right: 3px;
+}
+.sp-batch-chip {
+  display: inline-flex; align-items: baseline; gap: 5px; cursor: pointer;
+  font-family: inherit; font-size: 11.5px; color: var(--ink);
+  background: var(--cream); border: 1px solid transparent; border-radius: 999px;
+  padding: 4px 10px;
+}
+.sp-batch-chip b {
+  font-size: 10.5px; color: var(--white); background: var(--ink);
+  border-radius: 999px; padding: 1px 6px;
+}
+.sp-batch-chip span { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.sp-batch-chip:hover { border-color: var(--ink); }
+
+.sp-dok { max-width: 980px; height: 88vh; }
+.sp-dok-body { padding: 0; position: relative; background: var(--cream); }
+.sp-dok-body iframe { width: 100%; height: 100%; border: 0; display: block; background: var(--white); }
+.sp-dok-muat {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: var(--ink-soft);
+}
+
+@media (max-width: 620px) {
+  .sp-spk-kepala { flex-wrap: wrap; }
+  .sp-spk-cari { margin-left: 0; width: 100%; max-width: none; }
+  .sp-spk-btn { flex: 1 1 auto; text-align: center; }
+  .sp-dok { height: 92vh; }
+}
