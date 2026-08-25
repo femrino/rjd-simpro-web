@@ -182,3 +182,8 @@
   padding-left: 12px;
   margin-bottom: 0 !important;
 }
+
+/* v188: satu sumber SOP -- baris versi & tabel rantai */
+.sop-versi { font-size: 11px; color: var(--ink-soft, #6B7280); margin: 0 0 14px; }
+.sop-tabel-rantai td:nth-child(2) { white-space: nowrap; }
+.sop-tabel-rantai td:first-child { text-align: center; }

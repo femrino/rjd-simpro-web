@@ -93,6 +93,78 @@ function sopMulai() {
  * ============================================================ */
 
 /** Rantai utama. Tiap tahap membatasi tahap berikutnya. */
+/**
+ * v188: SATU SUMBER SOP.
+ *
+ * File ini dibaca dua layar (halaman /p/sop.html dan tab SOP di produksi)
+ * lewat sopIsiHtml_. Dokumen SOP-SIMPRO-PRODUKSI.md BUKAN sumber -- ia
+ * diekspor dari data di bawah ini oleh tools/buat-sop-md.js. SOP baru
+ * ditambahkan di sini, lalu MD dibuat ulang; jangan pernah menulis SOP di
+ * dua tempat.
+ */
+const SOP_VERSI = "v188 \u00b7 25 Agustus 2026";
+
+/** Rantai utama: siapa mencatat apa, di tab mana. Urutan = urutan kejadian. */
+const SOP_RANTAI_TAB = [
+  ["1", "Order masuk", "Order \u203a Orderan / Detail Order", "Admin",
+   "PO + Rincian SO (warna & size) jadi pembanding seluruh rantai"],
+  ["2", "Pola, Marker, Sampel, Approval", "fase Pola & Marker", "Pola/Marker",
+   "Approval klien = titik mulai potong"],
+  ["3", "Gelaran & potong", "Cutting \u203a Gelaran, Hasil Potong", "Kepala cutting",
+   "Hasil potong per warna per size; potong bertahap = baris baru"],
+  ["4", "QC Potong", "Cutting \u203a QC Potong", "Kepala cutting",
+   "Self-check sebelum panel dibagi. Afkir \u2192 centang koreksi + tombol re-cut"],
+  ["5", "Bagi ke line", "Cutting \u203a Bagi ke Line", "Cutting",
+   "Pembanding = qty potong, bukan qty order. <b>Satu kali Simpan = satu serahan = satu SPK</b> \u2014 " +
+   "cetak \u201cSPK serahan ini\u201d dan ikutkan ke tumpukannya; \u201cSPK gabungan\u201d hanya untuk rekap"],
+  ["6", "Konfirmasi terima", "Sewing \u203a Konfirmasi Potongan", "Kepala line",
+   "Cocok \u2192 Diterima; tidak cocok \u2192 <b>Ada Selisih</b> hari itu juga"],
+  ["7", "QC Jahit", "Sewing \u203a QC Jahit", "Kepala line",
+   "Self-check sebelum setor. Cacat jahitan saja \u2014 panel rusak bukan di sini (lihat skenario panel cacat)"],
+  ["8", "Setoran", "Sewing \u203a Setoran ke Finishing", "Kepala line",
+   "<b>Jadi Baju</b> = hasil jahit; <b>Dikembalikan</b> = potongan keluar dari line"],
+  ["9", "Konfirmasi setoran", "Finishing \u203a Konfirmasi Setoran", "Finishing",
+   "Selisih dicatat lewat mekanisme selisih, bukan didiamkan"],
+  ["10", "QC Finishing", "Finishing \u203a QC Finishing", "Bagian QC (khusus)",
+   "<b>Gerbang</b>: Qty Lolos per size = dasar stok siap kirim \u2192 surat jalan \u2192 tagihan"],
+  ["11", "Kirim & tagih", "Stok Siap Kirim \u2192 Pengiriman \u2192 Invoice", "Admin/Finance",
+   "Hanya yang lolos QC Finishing yang bisa dikirim"]
+];
+const SOP_PAGAR_QC = "Pagar akses QC: Potong = cutting/qc \u00b7 Jahit = sewing/qc \u00b7 Finishing = <b>qc saja</b>. " +
+  "Ditolak sistem padahal memang tugasmu? Hubungi admin \u2014 jangan pinjam akun.";
+
+/** Form QC: empat angka mutu. */
+const SOP_ANGKA_MUTU = [
+  ["Qty diperiksa", "Semua yang diperiksa sesi ini"],
+  ["Qty lolos (per size)", "Yang boleh lanjut \u2014 <b>termasuk yang sudah selesai diperbaiki</b>"],
+  ["Qty diperbaiki", "Dari yang lolos, berapa yang tadi sempat cacat lalu dibenerin"],
+  ["Qty ditahan", "Masih di keranjang perbaikan \u2014 belum lolos, belum diafkir"]
+];
+const SOP_ANGKA_MUTU_CATATAN =
+  "Afkir dihitung otomatis (diperiksa \u2212 lolos \u2212 ditahan). <b>Keputusan batch dinilai dari afkir</b> \u2014 " +
+  "batch yang 30% cacat tapi semua sudah beres tetap \u201cLolos\u201d. Kolom diperbaiki tidak menghukum siapa pun; " +
+  "dia hanya menunjukkan di mana waktu kerja ulang terbuang. Rincian jenis cacat harus menjumlah ke cacat " +
+  "ditemukan (afkir + diperbaiki + ditahan).";
+
+/** Dua buku re-cut -- bukan dobel, dua hal berbeda. */
+const SOP_DUA_BUKU = [
+  ["KAIN", "Gelaran \u203a mode Re-cut", "kain terpakai, komponen, alasan, line pemohon, kotak \u201cDari QC Potong\u201d", "Tidak (sengaja)"],
+  ["BAJU", "QC Potong (koreksi \u2212N) + Buat re-cut (+N), jejak Re-cut Dari QC", "pool \u201csisa boleh dibagi\u201d kembali utuh", "Netral (\u2212N lalu +N)"]
+];
+const SOP_DUA_BUKU_CATATAN =
+  "Kalau kain pengganti dicatat sebagai gelaran <b>Normal</b>: set lengkap naik N, Hasil Potong netral \u2192 " +
+  "panel \u201cN pcs belum dicatat\u201d menggantung selamanya. Itu satu-satunya cara dua jalur ini bertabrakan.";
+
+/** Cek mingguan -- Femri / kepala produksi. */
+const SOP_CEK_MINGGUAN = [
+  ["diagnosaMutuQC() bagian 2", "Keranjang terbuka per PO harus mengecil, bukan menumpuk."],
+  ["WIP per line", "Mendekati nol untuk PO yang selesai; WIP menggantung = ada serah-terima yang tidak dicatat."],
+  ["Sisa boleh dibagi", "= 0 saat PO tuntas; sisa positif menahun = ada panel hantu (langkah koreksi QC Potong terlewat)."],
+  ["diagnosaMutuQC() bagian 5", "Tiap sesi QC Potong berafkir harus TUNTAS: koreksi \u2212N, re-cut +N, kain pengganti > 0, satu ID QC. " +
+   "\u201cGelaran NORMAL memakai ID ini\u201d = salah mode, perbaiki hari itu."],
+  ["Defect rate naik setelah v184", "<b>Normal dan diharapkan</b> \u2014 mutu akhirnya terlihat. Yang dicurigai justru kalau tetap 0%."]
+];
+
 const SOP_RANTAI = [
   ["Order", "Order masuk & disetujui", "#8A5D1F"],
   ["Pola & Marker", "Pola dibuat, marker disusun", "#5F6B7A"],
@@ -121,7 +193,15 @@ const SOP_ATURAN_BESI = [
    "angkanya terasa salah, yang keliru adalah salah satu kejadiannya -- cari di situ."],
   ["Satu kejadian, satu tempat",
    "Kalau satu kejadian dicatat di dua form, angkanya berkurang dua kali. " +
-   "Ragu di mana mencatat? Lihat tabel skenario di bawah."]
+   "Ragu di mana mencatat? Lihat tabel skenario di bawah."],
+  // v188: dua prinsip dari dokumen induk, sekarang di sini.
+  ["Yang menerima yang mengonfirmasi",
+   "Setiap barang pindah tangan = ada catatannya, dan yang membenarkan adalah " +
+   "penerimanya \u2014 bukan yang menyerahkan. Angka jujur, bukan angka bagus: cacat, " +
+   "selisih, dan barang menggantung punya tempatnya masing-masing."],
+  ["Self-check tidak pernah memotong upah",
+   "Angka QC Potong & QC Jahit adalah pemeriksaan sendiri. Untuk insentif mutu, " +
+   "pakai temuan QC Finishing per line."]
 ];
 
 /** Per fase: siapa, apa, aturan, yang sering salah. */
@@ -371,6 +451,57 @@ const SOP_SKENARIO = [
     ]
   },
   {
+    // v188: dari dokumen induk, Kasus C.
+    judul: "Afkir ketemu di meja potong (belum masuk catatan Hasil Potong)",
+    tanya: "Panelnya pernah terhitung atau belum?",
+    baris: [
+      ["Belum pernah masuk Hasil Potong",
+       "Cutting \u203a QC Potong dengan centang koreksi <b>DIMATIKAN</b>",
+       "Tidak ada yang perlu dikurangkan \u2014 panelnya belum pernah terhitung. Kain penggantinya tetap " +
+       "Gelaran mode Re-cut kalau memang dipotong ulang."],
+      ["Sudah tercatat, ketahuan belakangan",
+       "Cutting \u203a QC Potong dengan centang koreksi <b>menyala</b>",
+       "Hasil Potong berkurang otomatis, lalu Buat re-cut seperti skenario panel cacat."]
+    ]
+  },
+  {
+    // v188: Kasus D.
+    judul: "Qty serah-terima tidak cocok",
+    tanya: "Siapa pun yang menerima \u2014 line dari cutting, finishing dari line:",
+    baris: [
+      ["Angkanya beda dengan yang diserahkan",
+       "Penerima pilih <b>Ada Selisih</b> saat konfirmasi, hari itu juga",
+       "Selisih lahir sebagai baris koreksi bertanda, di batch yang sama. Jangan \u201cDiterima\u201d dulu " +
+       "lalu dibetulkan lisan \u2014 itu selisih yang tidak akan pernah ketemu."]
+    ]
+  },
+  {
+    // v188: Kasus E.
+    judul: "Salah input",
+    tanya: "Kejadiannya nyata atau tidak?",
+    baris: [
+      ["Kejadiannya nyata, angkanya yang berubah",
+       "Baris <b>Koreksi</b> (qty minus)",
+       "Riwayat tetap utuh: angka lama, koreksinya, dan hasil bersihnya bisa ditelusuri."],
+      ["Barisnya tidak pernah mewakili kejadian apa pun (salah PO, salah ketik)",
+       "<b>Dibatalkan</b>",
+       "Baris tetap ada berstatus Dibatalkan. Jangan pernah mengedit baris lama."]
+    ]
+  },
+  {
+    // v188: Kasus G.
+    judul: "Cacat baru ketemu saat menyelesaikan keranjang",
+    tanya: "Sesi penyelesaian hanya menutup keranjang lama:",
+    baris: [
+      ["Yang ditutup = barang yang tadi ditahan",
+       "Tombol <b>Selesaikan sekarang</b> \u2192 isi lolos (per size) & afkir akhirnya",
+       "Sistem menolak kalau penyelesaian melebihi keranjang terbuka."],
+      ["Cacat BARU di luar keranjang",
+       "Sesi <b>inspeksi biasa</b>",
+       "Jangan diselipkan ke penyelesaian \u2014 keranjang lama jadi tidak bisa ditutup."]
+    ]
+  },
+  {
     judul: "Jumlah kirim tidak cocok dengan order",
     tanya: "Di titik mana selisihnya lahir?",
     baris: [
@@ -521,6 +652,29 @@ function sopIsiHtml_(opsi) {
     return '<li><b>' + a[0] + '</b><span>' + a[1] + '</span></li>';
   }).join("");
 
+  const rantaiTab = '<div class="sop-tabelwrap"><table class="sop-tabel sop-tabel-rantai">' +
+    '<thead><tr><th>#</th><th>Tahap</th><th>Tab</th><th>Yang mencatat</th><th>Inti</th></tr></thead><tbody>' +
+    SOP_RANTAI_TAB.map(function (r) {
+      return '<tr><td>' + r[0] + '</td><td><b>' + sopEsc_(r[1]) + '</b></td><td>' + r[2] + '</td><td>' +
+        sopEsc_(r[3]) + '</td><td>' + r[4] + '</td></tr>';
+    }).join("") + '</tbody></table></div>' +
+    '<p class="sop-info">' + SOP_PAGAR_QC + '</p>';
+
+  const angkaMutu = '<div class="sop-tabelwrap"><table class="sop-tabel">' +
+    '<thead><tr><th>Isian</th><th>Arti</th></tr></thead><tbody>' +
+    SOP_ANGKA_MUTU.map(function (r) { return '<tr><td>' + sopEsc_(r[0]) + '</td><td>' + r[1] + '</td></tr>'; }).join("") +
+    '</tbody></table></div><p class="sop-info">' + SOP_ANGKA_MUTU_CATATAN + '</p>';
+
+  const duaBuku = '<div class="sop-tabelwrap"><table class="sop-tabel">' +
+    '<thead><tr><th>Buku</th><th>Tab</th><th>Mencatat</th><th>Menambah set lengkap?</th></tr></thead><tbody>' +
+    SOP_DUA_BUKU.map(function (r) {
+      return '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td><td>' + r[2] + '</td><td>' + r[3] + '</td></tr>';
+    }).join("") + '</tbody></table></div><p class="sop-info">' + SOP_DUA_BUKU_CATATAN + '</p>';
+
+  const cekMingguan = '<ul class="sop-daftar">' + SOP_CEK_MINGGUAN.map(function (a) {
+    return '<li><b>' + sopEsc_(a[0]) + '</b><span>' + a[1] + '</span></li>';
+  }).join("") + '</ul>';
+
   const daftarIsi = SOP_FASE.map(function (f) {
     return '<a href="#sop-' + f.id + '">' + sopEsc_(f.nama) + '</a>';
   }).join("");
@@ -528,8 +682,11 @@ function sopIsiHtml_(opsi) {
   return (tanpaNav ? '' :
     '<div class="sop-nav">' + daftarIsi +
       '<a href="#sop-skenario-blok">Skenario</a>' +
+      '<a href="#sop-cek-mingguan">Cek mingguan</a>' +
       '<button class="sop-cetak sp-tautan" onclick="window.print()" type="button">Cetak</button>' +
     '</div>') +
+    '<p class="sop-versi">SOP SIMPRO \u00b7 berlaku mulai ' + SOP_VERSI +
+      ' \u00b7 satu sumber untuk halaman SOP, tab SOP, dan dokumen cetak</p>' +
     // v170: blok pembuka -- APA NAMA SISTEM INI, dan kenapa dua pintu.
     //
     // Tim selama ini menyebutnya "AppSheet" karena itu satu-satunya nama yang
@@ -569,6 +726,10 @@ function sopIsiHtml_(opsi) {
         'begitu seterusnya sampai tagihan.</p>' +
       sopBaganHtml_() +
     '</section>' +
+    '<section class="sop-blok" id="sop-rantai-tab">' +
+      '<h2>Rantai utama \u2014 siapa mencatat apa, di tab mana</h2>' +
+      rantaiTab +
+    '</section>' +
     '<section class="sop-blok">' +
       '<h2>Ke mana potongan bisa pergi</h2>' +
       '<p class="sop-info">Bagian yang paling sering keliru. Pertanyaan pemisahnya ' +
@@ -579,12 +740,21 @@ function sopIsiHtml_(opsi) {
       '<h2>Aturan yang berlaku di semua tab</h2>' +
       '<ul class="sop-daftar sop-besi">' + besi + '</ul>' +
     '</section>' +
+    '<section class="sop-blok">' +
+      '<h2>Form QC \u2014 empat angka mutu</h2>' + angkaMutu +
+    '</section>' +
+    '<section class="sop-blok">' +
+      '<h2>Dua buku re-cut \u2014 bukan dobel, dua hal berbeda</h2>' + duaBuku +
+    '</section>' +
     '<h2 class="sop-judul-besar">Per fase</h2>' +
     fase +
     '<h2 class="sop-judul-besar" id="sop-skenario-blok">Skenario &amp; penanganannya</h2>' +
     '<p class="sop-info">Kejadian yang tidak ada tombolnya \u2014 dan cara ' +
       'mencatatnya supaya angka tetap jujur.</p>' +
-    skenario;
+    skenario +
+    '<h2 class="sop-judul-besar" id="sop-cek-mingguan">Tanda buku sehat \u2014 cek mingguan</h2>' +
+    '<p class="sop-info">Untuk Femri / kepala produksi. Bukan untuk mengisi, untuk memeriksa.</p>' +
+    '<section class="sop-blok">' + cekMingguan + '</section>';
 }
 
 function sopRender() {
