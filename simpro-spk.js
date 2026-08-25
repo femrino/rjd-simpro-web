@@ -2742,19 +2742,17 @@ function spRenderDetailOrder_() {
           }).join(", ") + '</p>'
         : '<p class="sp-det-kain sp-det-kain-kosong">Kain belum tercatat untuk item ini.</p>') +
       spDetailTabelItem_(it) +
-      ((it.gambarOrder || it.scOrder) ? '<div class="sp-det-tautan">' +
-        (it.gambarOrder ? '<a href="' + rjdEscapeHtml_(it.gambarOrder) +
-          '" target="_blank">Gambar model</a>' : '') +
-        (it.scOrder ? '<a href="' + rjdEscapeHtml_(it.scOrder) +
-          '" target="_blank">Size chart</a>' : '') +
+      ((it.gambarOrder || it.scOrder) ? '<div class="sp-det-thumb-grid">' +
+        spThumbLampiran_(it.gambarOrder, "Gambar model") +
+        spThumbLampiran_(it.scOrder, "Size chart") +
       '</div>' : '') +
     '</div>';
   }).join("");
 
   const lampiran = (d.urlFileLainnya || []).length
-    ? '<div class="sp-det-blok"><h4>Lampiran</h4><div class="sp-det-tautan">' +
+    ? '<div class="sp-det-blok"><h4>Lampiran</h4><div class="sp-det-thumb-grid">' +
       d.urlFileLainnya.map(function (u, i) {
-        return '<a href="' + rjdEscapeHtml_(u) + '" target="_blank">Berkas ' + (i + 1) + '</a>';
+        return spThumbLampiran_(u, "Berkas " + (i + 1));
       }).join("") + '</div></div>'
     : "";
 
@@ -2818,7 +2816,10 @@ function spRenderDetailOrder_() {
       lampiran +
 
       '<div class="sp-det-tautan sp-det-cetak">' +
-        spTombolDok_("sp-tautan sp-tautan-btn", "Cetak SPK produksi",
+        // v194: bergaya tombol, seragam dengan daftar SPK di tab Loading.
+        // Sebagai teks bergaris bawah di dasar halaman panjang, ia tidak
+        // terbaca sebagai tindakan -- padahal inilah tindakan utama layar ini.
+        spTombolDok_("sp-spk-btn utama sp-det-cetak-btn", "&#128438; Cetak SPK produksi",
           "/p/cetak.html?jenis=spk&id=" + encodeURIComponent(window.SP_PO_AKTIF || ""),
           "SPK produksi", "PO penuh \u2014 semua line") +
       '</div>' +
@@ -4088,6 +4089,54 @@ function spSizePO_() {
  * Kalau gagal dimuat (file dihapus / izin berubah), onerror menggantinya
  * dengan tautan teks, bukan ikon rusak.
  */
+/**
+ * v194 -- ID berkas Drive dari sebuah tautan, atau "" kalau bukan Drive.
+ * Dipisah supaya spThumbMarker_ (layout marker) dan spThumbLampiran_
+ * (gambar model, size chart, lampiran order) memakai aturan yang SAMA.
+ * Tautan Drive biasa (".../file/d/ID/view") tidak bisa dipakai di <img> --
+ * yang keluar halaman HTML, bukan gambar.
+ */
+function spIdDrive_(url) {
+  const m = String(url).match(/\/file\/d\/([^/]+)/) || String(url).match(/[?&]id=([^&]+)/);
+  return m ? m[1] : "";
+}
+function spSrcDrive_(url, lebar) {
+  const id = spIdDrive_(url);
+  return id
+    ? ("https://drive.google.com/thumbnail?id=" + encodeURIComponent(id) + "&sz=w" + lebar)
+    : url;
+}
+
+/**
+ * v194 -- thumbnail berlabel untuk Detail Order (gambar model, size chart,
+ * lampiran). Sebelumnya semuanya tautan teks "Gambar model": untuk tahu
+ * modelnya seperti apa, orang harus meninggalkan halaman dan kembali lagi --
+ * padahal justru gambar itu yang paling sering dilihat saat membaca order.
+ *
+ * Klik membuka pratinjau gambar yang SAMA dengan layout marker
+ * (spBukaPratinjau_), lengkap dengan tautan ke Drive di dalamnya untuk yang
+ * perlu ukuran asli atau mengunduh.
+ *
+ * Berkas yang bukan gambar (.plt, .pdf, .xlsx) tidak akan pernah termuat
+ * sebagai <img>; onerror menggantinya dengan tautan unduh, bukan ikon rusak.
+ */
+function spThumbLampiran_(url, label) {
+  if (!url) return "";
+  return '<button class="sp-det-thumb" type="button" onclick="spBukaThumb_(this)" ' +
+      'data-besar="' + spEsc_(spSrcDrive_(url, 1600)) + '" data-asli="' + spEsc_(url) + '" ' +
+      'title="' + spEsc_(label) + '">' +
+    '<span class="sp-det-thumb-kotak">' +
+      '<img alt="' + spEsc_(label) + '" loading="lazy" onerror="spThumbGagal_(this)" ' +
+        'src="' + spEsc_(spSrcDrive_(url, 400)) + '"/>' +
+    '</span>' +
+    '<span class="sp-det-thumb-lbl">' + spEsc_(label) + '</span>' +
+  '</button>';
+}
+
+function spBukaThumb_(btn) {
+  if (btn) spBukaPratinjau_(btn.dataset.besar, btn.dataset.asli);
+}
+
 function spThumbMarker_(url) {
   const m = String(url).match(/\/file\/d\/([^/]+)/) || String(url).match(/[?&]id=([^&]+)/);
   const src = m
@@ -4159,6 +4208,17 @@ document.addEventListener("keydown", function (e) {
 });
 
 function spThumbGagal_(img) {
+  // v194: thumbnail Detail Order punya rangka sendiri (.sp-det-thumb) dan
+  // bisa saja memang bukan gambar (.plt, .pdf) -- diganti tautan unduh,
+  // supaya berkasnya tetap bisa diambil.
+  const d = img.closest(".sp-det-thumb");
+  if (d) {
+    const url = d.dataset.asli || "";
+    const lbl = (d.querySelector(".sp-det-thumb-lbl") || {}).textContent || "Berkas";
+    d.outerHTML = '<a class="sp-det-thumb-gagal" href="' + spEsc_(url) + '" ' +
+      'rel="noopener" target="_blank">&#128196; ' + spEsc_(lbl) + '</a>';
+    return;
+  }
   const a = img.closest(".sp-thumb");
   if (!a) return;
   a.classList.add("sp-thumb-gagal");

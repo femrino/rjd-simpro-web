@@ -1650,3 +1650,31 @@ body.sp-siap #sp-subtabs { visibility: visible; }
 /* .sp-cetak-btn semula <a> (punya margin-left:auto di dalam flex); sebagai
    <button> perlu penyetelan kotak supaya tingginya tidak ikut baris teks. */
 button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-height: 1.2; }
+
+/* ===== v194: thumbnail gambar di Detail Order + tombol cetak =====
+   Kelas .sp-det-thumb* dipisah dari .sp-thumb (layout marker, 56px, tanpa
+   label) supaya ukuran salah satunya bisa diubah tanpa menyeret yang lain. */
+.sp-det-thumb-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.sp-det-thumb {
+  padding: 0; background: none; border: 0; font: inherit; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 5px; width: 96px;
+}
+.sp-det-thumb-kotak {
+  width: 96px; height: 96px; border-radius: 10px; overflow: hidden;
+  border: 1px solid var(--line, #E5E0D6); background: var(--white); display: block;
+}
+.sp-det-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sp-det-thumb-lbl {
+  font-size: 11px; color: var(--ink-soft, #5F6B7A); text-align: center; line-height: 1.3;
+}
+.sp-det-thumb:hover .sp-det-thumb-kotak { border-color: var(--thread, #C2410C); }
+.sp-det-thumb:hover .sp-det-thumb-lbl { color: var(--thread, #C2410C); }
+/* Bukan gambar (atau gagal dimuat) -> tautan unduh, berkasnya tetap terambil. */
+.sp-det-thumb-gagal {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
+  padding: 6px 13px; border-radius: 999px; text-decoration: none;
+  border: 1px dashed var(--line, #E5E0D6); color: var(--ink, #17212F);
+}
+.sp-det-thumb-gagal:hover { border-color: var(--thread, #C2410C); color: var(--thread, #C2410C); }
+
+.sp-det-cetak-btn { font-size: 13px; padding: 9px 18px; border-radius: 9px; }
