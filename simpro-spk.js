@@ -426,11 +426,7 @@ function spRenderDaftarSPK_() {
   }
 
   // Tombol pratinjau: seluruh datanya lewat data-*, dibaca spPratinjauDari_.
-  function tombol_(kelas, teks, url, judul, sub) {
-    return '<button class="' + kelas + '" type="button" onclick="spPratinjauDari_(this)" ' +
-      'data-url="' + spEsc_(url) + '" data-judul="' + spEsc_(judul) + '" ' +
-      'data-sub="' + spEsc_(sub) + '">' + teks + '</button>';
-  }
+  const tombol_ = spTombolDok_;
 
   wadah.innerHTML = daftar.map(function (l) {
     const urlGabung = "/p/cetak.html?jenis=spk&id=" + encodeURIComponent(idPO) +
@@ -470,6 +466,19 @@ function spRenderDaftarSPK_() {
       '</div>' + chip +
     '</div>';
   }).join("");
+}
+
+/**
+ * v193 -- satu pembuat tombol pratinjau untuk SELURUH halaman produksi.
+ *
+ * Datanya dititipkan lewat data-*, tidak pernah dirangkai ke dalam onclick:
+ * nama line atau nomor dokumen yang mengandung apostrof akan memutus string
+ * JavaScript-nya, dan tombolnya mati tanpa pesan apa pun.
+ */
+function spTombolDok_(kelas, teks, url, judul, sub) {
+  return '<button class="' + kelas + '" type="button" onclick="spPratinjauDari_(this)" ' +
+    'data-url="' + spEsc_(url) + '" data-judul="' + spEsc_(judul) + '" ' +
+    'data-sub="' + spEsc_(sub || "") + '">' + teks + '</button>';
 }
 
 function spPratinjauDari_(btn) {
@@ -731,13 +740,17 @@ function spSimpan() {
         ' (' + h.jumlahBaris + ' baris warna).' +
         // v186: tautan utama = SPK BATCH INI (yang barusan disimpan). Kertas
         // yang ikut ke tumpukan potongan harus memuat tumpukan itu saja.
-        '<a class="sp-cetak-btn" target="_blank" href="/p/cetak.html?jenis=spk&amp;id=' +
-          encodeURIComponent(h.idPurchaseOrder) + '&amp;line=' + encodeURIComponent(h.idLine) +
-          (h.idBatch ? '&amp;batch=' + encodeURIComponent(h.idBatch) : '') + '">' +
-          'Cetak SPK serahan ini' + '</a>' +
-        '<a class="sp-tautan" target="_blank" href="/p/cetak.html?jenis=spk&amp;id=' +
-          encodeURIComponent(h.idPurchaseOrder) + '&amp;line=' + encodeURIComponent(h.idLine) + '">' +
-          'SPK gabungan ' + rjdEscapeHtml_(h.namaLine) + '</a>' +
+        // v193: pratinjau di dalam halaman -- sesudah menyimpan, orang masih
+        // berada di tengah pekerjaan membagi; tab baru membuang tempatnya.
+        spTombolDok_("sp-cetak-btn", "Cetak SPK serahan ini",
+          "/p/cetak.html?jenis=spk&id=" + encodeURIComponent(h.idPurchaseOrder) +
+            "&line=" + encodeURIComponent(h.idLine) +
+            (h.idBatch ? "&batch=" + encodeURIComponent(h.idBatch) : ""),
+          "SPK " + h.namaLine, "serahan yang baru disimpan \u00b7 " + h.totalQty + " pcs") +
+        spTombolDok_("sp-tautan sp-tautan-btn", "SPK gabungan " + rjdEscapeHtml_(h.namaLine),
+          "/p/cetak.html?jenis=spk&id=" + encodeURIComponent(h.idPurchaseOrder) +
+            "&line=" + encodeURIComponent(h.idLine),
+          "SPK " + h.namaLine, "seluruh jatah line di PO ini") +
       '</div>';
     kotak.classList.remove("hidden");
     // Muat ulang supaya kolom sisa & ringkasan line ikut ter-update -- kalau
@@ -2161,8 +2174,9 @@ function spRenderRiwayatKeluar_() {
           // v153: nomornya jadi TAUTAN CETAK. Dokumennya bukan surat jalan
           // biasa -- isinya potongan, bukan barang jadi, dan halaman cetak
           // menuliskannya terang-terangan supaya penerima tidak salah kira.
-          '<b><a href="/p/cetak.html?jenis=sjpotongan&amp;id=' +
-            encodeURIComponent(sj) + '" target="_blank">' + rjdEscapeHtml_(sj) + '</a></b>' +
+          '<b>' + spTombolDok_("sp-tautan sp-tautan-btn", rjdEscapeHtml_(sj),
+            "/p/cetak.html?jenis=sjpotongan&id=" + encodeURIComponent(sj),
+            "Surat Jalan Potongan " + sj, tot + " pcs \u00b7 " + (g0.jenisKeluar || "")) + '</b>' +
           '<span>' + rjdEscapeHtml_(g0.jenisKeluar || "") +
             (g0.komponen ? ' \u00b7 ' + rjdEscapeHtml_(g0.komponen) : '') + '</span>' +
           '<b class="sp-keluar-qty-total">' + tot + ' pcs</b>' +
@@ -2804,8 +2818,9 @@ function spRenderDetailOrder_() {
       lampiran +
 
       '<div class="sp-det-tautan sp-det-cetak">' +
-        '<a class="sp-tautan" href="/p/cetak.html?jenis=spk&amp;id=' +
-          encodeURIComponent(window.SP_PO_AKTIF || "") + '" target="_blank">Cetak SPK produksi</a>' +
+        spTombolDok_("sp-tautan sp-tautan-btn", "Cetak SPK produksi",
+          "/p/cetak.html?jenis=spk&id=" + encodeURIComponent(window.SP_PO_AKTIF || ""),
+          "SPK produksi", "PO penuh \u2014 semua line") +
       '</div>' +
     '</div>';
 }
@@ -3635,10 +3650,13 @@ function spRenderRiwayat() {
       (k.catatan ? '<div class="sp-riw-catatan">' + rjdEscapeHtml_(k.catatan) + '</div>' : '') +
       // v186: SPK untuk serahan INI saja. Batch = prefix ID Distribusi sebelum "-".
       (jenis === "distribusi" && !dibatalkan && id
-        ? '<div class="sp-riw-cetak"><a href="/p/cetak.html?jenis=spk&amp;id=' +
-            encodeURIComponent(k.idPurchaseOrder) + '&amp;line=' + encodeURIComponent(k.idLine || "") +
-            '&amp;batch=' + encodeURIComponent(String(id).split("-")[0]) +
-            '" target="_blank">Cetak SPK serahan ini</a></div>'
+        ? '<div class="sp-riw-cetak">' +
+            spTombolDok_("sp-tautan sp-tautan-btn", "Cetak SPK serahan ini",
+              "/p/cetak.html?jenis=spk&id=" + encodeURIComponent(k.idPurchaseOrder) +
+                "&line=" + encodeURIComponent(k.idLine || "") +
+                "&batch=" + encodeURIComponent(String(id).split("-")[0]),
+              "SPK " + (k.namaLine || "line"), String(id) + " \u00b7 " + tanggal) +
+          '</div>'
         : '') +
     '</div>';
   }).join("");
@@ -5373,8 +5391,9 @@ function spRenderDaftarGelaran_() {
           '<td data-label="">' + (g.dibatalkan
             ? '<span class="sp-riw-kunci">sudah dibatalkan</span>'
             : ((/panel/i.test(String(g.jenisGelaran || ""))
-                ? '<a class="sp-btn-kecil" href="/p/cetak.html?jenis=sjpotongan&amp;id=' +
-                  encodeURIComponent(g.idGelaran) + '" target="_blank">Surat Jalan</a> '
+                ? spTombolDok_("sp-btn-kecil", "Surat Jalan",
+                    "/p/cetak.html?jenis=sjpotongan&id=" + encodeURIComponent(g.idGelaran),
+                    "Surat Jalan Potongan", g.idGelaran) + ' '
                 : '') +
               '<button class="sp-btn-kecil" onclick="spBatalGelaran(\'' +
               spEsc_(g.idGelaran) + '\')" type="button">Batalkan</button>')) + '</td>' +

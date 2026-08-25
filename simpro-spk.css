@@ -1639,3 +1639,14 @@ body.sp-siap #sp-subtabs { visibility: visible; }
   .sp-spk-btn { flex: 1 1 auto; text-align: center; }
   .sp-dok { height: 92vh; }
 }
+
+/* v193: tautan cetak kini <button> supaya bisa membuka pratinjau. Kelas
+   .sp-tautan sendiri dipakai juga oleh <a> sungguhan di tempat lain, jadi
+   penyetelan tombol dipisah ke .sp-tautan-btn -- bukan ditempel ke .sp-tautan. */
+.sp-tautan-btn {
+  background: none; border: 0; padding: 0; font: inherit;
+  font-size: inherit; cursor: pointer;
+}
+/* .sp-cetak-btn semula <a> (punya margin-left:auto di dalam flex); sebagai
+   <button> perlu penyetelan kotak supaya tingginya tidak ikut baris teks. */
+button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-height: 1.2; }
