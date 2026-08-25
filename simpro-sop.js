@@ -102,7 +102,7 @@ function sopMulai() {
  * ditambahkan di sini, lalu MD dibuat ulang; jangan pernah menulis SOP di
  * dua tempat.
  */
-const SOP_VERSI = "v189 \u00b7 25 Agustus 2026";
+const SOP_VERSI = "v190 \u00b7 25 Agustus 2026";
 
 /** Rantai utama: siapa mencatat apa, di tab mana. Urutan = urutan kejadian. */
 const SOP_RANTAI_TAB = [
@@ -642,7 +642,8 @@ function sopIsiHtml_(opsi) {
       '<div class="sop-tabelwrap"><table class="sop-tabel">' +
         '<thead><tr><th>Kalau</th><th>Catat di</th><th>Akibatnya</th></tr></thead>' +
         '<tbody>' + s.baris.map(function (r) {
-          return '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td><td>' + r[2] + '</td></tr>';
+          return '<tr><td data-label="Kalau">' + r[0] + '</td><td data-label="Catat di">' + r[1] +
+            '</td><td data-label="Akibatnya">' + r[2] + '</td></tr>';
         }).join("") + '</tbody>' +
       '</table></div>' +
     '</section>';
@@ -663,13 +664,16 @@ function sopIsiHtml_(opsi) {
 
   const angkaMutu = '<div class="sop-tabelwrap"><table class="sop-tabel">' +
     '<thead><tr><th>Isian</th><th>Arti</th></tr></thead><tbody>' +
-    SOP_ANGKA_MUTU.map(function (r) { return '<tr><td>' + sopEsc_(r[0]) + '</td><td>' + r[1] + '</td></tr>'; }).join("") +
+    SOP_ANGKA_MUTU.map(function (r) {
+      return '<tr><td data-label="Isian">' + sopEsc_(r[0]) + '</td><td data-label="Arti">' + r[1] + '</td></tr>';
+    }).join("") +
     '</tbody></table></div><p class="sop-info">' + SOP_ANGKA_MUTU_CATATAN + '</p>';
 
   const duaBuku = '<div class="sop-tabelwrap"><table class="sop-tabel">' +
     '<thead><tr><th>Buku</th><th>Tab</th><th>Mencatat</th><th>Menambah set lengkap?</th></tr></thead><tbody>' +
     SOP_DUA_BUKU.map(function (r) {
-      return '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td><td>' + r[2] + '</td><td>' + r[3] + '</td></tr>';
+      return '<tr><td data-label="Buku">' + r[0] + '</td><td data-label="Tab">' + r[1] +
+        '</td><td data-label="Mencatat">' + r[2] + '</td><td data-label="Menambah set lengkap?">' + r[3] + '</td></tr>';
     }).join("") + '</tbody></table></div><p class="sop-info">' + SOP_DUA_BUKU_CATATAN + '</p>';
 
   const cekMingguan = '<ul class="sop-daftar">' + SOP_CEK_MINGGUAN.map(function (a) {
