@@ -102,7 +102,7 @@ function sopMulai() {
  * ditambahkan di sini, lalu MD dibuat ulang; jangan pernah menulis SOP di
  * dua tempat.
  */
-const SOP_VERSI = "v190 \u00b7 25 Agustus 2026";
+const SOP_VERSI = "v191 \u00b7 25 Agustus 2026";
 
 /** Rantai utama: siapa mencatat apa, di tab mana. Urutan = urutan kejadian. */
 const SOP_RANTAI_TAB = [
@@ -690,8 +690,10 @@ function sopIsiHtml_(opsi) {
       '<a href="#sop-cek-mingguan">Cek mingguan</a>' +
       '<button class="sop-cetak sp-tautan" onclick="window.print()" type="button">Cetak</button>' +
     '</div>') +
-    '<p class="sop-versi">SOP SIMPRO \u00b7 berlaku mulai ' + SOP_VERSI +
-      ' \u00b7 satu sumber untuk halaman SOP, tab SOP, dan dokumen cetak</p>' +
+    // v191: baris versi DICABUT dari layar (tetap tercetak di dokumen MD lewat
+    // SOP_VERSI). Yang membaca layar ini penjahit dan kepala line -- nomor versi
+    // bukan informasi yang mereka pakai, dan menempatkannya di baris pertama
+    // membuat hal pertama yang dibaca orang baru adalah angka yang tak berarti.
     // v170: blok pembuka -- APA NAMA SISTEM INI, dan kenapa dua pintu.
     //
     // Tim selama ini menyebutnya "AppSheet" karena itu satu-satunya nama yang
@@ -703,14 +705,14 @@ function sopIsiHtml_(opsi) {
     //
     // Blok ini menjelaskan sekali, di tempat yang dibaca orang baru.
     '<section class="sop-blok sop-blok-nama">' +
-      '<h2>Namanya SIMPRO</h2>' +
-      '<p class="sop-info">Satu sistem, dua pintu masuk. Keduanya membaca dan ' +
+      '<h2>SIMPRO</h2>' +
+      '<p class="sop-info">Satu sistem, dua pintu masuk (Appsheet dan web). Keduanya membaca dan ' +
         'menulis data yang <b>sama persis</b> &#8212; yang berbeda cuma layarnya.</p>' +
       '<div class="sop-pintu">' +
         '<div class="sop-pintu-kotak">' +
           '<b>SIMPRO di HP</b>' +
-          '<span>Aplikasi di lapangan. Untuk mencatat sambil berdiri di ' +
-            'dekat mesin: hasil potong, setoran, absensi.</span>' +
+          '<span>Aplikasi di lapangan. Untuk mencatat dailyreport, hasil potong, ' +
+            'setoran, absensi.</span>' +
         '</div>' +
         '<div class="sop-pintu-kotak">' +
           '<b>SIMPRO di komputer</b>' +
