@@ -102,7 +102,7 @@ function sopMulai() {
  * ditambahkan di sini, lalu MD dibuat ulang; jangan pernah menulis SOP di
  * dua tempat.
  */
-const SOP_VERSI = "v195 \u00b7 25 Agustus 2026";
+const SOP_VERSI = "v196 \u00b7 25 Agustus 2026";
 
 /** Rantai utama: siapa mencatat apa, di tab mana. Urutan = urutan kejadian. */
 const SOP_RANTAI_TAB = [
@@ -144,7 +144,9 @@ const SOP_ANGKA_MUTU_CATATAN =
   "Afkir dihitung otomatis (diperiksa \u2212 lolos \u2212 ditahan). <b>Keputusan batch dinilai dari afkir</b> \u2014 " +
   "batch yang 30% cacat tapi semua sudah beres tetap \u201cLolos\u201d. Kolom diperbaiki tidak menghukum siapa pun; " +
   "dia hanya menunjukkan di mana waktu kerja ulang terbuang. Rincian jenis cacat harus menjumlah ke cacat " +
-  "ditemukan (afkir + diperbaiki + ditahan).";
+  "ditemukan (afkir + diperbaiki + ditahan). <b>Jenis cacat yang belum ada di daftar boleh " +
+  "diketik sendiri</b> \u2014 pilih \u201c+ Jenis lain\u201d di dropdown. Tulis apa adanya; sistem " +
+  "menyamakan ejaannya dengan yang sudah ada dan memasukkannya ke daftar untuk dipakai berikutnya.";
 
 /** Dua buku re-cut -- bukan dobel, dua hal berbeda. */
 const SOP_DUA_BUKU = [

@@ -227,3 +227,14 @@ tr.sp-recut-target > td:first-child { box-shadow: inset 3px 0 0 #C9972B; }
 .qc-size-total { font-size: 11.5px; font-weight: 600; margin-top: 8px; }
 .qc-size-total.ok { color: #2C6B3F; }
 .qc-size-total.beda { color: var(--thread, #B23B2E); }
+
+/* v196: jenis cacat bisa diketik sendiri.
+   Select + kotak ketik dibungkus satu kolom grid, jadi lebar kolom qty dan
+   tombol hapus tidak bergeser waktu kotaknya muncul. */
+.qc-detail-jenis { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.qc-detail-jenis select, .qc-detail-jenis input { width: 100%; box-sizing: border-box; }
+.qc-detail-lain { border-color: var(--thread, #B23B2E) !important; }
+.qc-jenis-baru {
+  margin-top: 8px; padding-top: 8px; border-top: 1px dashed currentColor;
+  font-size: 12px; font-weight: 400; opacity: .95;
+}

@@ -7202,20 +7202,77 @@ function qcTambahBarisCacat() {
   }
   const daftarJenis = (QC_MASTER && QC_MASTER.jenisCacatPerTahap && QC_MASTER.jenisCacatPerTahap[QC_TAHAP_DIPILIH]) || [];
   const wrap = document.getElementById("qc-detail-rows");
+  qcPastikanDatalistCacat_();
   const row = document.createElement("div");
   row.className = "qc-detail-row";
+  // v196: pilihan terakhir = ketik sendiri. Kalau jenis yang ditemukan tidak
+  // ada di daftar, checker sebelumnya cuma punya dua pilihan yang sama-sama
+  // buruk: memilih yang "paling mirip" (data mutu jadi bohong) atau tidak
+  // merinci sama sekali -- dan submit ditolak karena rincian harus menjumlah
+  // ke cacat ditemukan.
   row.innerHTML =
-    '<select>' + daftarJenis.map(function (j) { return '<option value="' + rjdEscapeHtml_(j) + '">' + rjdEscapeHtml_(j) + '</option>'; }).join("") + '</select>' +
+    '<div class="qc-detail-jenis">' +
+      '<select onchange="qcPilihJenisCacat_(this)">' +
+        daftarJenis.map(function (j) {
+          return '<option value="' + rjdEscapeHtml_(j) + '">' + rjdEscapeHtml_(j) + '</option>';
+        }).join("") +
+        '<option value="' + QC_JENIS_LAIN + '">+ Jenis lain (ketik sendiri)</option>' +
+      '</select>' +
+      '<input class="qc-detail-lain hidden" list="qc-datalist-cacat" type="text" ' +
+        'placeholder="Tulis jenis cacatnya, mis. Resleting macet" autocomplete="off"/>' +
+    '</div>' +
     '<input min="0" type="number" value="1"/>' +
     '<button onclick="this.closest(\'.qc-detail-row\').remove(); qcRecalc();" type="button" title="Hapus baris">&times;</button>';
   wrap.appendChild(row);
 }
 
+/** Penanda opsi "ketik sendiri". Diawali karakter yang tidak mungkin jadi nama cacat. */
+const QC_JENIS_LAIN = "__lain__";
+
+function qcPilihJenisCacat_(sel) {
+  const kotak = sel.parentElement.querySelector(".qc-detail-lain");
+  if (!kotak) return;
+  const lain = sel.value === QC_JENIS_LAIN;
+  kotak.classList.toggle("hidden", !lain);
+  if (lain) kotak.focus(); else kotak.value = "";
+}
+
+/**
+ * Datalist berisi jenis cacat dari SEMUA tahap -- bukan tahap ini saja.
+ * Alasannya justru anti-duplikat: waktu "Jahitan lepas / putus" ditemukan di
+ * Finishing, saran ini memberi ejaan yang SUDAH dipakai di Jahit, sehingga
+ * tidak lahir ejaan kedua untuk cacat yang sama. Backend tetap menyelaraskan
+ * ejaan sekali lagi saat menyimpan; ini lapis pertama, yang lebih murah.
+ */
+function qcPastikanDatalistCacat_() {
+  let dl = document.getElementById("qc-datalist-cacat");
+  if (!dl) {
+    dl = document.createElement("datalist");
+    dl.id = "qc-datalist-cacat";
+    document.body.appendChild(dl);
+  }
+  const peta = (QC_MASTER && QC_MASTER.jenisCacatPerTahap) || {};
+  const set = {};
+  Object.keys(peta).forEach(function (t) {
+    (peta[t] || []).forEach(function (j) { if (j) set[j] = true; });
+  });
+  dl.innerHTML = Object.keys(set).sort().map(function (j) {
+    return '<option value="' + rjdEscapeHtml_(j) + '"></option>';
+  }).join("");
+}
+
 function qcKumpulkanDetailCacat_() {
   const hasil = [];
   document.querySelectorAll("#qc-detail-rows .qc-detail-row").forEach(function (row) {
-    const jenis = row.querySelector("select").value;
-    const qty = Number(row.querySelector("input").value) || 0;
+    const sel = row.querySelector("select");
+    // v196: qty ada di input[type=number]; kotak ketik-sendiri juga <input>,
+    // jadi querySelector("input") saja sudah salah sasaran sejak baris ini
+    // punya dua input.
+    const qty = Number((row.querySelector('input[type="number"]') || {}).value) || 0;
+    let jenis = sel.value;
+    if (jenis === QC_JENIS_LAIN) {
+      jenis = ((row.querySelector(".qc-detail-lain") || {}).value || "").trim();
+    }
     if (jenis && qty > 0) hasil.push({ jenisCacat: jenis, qty: qty });
   });
   return hasil;
@@ -7396,6 +7453,23 @@ function qcSubmitInspeksi() {
           '<button class="qc-recut-btn" onclick="qcKeRecut_()" type="button">Buat re-cut ' + afkirPotong + ' pcs &#8594;</button>';
       } else {
         el.textContent = "Tersimpan (" + d.idQC + ") -- " + d.keputusan + ", defect rate " + d.defectRate + "%.";
+      }
+      // v196: jenis cacat baru masuk master -> muncul di dropdown berikutnya.
+      // Dikabarkan supaya checker tahu tidak perlu mengetik ulang lain kali,
+      // dan supaya salah ketik ketahuan saat itu juga, bukan sebulan kemudian.
+      if (d.jenisCacatBaru && d.jenisCacatBaru.length) {
+        el.innerHTML = el.innerHTML +
+          '<div class="qc-jenis-baru">Jenis cacat baru masuk daftar: <b>' +
+          d.jenisCacatBaru.map(rjdEscapeHtml_).join(", ") +
+          '</b> &#183; mulai sekarang ada di dropdown tahap ini.</div>';
+        if (QC_MASTER && QC_MASTER.jenisCacatPerTahap && QC_MASTER.jenisCacatPerTahap[QC_TAHAP_DIPILIH]) {
+          d.jenisCacatBaru.forEach(function (j) {
+            if (QC_MASTER.jenisCacatPerTahap[QC_TAHAP_DIPILIH].indexOf(j) === -1) {
+              QC_MASTER.jenisCacatPerTahap[QC_TAHAP_DIPILIH].push(j);
+            }
+          });
+          qcPastikanDatalistCacat_();
+        }
       }
       el.classList.remove("hidden");
       qcResetForm_();
