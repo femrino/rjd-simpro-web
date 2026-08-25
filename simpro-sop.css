@@ -185,11 +185,25 @@
 
 /* v188: satu sumber SOP -- baris versi & tabel rantai */
 .sop-versi { font-size: 11px; color: var(--ink-soft, #6B7280); margin: 0 0 14px; }
-.sop-tabel-rantai td:nth-child(2) { white-space: nowrap; }
 .sop-tabel-rantai td:first-child { text-align: center; }
-/* v190: di HP SEMUA tabel SOP jadi kartu -- sel pertama jadi judul kartu,
-   sel lain diberi label kolomnya (data-label diisi sopIsiHtml_). Kolom sempit
-   memecah kata per huruf ("Gel/ara/n"), dan itu tidak bisa dibaca sambil berdiri. */
+
+/* v195: LEBAR KOLOM tabel rantai ditetapkan.
+   Auto-layout membagi lebar menurut isi terpanjang: "Pola, Marker, Sampel,
+   Approval" membuat kolom Tahap melar, sisanya terhimpit -- sampai kolom "#"
+   memecah angka 10 jadi "1" dan "0" di dua baris. table-layout: fixed
+   memutus tawar-menawar itu: lebarnya kita yang tentukan, isinya menyesuaikan. */
+@media (min-width: 821px) {
+  .sop-tabel-rantai { table-layout: fixed; }
+  .sop-tabel-rantai th:nth-child(1), .sop-tabel-rantai td:nth-child(1) { width: 40px; white-space: nowrap; }
+  .sop-tabel-rantai th:nth-child(2), .sop-tabel-rantai td:nth-child(2) { width: 19%; }
+  .sop-tabel-rantai th:nth-child(3), .sop-tabel-rantai td:nth-child(3) { width: 21%; }
+  .sop-tabel-rantai th:nth-child(4), .sop-tabel-rantai td:nth-child(4) { width: 14%; }
+  /* Sisanya (Inti) mengambil ruang tersisa dengan sendirinya. */
+}
+
+/* v190: di layar sempit SEMUA tabel SOP jadi kartu -- sel pertama jadi judul
+   kartu, sel lain diberi label kolomnya (data-label diisi sopIsiHtml_). Kolom
+   sempit memecah kata per huruf ("Gel/ara/n"), tidak terbaca sambil berdiri. */
 @media (max-width: 620px) {
   .sop-tabel thead { display: none; }
   .sop-tabel, .sop-tabel tbody, .sop-tabel tr, .sop-tabel td { display: block; }
@@ -200,7 +214,26 @@
     content: attr(data-label) ": "; font-size: 10.5px; letter-spacing: .05em;
     text-transform: uppercase; color: var(--ink-soft, #5F6B7A);
   }
-  /* rantai: nomor + nama tahap satu baris */
+}
+
+/* v195: ambang kartu tabel RANTAI lebih tinggi (820px, bukan 620px). Lima
+   kolom tidak pernah muat di tablet: yang muncul bukan tabel yang padat,
+   melainkan lima lajur sempit berisi satu-dua kata per baris. */
+@media (max-width: 820px) {
+  .sop-tabel-rantai thead { display: none; }
+  .sop-tabel-rantai, .sop-tabel-rantai tbody,
+  .sop-tabel-rantai tr, .sop-tabel-rantai td { display: block; }
+  .sop-tabel-rantai tr {
+    border: 1px solid var(--line, #E5E0D6); border-radius: 10px;
+    padding: 8px 10px; margin: 0 0 8px;
+  }
+  .sop-tabel-rantai td { border: 0; padding: 3px 0; text-align: left; white-space: normal; }
+  .sop-tabel-rantai td[data-label]:not(:first-child)::before {
+    content: attr(data-label) ": "; font-size: 10.5px; letter-spacing: .05em;
+    text-transform: uppercase; color: var(--ink-soft, #5F6B7A);
+  }
+  /* Nomor + nama tahap satu baris, jadi judul kartunya. */
   .sop-tabel-rantai td:first-child { display: inline; padding-right: 6px; font-size: 13.5px; }
   .sop-tabel-rantai td:nth-child(2) { display: inline; font-size: 14px; }
+  .sop-tabel-rantai td[data-label]:nth-child(2)::before { content: none; }
 }

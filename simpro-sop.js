@@ -102,7 +102,7 @@ function sopMulai() {
  * ditambahkan di sini, lalu MD dibuat ulang; jangan pernah menulis SOP di
  * dua tempat.
  */
-const SOP_VERSI = "v191 \u00b7 25 Agustus 2026";
+const SOP_VERSI = "v195 \u00b7 25 Agustus 2026";
 
 /** Rantai utama: siapa mencatat apa, di tab mana. Urutan = urutan kejadian. */
 const SOP_RANTAI_TAB = [
