@@ -102,7 +102,7 @@ function sopMulai() {
  * ditambahkan di sini, lalu MD dibuat ulang; jangan pernah menulis SOP di
  * dua tempat.
  */
-const SOP_VERSI = "v188 \u00b7 25 Agustus 2026";
+const SOP_VERSI = "v189 \u00b7 25 Agustus 2026";
 
 /** Rantai utama: siapa mencatat apa, di tab mana. Urutan = urutan kejadian. */
 const SOP_RANTAI_TAB = [
@@ -114,7 +114,7 @@ const SOP_RANTAI_TAB = [
    "Hasil potong per warna per size; potong bertahap = baris baru"],
   ["4", "QC Potong", "Cutting \u203a QC Potong", "Kepala cutting",
    "Self-check sebelum panel dibagi. Afkir \u2192 centang koreksi + tombol re-cut"],
-  ["5", "Bagi ke line", "Cutting \u203a Bagi ke Line", "Cutting",
+  ["5", "Bagi ke line", "Cutting \u203a Bagi ke Line", "Admin/PPIC",
    "Pembanding = qty potong, bukan qty order. <b>Satu kali Simpan = satu serahan = satu SPK</b> \u2014 " +
    "cetak \u201cSPK serahan ini\u201d dan ikutkan ke tumpukannya; \u201cSPK gabungan\u201d hanya untuk rekap"],
   ["6", "Konfirmasi terima", "Sewing \u203a Konfirmasi Potongan", "Kepala line",
@@ -655,8 +655,9 @@ function sopIsiHtml_(opsi) {
   const rantaiTab = '<div class="sop-tabelwrap"><table class="sop-tabel sop-tabel-rantai">' +
     '<thead><tr><th>#</th><th>Tahap</th><th>Tab</th><th>Yang mencatat</th><th>Inti</th></tr></thead><tbody>' +
     SOP_RANTAI_TAB.map(function (r) {
-      return '<tr><td>' + r[0] + '</td><td><b>' + sopEsc_(r[1]) + '</b></td><td>' + r[2] + '</td><td>' +
-        sopEsc_(r[3]) + '</td><td>' + r[4] + '</td></tr>';
+      return '<tr><td data-label="#">' + r[0] + '</td><td data-label="Tahap"><b>' + sopEsc_(r[1]) +
+        '</b></td><td data-label="Tab">' + r[2] + '</td><td data-label="Yang mencatat">' +
+        sopEsc_(r[3]) + '</td><td data-label="Inti">' + r[4] + '</td></tr>';
     }).join("") + '</tbody></table></div>' +
     '<p class="sop-info">' + SOP_PAGAR_QC + '</p>';
 

@@ -187,3 +187,18 @@
 .sop-versi { font-size: 11px; color: var(--ink-soft, #6B7280); margin: 0 0 14px; }
 .sop-tabel-rantai td:nth-child(2) { white-space: nowrap; }
 .sop-tabel-rantai td:first-child { text-align: center; }
+/* Di HP, lima kolom tidak muat: tiap tahap jadi kartu, sel diberi labelnya. */
+@media (max-width: 620px) {
+  .sop-tabel-rantai thead { display: none; }
+  .sop-tabel-rantai, .sop-tabel-rantai tbody, .sop-tabel-rantai tr, .sop-tabel-rantai td { display: block; }
+  .sop-tabel-rantai tr { border: 1px solid var(--line, #E5E0D6); border-radius: 10px; padding: 8px 10px; margin: 0 0 8px; }
+  .sop-tabel-rantai td { border: 0; padding: 3px 0; text-align: left; }
+  .sop-tabel-rantai td:first-child { display: inline; padding-right: 6px; }
+  .sop-tabel-rantai td:nth-child(2) { display: inline; white-space: normal; font-size: 14px; }
+  .sop-tabel-rantai td[data-label="Tab"]::before,
+  .sop-tabel-rantai td[data-label="Yang mencatat"]::before,
+  .sop-tabel-rantai td[data-label="Inti"]::before {
+    content: attr(data-label) ": "; font-size: 10.5px; letter-spacing: .05em;
+    text-transform: uppercase; color: var(--ink-soft, #5F6B7A);
+  }
+}
