@@ -2888,6 +2888,17 @@ function spSiapkanToggle_(id, el) {
   spSiapkanTombol_();
 }
 
+/** v200: centang/lepas seluruh baris satu serahan. */
+function spSiapkanPilihBatch_(cb) {
+  if (!window.SP_SIAPKAN_PILIH) window.SP_SIAPKAN_PILIH = {};
+  String(cb.dataset.ids || "").split(",").filter(Boolean).forEach(function (id) {
+    if (cb.checked) window.SP_SIAPKAN_PILIH[id] = true; else delete window.SP_SIAPKAN_PILIH[id];
+    const kotak = document.getElementById("sp-siap-cek-" + id);
+    if (kotak) kotak.checked = cb.checked;
+  });
+  spSiapkanTombol_();
+}
+
 function spSiapkanPilihLine_(idLine, el) {
   (window.SP_SIAPKAN || []).forEach(function (b) {
     if (b.idLine !== idLine) return;
@@ -2959,8 +2970,28 @@ function spRenderSiapkan_() {
 
   // Dikelompokkan per LINE: tim loading menyiapkan per tujuan, satu tumpuk
   // sekali angkut -- bukan per PO.
+  //
+  // v200: di dalam line, per SERAHAN (satu kali Simpan Pembagian = prefix
+  // ID Distribusi = satu SPK). Sebelumnya semua baris satu line dijejer
+  // rata: "Kloter 3" tanggal 13 Agustus bercampur dengan serahan 27 Agustus,
+  // dan yang menyiapkan harus membaca tanggal tiap baris untuk tahu mana
+  // yang satu tumpuk. Sekarang satu serahan = satu blok, dengan centang
+  // "siapkan seluruh serahan ini" dan tombol SPK-nya -- kertas yang ikut ke
+  // tumpukan itu. Urutan: serahan paling lama menunggu di atas.
   wadah.innerHTML = chip + Object.keys(perLine).map(function (idLine) {
     const g = perLine[idLine];
+    const batch = {}, urutBatch = [];
+    g.baris.forEach(function (b) {
+      const idB = String(b.idDistribusi || "").split("-")[0];
+      if (!batch[idB]) {
+        batch[idB] = { idBatch: idB, iso: b.tanggalSerah || "", po: b.idPurchaseOrder || "", baris: [], pcs: 0 };
+        urutBatch.push(batch[idB]);
+      }
+      batch[idB].baris.push(b);
+      batch[idB].pcs += b.totalQty || 0;
+    });
+    urutBatch.sort(function (a, b) { return (a.iso || "9999").localeCompare(b.iso || "9999") || a.idBatch.localeCompare(b.idBatch); });
+
     return '<div class="sp-siap-grup">' +
       '<div class="sp-siap-kepala">' +
         '<label class="sp-siap-ceksemua">' +
@@ -2968,28 +2999,48 @@ function spRenderSiapkan_() {
           '<span><b>' + rjdEscapeHtml_(g.nama) + '</b>' +
             (g.lokasi ? ' <small>' + rjdEscapeHtml_(g.lokasi) + '</small>' : '') + '</span>' +
         '</label>' +
-        '<span class="sp-siap-pcs">' + g.pcs + ' pcs \u00b7 ' + g.baris.length + ' baris</span>' +
+        '<span class="sp-siap-pcs">' + g.pcs + ' pcs \u00b7 ' + urutBatch.length + ' serahan \u00b7 ' + g.baris.length + ' baris</span>' +
       '</div>' +
-      g.baris.map(function (b) {
+      urutBatch.map(function (bt, n) {
+        const umurB = spSiapkanUmur_(bt.iso);
+        const ids = bt.baris.map(function (b) { return b.idDistribusi; });
+        const semuaDipilih = ids.every(function (id) { return (window.SP_SIAPKAN_PILIH || {})[id]; });
+        // Semua baris satu serahan berasal dari satu PO (satu kali Simpan
+        // Pembagian selalu dalam satu PO), jadi PO cukup di kepala serahan.
+        const urlSpk = "/p/cetak.html?jenis=spk&id=" + encodeURIComponent(bt.po) +
+          "&line=" + encodeURIComponent(idLine) + "&batch=" + encodeURIComponent(bt.idBatch);
+        return '<div class="sp-siap-serahan">' +
+          '<div class="sp-siap-serahan-head">' +
+            '<label class="sp-siap-serahan-cek">' +
+              '<input type="checkbox"' + (semuaDipilih ? ' checked' : '') +
+                ' data-ids="' + rjdEscapeHtml_(ids.join(",")) + '" onchange="spSiapkanPilihBatch_(this)"/>' +
+              '<span class="sp-siap-serahan-tgl">' + rjdEscapeHtml_(spTglIndo_(bt.iso)) + '</span>' +
+              (umurB !== null && umurB >= 2 ? '<span class="sp-siap-lama">' + umurB + ' hari</span>' : '') +
+              '<span class="sp-siap-serahan-po">' + rjdEscapeHtml_(bt.po) + '</span>' +
+            '</label>' +
+            '<span class="sp-siap-serahan-ringkas">' + bt.pcs + ' pcs \u00b7 ' + bt.baris.length + ' baris</span>' +
+            spTombolDok_("sp-btn-kecil", "SPK", urlSpk, "SPK " + g.nama,
+              "serahan " + spTglIndo_(bt.iso) + " \u00b7 " + bt.pcs + " pcs") +
+          '</div>' +
+          bt.baris.map(function (b) {
         const per = Object.keys(b.sizeQty || {}).map(function (sz) {
           return rjdEscapeHtml_(sz) + " " + b.sizeQty[sz];
         }).join("  ");
-        const umur = spSiapkanUmur_(b.tanggalSerah);
-        const tandaUmur = (umur !== null && umur >= 2)
-          ? '<span class="sp-siap-lama">' + umur + ' hari</span>' : '';
+        // v200: umur & PO sudah di kepala serahan -- baris cukup warna + size.
+        const dipilih = !!(window.SP_SIAPKAN_PILIH || {})[b.idDistribusi];
         return '<label class="sp-siap-baris">' +
-          '<input id="sp-siap-cek-' + rjdEscapeHtml_(b.idDistribusi) + '" ' +
+          '<input id="sp-siap-cek-' + rjdEscapeHtml_(b.idDistribusi) + '" ' + (dipilih ? 'checked ' : '') +
             'onchange="spSiapkanToggle_(\'' + rjdEscapeHtml_(b.idDistribusi) + '\', this)" type="checkbox"/>' +
           '<span class="sp-siap-isi">' +
             '<span class="sp-siap-judul">' + rjdEscapeHtml_(b.warna || "-") +
-              ' <small>' + rjdEscapeHtml_([b.artikel, b.style].filter(String).join(" / ")) + '</small>' +
-              tandaUmur + '</span>' +
-            '<span class="sp-siap-detail">' + rjdEscapeHtml_(b.idPurchaseOrder) +
-              (per ? ' \u00b7 ' + rjdEscapeHtml_(per) : '') + '</span>' +
+              ' <small>' + rjdEscapeHtml_([b.artikel, b.style].filter(String).join(" / ")) + '</small></span>' +
+            (per ? '<span class="sp-siap-detail">' + rjdEscapeHtml_(per) + '</span>' : '') +
             (b.catatan ? '<span class="sp-siap-catatan">\u201c' + rjdEscapeHtml_(b.catatan) + '\u201d</span>' : '') +
           '</span>' +
           '<b class="sp-siap-qty">' + (b.totalQty || 0) + '</b>' +
         '</label>';
+          }).join("") +
+        '</div>';
       }).join("") +
     '</div>';
   }).join("");
