@@ -1665,6 +1665,9 @@ function spSwitchTab(tab) {
   document.querySelectorAll("[id^='sp-panel-']").forEach(function (p) {
     p.classList.toggle("hidden", p.id !== idPanelTujuan);
   });
+  // v211: bar pintasan ada di navwrap, hanya untuk subtab Gelaran.
+  const pintasan = document.getElementById("sp-pintasan-gelar");
+  if (pintasan) pintasan.classList.toggle("hidden", tab !== "gelar");
   // Kartu "Pilih PO" cuma relevan untuk dua tab pertama. Tab Konfirmasi
   // melihat semua yang menunggu LINTAS ORDER -- memaksa pilih PO dulu di situ
   // justru membalik cara kepala line bekerja (dia pegang beberapa order).
@@ -5021,11 +5024,14 @@ function spBatalMarker(idMarker) {
  * Ditambah tombol "ke atas" mengambang yang muncul setelah gulir jauh.
  */
 function spOffsetPintasan_() {
+  // Bar pintasan sudah menjadi bagian navwrap (v211). Saat menempel, tepi
+  // bawah navwrap = top sticky-nya + tingginya; itu batas atas area konten.
+  // Dihitung dari nilai sticky (bukan posisi saat ini) supaya benar juga
+  // ketika halaman masih di atas dan navwrap belum menempel.
   const nav = document.getElementById("sp-navwrap");
   if (!nav) return 80;
-  const r = nav.getBoundingClientRect();
-  // Kalau navwrap sedang menempel, bottom-nya = batas bawah area tempel.
-  return Math.max(0, Math.round(r.bottom)) + 8;
+  const top = parseFloat(getComputedStyle(nav).top);
+  return (isNaN(top) ? 72 : top) + nav.offsetHeight + 8;
 }
 
 function spPasangPintasan_() {
@@ -5034,9 +5040,8 @@ function spPasangPintasan_() {
   bar.dataset.terpasang = "1";
 
   const atur = function () {
-    bar.style.top = spOffsetPintasan_() + "px";
     document.querySelectorAll("#sp-panel-gelar .sp-gl-sec").forEach(function (sec) {
-      sec.style.scrollMarginTop = (spOffsetPintasan_() + bar.offsetHeight + 8) + "px";
+      sec.style.scrollMarginTop = spOffsetPintasan_() + "px";
     });
   };
   atur();
@@ -5081,9 +5086,7 @@ function spLoncat_(ev, a) {
   const id = (a.getAttribute("href") || "").replace(/^#/, "");
   const target = document.getElementById(id);
   if (!target) return;
-  const bar = document.getElementById("sp-pintasan-gelar");
-  const offset = spOffsetPintasan_() + (bar ? bar.offsetHeight : 0) + 8;
-  const y = target.getBoundingClientRect().top + window.scrollY - offset;
+  const y = target.getBoundingClientRect().top + window.scrollY - spOffsetPintasan_();
   window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
 }
 

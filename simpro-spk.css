@@ -1815,13 +1815,14 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 @media (max-width: 620px) { .sp-laporan-aksi .sp-spk-btn { flex: 1 1 auto; text-align: center; } }
 
 /* ===== v211: pintasan antarbagian tab Gelaran + tombol ke atas ===== */
+/* Di dalam navwrap: tidak sticky sendiri, ikut induknya. */
 .sp-pintasan {
-  position: sticky; z-index: 25;          /* top diisi JS dari tinggi navwrap */
   display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch;
-  padding: 6px; margin: 0 0 12px;
+  padding: 4px; margin: 6px 0 0;
   background: var(--white); border: 1px solid var(--line, #E5E0D6); border-radius: 12px;
   scrollbar-width: none;
 }
+.sp-pintasan.hidden { display: none; }
 .sp-pintasan::-webkit-scrollbar { display: none; }
 .sp-pintasan a {
   flex: 0 0 auto; font-size: 12.5px; font-weight: 600; color: var(--ink-soft, #5F6B7A);
