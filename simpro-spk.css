@@ -1793,3 +1793,19 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 .sp-kain-dariroll { display: inline-flex; flex-direction: column; line-height: 1.25; }
 .sp-kain-dariroll small { font-size: 10.5px; color: var(--ink-soft, #5F6B7A); }
 .sp-kain-dariroll.belum small { color: var(--thread, #B23B2E); font-weight: 600; }
+
+/* v209: baris "Tambah roll" -- kotak isian dan pilihan satuan dirapatkan.
+   Aturan umum `[id^="sp-panel-"] input, select:not(...)` berspesifisitas
+   (0,4,1) dan mengalahkan `.sp-roll-tambah select` (0,1,1) yang sudah ada
+   di berkas ini. Akibatnya select satuan mendapat padding 14px kiri + 30px
+   kanan di dalam sel selebar 69px -- menyisakan 15px untuk teks, sehingga
+   "m" dan "yds" terpotong habis dan kotaknya tampak kosong.
+   Dipakai id #sp-roll-baru (tbody baris baru): menang telak atas aturan
+   umum itu, dan cakupannya persis form ini saja -- tidak menyentuh tabel
+   roll di bawahnya yang sudah punya aturannya sendiri (v208). */
+#sp-roll-baru input, #sp-roll-baru select {
+  padding: 6px 9px; font-size: 13px;
+}
+#sp-roll-baru select.sp-rb-satuan {
+  padding-right: 24px; min-width: 68px;
+}
