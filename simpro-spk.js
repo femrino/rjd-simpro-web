@@ -522,11 +522,23 @@ function spPratinjauDok_(url, judul, sub) {
     '</div>';
   ov.addEventListener("click", function (e) { if (e.target === ov) spTutupPratinjauDok_(); });
   document.body.appendChild(ov);
+  // v202: dokumen bisa SUDAH selesai dimuat sebelum pendengar terpasang --
+  // terjadi kalau /p/cetak.html masih di cache. Spanduk "Memuat dokumen..."
+  // ber-position:absolute, jadi ia MENUTUPI dokumennya, bukan sekadar hiasan
+  // di belakang: yang terlihat orang adalah modal yang menggantung selamanya.
+  // Karena itu keadaan iframe diperiksa sekali di sini, tidak hanya ditunggu.
   const f = document.getElementById("sp-dok-frame");
-  if (f) f.addEventListener("load", function () {
+  function lepasSpanduk_() {
     const m = document.getElementById("sp-dok-muat");
     if (m) m.remove();
-  });
+  }
+  if (f) {
+    f.addEventListener("load", lepasSpanduk_);
+    try {
+      const d = f.contentDocument;
+      if (d && d.readyState === "complete") lepasSpanduk_();
+    } catch (e) { /* beda origin -- biarkan pendengar yang bekerja */ }
+  }
   document.body.style.overflow = "hidden";
   document.addEventListener("keydown", spEscDok_);
 }
