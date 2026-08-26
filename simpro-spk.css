@@ -1813,3 +1813,30 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 /* v210: tombol laporan cutting di atas Rekap Kain */
 .sp-laporan-aksi { display: flex; justify-content: flex-end; margin-bottom: 10px; }
 @media (max-width: 620px) { .sp-laporan-aksi .sp-spk-btn { flex: 1 1 auto; text-align: center; } }
+
+/* ===== v211: pintasan antarbagian tab Gelaran + tombol ke atas ===== */
+.sp-pintasan {
+  position: sticky; z-index: 25;          /* top diisi JS dari tinggi navwrap */
+  display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch;
+  padding: 6px; margin: 0 0 12px;
+  background: var(--white); border: 1px solid var(--line, #E5E0D6); border-radius: 12px;
+  scrollbar-width: none;
+}
+.sp-pintasan::-webkit-scrollbar { display: none; }
+.sp-pintasan a {
+  flex: 0 0 auto; font-size: 12.5px; font-weight: 600; color: var(--ink-soft, #5F6B7A);
+  text-decoration: none; padding: 6px 12px; border-radius: 999px; white-space: nowrap;
+}
+.sp-pintasan a:hover { color: var(--ink); background: var(--cream, #F5F1EA); }
+.sp-pintasan a.aktif { color: var(--white); background: var(--ink, #17212F); }
+.sp-keatas {
+  position: fixed; right: 18px; bottom: 18px; z-index: 35;
+  width: 44px; height: 44px; border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--ink, #17212F); color: var(--white); font-size: 20px;
+  box-shadow: 0 6px 18px rgba(23, 33, 47, .22);
+  opacity: 0; transform: translateY(12px); pointer-events: none; transition: opacity .18s, transform .18s;
+}
+.sp-keatas.tampil { opacity: 1; transform: none; pointer-events: auto; }
+/* Jangan tumpang tindih bilah aksi melayang (konfirmasi massal / siapkan) */
+.sp-konf-aksi-massal.tampil ~ .sp-keatas, .sp-siap-aksi.tampil ~ .sp-keatas { bottom: 84px; }
+@media print { .sp-pintasan, .sp-keatas { display: none; } }

@@ -5006,7 +5006,89 @@ function spBatalMarker(idMarker) {
    GELARAN (bagian: cutting)
    ============================================================ */
 
+/* ============================================================
+ * v211 -- PINTASAN ANTARBAGIAN di tab Gelaran
+ * ============================================================
+ * Bar chip (markup di template: #sp-pintasan-gelar) menempel di bawah
+ * bar tab/subtab. Tiga pekerjaan di sini:
+ *   1. offset "top" bar dihitung dari tinggi #sp-navwrap yang sebenarnya --
+ *      bukan angka manual seperti .sp-tabs (72px), supaya tidak ikut rusak
+ *      kalau tinggi header berubah;
+ *   2. loncat halus ke bagian, dengan offset yang sama supaya judulnya
+ *      tidak tersembunyi di balik bar;
+ *   3. chip bagian yang sedang terlihat ditandai (IntersectionObserver),
+ *      supaya orang tahu posisinya tanpa membaca judul.
+ * Ditambah tombol "ke atas" mengambang yang muncul setelah gulir jauh.
+ */
+function spOffsetPintasan_() {
+  const nav = document.getElementById("sp-navwrap");
+  if (!nav) return 80;
+  const r = nav.getBoundingClientRect();
+  // Kalau navwrap sedang menempel, bottom-nya = batas bawah area tempel.
+  return Math.max(0, Math.round(r.bottom)) + 8;
+}
+
+function spPasangPintasan_() {
+  const bar = document.getElementById("sp-pintasan-gelar");
+  if (!bar || bar.dataset.terpasang === "1") return;
+  bar.dataset.terpasang = "1";
+
+  const atur = function () {
+    bar.style.top = spOffsetPintasan_() + "px";
+    document.querySelectorAll("#sp-panel-gelar .sp-gl-sec").forEach(function (sec) {
+      sec.style.scrollMarginTop = (spOffsetPintasan_() + bar.offsetHeight + 8) + "px";
+    });
+  };
+  atur();
+  window.addEventListener("resize", atur);
+
+  // Bagian aktif = yang paling atas di antara yang sedang terlihat.
+  if ("IntersectionObserver" in window) {
+    const terlihat = {};
+    const tandai = function () {
+      let aktif = null;
+      document.querySelectorAll("#sp-panel-gelar .sp-gl-sec").forEach(function (sec) {
+        if (terlihat[sec.id] && !aktif) aktif = sec.id;
+      });
+      bar.querySelectorAll("a").forEach(function (a) {
+        a.classList.toggle("aktif", aktif !== null && a.getAttribute("href") === "#" + aktif);
+      });
+    };
+    const io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { terlihat[e.target.id] = e.isIntersecting; });
+      tandai();
+    }, { rootMargin: "-40% 0px -55% 0px" });   // pita tengah layar
+    document.querySelectorAll("#sp-panel-gelar .sp-gl-sec").forEach(function (sec) { io.observe(sec); });
+  }
+
+  // Tombol ke atas: satu untuk halaman, dibuat sekali.
+  if (!document.getElementById("sp-keatas")) {
+    const b = document.createElement("button");
+    b.id = "sp-keatas"; b.type = "button"; b.className = "sp-keatas"; b.title = "Ke atas";
+    b.innerHTML = "&#8593;";
+    b.onclick = function () { window.scrollTo({ top: 0, behavior: "smooth" }); };
+    document.body.appendChild(b);
+    window.addEventListener("scroll", function () {
+      const panel = document.getElementById("sp-panel-gelar");
+      const tampil = window.scrollY > 600 && panel && !panel.classList.contains("hidden");
+      b.classList.toggle("tampil", !!tampil);
+    }, { passive: true });
+  }
+}
+
+function spLoncat_(ev, a) {
+  if (ev) ev.preventDefault();
+  const id = (a.getAttribute("href") || "").replace(/^#/, "");
+  const target = document.getElementById(id);
+  if (!target) return;
+  const bar = document.getElementById("sp-pintasan-gelar");
+  const offset = spOffsetPintasan_() + (bar ? bar.offsetHeight : 0) + 8;
+  const y = target.getBoundingClientRect().top + window.scrollY - offset;
+  window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+}
+
 function spMuatGelaran() {
+  spPasangPintasan_();   // v211
   if (!window.SP_PO_AKTIF) {
     document.getElementById("sp-gelar-form").innerHTML =
       '<p class="sp-info">Pilih Purchase Order dulu.</p>';
