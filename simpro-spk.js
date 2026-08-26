@@ -3130,7 +3130,73 @@ function spRenderKonfirmasi() {
     ' onchange="spKonfCentangSemua_(this.checked)"/>' +
     '<span>Pilih semua yang tampil <small>(' + daftar.length + ' bundel)</small></span></label>';
 
-  wadah.innerHTML = chip + daftar.map(function (k) {
+  // v199: DIKELOMPOKKAN per line + tanggal serah = satu "serahan". Itu unit
+  // fisiknya di lantai: tumpukan bundel yang diantar sekali jalan. Sebelumnya
+  // tujuh kartu sejajar dengan nama line & tanggal diulang di tiap kartu --
+  // mata harus membaca tanggal di tiap kartu untuk tahu ini kiriman kapan.
+  // Sekarang tanggal & line hanya di kepala grup, kartunya cukup PO + warna.
+  // Kepala grup punya centangnya sendiri: "seluruh serahan ini cocok".
+  const grup = {}, urutGrup = [];
+  daftar.forEach(function (k) {
+    const iso = k.tanggalSerahIso || k.tanggal || "";
+    const kunci = (k.idLine || k.namaLine || "-") + "|" + iso;
+    if (!grup[kunci]) {
+      grup[kunci] = { kunci: kunci, namaLine: k.namaLine || k.idLine || "-", iso: iso, item: [], pcs: 0 };
+      urutGrup.push(grup[kunci]);
+    }
+    grup[kunci].item.push(k);
+    grup[kunci].pcs += Number(k.totalQty !== undefined ? k.totalQty : k.total) || 0;
+  });
+  // Paling lama menunggu di atas -- itu yang paling berisiko terlupakan.
+  urutGrup.sort(function (a, b) {
+    return (a.iso || "9999").localeCompare(b.iso || "9999") || a.namaLine.localeCompare(b.namaLine);
+  });
+
+  wadah.innerHTML = chip + urutGrup.map(function (g) {
+    const semuaDipilih = g.item.every(function (k) {
+      return (window.SP_KONF_PILIH || {})[k.idDistribusi || k.idSetoran];
+    });
+    const idsGrup = g.item.map(function (k) { return k.idDistribusi || k.idSetoran || ""; });
+    return '<section class="sp-konf-grup">' +
+      '<label class="sp-konf-grup-head">' +
+        '<input type="checkbox"' + (semuaDipilih ? ' checked' : '') +
+          ' data-ids="' + rjdEscapeHtml_(idsGrup.join(",")) + '" onchange="spKonfCentangGrup_(this)"/>' +
+        '<span class="sp-konf-grup-line">' + rjdEscapeHtml_(g.namaLine) + '</span>' +
+        '<span class="sp-konf-grup-tgl">' + rjdEscapeHtml_(spTglIndo_(g.iso)) + '</span>' +
+        '<span class="sp-konf-grup-ringkas">' + g.item.length + ' bundel &#183; ' + g.pcs + ' pcs</span>' +
+      '</label>' +
+      g.item.map(spKonfKartuHtml_).join("") +
+    '</section>';
+  }).join("");
+  spKonfTombolMassal_();
+}
+
+/** v199: "2026-08-09" -> "9 Agustus 2026". Non-ISO dikembalikan apa adanya. */
+function spTglIndo_(iso) {
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return iso || "-";
+  const bln = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+  return Number(m[3]) + " " + bln[Number(m[2]) - 1] + " " + m[1];
+}
+
+/** v199: centang/lepas seluruh bundel dalam satu serahan. */
+function spKonfCentangGrup_(cb) {
+  if (!window.SP_KONF_PILIH) window.SP_KONF_PILIH = {};
+  const ids = String(cb.dataset.ids || "").split(",").filter(Boolean);
+  ids.forEach(function (id) {
+    if (cb.checked) window.SP_KONF_PILIH[id] = true; else delete window.SP_KONF_PILIH[id];
+    const kotak = document.querySelector('#sp-konf-daftar .sp-konf-cek input[data-id="' + id.replace(/"/g, '\\"') + '"]');
+    if (kotak) {
+      kotak.checked = cb.checked;
+      const kartu = kotak.closest(".sp-konf-kartu");
+      if (kartu) kartu.classList.toggle("dipilih", cb.checked);
+    }
+  });
+  spKonfTombolMassal_();
+}
+
+function spKonfKartuHtml_(k) {
+  const semua = window.SP_KONF || [];
     // indeks HARUS menunjuk ke SP_KONF asli -- tombol Terima/Selisih membaca
     // window.SP_KONF[i]; indeks daftar tersaring akan salah kartu.
     const i = semua.indexOf(k);
@@ -3144,14 +3210,14 @@ function spRenderKonfirmasi() {
         // diterima satuan atau ditandai selisih seperti sebelumnya.
         '<label class="sp-konf-cek"><input type="checkbox" data-id="' + rjdEscapeHtml_(idK) + '"' +
           (dicentang ? ' checked' : '') + ' onchange="spKonfCentang_(this)"/></label>' +
-        '<div>' +
-          '<div class="sp-konf-line">' + rjdEscapeHtml_(k.namaLine || k.idLine || "-") + '</div>' +
+        '<div class="sp-konf-teks">' +
+          // v199: line & tanggal sudah di kepala grup -- di kartu cukup
+          // warna (yang dicocokkan dengan bundel fisik) dan PO-nya.
           // Nama field berbeda antara dua sumber: distribusi memakai
-          // totalQty/tanggalSerah/diserahkanOleh, setoran memakai
-          // total/tanggal/disetorkanOleh. Tanpa penyesuaian ini, kartu setoran
-          // menampilkan "undefined pcs" dan tanggalnya kosong.
+          // totalQty/diserahkanOleh, setoran memakai total/disetorkanOleh.
+          '<div class="sp-konf-line">' + rjdEscapeHtml_(k.warna || "-") + '</div>' +
           '<div class="sp-konf-sub">' + rjdEscapeHtml_(k.idPurchaseOrder) +
-            ' &#183; ' + rjdEscapeHtml_(k.tanggalSerah || k.tanggal || "-") +
+            ' &#183; ' + rjdEscapeHtml_([k.artikel, k.style].filter(Boolean).join(" / ")) +
             (k.diserahkanOleh || k.disetorkanOleh
               ? ' &#183; dari ' + rjdEscapeHtml_(k.diserahkanOleh || k.disetorkanOleh) : '') + '</div>' +
         '</div>' +
@@ -3159,9 +3225,6 @@ function spRenderKonfirmasi() {
           (k.totalQty !== undefined ? k.totalQty : (k.total || 0)) +
           '<span>pcs</span></div>' +
       '</div>' +
-      '<div class="sp-konf-artikel">' +
-        rjdEscapeHtml_([k.artikel, k.style].filter(Boolean).join(" / ")) +
-        ' &#183; <b>' + rjdEscapeHtml_(k.warna || "-") + '</b></div>' +
       // Rincian size ditampilkan supaya kepala line bisa mencocokkan bundel
       // fisik dengan angkanya, bukan cuma total.
       '<div class="sp-konf-sizes">' +
@@ -3197,8 +3260,6 @@ function spRenderKonfirmasi() {
         '</div>' +
       '</div>' +
     '</div>';
-  }).join("");
-  spKonfTombolMassal_();
 }
 
 /* ============================================================
