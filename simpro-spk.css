@@ -1765,3 +1765,9 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 .sp-roll-satuansisa { flex: 0 0 auto; width: auto; min-width: 72px; padding-left: 8px; padding-right: 24px; }
 .sp-roll-sisa-sel .sp-konversi { font-size: 11px; color: var(--ink-soft, #5F6B7A); margin-top: 3px; }
 .sp-roll-sisa-sel .sp-konversi.lebih { color: var(--thread, #B23B2E); font-weight: 600; }
+
+/* v206: kondisi sisa jadi label turunan, bukan pilihan */
+.sp-roll-kondisi-auto {
+  display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--ink-soft, #5F6B7A);
+  background: var(--cream, #F5F1EA); border-radius: 6px; padding: 4px 10px;
+}

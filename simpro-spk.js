@@ -6099,12 +6099,12 @@ function spRenderRoll_() {
           '<div class="sp-konversi" data-awal-m="' +
             (Math.round(keM(r.panjangAwal, satuanRoll) * 100) / 100) + '"></div></td>' +
         '<td data-label="Kondisi">' +
-          '<select class="sp-roll-kondisi" data-id="' + spEsc_(r.idRoll) + '">' +
-            ["Utuh", "Potongan"].map(function (k) {
-              return '<option' + (spEsc_(r.kondisiSisa) === k ? ' selected="selected"' : '') +
-                ' value="' + k + '">' + k + '</option>';
-            }).join("") +
-          '</select></td>' +
+          // v206: kondisi DITURUNKAN dari sisa vs panjang awal, tidak dipilih.
+          // Dropdown yang bisa bertentangan dengan angkanya adalah sumber
+          // ringkasan "utuh" yang berbohong.
+          '<span class="sp-roll-kondisi-auto">' + spEsc_(spKondisiSisa_(
+            (diukur ? r.sisaTerukur : null), satuanSisa, keM(r.panjangAwal, satuanRoll))) +
+          '</span></td>' +
         '<td data-label=""><button class="sp-btn-kecil" onclick="spBatalRoll(\'' +
           spEsc_(r.idRoll) + '\')" type="button">Batal</button></td></tr>';
     }).join("");
@@ -6321,14 +6321,36 @@ function spTombolSibuk_(el, teks) {
  * sisa melebihi panjang awal (backend menolaknya; lebih baik ketahuan
  * sebelum ditekan Simpan, bukan sesudah).
  */
+/**
+ * v206: label kondisi sisa. Aturannya sama persis dengan backend
+ * (kondisiSisaRoll2_) -- kalau berbeda, layar dan sheet akan bercerita
+ * lain tentang roll yang sama.
+ */
+function spKondisiSisa_(sisa, satuan, awalMeter) {
+  if (sisa === null || sisa === undefined || sisa === "") return "\u2014";
+  const m = (satuan === "yds") ? Number(sisa) * 0.9144 : Number(sisa);
+  if (!(m > 0.001)) return "Habis";
+  if (awalMeter > 0 && m >= awalMeter - 0.5) return "Utuh";
+  return "Potongan";
+}
+
 function spKonversiSisaRoll_(el) {
   const td = el.closest("td");
   if (!td) return;
   const wadah = td.querySelector(".sp-konversi");
   if (!wadah) return;
-  const nilai = Number((td.querySelector(".sp-roll-sisa") || {}).value);
+  const mentah = (td.querySelector(".sp-roll-sisa") || {}).value;
+  const nilai = Number(mentah);
   const satuan = (td.querySelector(".sp-roll-satuansisa") || {}).value || "m";
   const awalM = Number(wadah.dataset.awalM) || 0;
+
+  // v206: label kondisi diperbarui LEBIH DULU dan tanpa syarat. Sebelumnya
+  // fungsi ini keluar lebih awal untuk nilai 0/kosong, jadi mengetik 0
+  // meninggalkan label di nilai sebelumnya -- "Utuh" untuk roll yang habis.
+  const tr0 = td.closest("tr");
+  const lbl0 = tr0 ? tr0.querySelector(".sp-roll-kondisi-auto") : null;
+  if (lbl0) lbl0.textContent = spKondisiSisa_(mentah === "" ? null : nilai, satuan, awalM);
+
   if (!(nilai > 0)) { wadah.textContent = ""; wadah.classList.remove("lebih"); return; }
   const nilaiM = satuan === "yds" ? nilai * 0.9144 : nilai;
   const lebih = awalM > 0 && nilaiM > awalM + 0.01;
@@ -6336,6 +6358,7 @@ function spKonversiSisaRoll_(el) {
   wadah.textContent = lebih
     ? ("melebihi panjang awal " + (Math.round(awalM * 100) / 100) + " m")
     : (satuan === "yds" ? ("= " + (Math.round(nilaiM * 100) / 100) + " m") : "");
+
 }
 
 function spSimpanSisaRoll(btn) {
@@ -6344,10 +6367,9 @@ function spSimpanSisaRoll(btn) {
     if (inp.value === "") return;
     const v = Number(inp.value);
     if (isNaN(v)) return;
-    const sel = document.querySelector('.sp-roll-kondisi[data-id="' + inp.dataset.id + '"]');
     const selSat = document.querySelector('.sp-roll-satuansisa[data-id="' + inp.dataset.id + '"]');
-    sisa.push({ idRoll: inp.dataset.id, sisa: v, satuan: selSat ? selSat.value : "m",   // v204
-      kondisi: sel ? sel.value : "Potongan" });
+    // v206: kondisi tidak dikirim lagi -- backend menurunkannya dari angka.
+    sisa.push({ idRoll: inp.dataset.id, sisa: v, satuan: selSat ? selSat.value : "m" });
   });
   if (!sisa.length) { alert("Belum ada sisa roll yang diisi."); return; }
   const pulih = spTombolSibuk_(btn, "Menyimpan " + sisa.length + " roll...");
