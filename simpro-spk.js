@@ -5989,7 +5989,7 @@ function spRenderRekapKain_() {
           }).join("");
       }).join("") +
     '</tbody></table></div>' +
-    '<button class="sp-simpan-btn" onclick="spSimpanSisaKain()" type="button">Simpan Hasil Ukur</button>' +
+    '<button class="sp-simpan-btn" onclick="spSimpanSisaKain(this)" type="button">Simpan Hasil Ukur</button>' +
     '<p class="sp-info">Selisih wajar sampai ' + (window.SP_KAIN_AMBANG.ambangWajar || 3) +
       '%. Di atas ' + (window.SP_KAIN_AMBANG.ambangPeriksa || 7) + '% perlu diperiksa. ' +
       'Selisih memang selalu ada &#8212; penyusutan kain dan potongan yang tidak utuh.</p>';
@@ -6051,7 +6051,19 @@ function spRenderRoll_() {
   const blok = daftar.map(function (g) {
     const baris = g.roll.map(function (r) {
       const diukur = r.sisaTerukur !== null && r.sisaTerukur !== undefined;
-      const terpakai = diukur ? (Math.round((r.panjangAwal - r.sisaTerukur) * 100) / 100) : null;
+      // v204: sisa boleh diukur dalam satuan lain (roll 100 yds, diukur
+      // dengan meteran). Terpakai karena itu dihitung di METER, lalu
+      // ditampilkan dalam meter juga -- mencampur "100 yds" dengan "10 m"
+      // dalam satu pengurangan adalah persis kesalahan yang mau dihindari.
+      const satuanRoll = r.satuan || "m";
+      // Belum diukur -> bawaan METER (alat ukur di lantai). Sudah diukur ->
+      // satuan yang tersimpan; data sebelum v204 kosong dan dibaca backend
+      // sebagai satuan roll, jadi angkanya tidak berubah arti.
+      const satuanSisa = r.satuanSisa || (diukur ? satuanRoll : "m");
+      const keM = function (v, u) { return (u === "yds") ? (v * 0.9144) : v; };
+      const terpakai = diukur
+        ? (Math.round((keM(r.panjangAwal, satuanRoll) - keM(r.sisaTerukur, satuanSisa)) * 100) / 100)
+        : null;
       return '<tr' + (diukur ? '' : ' class="sp-roll-belum"') + '>' +
         '<td data-label="No Roll"><b>' + spEsc_(r.noRoll || "-") + '</b>' +
           // v203: kode kain dari surat jalan klien, per roll.
@@ -6063,14 +6075,29 @@ function spRenderRoll_() {
           (r.satuan && r.satuan !== "m"
             ? ' <small>(' + r.panjangAwalMeter + ' m)</small>' : '') + '</td>' +
         '<td data-label="Terpakai">' + (terpakai === null ? "&#8212;"
-          : (terpakai + ' ' + spEsc_(r.satuan || "m"))) + '</td>' +
+          : (terpakai + ' m')) + '</td>' +
         // Satuan ditempel di label kolom, bukan cuma di header: di layar sempit
         // tabel jadi kartu dan headernya hilang -- kalau satuan cuma di header,
         // orang mengisi angka tanpa tahu satuannya apa.
-        '<td data-label="Sisa (' + spEsc_(r.satuan || "m") + ')">' +
-          '<input class="sp-roll-sisa" data-id="' + spEsc_(r.idRoll) +
-            '" max="' + r.panjangAwal + '" min="0" placeholder="ukur" step="0.01" ' +
-            'type="number" value="' + (diukur ? r.sisaTerukur : "") + '"/></td>' +
+        // v204: satuan sisa dipilih di sebelah angkanya, default METER --
+        // itu yang dipakai meteran di lantai. Sebelumnya angka masuk sebagai
+        // satuan roll tanpa label apa pun di layar lebar, jadi "10" yang
+        // dimaksud 10 m tercatat 10 yds tanpa ada yang bisa menyadarinya.
+        '<td data-label="Sisa terukur" class="sp-roll-sisa-sel">' +
+          '<div class="sp-roll-ukur">' +
+            '<input class="sp-roll-sisa" data-id="' + spEsc_(r.idRoll) +
+              '" min="0" placeholder="ukur" step="0.01" oninput="spKonversiSisaRoll_(this)" ' +
+              'type="number" value="' + (diukur ? r.sisaTerukur : "") + '"/>' +
+            '<select class="sp-roll-satuansisa" data-id="' + spEsc_(r.idRoll) +
+              '" onchange="spKonversiSisaRoll_(this)">' +
+              ["m", "yds"].map(function (u) {
+                return '<option' + (u === satuanSisa ? ' selected="selected"' : '') +
+                  ' value="' + u + '">' + u + '</option>';
+              }).join("") +
+            '</select>' +
+          '</div>' +
+          '<div class="sp-konversi" data-awal-m="' +
+            (Math.round(keM(r.panjangAwal, satuanRoll) * 100) / 100) + '"></div></td>' +
         '<td data-label="Kondisi">' +
           '<select class="sp-roll-kondisi" data-id="' + spEsc_(r.idRoll) + '">' +
             ["Utuh", "Potongan"].map(function (k) {
@@ -6113,14 +6140,14 @@ function spRenderRoll_() {
       rincian +
       '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu">' +
         '<thead><tr><th>No Roll</th><th>Panjang awal</th><th>Terpakai</th>' +
-        '<th>Sisa</th><th>Kondisi</th><th></th></tr></thead><tbody>' + baris +
+        '<th>Sisa terukur</th><th>Kondisi</th><th></th></tr></thead><tbody>' + baris +
         '</tbody></table></div>' +
     '</div>';
   }).join("");
 
   wadah.innerHTML =
     (daftar.length
-      ? blok + '<button class="sp-simpan-btn" onclick="spSimpanSisaRoll()" type="button">' +
+      ? blok + '<button class="sp-simpan-btn" onclick="spSimpanSisaRoll(this)" type="button">' +
         'Simpan Hasil Ukur Roll</button>'
       : '<p class="sp-info">Belum ada roll tercatat. Isi saat kain datang &#8212; ' +
         'nomor roll dan panjangnya. Sisanya diukur nanti setelah selesai digelar.</p>') +
@@ -6137,7 +6164,7 @@ function spFormTambahRoll_() {
       '<th>Satuan</th><th></th>' +
     '</tr></thead><tbody id="sp-roll-baru"></tbody></table></div>' +
     '<button class="sp-btn-kecil" onclick="spTambahBarisRoll()" type="button">+ Tambah baris</button> ' +
-    '<button class="sp-simpan-btn" onclick="spSimpanRoll()" type="button">Simpan Roll</button>' +
+    '<button class="sp-simpan-btn" onclick="spSimpanRoll(this)" type="button">Simpan Roll</button>' +
     '<datalist id="sp-datalist-kainroll">' +
       kain.map(function (k) { return '<option value="' + spEsc_(k) + '"></option>'; }).join("") +
     '</datalist>' +
@@ -6226,7 +6253,7 @@ function spHitungKonversiRoll_(el) {
   wadah.textContent = "= " + (Math.round(nilai * 0.9144 * 100) / 100) + " m";
 }
 
-function spSimpanRoll() {
+function spSimpanRoll(btn) {
   const roll = [];
   document.querySelectorAll("#sp-roll-baru tr").forEach(function (tr) {
     const jenisKain = (tr.querySelector(".sp-rb-kain").value || "").trim();
@@ -6242,6 +6269,7 @@ function spSimpanRoll() {
     });
   });
   if (!roll.length) { alert("Isi minimal satu roll: jenis kain dan panjangnya."); return; }
+  const pulih = spTombolSibuk_(btn, "Menyimpan " + roll.length + " roll...");
 
   fetch(SP_API_URL, {
     method: "POST",
@@ -6253,21 +6281,71 @@ function spSimpanRoll() {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
     alert(d.tersimpan + " roll tersimpan" +
       (d.rincianSatuan ? (" (" + d.rincianSatuan + ")") : "") + ".");
-    spMuatGelaran();
+    spMuatGelaran();   // tombol dipulihkan oleh render ulang
   })
-  .catch(function (e) { alert(e.message || e); });
+  .catch(function (e) { pulih(); alert(e.message || e); });
 }
 
-function spSimpanSisaRoll() {
+/**
+ * v204 -- indikator "sedang bekerja" untuk tombol aksi.
+ *
+ * Tiga tombol di area Roll & Rekap Kain (Simpan Roll, Simpan Hasil Ukur Roll,
+ * Simpan Hasil Ukur) mengirim fetch TANPA tanda apa pun: tombolnya tetap
+ * hidup, teksnya tidak berubah, dan sukses cuma memuat ulang daftar --
+ * yang perlu beberapa detik. Orang wajar menyimpulkan kliknya tidak masuk,
+ * lalu menekan lagi berkali-kali. Setiap tekanan = satu permintaan lagi.
+ *
+ * Tombol lain (Simpan Hasil Potong, Setoran, dll) sudah punya pola ini
+ * sejak lama; di sini pola itu dijadikan satu helper supaya tombol
+ * berikutnya tidak perlu mengulang tiga baris yang sama -- dan tidak ada
+ * lagi tombol yang lupa diberi tanda.
+ *
+ * Dipakai: const pulih = spTombolSibuk_(btn, "Menyimpan...");  ... pulih();
+ */
+function spTombolSibuk_(el, teks) {
+  if (!el || el.tagName !== "BUTTON") return function () {};
+  const teksAsli = el.textContent;
+  el.disabled = true;
+  el.textContent = teks || "Menyimpan...";
+  return function () { el.disabled = false; el.textContent = teksAsli; };
+}
+
+/**
+ * v204 -- pratinjau saat mengukur sisa roll.
+ * Menampilkan setara meter kalau satuannya yds, dan MEMPERINGATKAN kalau
+ * sisa melebihi panjang awal (backend menolaknya; lebih baik ketahuan
+ * sebelum ditekan Simpan, bukan sesudah).
+ */
+function spKonversiSisaRoll_(el) {
+  const td = el.closest("td");
+  if (!td) return;
+  const wadah = td.querySelector(".sp-konversi");
+  if (!wadah) return;
+  const nilai = Number((td.querySelector(".sp-roll-sisa") || {}).value);
+  const satuan = (td.querySelector(".sp-roll-satuansisa") || {}).value || "m";
+  const awalM = Number(wadah.dataset.awalM) || 0;
+  if (!(nilai > 0)) { wadah.textContent = ""; wadah.classList.remove("lebih"); return; }
+  const nilaiM = satuan === "yds" ? nilai * 0.9144 : nilai;
+  const lebih = awalM > 0 && nilaiM > awalM + 0.01;
+  wadah.classList.toggle("lebih", lebih);
+  wadah.textContent = lebih
+    ? ("melebihi panjang awal " + (Math.round(awalM * 100) / 100) + " m")
+    : (satuan === "yds" ? ("= " + (Math.round(nilaiM * 100) / 100) + " m") : "");
+}
+
+function spSimpanSisaRoll(btn) {
   const sisa = [];
   document.querySelectorAll(".sp-roll-sisa").forEach(function (inp) {
     if (inp.value === "") return;
     const v = Number(inp.value);
     if (isNaN(v)) return;
     const sel = document.querySelector('.sp-roll-kondisi[data-id="' + inp.dataset.id + '"]');
-    sisa.push({ idRoll: inp.dataset.id, sisa: v, kondisi: sel ? sel.value : "Potongan" });
+    const selSat = document.querySelector('.sp-roll-satuansisa[data-id="' + inp.dataset.id + '"]');
+    sisa.push({ idRoll: inp.dataset.id, sisa: v, satuan: selSat ? selSat.value : "m",   // v204
+      kondisi: sel ? sel.value : "Potongan" });
   });
   if (!sisa.length) { alert("Belum ada sisa roll yang diisi."); return; }
+  const pulih = spTombolSibuk_(btn, "Menyimpan " + sisa.length + " roll...");
 
   fetch(SP_API_URL, {
     method: "POST",
@@ -6277,9 +6355,13 @@ function spSimpanSisaRoll() {
   .then(function (r) { return r.json(); })
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
+    // Daftar dimuat ulang (beberapa detik). Tombol SENGAJA tetap mati sampai
+    // render selesai -- kalau dipulihkan di sini, layar masih menampilkan
+    // angka lama dengan tombol hidup, dan orang menekannya lagi.
+    alert(sisa.length + " roll tersimpan.");
     spMuatGelaran();
   })
-  .catch(function (e) { alert(e.message || e); });
+  .catch(function (e) { pulih(); alert(e.message || e); });
 }
 
 function spBatalRoll(idRoll) {
@@ -6297,7 +6379,7 @@ function spBatalRoll(idRoll) {
   .catch(function (e) { alert(e.message || e); });
 }
 
-function spSimpanSisaKain() {
+function spSimpanSisaKain(btn) {
   const sisa = [];
   document.querySelectorAll(".sp-kain-ukur").forEach(function (inp) {
     const v = Number(inp.value);
@@ -6312,6 +6394,7 @@ function spSimpanSisaKain() {
     }
   });
   if (!sisa.length) { alert("Belum ada hasil ukur yang diisi."); return; }
+  const pulih = spTombolSibuk_(btn, "Menyimpan " + sisa.length + " baris...");
 
   fetch(SP_API_URL, {
     method: "POST",
@@ -6321,9 +6404,10 @@ function spSimpanSisaKain() {
   .then(function (r) { return r.json(); })
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
-    spMuatGelaran();
+    alert(sisa.length + " hasil ukur tersimpan.");
+    spMuatGelaran();   // tombol dipulihkan oleh render ulang
   })
-  .catch(function (e) { alert(e.message || e); });
+  .catch(function (e) { pulih(); alert(e.message || e); });
 }
 
 /** Escape HTML sederhana -- dipakai di seluruh render tab Marker & Gelaran. */
