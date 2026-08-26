@@ -1761,15 +1761,32 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 
 /* v204: sisa roll diukur dengan satuannya sendiri (default meter) */
 .sp-roll-ukur { display: flex; gap: 6px; align-items: center; }
-.sp-roll-ukur .sp-roll-sisa { min-width: 0; flex: 1 1 auto; }
-.sp-roll-satuansisa { flex: 0 0 auto; width: auto; min-width: 72px; padding-left: 8px; padding-right: 24px; }
+/* v208: kotak ukur dirapatkan. Aturan input umum di kartu memberi
+   padding 12px 14px dan font 15px -- ukuran untuk form isian panjang,
+   bukan untuk satu sel di dalam tabel. Ditambah flex-grow, satu angka
+   dua digit mendapat kotak selebar 196px dan baris setinggi 78px.
+   Selektor sengaja tiga tingkat agar menang dari aturan umum itu. */
+.sp-roll-sisa-sel .sp-roll-ukur { max-width: 176px; }
+/* Selektor sengaja memuat [id^="sp-panel-"] dan .sp-tabel: aturan umum
+   `[id^="sp-panel-"] input:not(...)` berspesifisitas (0,4,1) dan
+   mengalahkan tiga kelas biasa. Menaikkan spesifisitas lebih jujur
+   daripada !important -- yang berikutnya masih bisa menimpa dengan cara
+   yang sama. */
+[id^="sp-panel-"] .sp-tabel .sp-roll-sisa-sel .sp-roll-ukur input.sp-roll-sisa {
+  flex: 0 0 84px; width: 84px; min-width: 0;
+  padding: 6px 9px; font-size: 13.5px;
+}
+[id^="sp-panel-"] .sp-tabel .sp-roll-sisa-sel select.sp-roll-satuansisa {
+  flex: 0 0 auto; width: auto; min-width: 62px;
+  padding: 6px 22px 6px 9px; font-size: 13.5px;
+}
 .sp-roll-sisa-sel .sp-konversi { font-size: 11px; color: var(--ink-soft, #5F6B7A); margin-top: 3px; }
 .sp-roll-sisa-sel .sp-konversi.lebih { color: var(--thread, #B23B2E); font-weight: 600; }
 
 /* v206: kondisi sisa jadi label turunan, bukan pilihan */
 .sp-roll-kondisi-auto {
-  display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--ink-soft, #5F6B7A);
-  background: var(--cream, #F5F1EA); border-radius: 6px; padding: 4px 10px;
+  display: inline-block; font-size: 12px; font-weight: 600; color: var(--ink-soft, #5F6B7A);
+  background: var(--cream, #F5F1EA); border-radius: 6px; padding: 4px 9px; white-space: nowrap;
 }
 
 /* v207: sisa ukur yang datang dari roll -- angka, bukan kotak isian */
