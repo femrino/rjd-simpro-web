@@ -5962,11 +5962,29 @@ function spRenderRekapKain_() {
             ? (k.terpakaiRecut + ' m' + (k.qtyRecut ? ' <small>(' + k.qtyRecut + ' pcs)</small>' : ''))
             : '&#8212;') + '</td>' +
           '<td data-label="Sisa hitung">' + k.sisaHitung + '</td>' +
-          '<td data-label="Sisa ukur">' + (k.sisaTerukur === null
-            ? '<input class="sp-kain-ukur" data-jenis="' + spEsc_(k.jenis) +
-              '" data-warna="' + spEsc_(k.warna === "(semua warna)" ? "" : (k.warna || "")) +
-              '" placeholder="ukur" step="0.01" type="number"/>'
-            : k.sisaTerukur) + '</td>' +
+          // v207: kotak ukur manual HANYA untuk kain yang rollnya belum
+          // tercatat. Kalau roll ada, sisa datang dari pengukuran per roll
+          // dan backend memang mengabaikan isian di sini (terukurRoll menang
+          // atas terukur) -- menampilkan kotak yang tidak berpengaruh adalah
+          // mengundang orang mengisi sesuatu yang hilang tanpa jejak.
+          '<td data-label="Sisa ukur">' + (
+            k.sisaDariRoll
+              ? '<span class="sp-kain-dariroll' + (k.rollLengkap ? '' : ' belum') + '">' +
+                  k.sisaTerukur + '<small>' +
+                  (k.rollLengkap
+                    ? (k.rollDiukur + ' roll diukur')
+                    : (k.rollDiukur + ' dari ' + k.jumlahRoll + ' roll \u00b7 belum lengkap')) +
+                  '</small></span>'
+              : (k.jumlahRoll > 0
+                  ? '<span class="sp-kosong">ukur per roll di atas' +
+                      (k.jumlahRoll > k.rollDiukur
+                        ? ' &#183; ' + (k.jumlahRoll - k.rollDiukur) + ' belum' : '') +
+                    '</span>'
+                  : (k.sisaTerukur === null
+                      ? '<input class="sp-kain-ukur" data-jenis="' + spEsc_(k.jenis) +
+                        '" data-warna="' + spEsc_(k.warna === "(semua warna)" ? "" : (k.warna || "")) +
+                        '" placeholder="ukur" step="0.01" type="number"/>'
+                      : k.sisaTerukur))) + '</td>' +
           '<td data-label="Selisih">' + (k.selisih === null ? "-"
             : (k.selisih + " (" + k.persenSelisih + "%) " + k.tanda)) + '</td></tr>' +
           // v203: rincian per KODE KAIN di bawah baris kain/warna -- bahasa
@@ -5989,7 +6007,11 @@ function spRenderRekapKain_() {
           }).join("");
       }).join("") +
     '</tbody></table></div>' +
-    '<button class="sp-simpan-btn" onclick="spSimpanSisaKain(this)" type="button">Simpan Hasil Ukur</button>' +
+    // v207: tombol ikut hilang kalau tidak ada satu pun kotak ukur manual --
+    // tombol simpan yang tidak punya isian adalah janji kosong.
+    (dipakai.some(function (k) { return !k.sisaDariRoll && !(k.jumlahRoll > 0) && k.sisaTerukur === null; })
+      ? '<button class="sp-simpan-btn" onclick="spSimpanSisaKain(this)" type="button">Simpan Hasil Ukur</button>'
+      : '') +
     '<p class="sp-info">Selisih wajar sampai ' + (window.SP_KAIN_AMBANG.ambangWajar || 3) +
       '%. Di atas ' + (window.SP_KAIN_AMBANG.ambangPeriksa || 7) + '% perlu diperiksa. ' +
       'Selisih memang selalu ada &#8212; penyusutan kain dan potongan yang tidak utuh.</p>';
