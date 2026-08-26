@@ -1708,7 +1708,8 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 
 /* ===== v199: konfirmasi dikelompokkan per serahan (line + tanggal) ===== */
 .sp-konf-teks { flex: 1 1 auto; min-width: 0; }
-.sp-konf-grup { margin-bottom: 14px; }
+/* padding:0 eksplisit -- jaring kedua terhadap aturan tema `section{padding:88px 0}` (v201) */
+.sp-konf-grup { margin: 0 0 14px; padding: 0; }
 .sp-konf-grup-head {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap; cursor: pointer;
   padding: 9px 12px; margin-bottom: 8px; border-radius: 10px;

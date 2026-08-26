@@ -3208,7 +3208,11 @@ function spRenderKonfirmasi() {
       return (window.SP_KONF_PILIH || {})[k.idDistribusi || k.idSetoran];
     });
     const idsGrup = g.item.map(function (k) { return k.idDistribusi || k.idSetoran || ""; });
-    return '<section class="sp-konf-grup">' +
+    // v201: <div>, bukan <section> -- simpro-global.css punya aturan tema
+    // `section{padding:88px 0}` untuk seksi halaman depan, dan grup ini ikut
+    // kena: jarak 88px di atas & bawah tiap serahan. Tidak ada error, cuma
+    // ruang kosong yang tak bisa dijelaskan.
+    return '<div class="sp-konf-grup">' +
       '<label class="sp-konf-grup-head">' +
         '<input type="checkbox"' + (semuaDipilih ? ' checked' : '') +
           ' data-ids="' + rjdEscapeHtml_(idsGrup.join(",")) + '" onchange="spKonfCentangGrup_(this)"/>' +
@@ -3217,7 +3221,7 @@ function spRenderKonfirmasi() {
         '<span class="sp-konf-grup-ringkas">' + g.item.length + ' bundel &#183; ' + g.pcs + ' pcs</span>' +
       '</label>' +
       g.item.map(spKonfKartuHtml_).join("") +
-    '</section>';
+    '</div>';
   }).join("");
   spKonfTombolMassal_();
 }
