@@ -6145,13 +6145,18 @@ function spRenderRoll_() {
     '</div>';
   }).join("");
 
+  // v204b: form "Tambah roll" DI ATAS daftar. Urutan kerjanya memang begitu --
+  // kain datang lebih dulu, sisanya diukur berminggu kemudian. Di bawah
+  // daftar, form itu perlu digulir melewati 16 baris roll setiap kali kiriman
+  // baru masuk. "Simpan Hasil Ukur Roll" tetap menempel di bawah daftar,
+  // dekat dengan kotak-kotak yang barusan diisi.
   wadah.innerHTML =
+    spFormTambahRoll_() +
     (daftar.length
       ? blok + '<button class="sp-simpan-btn" onclick="spSimpanSisaRoll(this)" type="button">' +
         'Simpan Hasil Ukur Roll</button>'
       : '<p class="sp-info">Belum ada roll tercatat. Isi saat kain datang &#8212; ' +
-        'nomor roll dan panjangnya. Sisanya diukur nanti setelah selesai digelar.</p>') +
-    spFormTambahRoll_();
+        'nomor roll dan panjangnya. Sisanya diukur nanti setelah selesai digelar.</p>');
 }
 
 function spFormTambahRoll_() {
