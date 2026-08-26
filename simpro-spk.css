@@ -1839,5 +1839,9 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 }
 .sp-keatas.tampil { opacity: 1; transform: none; pointer-events: auto; }
 /* Jangan tumpang tindih bilah aksi melayang (konfirmasi massal / siapkan) */
-.sp-konf-aksi-massal.tampil ~ .sp-keatas, .sp-siap-aksi.tampil ~ .sp-keatas { bottom: 84px; }
+/* Bilah aksi melayang (konfirmasi massal / siapkan) memakai bagian bawah;
+   tombol ke-atas naik supaya tidak menutupi tombol simpannya. Bilah itu ada
+   DI DALAM panel (bukan anak body), jadi kombinator ~ tidak menjangkaunya --
+   kelas .naik dipasang JS saat bilah sedang tampil. */
+.sp-keatas.naik { bottom: 84px; }
 @media print { .sp-pintasan, .sp-keatas { display: none; } }

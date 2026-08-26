@@ -1665,9 +1665,8 @@ function spSwitchTab(tab) {
   document.querySelectorAll("[id^='sp-panel-']").forEach(function (p) {
     p.classList.toggle("hidden", p.id !== idPanelTujuan);
   });
-  // v211: bar pintasan ada di navwrap, hanya untuk subtab Gelaran.
-  const pintasan = document.getElementById("sp-pintasan-gelar");
-  if (pintasan) pintasan.classList.toggle("hidden", tab !== "gelar");
+  // v213: bar pintasan generik -- dirakit untuk subtab ini (lihat SP_PINTASAN_PETA).
+  spPintasanUntuk_(tab);
   // Kartu "Pilih PO" cuma relevan untuk dua tab pertama. Tab Konfirmasi
   // melihat semua yang menunggu LINTAS ORDER -- memaksa pilih PO dulu di situ
   // justru membalik cara kepala line bekerja (dia pegang beberapa order).
@@ -5010,76 +5009,136 @@ function spBatalMarker(idMarker) {
    ============================================================ */
 
 /* ============================================================
- * v211 -- PINTASAN ANTARBAGIAN di tab Gelaran
+ * v213 -- PINTASAN ANTARBAGIAN (generik, semua subtab panjang)
  * ============================================================
- * Bar chip (markup di template: #sp-pintasan-gelar) menempel di bawah
- * bar tab/subtab. Tiga pekerjaan di sini:
- *   1. offset "top" bar dihitung dari tinggi #sp-navwrap yang sebenarnya --
- *      bukan angka manual seperti .sp-tabs (72px), supaya tidak ikut rusak
- *      kalau tinggi header berubah;
- *   2. loncat halus ke bagian, dengan offset yang sama supaya judulnya
- *      tidak tersembunyi di balik bar;
- *   3. chip bagian yang sedang terlihat ditandai (IntersectionObserver),
- *      supaya orang tahu posisinya tanpa membaca judul.
- * Ditambah tombol "ke atas" mengambang yang muncul setelah gulir jauh.
+ * v211 membuatnya khusus tab Gelaran dengan chip yang ditulis di template.
+ * Sekarang SATU bar (#sp-pintasan di navwrap) dan SATU peta: subtab ->
+ * daftar bagian {id, label}. Bar merakit dirinya sendiri dari bagian yang
+ * BENAR-BENAR ADA dan TERLIHAT saat itu -- kartu ringkasan yang masih
+ * .hidden (belum pilih PO) atau wadah yang masih kosong tidak dapat chip.
+ * Karena isi panel berubah setelah data dimuat, bar dirakit ulang lewat
+ * MutationObserver (didebounce), bukan dipanggil manual dari tiap pemuat --
+ * pemuat berikutnya tidak perlu ingat memanggil apa pun.
+ *
+ * Bar hanya tampil kalau ada >= 2 bagian: satu chip tidak memberi arah.
+ *
+ * Menambah tab: tambah baris di peta ini. Menambah bagian: beri id pada
+ * elemennya, daftarkan di sini. Tidak ada tempat lain yang perlu disentuh.
  */
+const SP_PINTASAN_PETA = {
+  gelar: [
+    ["sp-gl-sec-catat", "Catat"], ["sp-gl-sec-tercatat", "Tercatat"], ["sp-gl-sec-set", "Set Lengkap"],
+    ["sp-gl-sec-roll", "Roll Kain"], ["sp-gl-sec-rekap", "Rekap Kain"], ["sp-gl-sec-recut", "Re-cut"]
+  ],
+  marker:  [["sp-marker-form", "Marker"], ["sp-marker-daftar", "Tercatat"]],
+  cutting: [["sp-cut-ringkas", "Ringkasan"], ["sp-cut-tabel", "Catat"], ["sp-cut-tercatat", "Tercatat"]],
+  bagi:    [["sp-form", "Bagi"], ["sp-bagi-tercatat", "Tercatat"]],
+  setor:   [["sp-setor-ringkas", "Ringkasan"], ["sp-setor-tabel", "Catat"], ["sp-setor-tercatat", "Tercatat"]],
+  keluar:  [["sp-keluar-tabel", "Catat"], ["sp-keluar-riwayat", "Riwayat"]],
+  konf:    [["sp-konf-line", "Saring"], ["sp-konf-daftar", "Daftar"]],
+  konfpot: [["sp-konf-line", "Saring"], ["sp-konf-daftar", "Daftar"]],
+  konfset: [["sp-konf-line", "Saring"], ["sp-konf-daftar", "Daftar"]],
+  siapkan: [["sp-siapkan-ringkas", "Ringkasan"], ["sp-siapkan-daftar", "Daftar"]]
+};
+window.SP_PINTASAN_TAB = "";
+let SP_PINTASAN_OBS = null;      // IntersectionObserver bagian aktif
+let SP_PINTASAN_MUT = null;      // MutationObserver perakit ulang
+let SP_PINTASAN_TIMER = null;
+
 function spOffsetPintasan_() {
-  // Bar pintasan sudah menjadi bagian navwrap (v211). Saat menempel, tepi
-  // bawah navwrap = top sticky-nya + tingginya; itu batas atas area konten.
-  // Dihitung dari nilai sticky (bukan posisi saat ini) supaya benar juga
-  // ketika halaman masih di atas dan navwrap belum menempel.
+  // Bar ada di navwrap. Saat menempel, tepi bawah navwrap = top sticky-nya +
+  // tingginya; itu batas atas area konten. Dihitung dari nilai sticky (bukan
+  // posisi saat ini) supaya benar juga ketika halaman masih di atas.
   const nav = document.getElementById("sp-navwrap");
   if (!nav) return 80;
   const top = parseFloat(getComputedStyle(nav).top);
   return (isNaN(top) ? 72 : top) + nav.offsetHeight + 8;
 }
 
-function spPasangPintasan_() {
-  const bar = document.getElementById("sp-pintasan-gelar");
-  if (!bar || bar.dataset.terpasang === "1") return;
-  bar.dataset.terpasang = "1";
-
-  const atur = function () {
-    document.querySelectorAll("#sp-panel-gelar .sp-gl-sec").forEach(function (sec) {
-      sec.style.scrollMarginTop = spOffsetPintasan_() + "px";
-    });
-  };
-  atur();
-  window.addEventListener("resize", atur);
-
-  // Bagian aktif = yang paling atas di antara yang sedang terlihat.
-  if ("IntersectionObserver" in window) {
-    const terlihat = {};
-    const tandai = function () {
-      let aktif = null;
-      document.querySelectorAll("#sp-panel-gelar .sp-gl-sec").forEach(function (sec) {
-        if (terlihat[sec.id] && !aktif) aktif = sec.id;
-      });
-      bar.querySelectorAll("a").forEach(function (a) {
-        a.classList.toggle("aktif", aktif !== null && a.getAttribute("href") === "#" + aktif);
-      });
-    };
-    const io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (e) { terlihat[e.target.id] = e.isIntersecting; });
-      tandai();
-    }, { rootMargin: "-40% 0px -55% 0px" });   // pita tengah layar
-    document.querySelectorAll("#sp-panel-gelar .sp-gl-sec").forEach(function (sec) { io.observe(sec); });
+/** Elemen layak dapat chip: ada, tidak .hidden (sendiri/induk sampai panel), dan punya isi. */
+function spBagianTerlihat_(el, panel) {
+  if (!el) return false;
+  for (let a = el; a && a !== panel; a = a.parentElement) {
+    if (a.classList && a.classList.contains("hidden")) return false;
   }
-
-  // Tombol ke atas: satu untuk halaman, dibuat sekali.
-  if (!document.getElementById("sp-keatas")) {
-    const b = document.createElement("button");
-    b.id = "sp-keatas"; b.type = "button"; b.className = "sp-keatas"; b.title = "Ke atas";
-    b.innerHTML = "&#8593;";
-    b.onclick = function () { window.scrollTo({ top: 0, behavior: "smooth" }); };
-    document.body.appendChild(b);
-    window.addEventListener("scroll", function () {
-      const panel = document.getElementById("sp-panel-gelar");
-      const tampil = window.scrollY > 600 && panel && !panel.classList.contains("hidden");
-      b.classList.toggle("tampil", !!tampil);
-    }, { passive: true });
-  }
+  return el.offsetHeight > 0 && (el.children.length > 0 || el.textContent.trim().length > 0);
 }
+
+function spRakitPintasan_() {
+  const bar = document.getElementById("sp-pintasan");
+  if (!bar) return;
+  const tab = window.SP_PINTASAN_TAB || "";
+  const peta = SP_PINTASAN_PETA[tab];
+  const panel = document.querySelector("[id^='sp-panel-']:not(.hidden)");
+  if (!peta || !panel) { bar.classList.add("hidden"); bar.innerHTML = ""; return; }
+
+  const bagian = peta.filter(function (b) {
+    return spBagianTerlihat_(document.getElementById(b[0]), panel);
+  });
+  if (bagian.length < 2) { bar.classList.add("hidden"); bar.innerHTML = ""; return; }
+
+  // Rakit ulang hanya kalau daftarnya berubah -- jangan mengedipkan chip aktif.
+  const tanda = bagian.map(function (b) { return b[0]; }).join("|");
+  if (bar.dataset.tanda !== tanda) {
+    bar.dataset.tanda = tanda;
+    bar.innerHTML = bagian.map(function (b) {
+      return '<a href="#' + b[0] + '" onclick="spLoncat_(event, this)">' + rjdEscapeHtml_(b[1]) + '</a>';
+    }).join("");
+    if (SP_PINTASAN_OBS) SP_PINTASAN_OBS.disconnect();
+    if ("IntersectionObserver" in window) {
+      const terlihat = {};
+      SP_PINTASAN_OBS = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) { terlihat[e.target.id] = e.isIntersecting; });
+        let aktif = null;
+        bagian.forEach(function (b) { if (terlihat[b[0]] && !aktif) aktif = b[0]; });
+        bar.querySelectorAll("a").forEach(function (a) {
+          a.classList.toggle("aktif", aktif !== null && a.getAttribute("href") === "#" + aktif);
+        });
+      }, { rootMargin: "-40% 0px -55% 0px" });
+      bagian.forEach(function (b) { SP_PINTASAN_OBS.observe(document.getElementById(b[0])); });
+    }
+  }
+  bagian.forEach(function (b) {
+    document.getElementById(b[0]).style.scrollMarginTop = spOffsetPintasan_() + "px";
+  });
+  bar.classList.remove("hidden");
+}
+
+function spPintasanUntuk_(tab) {
+  window.SP_PINTASAN_TAB = tab;
+  const bar = document.getElementById("sp-pintasan");
+  if (bar) { bar.dataset.tanda = ""; bar.innerHTML = ""; bar.classList.add("hidden"); }
+  spRakitPintasan_();
+  // Rakit ulang saat isi panel berubah (data dimuat, kartu muncul/hilang).
+  if (SP_PINTASAN_MUT) SP_PINTASAN_MUT.disconnect();
+  const panel = document.querySelector("[id^='sp-panel-']:not(.hidden)");
+  if (panel && "MutationObserver" in window) {
+    SP_PINTASAN_MUT = new MutationObserver(function () {
+      clearTimeout(SP_PINTASAN_TIMER);
+      SP_PINTASAN_TIMER = setTimeout(spRakitPintasan_, 250);
+    });
+    SP_PINTASAN_MUT.observe(panel, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+  }
+  spPasangKeAtas_();
+}
+
+function spPasangKeAtas_() {
+  if (document.getElementById("sp-keatas")) return;
+  const b = document.createElement("button");
+  b.id = "sp-keatas"; b.type = "button"; b.className = "sp-keatas"; b.title = "Ke atas";
+  b.innerHTML = "&#8593;";
+  b.onclick = function () { window.scrollTo({ top: 0, behavior: "smooth" }); };
+  document.body.appendChild(b);
+  window.addEventListener("scroll", function () {
+    b.classList.toggle("tampil", window.scrollY > 600);
+    // Menghindar dari bilah aksi melayang yang sedang tampil.
+    b.classList.toggle("naik", !!document.querySelector(".sp-siap-aksi.tampil, .sp-konf-aksi-massal.tampil"));
+  }, { passive: true });
+  window.addEventListener("resize", function () { spRakitPintasan_(); });
+}
+
+/** v211: tetap dipakai nama lamanya oleh spMuatGelaran -- sekarang cuma pemicu rakit ulang. */
+function spPasangPintasan_() { spRakitPintasan_(); }
 
 function spLoncat_(ev, a) {
   if (ev) ev.preventDefault();
