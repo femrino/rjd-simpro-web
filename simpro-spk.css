@@ -1809,3 +1809,7 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 #sp-roll-baru select.sp-rb-satuan {
   padding-right: 24px; min-width: 68px;
 }
+
+/* v210: tombol laporan cutting di atas Rekap Kain */
+.sp-laporan-aksi { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+@media (max-width: 620px) { .sp-laporan-aksi .sp-spk-btn { flex: 1 1 auto; text-align: center; } }

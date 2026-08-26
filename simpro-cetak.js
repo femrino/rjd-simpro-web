@@ -127,7 +127,10 @@ function ckFetchData(){
     // v153: surat jalan POTONGAN (bukan baju jadi). ?id= boleh dua bentuk:
     // "SJK..." (dari SD Potongan Keluar) atau ID gelaran Panel Klien --
     // backend yang membedakannya dari bentuk ID, jadi tautannya satu bentuk.
-    "sjpotongan"];
+    "sjpotongan",
+    // v210: laporan cutting per PO -- ringkasan potong, konsumsi kain, sisa
+    // roll, rincian gelaran, mutu potong. ?id= = ID Purchase Order.
+    "laporancutting"];
   // "rekapline" identitasnya di ?line=, BUKAN ?id= -- dokumennya milik LINE,
   // bukan milik satu order. Jadi syarat CK_ID sengaja dilonggarkan khusus dia.
   const punyaIdentitas = CK_JENIS === "rekapline" ? !!CK_LINE : !!CK_ID;
@@ -135,7 +138,7 @@ function ckFetchData(){
     ckTampilkanError("Link tidak lengkap/valid -- buka halaman ini lewat tombol Cetak di Portal Klien atau Dashboard, bukan diketik manual.");
     return;
   }
-  const CK_ACTION_MAP = { invoice: "getInvoiceCetak", proforma: "getProformaCetak", suratjalan: "getSuratJalanCetak", konfirmasiorder: "getKonfirmasiOrderCetak", spk: "getSPKCetak", rekapline: "getRekapLineCetak", sjpotongan: "getSuratJalanPotonganCetak" };
+  const CK_ACTION_MAP = { invoice: "getInvoiceCetak", proforma: "getProformaCetak", suratjalan: "getSuratJalanCetak", konfirmasiorder: "getKonfirmasiOrderCetak", spk: "getSPKCetak", rekapline: "getRekapLineCetak", sjpotongan: "getSuratJalanPotonganCetak", laporancutting: "getLaporanCuttingCetak" };
   const action = CK_ACTION_MAP[CK_JENIS];
   fetch(CK_API_URL, {
     method: "POST",
@@ -160,6 +163,7 @@ function ckFetchData(){
       else if(CK_JENIS === "konfirmasiorder") ckRenderKonfirmasiOrder(data.data);
       else if(CK_JENIS === "rekapline") ckRenderRekapLine(data.data);
       else if(CK_JENIS === "sjpotongan") ckRenderSuratJalanPotongan(data.data);
+      else if(CK_JENIS === "laporancutting") ckRenderLaporanCutting(data.data);
       else { CK_SPK_DATA = data.data; ckRenderSPK(); }
     }catch(errRender){
       console.error("Gagal menggambar dokumen:", errRender);
@@ -550,6 +554,201 @@ function ckRenderSuratJalan(d){
  * dan penerima harus langsung tahu bedanya tanpa membaca rinciannya -- salah
  * baca di sini berarti klien mengira menerima baju siap pakai.
  */
+/**
+ * ============================================================
+ * v210 -- LAPORAN CUTTING per PO
+ * ============================================================
+ * Satu dokumen untuk tiga pembaca: klien (kain yang dititipkan ke mana
+ * saja), kepala produksi (potong vs order, mutu), dan arsip. Bagian yang
+ * datanya belum ada TETAP dicetak dengan keterangan "belum ada" -- laporan
+ * yang diam-diam menghilangkan bagian membuat pembaca mengira bagian itu
+ * tidak pernah ada.
+ */
+function ckTglIndo_(iso){
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return iso || "-";
+  const b = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+  return Number(m[3]) + " " + b[Number(m[2]) - 1] + " " + m[1];
+}
+function ckAngka_(v, desimal){
+  if (v === null || v === undefined || v === "") return "&#8212;";
+  const n = Number(v); if (isNaN(n)) return rjdEscapeHtml_(v);
+  return n.toLocaleString("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: desimal === undefined ? 2 : desimal });
+}
+function ckTanda_(v){ if (v === null || v === undefined) return "&#8212;"; const n = Number(v); return (n > 0 ? "+" : "") + ckAngka_(n); }
+
+function ckRenderLaporanCutting(d){
+  const r = d.ringkasan || {};
+  const sz = d.sizeKolom || [];
+
+  // ---------- 1. Ringkasan ----------
+  const kartu = function (lbl, nilai, sub, kelas) {
+    return '<div class="ck-lc-kartu' + (kelas ? ' ' + kelas : '') + '"><div class="lbl">' + lbl + '</div>' +
+      '<div class="nilai">' + nilai + '</div>' + (sub ? '<div class="sub">' + sub + '</div>' : '') + '</div>';
+  };
+  const ringkasan = '<div class="ck-lc-ringkasan">' +
+    kartu("Order", ckAngka_(r.totalOrder, 0) + ' <small>pcs</small>') +
+    kartu("Hasil potong", ckAngka_(r.totalPotong, 0) + ' <small>pcs</small>',
+      r.persenSelisihPotong === null ? '' : (ckTanda_(r.selisihPotong) + ' pcs (' + ckTanda_(r.persenSelisihPotong) + '%) dari order'),
+      r.selisihPotong < 0 ? 'kurang' : '') +
+    kartu("Kain diterima", ckAngka_(r.totalDiterima) + ' <small>m</small>', (r.jumlahGelaran || 0) + ' gelaran') +
+    kartu("Kain terpakai", ckAngka_(r.totalTerpakai) + ' <small>m</small>',
+      r.meterPerPcs === null ? '' : ('rata-rata ' + ckAngka_(r.meterPerPcs, 3) + ' m/pcs')) +
+    kartu("Sisa hitung", ckAngka_(r.totalSisaHitung) + ' <small>m</small>',
+      r.totalSisaUkur === null ? 'belum diukur' : ('terukur ' + ckAngka_(r.totalSisaUkur) + ' m')) +
+    '</div>';
+
+  // ---------- 2. Hasil potong vs order ----------
+  const hpHead = '<tr><th>Warna</th>' + sz.map(function (s) { return '<th class="num" colspan="2">' + rjdEscapeHtml_(s) + '</th>'; }).join("") +
+    '<th class="num" colspan="2">Total</th><th class="num">Selisih</th></tr>' +
+    '<tr class="ck-lc-sub"><th></th>' + sz.map(function () { return '<th class="num">order</th><th class="num">potong</th>'; }).join("") +
+    '<th class="num">order</th><th class="num">potong</th><th></th></tr>';
+  const hpRows = (d.hasilPotong || []).map(function (h) {
+    return '<tr' + (h.tidakDiOrder ? ' class="ck-lc-asing"' : '') + '>' +
+      '<td>' + rjdEscapeHtml_(h.warna || "-") +
+        (h.style ? '<div class="ck-lc-kecil">' + rjdEscapeHtml_(h.style) + '</div>' : '') +
+        (h.tidakDiOrder ? '<div class="ck-lc-kecil ck-lc-merah">tidak ada di order</div>' : '') +
+        (h.tertahan > 0 ? '<div class="ck-lc-kecil">' + h.tertahan + ' panel menunggu pasangan</div>' : '') + '</td>' +
+      h.perSize.map(function (p) {
+        return '<td class="num ck-lc-redup">' + (p.order || '') + '</td>' +
+          '<td class="num' + (p.selisih < 0 ? ' ck-lc-merah' : '') + '">' + (p.potong || '') + '</td>';
+      }).join("") +
+      '<td class="num ck-lc-redup">' + ckAngka_(h.totalOrder, 0) + '</td>' +
+      '<td class="num"><b>' + ckAngka_(h.totalPotong, 0) + '</b></td>' +
+      '<td class="num' + (h.selisih < 0 ? ' ck-lc-merah' : '') + '">' + ckTanda_(h.selisih) +
+        (h.persenSelisih === null ? '' : '<div class="ck-lc-kecil">' + ckTanda_(h.persenSelisih) + '%</div>') + '</td>' +
+    '</tr>';
+  }).join("");
+  const hasilPotong = '<div class="ck-lc-blok"><h2>1. Hasil potong vs order</h2>' +
+    (hpRows
+      ? '<div class="ck-lc-wrap"><table class="ck-dok-tabel ck-lc-tabel"><thead>' + hpHead + '</thead><tbody>' + hpRows +
+        '<tr class="ck-lc-kaki"><td>Total</td>' + sz.map(function () { return '<td></td><td></td>'; }).join("") +
+        '<td class="num">' + ckAngka_(r.totalOrder, 0) + '</td><td class="num">' + ckAngka_(r.totalPotong, 0) + '</td>' +
+        '<td class="num">' + ckTanda_(r.selisihPotong) + '</td></tr></tbody></table></div>' +
+        '<p class="ck-lc-catatan">Potong = set lengkap (semua komponen sudah ada pasangannya). Selisih positif = kelebihan potong (allowance), negatif = kurang potong.</p>'
+      : '<p class="ck-lc-kosong">Belum ada gelaran tercatat untuk PO ini.</p>') + '</div>';
+
+  // ---------- 3. Konsumsi kain ----------
+  const kainRows = (d.kain || []).map(function (k) {
+    const subKode = (k.perKode || []).length > 1
+      ? k.perKode.map(function (pk) {
+          return '<tr class="ck-lc-kode"><td></td><td>' + (pk.kode ? '<span class="ck-lc-tag">' + rjdEscapeHtml_(pk.kode) + '</span>' : '<i>tanpa kode</i>') +
+            (pk.jumlahRoll ? ' <small>' + pk.jumlahRoll + ' roll</small>' : '') + '</td>' +
+            '<td class="num">' + ckAngka_(pk.diterima) + '</td><td class="num">' + ckAngka_(pk.terpakai) + '</td>' +
+            '<td></td><td class="num">' + ckAngka_(pk.sisaHitung) + '</td><td></td><td></td><td></td></tr>';
+        }).join("")
+      : '';
+    const satuKode = (k.perKode || []).length === 1 && k.perKode[0].kode ? k.perKode[0].kode : '';
+    return '<tr' + (k.tanda === "periksa" ? ' class="ck-lc-periksa"' : '') + '>' +
+      '<td><b>' + rjdEscapeHtml_(k.jenis) + '</b></td>' +
+      '<td>' + rjdEscapeHtml_(k.warna) + (satuKode ? ' <span class="ck-lc-tag">' + rjdEscapeHtml_(satuKode) + '</span>' : '') + '</td>' +
+      '<td class="num">' + ckAngka_(k.diterima) +
+        (k.diterimaAsli && k.satuanAsli && k.satuanAsli !== "m" ? '<div class="ck-lc-kecil">' + ckAngka_(k.diterimaAsli) + ' ' + rjdEscapeHtml_(k.satuanAsli) + '</div>' : '') +
+        (k.jumlahRoll ? '<div class="ck-lc-kecil">' + k.jumlahRoll + ' roll</div>' : '') + '</td>' +
+      '<td class="num">' + ckAngka_(k.terpakai) + (k.hanyaPerkiraan ? '<div class="ck-lc-kecil">perkiraan</div>' : '') + '</td>' +
+      '<td class="num">' + (k.terpakaiRecut ? ckAngka_(k.terpakaiRecut) + '<div class="ck-lc-kecil">' + k.qtyRecut + ' pcs</div>' : '&#8212;') + '</td>' +
+      '<td class="num">' + ckAngka_(k.sisaHitung) + '</td>' +
+      '<td class="num">' + (k.sisaTerukur === null || k.sisaTerukur === undefined ? '&#8212;'
+        : ckAngka_(k.sisaTerukur) + (k.sisaDariRoll ? '<div class="ck-lc-kecil">' + (k.rollLengkap ? k.rollDiukur + ' roll' : k.rollDiukur + '/' + k.jumlahRoll + ' roll, belum lengkap') + '</div>' : '')) + '</td>' +
+      '<td class="num">' + (k.selisih === null || k.selisih === undefined ? '&#8212;'
+        : ckTanda_(k.selisih) + '<div class="ck-lc-kecil">' + ckAngka_(k.persenSelisih, 1) + '% ' + rjdEscapeHtml_(k.tanda || '') + '</div>') + '</td>' +
+      '<td class="num">' + (k.meterPerPcs === null ? '&#8212;' : ckAngka_(k.meterPerPcs, 3)) + '</td>' +
+    '</tr>' + subKode;
+  }).join("");
+  const konsumsi = '<div class="ck-lc-blok"><h2>2. Konsumsi kain</h2>' +
+    (kainRows
+      ? '<div class="ck-lc-wrap"><table class="ck-dok-tabel ck-lc-tabel"><thead><tr>' +
+        '<th>Kain</th><th>Warna</th><th class="num">Diterima (m)</th><th class="num">Terpakai (m)</th><th class="num">Re-cut (m)</th>' +
+        '<th class="num">Sisa hitung</th><th class="num">Sisa ukur</th><th class="num">Selisih</th><th class="num">m/pcs</th></tr></thead>' +
+        '<tbody>' + kainRows + '</tbody></table></div>' +
+        '<p class="ck-lc-catatan">Sisa hitung = diterima &#8722; terpakai. Selisih = sisa ukur &#8722; sisa hitung' +
+          (r.ambang && r.ambang.wajar ? '; wajar sampai ' + r.ambang.wajar + '%, di atas ' + r.ambang.periksa + '% perlu diperiksa' : '') +
+          '. m/pcs = kain gelaran normal &#247; pcs set lengkap warna itu (re-cut tidak dihitung).</p>'
+      : '<p class="ck-lc-kosong">Belum ada data kain.</p>') + '</div>';
+
+  // ---------- 4. Sisa per roll ----------
+  const rollBlok = (d.rollPerKain || []).map(function (g) {
+    const baris = (g.roll || []).map(function (x) {
+      const diukur = x.sisaTerukur !== null && x.sisaTerukur !== undefined;
+      return '<tr>' +
+        '<td>' + rjdEscapeHtml_(x.noRoll || '-') + (x.kodeKain ? ' <span class="ck-lc-tag">' + rjdEscapeHtml_(x.kodeKain) + '</span>' : '') + '</td>' +
+        '<td class="num">' + ckAngka_(x.panjangAwal) + ' ' + rjdEscapeHtml_(x.satuan || 'm') +
+          (x.satuan !== 'm' ? '<div class="ck-lc-kecil">' + ckAngka_(x.panjangAwalMeter) + ' m</div>' : '') + '</td>' +
+        '<td class="num">' + (diukur ? ckAngka_(x.sisaTerukur) + ' ' + rjdEscapeHtml_(x.satuanSisa || x.satuan || 'm') +
+          ((x.satuanSisa || x.satuan) !== 'm' ? '<div class="ck-lc-kecil">' + ckAngka_(x.sisaMeter) + ' m</div>' : '') : '<span class="ck-lc-redup">belum diukur</span>') + '</td>' +
+        '<td>' + (diukur ? rjdEscapeHtml_(x.kondisiSisa || '-') : '') + '</td>' +
+      '</tr>';
+    }).join("");
+    return '<div class="ck-lc-roll"><div class="ck-lc-roll-judul"><b>' + rjdEscapeHtml_(g.jenis) + ' &#183; ' + rjdEscapeHtml_(g.warna) + '</b>' +
+      '<span>' + g.jumlahRoll + ' roll &#183; ' + ckAngka_(g.totalPanjangAwal) + ' m' +
+        (g.sudahDiukur ? ' &#183; sisa ' + ckAngka_(g.totalSisa) + ' m (utuh ' + ckAngka_(g.sisaUtuh) + ', potongan ' + ckAngka_(g.sisaPotongan) + ')' : '') +
+        (g.belumDiukur ? ' &#183; <span class="ck-lc-merah">' + g.belumDiukur + ' belum diukur</span>' : '') + '</span></div>' +
+      '<table class="ck-dok-tabel ck-lc-tabel ck-lc-tabel-roll"><thead><tr><th>No roll</th><th class="num">Panjang awal</th><th class="num">Sisa</th><th>Kondisi</th></tr></thead>' +
+      '<tbody>' + baris + '</tbody></table></div>';
+  }).join("");
+  const roll = '<div class="ck-lc-blok"><h2>3. Sisa kain per roll</h2>' +
+    (rollBlok || '<p class="ck-lc-kosong">Roll belum dicatat untuk PO ini.</p>') + '</div>';
+
+  // ---------- 5. Rincian gelaran ----------
+  const gelRows = (d.gelaran || []).map(function (g) {
+    const per = Object.keys(g.sizeQty || {}).filter(function (s) { return g.sizeQty[s] > 0; })
+      .map(function (s) { return s + ' ' + g.sizeQty[s]; }).join('  ');
+    return '<tr' + (g.jenis !== 'normal' ? ' class="ck-lc-recut"' : '') + '>' +
+      '<td>' + ckTglIndo_(g.tanggal) + '</td>' +
+      '<td>' + rjdEscapeHtml_(g.warna || '-') + '</td>' +
+      '<td>' + rjdEscapeHtml_(g.jenisKain || '-') + (g.kodeKain ? ' <span class="ck-lc-tag">' + rjdEscapeHtml_(g.kodeKain) + '</span>' : '') +
+        (g.komponen && g.komponen !== 'Semua panel' ? '<div class="ck-lc-kecil">' + rjdEscapeHtml_(g.komponen) + '</div>' : '') + '</td>' +
+      '<td>' + (g.jenis === 'normal' ? 'Normal' : rjdEscapeHtml_(g.jenis)) + '</td>' +
+      '<td class="num">' + g.jumlahLapis + '</td>' +
+      '<td class="num">' + (g.jenis === 'normal' ? '<b>' + g.total + '</b>' + (per ? '<div class="ck-lc-kecil">' + rjdEscapeHtml_(per) + '</div>' : '') : '&#8212;') + '</td>' +
+      '<td class="num">' + ckAngka_(g.kainTerpakai) + '</td>' +
+      '<td class="ck-lc-kecil">' + rjdEscapeHtml_(g.catatan || '') + '</td>' +
+    '</tr>';
+  }).join("");
+  const gelaran = '<div class="ck-lc-blok"><h2>4. Rincian gelaran</h2>' +
+    (gelRows
+      ? '<div class="ck-lc-wrap"><table class="ck-dok-tabel ck-lc-tabel"><thead><tr><th>Tanggal</th><th>Warna</th><th>Kain</th><th>Jenis</th>' +
+        '<th class="num">Lapis</th><th class="num">Output (pcs)</th><th class="num">Kain (m)</th><th>Catatan</th></tr></thead><tbody>' + gelRows + '</tbody></table></div>'
+      : '<p class="ck-lc-kosong">Belum ada gelaran.</p>') + '</div>';
+
+  // ---------- 6. Mutu potong ----------
+  const m = d.mutu || {};
+  const mutu = '<div class="ck-lc-blok"><h2>5. Mutu potong</h2>' +
+    (m.sesi
+      ? '<div class="ck-lc-ringkasan ck-lc-ringkasan-kecil">' +
+        kartu("Sesi QC", ckAngka_(m.sesi, 0)) + kartu("Diperiksa", ckAngka_(m.diperiksa, 0) + ' <small>pcs</small>') +
+        kartu("Afkir", ckAngka_(m.afkir, 0) + ' <small>pcs</small>', m.afkirRate === null ? '' : ckAngka_(m.afkirRate, 1) + '%', m.afkirRate > 10 ? 'kurang' : '') +
+        kartu("Re-cut", ckAngka_(r.recutPcs, 0) + ' <small>pcs</small>', r.recutKain ? ckAngka_(r.recutKain) + ' m kain' : '') +
+        '</div>' +
+        ((m.jenisCacat || []).length
+          ? '<table class="ck-dok-tabel ck-lc-tabel ck-lc-tabel-cacat"><thead><tr><th>Jenis cacat</th><th class="num">Qty</th></tr></thead><tbody>' +
+            m.jenisCacat.map(function (j) { return '<tr><td>' + rjdEscapeHtml_(j.jenis) + '</td><td class="num">' + j.qty + '</td></tr>'; }).join("") +
+            '</tbody></table>' : '')
+      : '<p class="ck-lc-kosong">Belum ada sesi QC Potong untuk PO ini.</p>') + '</div>';
+
+  // ---------- Kepala & tanda tangan ----------
+  const meta = '<div class="ck-lc-meta">' +
+    '<div><span>Klien</span><b>' + rjdEscapeHtml_(d.namaKlien || '-') + '</b></div>' +
+    '<div><span>Artikel</span><b>' + rjdEscapeHtml_(d.artikel || '-') + '</b></div>' +
+    (d.noSO ? '<div><span>No. SO</span><b>' + rjdEscapeHtml_(d.noSO) + '</b></div>' : '') +
+    '<div><span>Periode potong</span><b>' + (d.periode ? ckTglIndo_(d.periode.mulai) + ' &#8211; ' + ckTglIndo_(d.periode.selesai) : '&#8212;') + '</b></div>' +
+    (d.targetKirim ? '<div><span>Target kirim</span><b>' + rjdEscapeHtml_(d.targetKirim) + '</b></div>' : '') +
+    '</div>';
+
+  const html = '<div class="ck-dok ck-lc">' +
+    ckHeaderHtml("LAPORAN CUTTING", rjdEscapeHtml_(d.idPurchaseOrder || ''), 'Dicetak ' + ckTglIndo_(d.tanggalCetak) + ' oleh ' + rjdEscapeHtml_(d.dicetakOleh || '')) +
+    meta + ringkasan + hasilPotong + konsumsi + roll + gelaran + mutu +
+    '<div class="ck-dok-ttd ck-lc-ttd">' +
+      '<div class="kolom">Kepala Cutting,<div class="garis"></div><div class="nama-ttd">&nbsp;</div></div>' +
+      '<div class="kolom">Diperiksa,<div class="garis"></div><div class="nama-ttd">Kepala Produksi</div></div>' +
+      '<div class="kolom">Diterima,<div class="garis"></div><div class="nama-ttd">' + rjdEscapeHtml_(d.namaKlien || 'Klien') + '</div></div>' +
+    '</div>' +
+  '</div>';
+
+  document.getElementById("ck-isi").innerHTML = html;
+  document.title = "Laporan Cutting " + (d.idPurchaseOrder || "") + " -- RJD Apparel";
+}
+
 function ckRenderSuratJalanPotongan(d){
   const rows = (d.items || []).map(function(it){
     return '<tr>' +

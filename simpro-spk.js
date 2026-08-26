@@ -5906,8 +5906,20 @@ function spTerapkanIsiCutting_() {
 function spRenderRekapKain_() {
   const semua = window.SP_KAIN || [];
   const wadah = document.getElementById("sp-kain-rekap");
+  // v210: tombol Laporan Cutting -- dokumen cetak per PO yang merangkum
+  // hasil potong vs order, konsumsi kain, sisa roll, gelaran, dan mutu.
+  // Dibuka sebagai pratinjau modal seperti dokumen lain. Dideklarasikan di
+  // sini, DI LUAR cabang kosong -- const berskop blok, dan cabang render
+  // utama juga memakainya.
+  const tombolLaporan = window.SP_PO_AKTIF
+    ? '<div class="sp-laporan-aksi">' +
+        spTombolDok_("sp-spk-btn utama", "&#128438; Cetak Laporan Cutting",
+          "/p/cetak.html?jenis=laporancutting&id=" + encodeURIComponent(window.SP_PO_AKTIF),
+          "Laporan Cutting " + window.SP_PO_AKTIF, "hasil potong, konsumsi kain, sisa roll, gelaran, mutu") +
+      '</div>'
+    : '';
   if (!semua.length) {
-    wadah.innerHTML = '<p class="sp-info">Belum ada data kain untuk PO ini.</p>';
+    wadah.innerHTML = tombolLaporan + '<p class="sp-info">Belum ada data kain untuk PO ini.</p>';
     return;
   }
   // Kain x warna menghasilkan perkalian: 4 kain x 5 warna = 20 baris, padahal
@@ -5922,7 +5934,7 @@ function spRenderRekapKain_() {
   const tampilSemua = !!window.SP_KAIN_SEMUA;
   const dipakai = (tampilSemua || !berangka.length) ? semua : berangka;
 
-  wadah.innerHTML =
+  wadah.innerHTML = tombolLaporan +
     (belum.length && !tampilSemua && berangka.length
       ? '<p class="sp-info">' + berangka.length + ' kombinasi punya angka. ' +
         '<a class="sp-tautan" href="#" onclick="window.SP_KAIN_SEMUA=true;' +
