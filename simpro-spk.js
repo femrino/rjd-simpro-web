@@ -5934,13 +5934,19 @@ function spRenderRekapKain_() {
       '<th>Sisa hitung</th><th>Sisa ukur</th><th>Selisih</th></tr></thead><tbody>' +
       dipakai.map(function (k) {
         const kelas = k.tanda ? ("sp-kain-" + k.tanda) : "";
+        const kodeSungguhan = (k.perKode || []).filter(function (pk) { return !!pk.kode; });
+        const satuKode = ((k.perKode || []).length === 1 && kodeSungguhan.length === 1) ? kodeSungguhan[0] : null;
         return '<tr class="' + kelas + '">' +
           '<td data-label="Kain"><b>' + spEsc_(k.jenis) + '</b></td>' +
           // Kain klien selalu datang per warna, jadi warna sekelas dengan nama
           // kain di rekap ini -- bukan pelengkap.
           '<td data-label="Warna">' + (k.warna && k.warna !== "(semua warna)"
             ? spEsc_(k.warna)
-            : '<span class="sp-kosong">semua warna</span>') + '</td>' +
+            : '<span class="sp-kosong">semua warna</span>') +
+            // v203: satu kode saja -> ditempel di sini, tidak perlu baris rincian
+            // (angkanya pasti sama dengan induknya).
+            (satuKode ? ' <span class="sp-kode-kain">' + spEsc_(satuKode.kode) + '</span>' : '') +
+            '</td>' +
           // Kalau roll sudah dicatat, angka DITERIMA berasal dari roll dan
           // estimasi order jadi pembanding -- bukan diganti diam-diam.
           // Selisihnya sendiri informasi: estimasi 100 yds tapi datang 95 yds
@@ -5962,7 +5968,25 @@ function spRenderRekapKain_() {
               '" placeholder="ukur" step="0.01" type="number"/>'
             : k.sisaTerukur) + '</td>' +
           '<td data-label="Selisih">' + (k.selisih === null ? "-"
-            : (k.selisih + " (" + k.persenSelisih + "%) " + k.tanda)) + '</td></tr>';
+            : (k.selisih + " (" + k.persenSelisih + "%) " + k.tanda)) + '</td></tr>' +
+          // v203: rincian per KODE KAIN di bawah baris kain/warna -- bahasa
+          // yang dipakai klien di surat jalannya. Baris induk tetap angka
+          // total; rincian hanya kalau ada kode sungguhan. Sisa ukur dan
+          // selisih memang tidak per kode: hasil ukur dicatat per roll, dan
+          // roll sudah membawa kodenya masing-masing di panel Roll Kain.
+          (satuKode ? [] : (k.perKode || [])).map(function (pk) {
+            return '<tr class="sp-kain-kode">' +
+              '<td data-label="Kain"></td>' +
+              '<td data-label="Kode">' + (pk.kode
+                ? '<span class="sp-kode-kain">' + spEsc_(pk.kode) + '</span>'
+                : '<span class="sp-kosong">tanpa kode</span>') +
+                (pk.jumlahRoll ? ' <small>' + pk.jumlahRoll + ' roll</small>' : '') + '</td>' +
+              '<td data-label="Diterima">' + pk.diterima + ' m</td>' +
+              '<td data-label="Terpakai">' + pk.terpakai + '</td>' +
+              '<td data-label="Re-cut"></td>' +
+              '<td data-label="Sisa hitung">' + pk.sisaHitung + '</td>' +
+              '<td data-label="Sisa ukur"></td><td data-label="Selisih"></td></tr>';
+          }).join("");
       }).join("") +
     '</tbody></table></div>' +
     '<button class="sp-simpan-btn" onclick="spSimpanSisaKain()" type="button">Simpan Hasil Ukur</button>' +
@@ -6029,7 +6053,9 @@ function spRenderRoll_() {
       const diukur = r.sisaTerukur !== null && r.sisaTerukur !== undefined;
       const terpakai = diukur ? (Math.round((r.panjangAwal - r.sisaTerukur) * 100) / 100) : null;
       return '<tr' + (diukur ? '' : ' class="sp-roll-belum"') + '>' +
-        '<td data-label="No Roll"><b>' + spEsc_(r.noRoll || "-") + '</b></td>' +
+        '<td data-label="No Roll"><b>' + spEsc_(r.noRoll || "-") + '</b>' +
+          // v203: kode kain dari surat jalan klien, per roll.
+          (r.kodeKain ? '<div class="sp-kode-kain">' + spEsc_(r.kodeKain) + '</div>' : '') + '</td>' +
         // Angka ASLI di depan, konversi di belakang dalam kurung. Roll yang
         // datang 60 yds ditampilkan "60 yds" -- bukan "54,86 m" yang terasa
         // seperti angka lain saat dicocokkan dengan surat jalan supplier.
@@ -6070,9 +6096,15 @@ function spRenderRoll_() {
       : '<div class="sp-roll-rincian"><span class="sp-roll-belum-tag">' +
           g.jumlahRoll + ' roll belum diukur</span></div>';
 
+    // v203: kalau semua roll satu kode, tampilkan di judul supaya tidak
+    // diulang di tiap baris; kalau campur, biarkan per baris yang bicara.
+    const kodeSemua = g.roll.map(function (r) { return r.kodeKain || ""; })
+      .filter(function (k, i, a) { return a.indexOf(k) === i; });
+    const kodeJudul = (kodeSemua.length === 1 && kodeSemua[0])
+      ? ' <span class="sp-kode-kain sp-kode-kain-inline">' + spEsc_(kodeSemua[0]) + '</span>' : '';
     return '<div class="sp-set-blok">' +
       '<div class="sp-set-judul">' + spEsc_(g.jenis) +
-        (g.warna && g.warna !== "(semua warna)" ? ' &#183; ' + spEsc_(g.warna) : '') +
+        (g.warna && g.warna !== "(semua warna)" ? ' &#183; ' + spEsc_(g.warna) : '') + kodeJudul +
         '<span class="sp-set-siap">' + g.jumlahRoll + ' ROLL <b>' +
           g.totalPanjangAwal + ' m</b>' +
           (g.satuanAsli && g.satuanAsli !== "m"
@@ -6101,7 +6133,7 @@ function spFormTambahRoll_() {
   return '<div class="sp-roll-tambah">' +
     '<div class="sp-lbl">Tambah roll (saat kain datang)</div>' +
     '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
-      '<th>Jenis Kain</th><th>Warna</th><th>No Roll</th><th>Panjang</th>' +
+      '<th>Jenis Kain</th><th>Warna</th><th>Kode Kain</th><th>No Roll</th><th>Panjang</th>' +
       '<th>Satuan</th><th></th>' +
     '</tr></thead><tbody id="sp-roll-baru"></tbody></table></div>' +
     '<button class="sp-btn-kecil" onclick="spTambahBarisRoll()" type="button">+ Tambah baris</button> ' +
@@ -6124,6 +6156,9 @@ function spTambahBarisRoll() {
   const terakhir = tb.querySelector("tr:last-child");
   const kainLama = terakhir ? (terakhir.querySelector(".sp-rb-kain").value || "") : "";
   const warnaLama = terakhir ? (terakhir.querySelector(".sp-rb-warna").value || "") : "";
+  // v203: kode ikut disalin ke baris berikutnya -- 16 roll satu kiriman
+  // biasanya satu kode; yang berbeda tinggal diganti.
+  const kodeLama = terakhir ? ((terakhir.querySelector(".sp-rb-kode") || {}).value || "") : "";
   const satuanLama = terakhir
     ? ((terakhir.querySelector(".sp-rb-satuan") || {}).value || "m") : "m";
   tb.insertAdjacentHTML("beforeend",
@@ -6131,7 +6166,14 @@ function spTambahBarisRoll() {
       '<td data-label="Jenis Kain"><input class="sp-rb-kain" list="sp-datalist-kainroll" ' +
         'placeholder="jenis kain" type="text" value="' + spEsc_(kainLama) + '"/></td>' +
       '<td data-label="Warna"><input class="sp-rb-warna" list="sp-datalist-warnaroll" ' +
-        'placeholder="warna" type="text" value="' + spEsc_(warnaLama) + '"/></td>' +
+        'placeholder="warna" type="text" value="' + spEsc_(warnaLama) + '"' +
+        ' onchange="spIsiKodeRoll_(this)"/></td>' +
+      // v203: kode kain dari surat jalan klien. Datalist = kode rencana SO
+      // (sp-datalist-kodekain, dibuat form gelaran); saat warna dipilih dan
+      // kotak masih kosong, diisi dari rencana untuk (warna, kain) itu.
+      '<td data-label="Kode Kain"><input class="sp-rb-kode" list="sp-datalist-kodekain" ' +
+        'placeholder="mis. C75" type="text" value="' + spEsc_(kodeLama) + '" ' +
+        'style="text-transform:uppercase"/></td>' +
       '<td data-label="No Roll"><input class="sp-rb-no" placeholder="mis. R-01" type="text"/></td>' +
       '<td data-label="Panjang"><input class="sp-rb-panjang" min="0" ' +
         'oninput="spHitungKonversiRoll_(this)" placeholder="0" step="0.01" type="number"/>' +
@@ -6159,6 +6201,19 @@ function spTambahBarisRoll() {
  * Ini yang membuat "60 yds" terasa aman diketik: angkanya tetap 60 seperti di
  * surat jalan supplier, dan setaranya dalam meter terlihat langsung.
  */
+/** v203: isi kode kain roll dari rencana SO kalau kotaknya masih kosong. */
+function spIsiKodeRoll_(el) {
+  const tr = el.closest("tr");
+  if (!tr) return;
+  const kotak = tr.querySelector(".sp-rb-kode");
+  if (!kotak || kotak.value.trim()) return;
+  const rencana = (window.SP_BAHAN_RENCANA && window.SP_BAHAN_RENCANA.peta) || {};
+  const norm = function (x) { return String(x || "").trim().toLowerCase().replace(/\s+/g, " "); };
+  const warna = (tr.querySelector(".sp-rb-warna") || {}).value || "";
+  const kain = (tr.querySelector(".sp-rb-kain") || {}).value || "";
+  kotak.value = rencana[norm(warna) + "||" + norm(kain)] || "";
+}
+
 function spHitungKonversiRoll_(el) {
   const tr = el.closest("tr");
   if (!tr) return;
@@ -6181,6 +6236,7 @@ function spSimpanRoll() {
       jenisKain: jenisKain,
       warna: (tr.querySelector(".sp-rb-warna").value || "").trim(),
       noRoll: (tr.querySelector(".sp-rb-no").value || "").trim(),
+      kodeKain: ((tr.querySelector(".sp-rb-kode") || {}).value || "").trim(),   // v203
       panjangAwal: panjang,
       satuan: (tr.querySelector(".sp-rb-satuan") || {}).value || "m"
     });

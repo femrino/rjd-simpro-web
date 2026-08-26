@@ -1740,3 +1740,21 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 .sp-siap-serahan-ringkas { font-size: 12px; color: var(--ink-soft, #5F6B7A); font-variant-numeric: tabular-nums; }
 .sp-siap-serahan .sp-siap-baris { padding-left: 28px; }
 @media (max-width: 620px) { .sp-siap-serahan .sp-siap-baris { padding-left: 13px; } }
+
+/* ===== v203: kode kain -- tag di roll, form roll, dan rincian rekap ===== */
+.sp-kode-kain {
+  display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+  font-weight: 600; letter-spacing: .03em; color: var(--ink, #17212F);
+  background: var(--cream, #F5F1EA); border-radius: 5px; padding: 1px 6px; margin-top: 3px;
+}
+.sp-kode-kain-inline { margin: 0 0 0 8px; vertical-align: middle; font-weight: 500; }
+.sp-rb-kode { width: 100%; min-width: 80px; }
+/* Baris rincian per kode: lebih kecil, bergaris tipis, sedikit menjorok --
+   harus terbaca sebagai anak baris di atasnya, bukan kombinasi kain baru. */
+.sp-tabel tr.sp-kain-kode td { font-size: 12px; color: var(--ink-soft, #5F6B7A);
+  padding-top: 4px; padding-bottom: 6px; border-top: 0; background: transparent; }
+.sp-tabel tr.sp-kain-kode td:nth-child(2) { padding-left: 18px; }
+@media (max-width: 620px) {
+  .sp-tabel-kartu tr.sp-kain-kode { margin-left: 14px; border-left: 3px solid var(--line, #E5E0D6); }
+  .sp-tabel-kartu tr.sp-kain-kode td:empty { display: none; }
+}

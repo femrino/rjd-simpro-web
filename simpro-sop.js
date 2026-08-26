@@ -102,7 +102,7 @@ function sopMulai() {
  * ditambahkan di sini, lalu MD dibuat ulang; jangan pernah menulis SOP di
  * dua tempat.
  */
-const SOP_VERSI = "v198 \u00b7 25 Agustus 2026";
+const SOP_VERSI = "v203 \u00b7 25 Agustus 2026";
 
 /** Rantai utama: siapa mencatat apa, di tab mana. Urutan = urutan kejadian. */
 const SOP_RANTAI_TAB = [
@@ -111,7 +111,8 @@ const SOP_RANTAI_TAB = [
   ["2", "Pola, Marker, Sampel, Approval", "fase Pola & Marker", "Pola/Marker",
    "Approval klien = titik mulai potong"],
   ["3", "Gelaran & potong", "Cutting \u203a Gelaran, Hasil Potong", "Kepala cutting",
-   "Hasil potong per warna per size; potong bertahap = baris baru"],
+   "Hasil potong per warna per size; potong bertahap = baris baru. <b>Kode kain</b> (dari surat jalan klien) " +
+   "diisi saat roll didaftarkan DAN saat gelaran \u2014 itu yang membuat rekap kain bisa dirinci per kode klien"],
   ["4", "QC Potong", "Cutting \u203a QC Potong", "Kepala cutting",
    "Self-check sebelum panel dibagi. Afkir \u2192 centang koreksi + tombol re-cut"],
   ["5", "Bagi ke line", "Cutting \u203a Bagi ke Line", "Admin/PPIC",
