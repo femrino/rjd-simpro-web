@@ -1,5 +1,5 @@
 /* ============================================================
-   SIMPRO -- simpro-jadwal.css (v214)
+   SIMPRO -- simpro-jadwal.css (v214, form v215)
    Matriks Jadwal Produksi (jadwal.html).
 
    Yang penting di halaman ini cuma satu: matriksnya. Semua yang lain
@@ -63,6 +63,46 @@
 .jm-alat select:focus { outline: none; border-color: var(--ink, #17212F); }
 .jm-cek { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-soft, #5F6B7A); cursor: pointer; }
 .jm-alat-spasi { flex: 1; }
+
+/* ---------- form (v215) ---------- */
+/* <details>, bukan panel tetap: yang membuka halaman ini lebih sering MEMBACA
+   daripada mengisi, dan form yang selalu terbuka mendorong matriks turun. */
+.jm-form-wrap {
+  background: #fff; border: 1px solid var(--line, #E5E0D6); border-radius: 14px;
+  margin-bottom: 12px; overflow: hidden;
+}
+.jm-form-wrap.jm-mode-edit { border-color: var(--navy, #17212F); }
+.jm-form-wrap > summary {
+  list-style: none; cursor: pointer; padding: 11px 16px;
+  font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13.5px; color: var(--navy, #17212F);
+  display: flex; align-items: center; gap: 8px;
+}
+.jm-form-wrap > summary::-webkit-details-marker { display: none; }
+.jm-form-wrap > summary::before { content: "+"; font-size: 16px; line-height: 1; width: 14px; }
+.jm-form-wrap[open] > summary::before { content: "\2013"; }
+.jm-form { display: flex; flex-direction: column; gap: 10px; padding: 4px 16px 14px; }
+.jm-form-baris { display: flex; gap: 12px; flex-wrap: wrap; }
+.jm-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-soft, #5F6B7A); min-width: 0; }
+.jm-form select, .jm-form input {
+  padding: 8px 10px; border: 1px solid var(--line, #E5E0D6); border-radius: 9px;
+  font-family: inherit; font-size: 13px; background: #fff; color: var(--ink, #17212F); min-width: 0; width: 100%;
+}
+.jm-form select:focus, .jm-form input:focus { outline: none; border-color: var(--ink, #17212F); }
+.jm-form-item  { flex: 3 1 280px; }
+.jm-form-tahap { flex: 1 1 160px; }
+.jm-form-line  { flex: 1 1 140px; }
+.jm-form-tgl   { flex: 1 1 150px; }
+.jm-form-qty   { flex: 1 1 120px; }
+.jm-form-ket   { flex: 3 1 240px; }
+.jm-form-aksi { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.jm-btn-hapus { color: #8f2c22; border-color: #E6C3BF; }
+.jm-btn-hapus:hover { border-color: #8f2c22; }
+.jm-btn:disabled { opacity: .5; cursor: default; }
+.jm-form-pesan { font-size: 12.5px; color: #2F6B3A; margin-left: auto; }
+.jm-form-pesan.jm-form-galat { color: #8f2c22; }
+/* sel bar bisa diklik hanya kalau boleh menulis */
+body.jm-bisa-tulis td.jm-bar[data-id]:not([data-id=""]) { cursor: pointer; }
+body.jm-bisa-tulis td.jm-bar[data-id]:not([data-id=""]):hover { box-shadow: inset 0 0 0 2px var(--navy, #17212F); }
 
 /* ---------- legenda ---------- */
 .jm-legenda { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 4px 12px; font-size: 12px; color: var(--ink-soft, #5F6B7A); }
@@ -146,12 +186,14 @@ th.jm-hari-ini { background: #FBE7B3; }
   .jm-td-tahap { padding-left: 12px; }
   .jm-gulir { max-height: calc(100vh - 170px); }
   .jm-rentang { font-size: 13px; }
+  .jm-form-tgl { flex-basis: 45%; }
+  .jm-form-pesan { margin-left: 0; width: 100%; }
 }
 
 /* ---------- cetak ---------- */
 @media print {
   @page { size: landscape; margin: 8mm; }
-  .db-header, .jm-alat, .bg-canvas, .hero { display: none !important; }
+  .db-header, .jm-alat, .jm-form-wrap, .bg-canvas, .hero { display: none !important; }
   .jm-wrap { max-width: none; padding: 0; }
   .jm-gulir { max-height: none; overflow: visible; border: 0; }
   .jm-tabel { font-size: 10px; }
