@@ -3163,7 +3163,8 @@ var RJD_AREA_HALAMAN = {
   // (bukan staff), jadi menu ringkas di dua halaman itu tetap utuh buat mereka.
   "/p/tracking.html":      "order",
   "/p/order.html":         "order"
-  // Dashboard, Orderan, Produksi, QC, Pengiriman SENGAJA tidak didaftarkan:
+  // Dashboard, Orderan, Produksi, QC, Pengiriman, Jadwal Produksi (v214)
+  // SENGAJA tidak didaftarkan:
   // halaman-halaman itu tetap berguna untuk peran Produksi, yang tertutup cuma
   // sebagian tab di dalamnya (Order Masuk, Edit PO) -- dan itu ditangani JS
   // halaman masing-masing, bukan dari sini.
@@ -3364,6 +3365,10 @@ var RJD_JAGA_HALAMAN = {
   "/p/spk.html":          "produksi",
   "/p/pengiriman.html":   "produksi",
   "/p/qc.html":           "produksi",
+  // v214: matriks jadwal produksi manual. Rencana produksi adalah data
+  // BARANG (tahap & tanggal, nol rupiah), jadi areanya "produksi" -- semua
+  // staf internal boleh melihat, seperti halaman produksi.
+  "/p/jadwal.html":       "produksi",
   // Daftar PO boleh dilihat peran produksi; yang ditolak cuma tab Edit PO di
   // dalamnya (area keuangan), dan itu sudah ditegakkan backend per-action.
   "/p/order-list.html":   "produksi",

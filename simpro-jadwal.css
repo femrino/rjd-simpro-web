@@ -1,0 +1,163 @@
+/* ============================================================
+   SIMPRO -- simpro-jadwal.css (v214)
+   Matriks Jadwal Produksi (jadwal.html).
+
+   Yang penting di halaman ini cuma satu: matriksnya. Semua yang lain
+   (filter, legenda, peringatan) dibuat tenang supaya mata langsung jatuh ke
+   pola warna -- sama seperti membaca sheet Gantt lama, tapi tanpa perlu
+   membuka spreadsheet.
+
+   Prefiks kelas: jm-  (cegah bentrok CSS global). Dibungkus <div>, bukan
+   <section>, karena simpro-global.css memberi padding ke section{}.
+   ============================================================ */
+
+.jm-wrap { max-width: 1440px; margin: 0 auto; padding: 0 20px 80px; }
+
+/* ---------- login ---------- */
+.jm-kotak-login {
+  background: #fff; border: 1px solid var(--line, #E5E0D6); border-radius: 16px;
+  padding: 28px 24px; text-align: center; max-width: 420px; margin: 40px auto;
+}
+.jm-kotak-login h2 { margin: 0 0 8px; font-size: 20px; }
+.jm-kotak-login p { margin: 0 0 18px; color: var(--ink-soft, #5F6B7A); font-size: 13.5px; }
+#jm-google-btn { display: flex; justify-content: center; }
+
+.jm-kartu { background: #fff; border: 1px solid var(--line, #E5E0D6); border-radius: 14px; padding: 18px 20px; }
+.jm-info { margin: 0; font-size: 13px; color: var(--ink-soft, #5F6B7A); line-height: 1.6; }
+.jm-galat { margin: 0; font-size: 13px; color: #8f2c22; }
+.jm-mono { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; }
+
+/* ---------- peringatan baris bermasalah ---------- */
+.jm-peringatan {
+  background: #FCF3E3; border: 1px solid #EBCFA0; border-radius: 12px;
+  padding: 12px 16px; margin-bottom: 14px; font-size: 12.5px; color: #8A5D1F; line-height: 1.6;
+}
+.jm-peringatan ul { margin: 6px 0 0; padding-left: 18px; }
+.jm-peringatan li { margin: 2px 0; }
+.jm-peringatan code { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; background: rgba(0,0,0,.05); padding: 1px 5px; border-radius: 4px; }
+
+/* ---------- bilah kendali ---------- */
+.jm-alat {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: #fff; border: 1px solid var(--line, #E5E0D6); border-radius: 14px;
+  padding: 12px 16px; margin-bottom: 12px;
+}
+.jm-nav { display: flex; align-items: center; gap: 4px; }
+.jm-btn {
+  padding: 8px 12px; border-radius: 9px; border: 1px solid var(--line, #E5E0D6);
+  background: #fff; color: var(--ink, #17212F); cursor: pointer; font-family: inherit;
+  font-size: 13px; font-weight: 600; line-height: 1;
+}
+.jm-btn:hover { border-color: var(--ink, #17212F); }
+.jm-btn-utama { background: var(--navy, #17212F); color: #fff; border-color: var(--navy, #17212F); }
+.jm-btn-utama:hover { background: var(--thread, #C2410C); border-color: var(--thread, #C2410C); }
+.jm-rentang {
+  font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 14px; color: var(--navy, #17212F);
+  padding: 0 6px; white-space: nowrap;
+}
+.jm-rentang-sub { font-family: inherit; font-weight: 500; font-size: 12px; color: var(--ink-soft, #5F6B7A); }
+.jm-alat select {
+  padding: 7px 10px; border: 1px solid var(--line, #E5E0D6); border-radius: 9px;
+  font-family: inherit; font-size: 12.5px; background: #fff; color: var(--ink, #17212F);
+}
+.jm-alat select:focus { outline: none; border-color: var(--ink, #17212F); }
+.jm-cek { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-soft, #5F6B7A); cursor: pointer; }
+.jm-alat-spasi { flex: 1; }
+
+/* ---------- legenda ---------- */
+.jm-legenda { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 4px 12px; font-size: 12px; color: var(--ink-soft, #5F6B7A); }
+.jm-leg { display: inline-flex; align-items: center; gap: 6px; }
+.jm-swatch { display: inline-block; width: 14px; height: 12px; border-radius: 3px; border: 1px solid rgba(0,0,0,.08); }
+.jm-swatch-dl { width: 3px; background: #C8362B; border: 0; border-radius: 1px; }
+.jm-swatch-ini { background: #FFF4D6; border-color: #E8C978; }
+
+/* ---------- warna tahap ---------- */
+.jm-t-pola        { background: #B9D7A8; }
+.jm-t-bahan       { background: #E9B97A; }
+.jm-t-cutting     { background: #A9BEEE; }
+.jm-t-interlining { background: #A8D5D2; }
+.jm-t-sewing      { background: #D4CBEA; }
+.jm-t-finishing   { background: #A99BD0; }
+.jm-t-kirim       { background: #5B4A9E; }
+.jm-t-lain        { background: #CFCFCF; }
+
+/* ---------- matriks ---------- */
+.jm-gulir {
+  overflow: auto; max-height: calc(100vh - 220px);
+  background: #fff; border: 1px solid var(--line, #E5E0D6); border-radius: 14px;
+}
+.jm-tabel { border-collapse: separate; border-spacing: 0; font-size: 12.5px; color: var(--ink, #17212F); }
+.jm-tabel th, .jm-tabel td { border-right: 1px solid #EDE9E1; border-bottom: 1px solid #EDE9E1; }
+
+/* kolom kiri menempel */
+.jm-sticky { position: sticky; left: 0; z-index: 2; background: #fff; }
+.jm-th-kiri { min-width: 250px; max-width: 320px; text-align: left; padding: 8px 12px; z-index: 4; white-space: nowrap; overflow: hidden; }
+.jm-th-kiri span { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 12px; color: var(--navy, #17212F); }
+
+/* header menempel atas */
+.jm-tabel thead th { position: sticky; background: #F6F3EC; z-index: 3; }
+.jm-h-minggu th { top: 0; height: 26px; }
+.jm-h-hari th { top: 26px; }
+.jm-th-minggu {
+  font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 11.5px; color: var(--navy, #17212F);
+  text-align: left; padding: 0 8px; border-left: 2px solid #D9D2C4;
+}
+.jm-th-hari { width: 26px; min-width: 26px; padding: 3px 0 4px; text-align: center; line-height: 1.15; }
+.jm-h-inisial { display: block; font-size: 10px; color: var(--ink-soft, #5F6B7A); }
+.jm-h-tgl { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; font-weight: 600; }
+
+/* sel */
+.jm-sel { width: 26px; min-width: 26px; height: 26px; padding: 0; }
+.jm-awal-minggu { border-left: 2px solid #D9D2C4; }
+.jm-hari-ini { background: #FFF4D6; }
+th.jm-hari-ini { background: #FBE7B3; }
+.jm-deadline { box-shadow: inset -3px 0 0 #C8362B; }
+.jm-bar { box-shadow: inset 0 0 0 1px rgba(255,255,255,.35); }
+.jm-bar.jm-hari-ini { background-image: linear-gradient(rgba(255,244,214,.25), rgba(255,244,214,.25)); }
+.jm-bar-awal { border-top-left-radius: 5px; border-bottom-left-radius: 5px; }
+.jm-bar-akhir { border-top-right-radius: 5px; border-bottom-right-radius: 5px; }
+
+/* baris item (judul) */
+.jm-r-item td { background: #FBFAF7; border-bottom-color: #E3DED3; }
+.jm-r-item .jm-sticky { background: #FBFAF7; }
+.jm-td-item { padding: 7px 12px 5px; vertical-align: bottom; }
+.jm-item-nama { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13px; color: var(--navy, #17212F); line-height: 1.2; }
+.jm-item-meta { font-size: 11px; color: var(--ink-soft, #5F6B7A); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
+.jm-dl { color: #8f2c22; font-weight: 600; }
+.jm-dl-lewat { text-decoration: line-through; opacity: .7; }
+
+/* baris tahap */
+.jm-td-tahap { padding: 0 12px 0 24px; height: 26px; white-space: nowrap; font-size: 12px; }
+.jm-td-tahap .jm-swatch { width: 9px; height: 9px; margin-right: 7px; vertical-align: -1px; border-radius: 2px; }
+.jm-tahap-sub { color: var(--ink-soft, #5F6B7A); font-weight: 600; }
+
+/* pemisah antar item */
+.jm-r-pisah td { height: 6px; padding: 0; background: #F1EEE6; border-bottom: 2px solid #D9D2C4; }
+
+/* ---------- layar sempit ---------- */
+@media (max-width: 760px) {
+  .jm-wrap { padding: 0 10px 60px; }
+  /* Di HP, matriksnya yang harus terlihat lebih dulu, bukan judul halaman. */
+  .jm-hero { padding: 26px 0 10px !important; }
+  .jm-hero .lead { display: none; }
+  .jm-hero h1 { font-size: 24px !important; }
+  .jm-th-kiri { min-width: 150px; max-width: 170px; }
+  .jm-item-meta { max-width: 150px; }
+  .jm-td-tahap { padding-left: 12px; }
+  .jm-gulir { max-height: calc(100vh - 170px); }
+  .jm-rentang { font-size: 13px; }
+}
+
+/* ---------- cetak ---------- */
+@media print {
+  @page { size: landscape; margin: 8mm; }
+  .db-header, .jm-alat, .bg-canvas, .hero { display: none !important; }
+  .jm-wrap { max-width: none; padding: 0; }
+  .jm-gulir { max-height: none; overflow: visible; border: 0; }
+  .jm-tabel { font-size: 10px; }
+  .jm-sel, .jm-th-hari { width: 18px; min-width: 18px; height: 18px; }
+  .jm-td-tahap { height: 18px; }
+  .jm-tabel thead th, .jm-sticky { position: static; }
+  .jm-bar, .jm-t-pola, .jm-t-bahan, .jm-t-cutting, .jm-t-interlining, .jm-t-sewing, .jm-t-finishing, .jm-t-kirim,
+  .jm-hari-ini, .jm-r-item td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
