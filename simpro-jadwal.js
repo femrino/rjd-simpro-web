@@ -173,7 +173,10 @@ function jmTerapkanBagian_(d) {
   const f = document.getElementById("jm-form-wrap");
   if (f) f.classList.toggle("hidden", !JM_BOLEH_TULIS);
   document.body.classList.toggle("jm-bisa-tulis", JM_BOLEH_TULIS);
-  if (JM_DATA) jmIsiFormPilihan_();
+  // Peran dan data datang lewat dua permintaan yang urutannya tidak pasti;
+  // kalau data lebih dulu, matriks (dan pesan kosongnya) sudah digambar
+  // dengan asumsi belum boleh menulis -- gambar ulang dengan peran yang benar.
+  if (JM_DATA) { jmIsiFormPilihan_(); jmRender(); }
 }
 
 // ---------- keadaan tampilan ----------
@@ -375,7 +378,9 @@ function jmRenderMatriks_() {
     wadah.innerHTML = '<div class="jm-kartu"><p class="jm-info">' +
       ((JM_DATA.bar || []).length
         ? 'Tidak ada item yang cocok dengan filter ini.'
-        : 'Belum ada baris jadwal. Isi "SD Jadwal Produksi" di spreadsheet, lalu muat ulang.') +
+        : (JM_BOLEH_TULIS
+            ? 'Belum ada jadwal. Buka <b>Tambah jadwal</b> di atas untuk mulai mengisi.'
+            : 'Belum ada baris jadwal. Isi lewat form (bagian PPIC/produksi) atau di sheet "SD Jadwal Produksi", lalu muat ulang.')) +
       '</p></div>';
     jmRenderInfo_(0, 0);
     return;
