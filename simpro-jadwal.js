@@ -1,7 +1,7 @@
 /**
  * ============================================================
  * SIMPRO -- simpro-jadwal  (v214, form v215, pesan galat jujur v217, periksa-sendiri v217.1,
- *                           pesan tenang v219)
+ *                           pesan tenang v219, header kiri sticky tanpa rowspan v221)
  * ============================================================
  * MATRIKS JADWAL PRODUKSI (jadwal.html).
  *
@@ -402,7 +402,13 @@ function jmRenderMatriks_() {
   }
 
   // ---- header: baris 1 = minggu (bulan + rentang), baris 2 = hari + tanggal
-  let thead = '<tr class="jm-h-minggu"><th class="jm-sticky jm-th-kiri" rowspan="2">' +
+  // v221: TANPA rowspan. Sel kiri header dulu memakai rowspan="2" dan di
+  // Chrome (terlihat di tablet, 31 Agu 2026) sel ber-rowspan yang sticky ke
+  // atas kehilangan sticky ke kirinya: judul "Artikel & Tahap" ikut tergulir
+  // sementara kolom kiri badan tabel tetap menempel, sehingga header tanggal
+  // tampak menabrak kolom kiri. Sekarang tiap baris header punya sel kirinya
+  // sendiri (baris kedua kosong), keduanya sticky kiri+atas.
+  let thead = '<tr class="jm-h-minggu"><th class="jm-sticky jm-th-kiri">' +
     '<span>Artikel &amp; Tahap</span></th>';
   for (let m = 0; m < JM_LIHAT.minggu; m++) {
     const a = kolom[m * 6].tgl, z = kolom[m * 6 + 5].tgl;
@@ -411,7 +417,7 @@ function jmRenderMatriks_() {
       : JM_BULAN[a.getMonth()] + "\u2013" + JM_BULAN[z.getMonth()] + " " + z.getFullYear();
     thead += '<th class="jm-th-minggu" colspan="6">' + label + '</th>';
   }
-  thead += '</tr><tr class="jm-h-hari">';
+  thead += '</tr><tr class="jm-h-hari"><th class="jm-sticky jm-th-kiri jm-th-kiri-2"></th>';
   kolom.forEach(function (k) {
     const kelas = ["jm-th-hari"];
     if (k.hari === 0) kelas.push("jm-awal-minggu");

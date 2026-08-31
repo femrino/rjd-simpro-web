@@ -1,5 +1,5 @@
 /* ============================================================
-   SIMPRO -- simpro-jadwal.css (v214, form v215)
+   SIMPRO -- simpro-jadwal.css (v214, form v215, header kiri sticky v221)
    Matriks Jadwal Produksi (jadwal.html).
 
    Yang penting di halaman ini cuma satu: matriksnya. Semua yang lain
@@ -138,6 +138,11 @@ body.jm-bisa-tulis td.jm-bar[data-id]:not([data-id=""]):hover { box-shadow: inse
 .jm-tabel thead th { position: sticky; background: #F6F3EC; z-index: 3; }
 .jm-h-minggu th { top: 0; height: 26px; }
 .jm-h-hari th { top: 26px; }
+/* v221: sel kiri header menempel KIRI DAN ATAS, dan selalu di atas sel
+   tanggal yang tergulir di bawahnya. Spesifisitas sengaja dinaikkan
+   (.jm-tabel thead th.jm-th-kiri) supaya mengalahkan aturan thead th di atas. */
+.jm-tabel thead th.jm-th-kiri { left: 0; z-index: 5; }
+.jm-tabel thead th.jm-th-kiri-2 { padding: 0; }
 .jm-th-minggu {
   font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 11.5px; color: var(--navy, #17212F);
   text-align: left; padding: 0 8px; border-left: 2px solid #D9D2C4;
