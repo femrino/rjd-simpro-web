@@ -151,6 +151,24 @@ function upMuat() {
       '&#8212; untuk periode sebulan biasanya belasan detik.</p>' +
     '</div>';
 
+  /* v228 -- SNAPSHOT LOKAL (Tipe B).
+     Halaman ini yang paling panjang menunggunya: perhitungan membaca seluruh
+     arsip harian, belasan detik untuk sebulan. Kunci snapshot memuat PERIODE,
+     karena hasil periode lain sama sekali bukan jawaban untuk periode ini --
+     kesalahan yang di halaman upah berarti salah bayar orang.
+     Bendera segar tidak dipakai di sini: setiap penekanan Hitung adalah
+     permintaan eksplisit atas periode tertentu, jadi snapshot boleh tampil
+     lagi saat orang berpindah periode -- selama labelnya ikut tampil. */
+  const kunciSnap = "upah_" + dari + "_" + sampai;
+  if (typeof rjdSnapshotBaca_ === "function") {
+    const snap = rjdSnapshotBaca_(kunciSnap, 7 * 24 * 60);
+    if (snap && snap.data) {
+      window.UP_DATA = snap.data;
+      upRender_();
+      if (typeof rjdSnapshotBar_ === "function") rjdSnapshotBar_("up-hasil", snap.waktu);
+    }
+  }
+
   fetch(UP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: UP_ID_TOKEN, action: "getUpahBorongan",
@@ -165,7 +183,9 @@ function upMuat() {
       return;
     }
     window.UP_DATA = d;
+    if (typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_(kunciSnap, d);
     upRender_();
+    if (typeof rjdSnapshotBarHapus_ === "function") rjdSnapshotBarHapus_("up-hasil");
   })
   .catch(function () {
     document.getElementById("up-hasil").innerHTML =

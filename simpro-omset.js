@@ -55,7 +55,21 @@ function loFetchData() {
   }
 }
 
+/* v228 -- SNAPSHOT LOKAL (Tipe B). Laporan tahunan, isinya berubah lambat;
+   7 hari cukup aman dan membuat halaman terbuka seketika. */
+var LO_SUDAH_SEGAR = false;
+
 function loFetchDataIsi_() {
+  if (!LO_SUDAH_SEGAR && typeof rjdSnapshotBaca_ === "function") {
+    const snap = rjdSnapshotBaca_("omset_laporan", 7 * 24 * 60);
+    if (snap && snap.data) {
+      LO_DATA_MENTAH = snap.data;
+      loSetupTahunSelector();
+      loRenderLaporan();
+      loShow("lo-isi");
+      if (typeof rjdSnapshotBar_ === "function") rjdSnapshotBar_("lo-isi", snap.waktu);
+    }
+  }
   fetch(LO_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: LO_ID_TOKEN, action: "getLaporanOmsetPajak" })
@@ -67,8 +81,11 @@ function loFetchDataIsi_() {
       return;
     }
     LO_DATA_MENTAH = data.data;
+    LO_SUDAH_SEGAR = true;
+    if (typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("omset_laporan", LO_DATA_MENTAH);
     loSetupTahunSelector();
     loRenderLaporan();
+    if (typeof rjdSnapshotBarHapus_ === "function") rjdSnapshotBarHapus_("lo-isi");
     document.getElementById("lo-print-btn").classList.remove("hidden");
     document.getElementById("lo-export-btn").classList.remove("hidden");
     loShow("lo-isi");

@@ -1207,3 +1207,23 @@ body[data-bagian~="lintas"] .rjd-bagian-gudang.rjd-bagian-inline:not(.hidden) { 
 .rjd-bagian-lain { display: block; }
 body[data-bagian~="gudang"] .rjd-bagian-lain,
 body[data-bagian~="lintas"] .rjd-bagian-lain { display: none; }
+
+
+/* ============================================================
+   BILAH SNAPSHOT (v228)
+   ============================================================
+   Muncul di atas daftar yang sedang menampilkan data tersimpan, dan hilang
+   sendiri begitu jawaban server datang. Sengaja mencolok tapi tidak seperti
+   galat: warnanya netral-hangat, bukan merah -- ini bukan kesalahan, cuma
+   keterangan bahwa angkanya belum tentu yang terbaru. */
+.rjd-snap-bar{
+  display:block;
+  margin:0 0 10px;
+  padding:6px 10px;
+  border-radius:6px;
+  background:#f4efe4;
+  border:1px solid #e2d8c4;
+  color:#6b5b3e;
+  font-size:12px;
+  line-height:1.45;
+}

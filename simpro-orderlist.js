@@ -131,8 +131,43 @@ window.onload = function(){
   }
 };
 
+/* v228 -- SNAPSHOT LOKAL (Tipe B)
+   Data terakhir yang berhasil dimuat digambar lebih dulu supaya halaman
+   terpakai dalam < 1 detik, lalu diganti diam-diam oleh jawaban server.
+   BENDERA di bawah adalah inti keamanannya: snapshot HANYA boleh tampil
+   sebelum halaman ini pernah sekali pun menerima data segar. Sesudah itu --
+   tombol Refresh, atau muat ulang sesudah menyimpan sesuatu -- menampilkan
+   snapshot berarti memperlihatkan keadaan SEBELUM perubahan yang baru saja
+   dibuat orang. Itu bukan lambat, itu salah. */
+var OL_SUDAH_SEGAR = false;
+
+function olIsiStatusPO_(){
+  const statusUnik = [];
+  (window.OL_DAFTAR_PO || []).forEach(function(p){
+    if(p.status && statusUnik.indexOf(p.status) === -1) statusUnik.push(p.status);
+  });
+  const sel = document.getElementById("db-po-status");
+  if(!sel) return;
+  const lama = sel.value;
+  sel.innerHTML = '<option value="">Semua status</option>' +
+    statusUnik.sort().map(function(st){
+      return '<option value="' + rjdEscapeHtml_(st) + '">' + rjdEscapeHtml_(st) + '</option>';
+    }).join("");
+  if(lama && statusUnik.indexOf(lama) !== -1) sel.value = lama;
+}
+
 function dbMuatDaftarPO(){
-  if(window.OL_DAFTAR_PO) { dbRenderDaftarPO(); return; }
+  if(window.OL_DAFTAR_PO && OL_SUDAH_SEGAR) { dbRenderDaftarPO(); return; }
+  if(!OL_SUDAH_SEGAR && typeof rjdSnapshotBaca_ === "function"){
+    const snap = rjdSnapshotBaca_("orderlist_po", 3 * 24 * 60);
+    if(snap && Array.isArray(snap.data)){
+      window.OL_DAFTAR_PO = snap.data;
+      olShow("ol-isi");
+      olIsiStatusPO_();
+      dbRenderDaftarPO();
+      if(typeof rjdSnapshotBar_ === "function") rjdSnapshotBar_("db-po-isi", snap.waktu);
+    }
+  }
   fetch(OL_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: OL_ID_TOKEN, action: "getDaftarPO" })
@@ -146,6 +181,8 @@ function dbMuatDaftarPO(){
       return;
     }
     window.OL_DAFTAR_PO = d.daftar || [];
+    OL_SUDAH_SEGAR = true;
+    if(typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("orderlist_po", window.OL_DAFTAR_PO);
     // WAJIB: olShow("ol-loading") menyembunyikan #ol-isi, dan #db-po-isi ada
     // DI DALAMNYA. Tanpa baris ini datanya termuat ke elemen tersembunyi --
     // halaman terlihat menggantung di "Memuat..." padahal sudah selesai.
@@ -153,16 +190,9 @@ function dbMuatDaftarPO(){
     // Pilihan status diisi dari data NYATA, bukan daftar tetap -- supaya
     // status apa pun yang dipakai di AppSheet ikut muncul tanpa perlu
     // menyunting kode setiap kali ada status baru.
-    const statusUnik = [];
-    window.OL_DAFTAR_PO.forEach(function(p){
-      if(p.status && statusUnik.indexOf(p.status) === -1) statusUnik.push(p.status);
-    });
-    const sel = document.getElementById("db-po-status");
-    if(sel) sel.innerHTML = '<option value="">Semua status</option>' +
-      statusUnik.sort().map(function(st){
-        return '<option value="' + rjdEscapeHtml_(st) + '">' + rjdEscapeHtml_(st) + '</option>';
-      }).join("");
+    olIsiStatusPO_();
     dbRenderDaftarPO();
+    if(typeof rjdSnapshotBarHapus_ === "function") rjdSnapshotBarHapus_("db-po-isi");
   })
   .catch(function(){
     olShow("ol-isi");

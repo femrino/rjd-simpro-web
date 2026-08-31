@@ -62,7 +62,7 @@ function ksLogout() {
 function ksMulai() { if (typeof rjdJagaHalaman === "function") rjdJagaHalaman(KS_ID_TOKEN, KS_API_URL, ksMulaiIsi_); else ksMulaiIsi_(); }
 function ksMulaiIsi_() {
   const b = document.getElementById("ks-nav-logout"); if (b) b.classList.remove("hidden");
-  ksShow("ks-loading"); ksMuat();
+  ksShow("ks-loading"); ksMuatPertama_();
 }
 
 // ---------- API ----------
@@ -75,9 +75,35 @@ function ksKirim_(action, muatan) {
       return d;
     });
 }
+/* v228 -- SNAPSHOT LOKAL (Tipe B), khusus buku kas.
+   Uang menuntut kehati-hatian lebih daripada daftar produksi: snapshot di sini
+   HANYA dipakai oleh pemuatan pertama halaman (ksMulaiIsi_), TIDAK PERNAH oleh
+   ksMuat() yang dipanggil ulang sesudah menyimpan transaksi, membatalkan, atau
+   menutup bulan. Menampilkan saldo lama sesaat sesudah orang mencatat uang
+   keluar adalah cara tercepat membuat orang mencatatnya dua kali.
+   Kuncinya memuat BULAN supaya bulan berbeda tidak saling menimpa. */
+var KS_SUDAH_SEGAR = false;
+
+function ksMuatPertama_() {
+  if (!KS_SUDAH_SEGAR && typeof rjdSnapshotBaca_ === "function") {
+    var snap = rjdSnapshotBaca_("kas_" + (KS_BULAN || "kini"), 3 * 24 * 60);
+    if (snap && snap.data && snap.data.akun) {
+      KS_DATA = snap.data; KS_BULAN = snap.data.bulan;
+      ksShow("ks-isi"); ksRender();
+      if (typeof rjdSnapshotBar_ === "function") rjdSnapshotBar_("ks-buku", snap.waktu);
+    }
+  }
+  return ksMuat(KS_BULAN);
+}
+
 function ksMuat(bulan) {
   return ksKirim_("getKas", { bulan: bulan || KS_BULAN || undefined })
-    .then(function (d) { KS_DATA = d; KS_BULAN = d.bulan; ksShow("ks-isi"); ksRender(); })
+    .then(function (d) {
+      KS_DATA = d; KS_BULAN = d.bulan; ksShow("ks-isi"); ksRender();
+      KS_SUDAH_SEGAR = true;
+      if (typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("kas_" + d.bulan, d);
+      if (typeof rjdSnapshotBarHapus_ === "function") rjdSnapshotBarHapus_("ks-buku");
+    })
     .catch(function (e) {
       ksShow("ks-isi");
       document.getElementById("ks-buku").innerHTML = '<div class="ks-kartu"><p class="ks-galat">' + ksEsc_(e.message || "Gagal memuat.") + '</p></div>';

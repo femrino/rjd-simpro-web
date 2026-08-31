@@ -159,8 +159,27 @@ function krBukaDariTautan_() {
   } catch (e) { /* tidak fatal */ }
 }
 
+/* v228 -- SNAPSHOT LOKAL (Tipe B)
+   Data terakhir yang berhasil dimuat digambar lebih dulu supaya halaman
+   terpakai dalam < 1 detik, lalu diganti diam-diam oleh jawaban server.
+   BENDERA di bawah adalah inti keamanannya: snapshot HANYA boleh tampil
+   sebelum halaman ini pernah sekali pun menerima data segar. Sesudah itu --
+   tombol Refresh, atau muat ulang sesudah menyimpan sesuatu -- menampilkan
+   snapshot berarti memperlihatkan keadaan SEBELUM perubahan yang baru saja
+   dibuat orang. Itu bukan lambat, itu salah. */
+var KR_SUDAH_SEGAR = false;
+
 function krMuat(){
-  if(window.KR_DAFTAR){ krRender(); return; }
+  if(window.KR_DAFTAR && KR_SUDAH_SEGAR){ krRender(); return; }
+  if(!KR_SUDAH_SEGAR && typeof rjdSnapshotBaca_ === "function"){
+    const snap = rjdSnapshotBaca_("pengiriman_daftar", 3 * 24 * 60);
+    if(snap && Array.isArray(snap.data)){
+      window.KR_DAFTAR = snap.data;
+      krShow("kr-isi");
+      krRender();
+      if(typeof rjdSnapshotBar_ === "function") rjdSnapshotBar_("kr-tabel", snap.waktu);
+    }
+  }
   fetch(KR_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: KR_ID_TOKEN, action: "getDaftarPengiriman" })
@@ -174,7 +193,10 @@ function krMuat(){
       return;
     }
     window.KR_DAFTAR = d.daftar || [];
+    KR_SUDAH_SEGAR = true;
+    if(typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("pengiriman_daftar", window.KR_DAFTAR);
     krRender();
+    if(typeof rjdSnapshotBarHapus_ === "function") rjdSnapshotBarHapus_("kr-tabel");
   })
   .catch(function(){
     krShow("kr-isi");

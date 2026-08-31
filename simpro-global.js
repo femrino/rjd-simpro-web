@@ -3290,6 +3290,14 @@ function rjdTerapkanPeranKeMenu() {
   });
 }
 
+// v228: pembersih snapshot kedaluwarsa. Dijalankan sekali per pemuatan halaman,
+// sesudah muatan utama supaya tidak menunda gambar pertama.
+document.addEventListener("DOMContentLoaded", function () {
+  setTimeout(function () {
+    try { rjdSnapshotBersihkan_(14); } catch (e) { /* jangan sampai menjatuhkan halaman */ }
+  }, 3000);
+});
+
 document.addEventListener("DOMContentLoaded", function () {
   // Dijalankan SEGERA. Versi pertama menundanya 1200ms dengan alasan menunggu
   // header tersisip, tapi itu justru bikin menu penuh sempat terlihat sekejap
@@ -3740,8 +3748,68 @@ function rjdSnapshotKunci_(nama) {
   return "rjd_snap:" + nama + ":" + email;
 }
 function rjdSnapshotSimpan_(nama, data) {
-  try { localStorage.setItem(rjdSnapshotKunci_(nama), JSON.stringify({ t: Date.now(), d: data })); }
-  catch (e) { /* kuota penuh / private mode -> tanpa snapshot, halaman tetap jalan */ }
+  var isi = null;
+  try { isi = JSON.stringify({ t: Date.now(), d: data }); } catch (e) { return; }
+  try { localStorage.setItem(rjdSnapshotKunci_(nama), isi); return; }
+  catch (e) { /* kemungkinan besar kuota penuh -- ditangani di bawah */ }
+  // v228: SEBELUM menyerah, buang snapshot kedaluwarsa lalu coba SEKALI lagi.
+  // Sejak v228 ada 8 halaman yang menyimpan snapshot, semuanya berbagi kuota
+  // localStorage +-5 MB milik satu domain. Tanpa ini, halaman yang kebetulan
+  // memuat paling akhir adalah yang selamanya kehilangan snapshot -- dan
+  // gejalanya (satu halaman terasa lambat, yang lain cepat) nyaris mustahil
+  // ditebak sebabnya.
+  try {
+    rjdSnapshotBersihkan_(0);
+    localStorage.setItem(rjdSnapshotKunci_(nama), isi);
+  } catch (e2) { /* memang tidak muat / private mode -> halaman tetap jalan tanpa snapshot */ }
+}
+
+/**
+ * v228: buang snapshot yang lebih tua dari `maksHari` (default 14).
+ * maksHari 0 = buang SEMUA snapshot milik siapa pun -- dipakai sebagai jalan
+ * terakhir saat kuota penuh. Aman: snapshot cuma salinan, bukan sumber data.
+ */
+function rjdSnapshotBersihkan_(maksHari) {
+  var batas = (maksHari === 0) ? 0 : (Date.now() - (maksHari || 14) * 24 * 60 * 60 * 1000);
+  var buang = [];
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (!k || k.indexOf("rjd_snap:") !== 0) continue;
+      if (batas === 0) { buang.push(k); continue; }
+      var t = 0;
+      try { t = (JSON.parse(localStorage.getItem(k)) || {}).t || 0; } catch (e) { t = 0; }
+      if (!t || t < batas) buang.push(k);   // tanpa stempel waktu = bentuk lama, buang
+    }
+    buang.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) { /* abaikan */ } });
+  } catch (e) { /* localStorage tidak tersedia -> tidak ada yang perlu dibersihkan */ }
+  return buang.length;
+}
+
+/**
+ * v228: bilah kecil "data tersimpan pukul HH.MM" di atas sebuah wadah.
+ * SATU implementasi untuk semua halaman -- kalau tiap halaman menulis
+ * penandanya sendiri, cepat atau lambat ada halaman yang lupa membuangnya
+ * saat data segar tiba, dan orang membaca angka lama tanpa tahu itu lama.
+ *
+ * `el` boleh elemen atau id. Aman dipanggil untuk wadah yang tidak ada.
+ */
+function rjdSnapshotBar_(el, waktu) {
+  var wadah = (typeof el === "string") ? document.getElementById(el) : el;
+  if (!wadah) return;
+  var bar = wadah.querySelector(":scope > .rjd-snap-bar");
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.className = "rjd-snap-bar";
+    wadah.insertBefore(bar, wadah.firstChild);
+  }
+  bar.textContent = "Data tersimpan pukul " + rjdJamPendek_(waktu) + " \u00b7 memperbarui dari server\u2026";
+}
+function rjdSnapshotBarHapus_(el) {
+  var wadah = (typeof el === "string") ? document.getElementById(el) : el;
+  if (!wadah) return;
+  var bar = wadah.querySelector(":scope > .rjd-snap-bar");
+  if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
 }
 /** @return {{data:*, umurMenit:number, waktu:Date}|null} */
 function rjdSnapshotBaca_(nama, maksUmurMenit) {

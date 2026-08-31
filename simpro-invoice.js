@@ -77,8 +77,28 @@ function ivMulai(){
   ivMuat();
 }
 
+/* v228 -- SNAPSHOT LOKAL (Tipe B)
+   Data terakhir yang berhasil dimuat digambar lebih dulu supaya halaman
+   terpakai dalam < 1 detik, lalu diganti diam-diam oleh jawaban server.
+   BENDERA di bawah adalah inti keamanannya: snapshot HANYA boleh tampil
+   sebelum halaman ini pernah sekali pun menerima data segar. Sesudah itu --
+   tombol Refresh, atau muat ulang sesudah menyimpan sesuatu -- menampilkan
+   snapshot berarti memperlihatkan keadaan SEBELUM perubahan yang baru saja
+   dibuat orang. Itu bukan lambat, itu salah. */
+var IV_SUDAH_SEGAR = false;
+
 function ivMuat(){
-  if(window.IV_DAFTAR){ ivRender(); return; }
+  if(window.IV_DAFTAR && IV_SUDAH_SEGAR){ ivRender(); return; }
+  if(!IV_SUDAH_SEGAR && typeof rjdSnapshotBaca_ === "function"){
+    const snap = rjdSnapshotBaca_("invoice_daftar", 3 * 24 * 60);
+    if(snap && snap.data && Array.isArray(snap.data.daftar)){
+      window.IV_DAFTAR = snap.data.daftar;
+      window.IV_RINGKASAN = snap.data.ringkasan || {};
+      ivShow("iv-isi");
+      ivRender();
+      if(typeof rjdSnapshotBar_ === "function") rjdSnapshotBar_("iv-tabel", snap.waktu);
+    }
+  }
   fetch(IV_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: IV_ID_TOKEN, action: "getDaftarInvoice" })
@@ -93,7 +113,11 @@ function ivMuat(){
     }
     window.IV_DAFTAR = d.daftar || [];
     window.IV_RINGKASAN = d.ringkasan || {};
+    IV_SUDAH_SEGAR = true;
+    if(typeof rjdSnapshotSimpan_ === "function")
+      rjdSnapshotSimpan_("invoice_daftar", { daftar: window.IV_DAFTAR, ringkasan: window.IV_RINGKASAN });
     ivRender();
+    if(typeof rjdSnapshotBarHapus_ === "function") rjdSnapshotBarHapus_("iv-tabel");
   })
   .catch(function(){
     ivShow("iv-isi");
