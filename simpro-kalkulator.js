@@ -12,6 +12,7 @@
  *             cuma mengirim masukan dan menggambar jawaban, supaya tidak
  *             pernah ada dua versi rumus yang bisa saling berbeda.
  *
+ * v222: sesi tersimpan (db_session) + tombol Keluar + hamburger.
  * JANGAN diunggah ke Apps Script. Ini kode BROWSER, bukan server.
  */
 
@@ -40,8 +41,41 @@ function khTampilkanError(pesan){
   khShow("kh-error");
 }
 
+/* ============================================================
+ * SESI & KELUAR (v222)
+ * ============================================================
+ * Dulu halaman ini satu-satunya halaman staff tanpa sesi tersimpan dan tanpa
+ * tombol Keluar: tiap buka harus login lagi, dan hamburger tidak pernah
+ * muncul karena digate ke tombol Keluar yang tidak ada. Sekarang memakai
+ * "db_session" yang sama dengan dashboard/produksi/jadwal, jadi login di satu
+ * halaman berlaku di semua. */
+function khBacaSesi_(){
+  try {
+    var raw = localStorage.getItem("db_session");
+    if (!raw) return null;
+    var d = JSON.parse(raw);
+    if (!d.exp || d.exp * 1000 <= Date.now()) return null;
+    return d.token;
+  } catch (e) { return null; }
+}
+function khSimpanSesi_(token){
+  try {
+    var p = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    localStorage.setItem("db_session", JSON.stringify({ token: token, exp: p.exp }));
+  } catch (e) { /* private mode */ }
+}
+function khLogout(){
+  KH_ID_TOKEN = null;
+  try { localStorage.removeItem("db_session"); } catch (e) { /* private mode */ }
+  if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
+  var b = document.getElementById("kh-nav-logout");
+  if (b) b.classList.add("hidden");
+  khShow("kh-login-box");
+}
+
 function khHandleLogin(response){
   KH_ID_TOKEN = response.credential;
+  khSimpanSesi_(response.credential);
   khShow("kh-loading");
   // Satpam halaman -- pola yang sama dengan laporan omset. Dibungkus typeof:
   // kalau simpro-global.js gagal dimuat, halaman tetap jalan; backend
@@ -55,6 +89,8 @@ function khHandleLogin(response){
 }
 
 function khTampilkanForm_(){
+  var b = document.getElementById("kh-nav-logout");
+  if (b) b.classList.remove("hidden");   // v222: sekaligus membuka hamburger (gate CSS)
   khShow("kh-isi");
   khBangunForm_();
 }
@@ -279,6 +315,15 @@ function khBangunForm_(){
 }
 
 window.onload = function(){
+  // v222: sesi tersimpan dari halaman lain -> langsung masuk tanpa tombol Google.
+  var sesi = khBacaSesi_();
+  if (sesi) {
+    KH_ID_TOKEN = sesi;
+    khShow("kh-loading");
+    if (typeof rjdJagaHalaman === "function") rjdJagaHalaman(KH_ID_TOKEN, KH_API_URL, khTampilkanForm_);
+    else khTampilkanForm_();
+    return;
+  }
   if (window.google && google.accounts && google.accounts.id) {
     google.accounts.id.initialize({
       client_id: KH_OAUTH_CLIENT_ID,
