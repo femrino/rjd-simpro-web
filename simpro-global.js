@@ -3143,6 +3143,7 @@ var RJD_AREA_HALAMAN = {
   // tidak ada yang mengklik sesuatu yang pasti menolaknya.
   "/p/upah.html":          "penggajian",
   "/p/invoice.html":       "keuangan",
+  "/p/kas.html":           "keuangan",   // v225
   "/p/kalkulator-harga.html": "keuangan",
   "/p/laporan-omset.html": "pajak",
   // Dashboard Operasional memang tertutup penuh untuk peran Produksi -- itu
@@ -3369,6 +3370,8 @@ var RJD_JAGA_HALAMAN = {
   // BARANG (tahap & tanggal, nol rupiah), jadi areanya "produksi" -- semua
   // staf internal boleh melihat, seperti halaman produksi.
   "/p/jadwal.html":       "produksi",
+  // v225: buku kas & bank. Uang = area keuangan (finance, admin, owner).
+  "/p/kas.html":          "keuangan",
   // Daftar PO boleh dilihat peran produksi; yang ditolak cuma tab Edit PO di
   // dalamnya (area keuangan), dan itu sudah ditegakkan backend per-action.
   "/p/order-list.html":   "produksi",
@@ -3766,6 +3769,7 @@ function rjdJagaHalaman(idToken, apiUrl, saatLolos) {
     if (typeof JM_API_URL !== "undefined") u.push(String(JM_API_URL));   // jadwal produksi
     if (typeof SOP_API_URL !== "undefined") u.push(String(SOP_API_URL)); // sop
     if (typeof CK_API_URL !== "undefined") u.push(String(CK_API_URL));   // cetak
+    if (typeof KS_API_URL !== "undefined") u.push(String(KS_API_URL));   // buku kas (v225)
     return u;
   }
 
