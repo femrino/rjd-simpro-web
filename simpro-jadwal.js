@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * SIMPRO -- simpro-jadwal  (v214, form v215)
+ * SIMPRO -- simpro-jadwal  (v214, form v215, pesan galat jujur v217)
  * ============================================================
  * MATRIKS JADWAL PRODUKSI (jadwal.html).
  *
@@ -602,17 +602,11 @@ function jmFormSimpan() {
 
   jmFormSibuk_(true);
   jmFormPesan_("Menyimpan...");
-  fetch(JM_API_URL, {
-    method: "POST",
-    body: JSON.stringify({ idToken: JM_ID_TOKEN, action: "simpanJadwalManual", data: data })
-  })
-  .then(function (r) { return r.json(); })
-  .then(function (res) {
-    jmFormSibuk_(false);
-    if (!res || !res.success) { jmFormPesan_((res && res.error) || "Gagal menyimpan.", true); return; }
+  jmKirim_("simpanJadwalManual", { data: data }, function (res) {
+    const bar = res.bar;
+    if (!bar || !bar.id) throw new Error("jawaban server tanpa data baris");
     // Perbarui data lokal tanpa memuat ulang seluruh halaman: cepat, dan
     // posisi jendela/filter tidak berubah.
-    const bar = res.bar;
     const idx = (JM_DATA.bar || []).map(function (b) { return b.id; }).indexOf(bar.id);
     if (idx === -1) JM_DATA.bar.push(bar); else JM_DATA.bar[idx] = bar;
     jmSinkronItems_();
@@ -621,15 +615,18 @@ function jmFormSimpan() {
     jmFormModeTampil_();
     jmIsiFilter_();
     jmRender();
-    jmFormPesan_((wasEdit ? "Perubahan tersimpan: " : "Tersimpan: ") + bar.tahap + (bar.namaLine ? " " + bar.namaLine : "") +
+    jmFormPesan_(
+      (res.kembar
+        ? "Sudah ada baris yang sama persis, jadi tidak ditambah lagi: "
+        : (wasEdit ? "Perubahan tersimpan: " : "Tersimpan: ")) +
+      bar.tahap + (bar.namaLine ? " " + bar.namaLine : "") +
       " " + jmTanggalPendek_(bar.mulai) + "\u2013" + jmTanggalPendek_(bar.selesai) + ".");
     // siap untuk tahap berikutnya dari item yang sama
     document.getElementById("jm-in-qty").value = "";
     document.getElementById("jm-in-ket").value = "";
     jmFormItemBerubah();
     jmGulirKeBar_(bar);
-  })
-  .catch(function () { jmFormSibuk_(false); jmFormPesan_("Gagal menghubungi server.", true); });
+  });
 }
 
 function jmFormHapus() {
@@ -640,14 +637,7 @@ function jmFormHapus() {
   jmFormSibuk_(true);
   jmFormPesan_("Menghapus...");
   const id = JM_EDIT_ID;
-  fetch(JM_API_URL, {
-    method: "POST",
-    body: JSON.stringify({ idToken: JM_ID_TOKEN, action: "hapusJadwalManual", id: id })
-  })
-  .then(function (r) { return r.json(); })
-  .then(function (res) {
-    jmFormSibuk_(false);
-    if (!res || !res.success) { jmFormPesan_((res && res.error) || "Gagal menghapus.", true); return; }
+  jmKirim_("hapusJadwalManual", { id: id }, function () {
     JM_DATA.bar = (JM_DATA.bar || []).filter(function (x) { return x.id !== id; });
     jmSinkronItems_();
     JM_EDIT_ID = "";
@@ -656,8 +646,63 @@ function jmFormHapus() {
     jmRender();
     jmFormPesan_("Jadwal dihapus.");
     jmFormItemBerubah();
-  })
-  .catch(function () { jmFormSibuk_(false); jmFormPesan_("Gagal menghubungi server.", true); });
+  });
+}
+
+/**
+ * v217. Satu pintu untuk semua permintaan yang MENGUBAH data, supaya pesan
+ * kegagalannya jujur.
+ *
+ * Versi sebelumnya memakai satu `.catch()` di ujung rantai. Masalahnya,
+ * `.catch()` juga menangkap error yang terjadi SESUDAH server berhasil
+ * menyimpan (saat memperbarui tampilan) -- dan pesannya berbunyi "Gagal
+ * menghubungi server". Orang lalu menekan Simpan lagi, dan barisnya
+ * bertambah. Persis itu yang terjadi 1 Sep 2026: tiga klik, tiga baris.
+ *
+ * Sekarang dibedakan tiga keadaan:
+ *   1. Server menjawab "tidak boleh/tidak sah"  -> tampilkan alasannya
+ *   2. Server berhasil, tampilan gagal diperbarui -> katakan SUDAH tersimpan,
+ *      lalu muat ulang datanya
+ *   3. Jawaban tidak sampai / tidak terbaca      -> katakan hasilnya TIDAK
+ *      DIKETAHUI dan minta Muat ulang, JANGAN menyuruh mencoba lagi
+ */
+function jmKirim_(action, muatan, saatBerhasil) {
+  const badan = Object.assign({ idToken: JM_ID_TOKEN, action: action }, muatan || {});
+  fetch(JM_API_URL, { method: "POST", body: JSON.stringify(badan) })
+    .then(function (r) { return r.text(); })
+    .then(function (teks) {
+      let res;
+      try {
+        res = JSON.parse(teks);
+      } catch (eParse) {
+        // Bukan JSON -> hampir selalu halaman HTML dari Google (sesi habis,
+        // izin, atau deployment lama). Potongan awalnya ikut ditampilkan
+        // supaya bisa dikenali tanpa membuka alat pengembang.
+        throw new Error("jawaban server tidak terbaca: " + String(teks).replace(/<[^>]*>/g, " ").trim().slice(0, 90));
+      }
+      jmFormSibuk_(false);
+      if (!res || !res.success) {
+        jmFormPesan_((res && res.error) || "Permintaan ditolak server.", true);
+        return;
+      }
+      // ---- server SUDAH mengerjakan. Kegagalan di bawah ini bukan soal server.
+      try {
+        saatBerhasil(res);
+      } catch (eUi) {
+        jmFormPesan_("Tersimpan di server, tapi tampilan gagal diperbarui. Memuat ulang...", false);
+        JM_EDIT_ID = "";
+        jmFormModeTampil_();
+        JM_DATA = null;
+        jmShow("jm-loading");
+        jmMuat();
+      }
+    })
+    .catch(function (e) {
+      jmFormSibuk_(false);
+      jmFormPesan_("Hasilnya TIDAK DIKETAHUI (" +
+        ((e && e.message) ? e.message : "sambungan terputus") +
+        "). Jangan menekan Simpan berulang -- klik Muat ulang dulu untuk memeriksa.", true);
+    });
 }
 
 /** items (yang punya bar) diturunkan dari bar + itemAktif -- sama dengan cara backend menyusunnya. */
