@@ -2,7 +2,8 @@
  * ============================================================
  * SIMPRO -- simpro-jadwal  (v214, form v215, pesan galat jujur v217, periksa-sendiri v217.1,
  *                           pesan tenang v219, header kiri sticky tanpa rowspan v221,
- *                           Sub Tahap (Sampel/Pengiriman) v224)
+ *                           Sub Tahap (Sampel/Pengiriman) v224,
+ *                           muat paralel + snapshot lokal + kotak keluar v226)
  * ============================================================
  * MATRIKS JADWAL PRODUKSI (jadwal.html).
  *
@@ -40,6 +41,10 @@ let JM_ID_TOKEN = null;
 let JM_DATA = null;
 let JM_BOLEH_TULIS = false;   // v215: diisi dari getPeranSaya
 let JM_EDIT_ID = "";          // v215: ID bar yang sedang diedit ("" = tambah baru)
+let JM_JANJI_DATA = null;     // v226: permintaan data yang dimulai SEBELUM gerbang peran selesai
+let JM_DARI_SNAPSHOT = false; // v226: tampilan saat ini berasal dari snapshot lokal
+const JM_ANTREAN_KUNCI = "jm_antrean";   // v226: kotak keluar (localStorage)
+let JM_PENGIRIM_ANTREAN = null;
 
 // Keadaan tampilan. Disimpan di sessionStorage supaya tidak kembali ke minggu
 // ini setiap kali halaman dimuat ulang -- kepala produksi biasanya sedang
@@ -147,6 +152,13 @@ function jmLogout() {
 }
 
 function jmMulai() {
+  // v226: data diminta SEKARANG, sejajar dengan pemeriksaan peran -- bukan
+  // sesudahnya. Dulu dua permintaan berurutan (peran 3-4 dtk, lalu data 4-6
+  // dtk); sekarang waktu tunggunya = yang terlama, bukan jumlah keduanya.
+  // Aman: server tetap menolak data untuk yang tidak berhak; gerbang di
+  // sini hanya menentukan APA yang digambar.
+  JM_JANJI_DATA = jmAmbilData_();
+  JM_JANJI_DATA.catch(function () { /* ditangani di jmMuat */ });
   if (typeof rjdJagaHalaman === "function") {
     rjdJagaHalaman(JM_ID_TOKEN, JM_API_URL, jmMulaiIsi_);
   } else {
@@ -158,7 +170,17 @@ function jmMulaiIsi_() {
   const b = document.getElementById("jm-nav-logout");
   if (b) b.classList.remove("hidden");
   jmBacaLihat_();
-  jmShow("jm-loading");
+  // v226: snapshot lokal digambar lebih dulu (kalau ada, maks 3 hari), sambil
+  // menunggu jawaban server. Ditandai jelas supaya orang tahu angkanya lama.
+  const snap = (typeof rjdSnapshotBaca_ === "function") ? rjdSnapshotBaca_("jadwal", 3 * 24 * 60) : null;
+  if (snap && snap.data && snap.data.bar) {
+    JM_DARI_SNAPSHOT = true;
+    jmShow("jm-isi");
+    jmTerapkanData_(snap.data);
+    jmStatusData_("Data tersimpan pukul " + rjdJamPendek_(snap.waktu) + " \u00b7 memperbarui dari server\u2026");
+  } else {
+    jmShow("jm-loading");
+  }
   // v215: peran sudah di-cache oleh satpam -- tidak menambah permintaan.
   if (typeof rjdAmbilPeran_ === "function") {
     rjdAmbilPeran_(JM_API_URL, JM_ID_TOKEN)
@@ -240,18 +262,102 @@ function jmTerapkanData_(data) {
   jmRender();
 }
 
+function jmStatusData_(teks) {
+  const el = document.getElementById("jm-status-data");
+  if (!el) return;
+  el.textContent = teks || "";
+  el.classList.toggle("hidden", !teks);
+}
+
 function jmMuat() {
-  jmAmbilData_()
+  const janji = JM_JANJI_DATA || jmAmbilData_();
+  JM_JANJI_DATA = null;
+  janji
     .then(function (data) {
       jmShow("jm-isi");
+      JM_DARI_SNAPSHOT = false;
       jmTerapkanData_(data);
+      if (typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("jadwal", data);
+      jmStatusData_("");
+      jmKirimAntrean_();
     })
     .catch(function (e) {
+      if (JM_DARI_SNAPSHOT) {
+        // Snapshot tetap tampil; cukup beri tahu bahwa yang segar gagal.
+        jmStatusData_("Tidak bisa memperbarui dari server (" + ((e && e.message) || "sambungan") + "). Menampilkan data tersimpan.");
+        return;
+      }
       jmShow("jm-isi");
       document.getElementById("jm-matriks").innerHTML =
         '<div class="jm-kartu"><p class="jm-galat">' + jmEsc_((e && e.message) || "Gagal menghubungi server. Periksa jaringan lalu muat ulang.") + '</p></div>';
     });
 }
+
+// ---------- kotak keluar (v226) ----------
+// Simpan/hapus yang gagal terkirim DAN gagal diverifikasi (= benar-benar
+// tanpa sambungan) masuk antrean di localStorage, digambar sebagai bar
+// "menunggu", dan dikirim ulang saat sambungan kembali / halaman dibuka lagi.
+// Server punya anti-kembar, jadi pengiriman ulang selalu aman.
+function jmAntreanBaca_() { try { return JSON.parse(localStorage.getItem(JM_ANTREAN_KUNCI) || "[]"); } catch (e) { return []; } }
+function jmAntreanTulis_(q) { try { localStorage.setItem(JM_ANTREAN_KUNCI, JSON.stringify(q)); } catch (e) { /* kuota */ } }
+function jmAntreanTambah_(action, muatan, label) {
+  const q = jmAntreanBaca_();
+  const id = "ANTRE:" + Date.now() + Math.floor(Math.random() * 100);
+  q.push({ id: id, action: action, muatan: muatan, label: label, dibuat: Date.now() });
+  jmAntreanTulis_(q);
+  // gambar optimistis
+  if (action === "simpanJadwalManual" && JM_DATA) {
+    const d = muatan.data;
+    if (d.id) { JM_DATA.bar = (JM_DATA.bar || []).filter(function (b) { return b.id !== d.id; }); }
+    JM_DATA.bar.push({ id: id, item: d.item, tahap: d.tahap, line: d.line || "", sub: d.sub || "",
+      namaLine: d.line ? ((JM_DATA.lines || []).filter(function (l) { return l.idLine === d.line; })[0] || {}).namaLine || d.line : "",
+      mulai: d.mulai, selesai: d.selesai, qty: d.qty || 0, keterangan: d.keterangan || "", menunggu: true });
+    jmSinkronItems_(); jmRender();
+  } else if (action === "hapusJadwalManual" && JM_DATA) {
+    JM_DATA.bar = (JM_DATA.bar || []).filter(function (b) { return b.id !== muatan.id; });
+    jmSinkronItems_(); jmRender();
+  }
+  jmRenderAntrean_();
+  return id;
+}
+function jmRenderAntrean_() {
+  const q = jmAntreanBaca_();
+  const el = document.getElementById("jm-antrean");
+  if (!el) return;
+  el.classList.toggle("hidden", !q.length);
+  el.innerHTML = q.length ? '<b>' + q.length + ' perubahan menunggu dikirim</b> \u2014 akan terkirim otomatis saat sambungan kembali. ' +
+    '<button class="jm-btn" onclick="jmKirimAntrean_(true)" type="button">Kirim sekarang</button>' : "";
+}
+function jmKirimAntrean_(manual) {
+  const q = jmAntreanBaca_();
+  if (!q.length) { jmRenderAntrean_(); return; }
+  if (JM_PENGIRIM_ANTREAN) return;
+  if (!navigator.onLine && !manual) { jmRenderAntrean_(); return; }
+  let sisa = q.slice();
+  const satu = function () {
+    if (!sisa.length) {
+      JM_PENGIRIM_ANTREAN = null; jmAntreanTulis_([]); jmRenderAntrean_();
+      jmAmbilData_().then(function (d) { JM_DATA = d; jmIsiFilter_(); jmIsiFormPilihan_(); jmRender(); if (typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("jadwal", d); }).catch(function () {});
+      return;
+    }
+    const item = sisa[0];
+    fetch(JM_API_URL, { method: "POST", body: JSON.stringify(Object.assign({ idToken: JM_ID_TOKEN, action: item.action }, item.muatan)) })
+      .then(function (r) { return r.text(); })
+      .then(function (teks) {
+        let res; try { res = JSON.parse(teks); } catch (e) { throw new TypeError("jawaban tidak terbaca"); }
+        // Ditolak server (validasi/bagian) = bukan soal sambungan -> buang dari antrean, beri tahu.
+        if (!res || !res.success) { jmFormPesan_("Antrean \"" + item.label + "\" ditolak server: " + ((res && res.error) || "?"), true); }
+        sisa.shift(); jmAntreanTulis_(sisa); satu();
+      })
+      .catch(function () {
+        // masih tanpa sambungan -> berhenti, coba lagi nanti
+        JM_PENGIRIM_ANTREAN = null; jmAntreanTulis_(sisa); jmRenderAntrean_();
+      });
+  };
+  JM_PENGIRIM_ANTREAN = true; satu();
+}
+window.addEventListener("online", function () { jmKirimAntrean_(); });
+setInterval(function () { if (JM_ID_TOKEN && jmAntreanBaca_().length) jmKirimAntrean_(); }, 60000);
 
 function jmIsiFilter_() {
   const selK = document.getElementById("jm-f-klien");
@@ -480,7 +586,7 @@ function jmRenderMatriks_() {
         const tepi = (x.mulai === k.iso ? " jm-bar-awal" : "") + (x.selesai === k.iso ? " jm-bar-akhir" : "");
         const tip = b.label + (b.sub ? " " + b.sub : "") + ": " + jmTanggalPendek_(x.mulai) + " - " + jmTanggalPendek_(x.selesai) +
           (x.qty ? " \u00b7 " + x.qty + " pcs" : "") + (x.keterangan ? "\n" + x.keterangan : "");
-        tbody += '<td class="' + kelas + ' jm-bar jm-t-' + (JM_KELAS_TAHAP[b.tahap] || "lain") + tepi +
+        tbody += '<td class="' + kelas + ' jm-bar jm-t-' + (JM_KELAS_TAHAP[b.tahap] || "lain") + tepi + (x.menunggu ? " jm-bar-menunggu" : "") +
           '" data-id="' + jmEsc_(x.id || "") + '" title="' + jmEsc_(tip) + (x.id ? "\n(klik untuk mengubah)" : "") + '"></td>';
       });
       tbody += '</tr>';
@@ -666,6 +772,7 @@ function jmFormSimpan() {
     return (JM_EDIT_ID ? "Perubahan tersimpan: " : "Tersimpan: ") + ada.tahap + (ada.namaLine ? " " + ada.namaLine : "") + (ada.sub ? " " + ada.sub : "") +
       " " + jmTanggalPendek_(ada.mulai) + "\u2013" + jmTanggalPendek_(ada.selesai) + ".";
   };
+  const labelAntrean = data.tahap + (data.sub ? " " + data.sub : "") + " " + jmTanggalPendek_(data.mulai) + "\u2013" + jmTanggalPendek_(data.selesai);
   jmKirim_("simpanJadwalManual", { data: data }, function (res) {
     const bar = res.bar;
     if (!bar || !bar.id) throw new Error("jawaban server tanpa data baris");
@@ -690,7 +797,7 @@ function jmFormSimpan() {
     document.getElementById("jm-in-ket").value = "";
     jmFormItemBerubah();
     jmGulirKeBar_(bar);
-  }, periksaSimpan);
+  }, periksaSimpan, labelAntrean);
 }
 
 function jmFormHapus() {
@@ -713,7 +820,7 @@ function jmFormHapus() {
     jmRender();
     jmFormPesan_("Jadwal dihapus.");
     jmFormItemBerubah();
-  }, periksaHapus);
+  }, periksaHapus, "hapus " + label);
 }
 
 /**
@@ -733,7 +840,7 @@ function jmFormHapus() {
  *   3. Jawaban tidak sampai / tidak terbaca      -> katakan hasilnya TIDAK
  *      DIKETAHUI dan minta Muat ulang, JANGAN menyuruh mencoba lagi
  */
-function jmKirim_(action, muatan, saatBerhasil, periksa) {
+function jmKirim_(action, muatan, saatBerhasil, periksa, label) {
   const badan = Object.assign({ idToken: JM_ID_TOKEN, action: action }, muatan || {});
   fetch(JM_API_URL, { method: "POST", body: JSON.stringify(badan) })
     .then(function (r) { return r.text(); })
@@ -800,10 +907,14 @@ function jmKirim_(action, muatan, saatBerhasil, periksa) {
               ". Coba Simpan sekali lagi; kalau berulang, kirim pesan ini ke admin.", true);
           }
         })
-        .catch(function (e2) {
+        .catch(function () {
+          // v226: benar-benar tanpa sambungan -> masuk kotak keluar.
           jmFormSibuk_(false);
-          jmFormPesan_("Sambungan ke server bermasalah dua kali berturut-turut (" +
-            ((e2 && e2.message) || "terputus") + "). Muat ulang halaman, lalu periksa apakah barisnya sudah ada.", true);
+          JM_EDIT_ID = ""; jmFormModeTampil_();
+          jmAntreanTambah_(action, muatan, label);
+          jmFormPesan_("Tidak ada sambungan. Disimpan di antrean HP ini dan akan dikirim otomatis saat sinyal kembali.");
+          document.getElementById("jm-in-qty").value = ""; document.getElementById("jm-in-ket").value = "";
+          jmFormItemBerubah();
         });
     });
 }
@@ -864,6 +975,7 @@ function jmRenderLegenda_() {
 
 window.addEventListener("load", function () {
   jmRenderLegenda_();
+  jmRenderAntrean_();
   // v215: klik sel bar = edit. Delegasi di wadah, bukan onclick per sel --
   // matriks bisa ribuan sel dan dirender ulang tiap geser.
   const wadah = document.getElementById("jm-matriks");

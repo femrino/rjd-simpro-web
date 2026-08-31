@@ -99,6 +99,13 @@ function spMulai() {
   // halaman WAJIB tetap jalan. Kehilangan satpam jauh lebih ringan daripada
   // seluruh halaman staff mati serentak -- dan backend (pastikanBoleh_ di
   // akses-role.gs) tetap menolak datanya, jadi tidak ada yang bocor.
+  // v226: daftar PO & line diminta SEKARANG, sejajar dengan pemeriksaan
+  // peran -- bukan sesudahnya. Waktu tunggu = yang terlama, bukan jumlahnya.
+  // Server tetap menolak yang tidak berhak; gerbang hanya mengatur tampilan.
+  // Snapshot lokal (kalau ada) digambar lebih dulu di dalam kedua fungsi itu.
+  window.SP_PREFETCH = true;
+  spMuatDaftarPO();
+  spMuatDaftarLine_();
   if (typeof rjdJagaHalaman === "function") {
     rjdJagaHalaman(SP_ID_TOKEN, SP_API_URL, spMulaiIsi_);
   } else {
@@ -110,8 +117,8 @@ function spMulaiIsi_() {
   spShow("sp-isi");
   const el = document.getElementById("sp-nav-logout");
   if (el) el.classList.remove("hidden");
-  spMuatDaftarPO();
-  spMuatDaftarLine_();
+  if (!window.SP_PREFETCH) { spMuatDaftarPO(); spMuatDaftarLine_(); }   // v226: biasanya sudah berjalan dari spMulai
+  window.SP_PREFETCH = false;
 
   // Saring tab per bagian. Memakai rjdAmbilPeran_ yang SUDAH di-cache oleh
   // satpam halaman -- jadi tidak menembak getPeranSaya untuk kedua kalinya.
@@ -138,6 +145,9 @@ function spMulaiIsi_() {
 
 /** Daftar line untuk filter di tab Konfirmasi. */
 function spMuatDaftarLine_() {
+  // v226: snapshot lokal dulu (maks 7 hari), lalu segarkan.
+  const snapL = (typeof rjdSnapshotBaca_ === "function") ? rjdSnapshotBaca_("produksi_line", 7 * 24 * 60) : null;
+  if (snapL && snapL.data && !window.SP_DAFTAR_LINE) { window.SP_DAFTAR_LINE = snapL.data; spIsiFilterLineKonf_(window.SP_DAFTAR_LINE); }
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getDaftarLine" })
@@ -146,6 +156,7 @@ function spMuatDaftarLine_() {
   .then(function (d) {
     if (d && d.success) {
       window.SP_DAFTAR_LINE = d.daftar || [];
+      if (typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("produksi_line", window.SP_DAFTAR_LINE);
       spIsiFilterLineKonf_(window.SP_DAFTAR_LINE);
       spMuatLineSetoran_();
     }
@@ -189,6 +200,16 @@ function spMuatDaftarPO() {
   // menunggu sebentar. Menyuruh orang memuat ulang padahal sistemnya sedang
   // bekerja adalah cara tercepat membuat orang tidak percaya pada layar.
   window.SP_PO_STATUS = "memuat";
+  // v226: snapshot lokal (maks 3 hari) digambar lebih dulu supaya kotak Pilih
+  // PO & tab Orderan langsung bisa dipakai; status "snapshot" membedakannya
+  // dari data segar. Jawaban server menggantikannya diam-diam.
+  const snapPO = (typeof rjdSnapshotBaca_ === "function") ? rjdSnapshotBaca_("produksi_po", 3 * 24 * 60) : null;
+  if (snapPO && Array.isArray(snapPO.data)) {
+    spTerapkanDaftarPO_(snapPO.data);
+    window.SP_PO_STATUS = "snapshot";
+    window.SP_PO_SNAPSHOT_JAM = rjdJamPendek_(snapPO.waktu);
+    spPesan_("sp-po-pesan", "Daftar tersimpan pukul " + window.SP_PO_SNAPSHOT_JAM + " \u00b7 memperbarui dari server\u2026", false);
+  }
   if (window.SP_TAB === "orderan" && typeof spRenderOrderan_ === "function") {
     spRenderOrderan_();
   }
@@ -227,13 +248,10 @@ function spMuatDaftarPO() {
     // "Cancel". Menuntut satu ejaan persis berarti sebagian order batal tetap
     // lolos ke daftar kerja tanpa ada yang menyadarinya.
     const semuaPO = d.daftar || [];
-    const stat_ = function (p) { return String(p.status || "").toLowerCase().trim(); };
-    window.SP_DAFTAR_PO_SELESAI = semuaPO.filter(function (p) { return stat_(p) === "selesai"; });
-    window.SP_DAFTAR_PO_BATAL = semuaPO.filter(function (p) { return /batal|cancel/.test(stat_(p)); });
-    window.SP_DAFTAR_PO = semuaPO.filter(function (p) {
-      const s = stat_(p);
-      return s !== "selesai" && !/batal|cancel/.test(s);
-    });
+    spTerapkanDaftarPO_(semuaPO);
+    if (typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("produksi_po", semuaPO);
+    if (window.SP_PO_SNAPSHOT_JAM) spPesan_("sp-po-pesan", "");
+    window.SP_PO_SNAPSHOT_JAM = "";
     // v163: kalau tab Orderan sedang terbuka saat daftarnya baru tiba, render
     // ulang. Urutan kedatangan tidak dijamin -- panel bisa terbuka lebih dulu
     // (menampilkan "daftar belum termuat") dan tanpa ini ia akan bertahan
@@ -244,12 +262,28 @@ function spMuatDaftarPO() {
     }
   })
   .catch(function () {
+    // v226: kalau snapshot sudah tampil, biarkan -- jangan ganti dengan pesan galat.
+    if (window.SP_PO_STATUS === "snapshot") {
+      spPesan_("sp-po-pesan", "Tidak bisa memperbarui dari server. Menampilkan daftar tersimpan pukul " + window.SP_PO_SNAPSHOT_JAM + ".", true);
+      return;
+    }
     window.SP_PO_STATUS = "galat";
     window.SP_PO_GALAT = "Gagal menghubungi server.";
     spPesan_("sp-po-pesan", window.SP_PO_GALAT, true);
     if (window.SP_TAB === "orderan" && typeof spRenderOrderan_ === "function") {
       spRenderOrderan_();
     }
+  });
+}
+
+/** v226: tiga kelompok PO dari satu daftar mentah -- dipakai untuk snapshot maupun data segar. */
+function spTerapkanDaftarPO_(semuaPO) {
+  const stat_ = function (p) { return String(p.status || "").toLowerCase().trim(); };
+  window.SP_DAFTAR_PO_SELESAI = semuaPO.filter(function (p) { return stat_(p) === "selesai"; });
+  window.SP_DAFTAR_PO_BATAL = semuaPO.filter(function (p) { return /batal|cancel/.test(stat_(p)); });
+  window.SP_DAFTAR_PO = semuaPO.filter(function (p) {
+    const s = stat_(p);
+    return s !== "selesai" && !/batal|cancel/.test(s);
   });
 }
 

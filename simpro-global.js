@@ -3726,6 +3726,35 @@ function rjdJagaHalaman(idToken, apiUrl, saatLolos) {
 }
 
 /* ============================================================
+   SNAPSHOT LOKAL (v226) -- "tampilkan yang terakhir dulu, segarkan di latar"
+   ============================================================
+   Halaman menyimpan data terakhir yang berhasil dimuat ke localStorage.
+   Saat dibuka lagi, data itu langsung digambar (< 1 detik) sementara server
+   dipanggil di latar; begitu jawaban segar datang, tampilan diganti diam-
+   diam. Ini yang membuat AppSheet terasa instan -- dan bisa ditiru tanpa
+   service worker (Blogger tidak bisa menyimpan file di akar domain).
+   Kunci dipisah per email supaya dua staf di satu HP tidak saling melihat. */
+function rjdSnapshotKunci_(nama) {
+  var email = "";
+  try { var t = rjdBacaTokenStaff_(); if (t) email = String(JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).email || ""); } catch (e) { /* token tak terbaca */ }
+  return "rjd_snap:" + nama + ":" + email;
+}
+function rjdSnapshotSimpan_(nama, data) {
+  try { localStorage.setItem(rjdSnapshotKunci_(nama), JSON.stringify({ t: Date.now(), d: data })); }
+  catch (e) { /* kuota penuh / private mode -> tanpa snapshot, halaman tetap jalan */ }
+}
+/** @return {{data:*, umurMenit:number, waktu:Date}|null} */
+function rjdSnapshotBaca_(nama, maksUmurMenit) {
+  try {
+    var raw = localStorage.getItem(rjdSnapshotKunci_(nama)); if (!raw) return null;
+    var o = JSON.parse(raw); var umur = (Date.now() - o.t) / 60000;
+    if (maksUmurMenit && umur > maksUmurMenit) return null;
+    return { data: o.d, umurMenit: umur, waktu: new Date(o.t) };
+  } catch (e) { return null; }
+}
+function rjdJamPendek_(d) { return String(d.getHours()).padStart(2, "0") + "." + String(d.getMinutes()).padStart(2, "0"); }
+
+/* ============================================================
    PENJAGA SESI KEDALUWARSA -- GLOBAL (v141, naik dari spk v123)
    ============================================================
    Token ID Google berumur +-1 jam. Begitu kedaluwarsa, SEMUA panggilan
