@@ -3410,6 +3410,58 @@ var RJD_JAGA_HALAMAN = {
  */
 var RJD_PERAN_CACHE = { token: null, janji: null };
 
+/* ============================================================
+   v229 -- PERAN TERSIMPAN : gerbang tidak lagi menahan layar
+   ============================================================
+   Sampai v228, rjdJagaHalaman MENUNGGU jawaban getPeranSaya sebelum
+   memanggil pemuat isi halaman. Akibatnya SEMUA halaman terjaga membayar
+   satu bolak-balik penuh ke Apps Script sebelum menggambar apa pun --
+   termasuk sebelum snapshot lokal v228 sempat tampil. Snapshot secepat
+   apa pun tidak menolong kalau ia dipasang di BELAKANG gerbang.
+
+   Sekarang: keputusan terakhir disimpan (umur 1 jam, mengikuti umur token
+   Google), halaman LANGSUNG jalan kalau keputusan itu mengizinkan, dan
+   verifikasi tetap dikirim ke server di latar. Jawaban segar yang menolak
+   tetap memunculkan layar tolak.
+
+   YANG MENJAGA INI TETAP AMAN, dan harus dipahami sebelum mengubahnya:
+   1. Backend adalah penegak sebenarnya. pastikanBoleh_ (akses-role.gs)
+      menolak per-action berdasarkan area -- getKas/getDaftarInvoice =
+      keuangan, getDaftarPO = produksi. Peran palsu di localStorage TIDAK
+      menarik satu baris data pun.
+   2. Kunci memuat email. Yang bisa dilewatkan hanyalah keputusan untuk
+      orang yang sama, bukan keputusan orang lain.
+   3. Akses yang DICABUT adalah satu-satunya celah nyata: sekali, sebelum
+      jawaban segar tiba. Ditutup dengan menghapus peran DAN seluruh
+      snapshot begitu layar tolak muncul -- jadi tidak pernah terulang. */
+var RJD_PERAN_UMUR_MENIT = 60;
+
+function rjdPeranKunci_() {
+  var email = "";
+  try {
+    var t = rjdBacaTokenStaff_();
+    if (t) email = String(JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).email || "");
+  } catch (e) { /* token tak terbaca -> kunci tanpa email */ }
+  return "rjd_peran:" + email;
+}
+function rjdPeranSimpan_(d) {
+  try { localStorage.setItem(rjdPeranKunci_(), JSON.stringify({ t: Date.now(), d: d })); }
+  catch (e) { /* kuota/private mode -> jalan seperti sebelum v229 */ }
+}
+function rjdPeranBaca_() {
+  try {
+    var raw = localStorage.getItem(rjdPeranKunci_()); if (!raw) return null;
+    var o = JSON.parse(raw);
+    if ((Date.now() - o.t) / 60000 > RJD_PERAN_UMUR_MENIT) return null;
+    return o.d;
+  } catch (e) { return null; }
+}
+/** Dipanggil saat akses ditolak: peran + SEMUA snapshot dibuang. */
+function rjdLupakanAkses_() {
+  try { localStorage.removeItem(rjdPeranKunci_()); } catch (e) { /* abaikan */ }
+  try { if (typeof rjdSnapshotBersihkan_ === "function") rjdSnapshotBersihkan_(0); } catch (e) { /* abaikan */ }
+}
+
 function rjdAmbilPeran_(apiUrl, idToken) {
   if (!apiUrl || !idToken) return Promise.reject(new Error("apiUrl/idToken kosong"));
   if (RJD_PERAN_CACHE.token === idToken && RJD_PERAN_CACHE.janji) {
@@ -3422,6 +3474,7 @@ function rjdAmbilPeran_(apiUrl, idToken) {
   .then(function (r) { return r.json(); })
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "getPeranSaya gagal");
+    rjdPeranSimpan_(d);   // v229: keputusan segar jadi dasar pelewatan cepat berikutnya
     return d;
   })
   .catch(function (e) {
@@ -3558,6 +3611,11 @@ function rjdRapikanPemisahMenu_() {
 
 /** Layar penolakan. Disuntik dari JS supaya markup Blogger tidak perlu disentuh. */
 function rjdLayarTolak_(judul, pesan, tombol) {
+  // v229: penolakan = buang peran tersimpan DAN seluruh snapshot. Inilah yang
+  // menutup celah "akses baru dicabut": orang itu boleh melihat layar lamanya
+  // sekali, tidak pernah lagi sesudahnya.
+  try { rjdLupakanAkses_(); } catch (e) { /* jangan sampai menahan layar tolak */ }
+
   var lama = document.getElementById("rjd-jaga-layar");
   if (lama) lama.remove();
 
@@ -3636,10 +3694,29 @@ function rjdJagaHalaman(idToken, apiUrl, saatLolos) {
   // rjdTerapkanPeranKeMenu: yang di sana boleh menyerah cepat (paling-paling
   // menu tampil berlebih), yang di sini menahan seluruh halaman -- menyerah
   // kecepatan bikin staff dengan sinyal jelek terpental padahal tidak salah apa-apa.
+  // v229: PELEWATAN CEPAT. Kalau keputusan tersimpan (<= 1 jam) memberi area
+  // yang dibutuhkan halaman ini, isi halaman digambar SEKARANG dan verifikasi
+  // berjalan di latar. `jalan` dibungkus supaya tidak mungkin terpanggil dua
+  // kali kalau jawaban segar juga mengizinkan.
+  var sudahJalan = false;
+  var jalanSekali = function () { if (sudahJalan) return; sudahJalan = true; jalan(); };
+  var cepat = false;
+  try {
+    var tersimpan = rjdPeranBaca_();
+    if (tersimpan && (tersimpan.area || []).indexOf(perlu) !== -1) {
+      cepat = true;
+      jalanSekali();
+    }
+  } catch (e) { /* apa pun yang salah di sini -> jatuh ke jalur lama */ }
+
   var selesai = false;
   var jaring = setTimeout(function () {
     if (selesai) return;
     selesai = true;
+    // Sudah tergambar dari peran tersimpan -> jangan tutup layar yang berfungsi
+    // hanya karena verifikasi latar lambat. Backend tetap menolak per-action,
+    // jadi yang terlihat maksimal data lama milik orang itu sendiri.
+    if (cepat) return;
     rjdLayarTolak_("Gagal memeriksa akses",
       "Sambungan ke server terlalu lama menjawab. Ini biasanya masalah jaringan sesaat, bukan soal hak akses Anda.",
       { teks: "Coba lagi", saatKlik: function () { window.location.reload(); } });
@@ -3685,7 +3762,7 @@ function rjdJagaHalaman(idToken, apiUrl, saatLolos) {
       //
       // Aturannya sekarang sejalan dengan backend: area yang berwenang, `staff`
       // cuma dipakai untuk memilih KATA-KATA di layar penolakan.
-      if (area.indexOf(perlu) !== -1) { jalan(); return; }
+      if (area.indexOf(perlu) !== -1) { jalanSekali(); return; }
 
       // ---------- STAFF, tapi area tidak cocok ----------
       // Sengaja TIDAK menyebut nama peran atau daftar area di layar. Buat orang
@@ -3726,6 +3803,14 @@ function rjdJagaHalaman(idToken, apiUrl, saatLolos) {
       // MUNGKIN terjadi di lantai produksi dengan sinyal seadanya.
       // Tombolnya menolong staff (coba lagi -> masuk) dan tidak menolong yang
       // tidak berhak (coba lagi -> ditolak lagi).
+      //
+      // v229: KECUALI halaman sudah tergambar dari peran tersimpan. Menutupi
+      // layar yang berfungsi karena verifikasi latar gagal jaringan justru
+      // merusak hal yang paling ingin ditolong -- staf lantai dengan sinyal
+      // seadanya. Yang terlihat maksimal data lama milik orang itu sendiri,
+      // dan backend tetap menolak tiap permintaan baru. Sesi yang benar-benar
+      // kedaluwarsa tetap tertangkap penjaga fetch global (rjdSesiHabis_).
+      if (cepat) return;
       rjdLayarTolak_("Gagal memeriksa akses",
         "Tidak berhasil menghubungi server untuk memeriksa hak akses. Periksa " +
         "sambungan internet Anda lalu coba lagi.",
@@ -3794,21 +3879,63 @@ function rjdSnapshotBersihkan_(maksHari) {
  *
  * `el` boleh elemen atau id. Aman dipanggil untuk wadah yang tidak ada.
  */
-function rjdSnapshotBar_(el, waktu) {
-  var wadah = (typeof el === "string") ? document.getElementById(el) : el;
-  if (!wadah) return;
-  var bar = wadah.querySelector(":scope > .rjd-snap-bar");
+/**
+ * v229: bilah dipasang sebagai SAUDARA di ATAS wadah, bukan anak pertamanya.
+ *
+ * Dua alasan, dua-duanya ketahuan saat memasang di halaman Kas:
+ * 1. #ks-saldo adalah wadah flex. Bilah yang jadi anaknya berubah jadi item
+ *    sejajar kartu saldo -- kotak sempit di samping angka, bukan garis
+ *    keterangan di atasnya.
+ * 2. Sebagai anak, bilah ikut terhapus setiap kali innerHTML wadahnya
+ *    ditulis ulang -- termasuk oleh penangan galat, yaitu saat bilah justru
+ *    paling perlu bertahan.
+ * Konsekuensinya: bilah TIDAK lagi hilang sendiri. rjdSnapshotBarHapus_
+ * WAJIB dipanggil saat data segar tiba -- semua halaman sudah melakukannya.
+ */
+function rjdSnapshotBarCari_(wadah) {
+  var s = wadah.previousElementSibling;
+  return (s && s.classList && s.classList.contains("rjd-snap-bar")) ? s : null;
+}
+function rjdSnapshotBarPasang_(wadah) {
+  var bar = rjdSnapshotBarCari_(wadah);
   if (!bar) {
     bar = document.createElement("div");
     bar.className = "rjd-snap-bar";
-    wadah.insertBefore(bar, wadah.firstChild);
+    wadah.parentNode.insertBefore(bar, wadah);
   }
+  return bar;
+}
+function rjdSnapshotBar_(el, waktu) {
+  var wadah = (typeof el === "string") ? document.getElementById(el) : el;
+  if (!wadah || !wadah.parentNode) return;
+  var bar = rjdSnapshotBarPasang_(wadah);
   bar.textContent = "Data tersimpan pukul " + rjdJamPendek_(waktu) + " \u00b7 memperbarui dari server\u2026";
+  bar.classList.remove("rjd-snap-bar-gagal");
+}
+
+/**
+ * v229: bilah versi GAGAL. Dipakai saat penyegaran tidak berhasil.
+ *
+ * Ini menutup cacat v228: kalau permintaan segar gagal, penangan galat
+ * menimpa wadah tabel -- termasuk bilahnya -- sementara angka ringkasan di
+ * wadah LAIN tetap memajang data lama TANPA keterangan apa pun. Justru saat
+ * jaringan gagal itulah label paling dibutuhkan; angka basi tanpa keterangan
+ * adalah bentuk sistem berbohong. Karena itu bilah gagal ditaruh di wadah
+ * yang TIDAK ditimpa penangan galat, dan ia MENETAP.
+ */
+function rjdSnapshotBarGagal_(el, waktu) {
+  var wadah = (typeof el === "string") ? document.getElementById(el) : el;
+  if (!wadah || !wadah.parentNode) return;
+  var bar = rjdSnapshotBarPasang_(wadah);
+  bar.classList.add("rjd-snap-bar-gagal");
+  bar.textContent = waktu
+    ? "Gagal memperbarui \u2014 angka ini tersimpan pukul " + rjdJamPendek_(waktu) + ", bukan yang terbaru."
+    : "Gagal memperbarui dari server.";
 }
 function rjdSnapshotBarHapus_(el) {
   var wadah = (typeof el === "string") ? document.getElementById(el) : el;
   if (!wadah) return;
-  var bar = wadah.querySelector(":scope > .rjd-snap-bar");
+  var bar = rjdSnapshotBarCari_(wadah);
   if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
 }
 /** @return {{data:*, umurMenit:number, waktu:Date}|null} */

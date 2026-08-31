@@ -1522,7 +1522,29 @@ function dbFetch() {
   }
 }
 
+/* v229 -- SNAPSHOT LOKAL. Dashboard tertinggal di v228 (berkas ini tidak ikut
+   dalam paket itu), padahal ia justru halaman pembuka bagi peran keuangan.
+   Umurnya 1 hari, sama dengan Kas: isinya omset & umur piutang, angka yang
+   dipakai mengambil keputusan -- bukan daftar yang tinggal disegarkan. */
+var DB_SUDAH_SEGAR = false;
+var DB_SNAP_UMUR_MENIT = 24 * 60;
+var DB_SNAP_WAKTU = null;
+
 function dbFetchIsi_() {
+  if (!DB_SUDAH_SEGAR && typeof rjdSnapshotBaca_ === "function") {
+    var snap = rjdSnapshotBaca_("dashboard", DB_SNAP_UMUR_MENIT);
+    if (snap && snap.data) {
+      try {
+        DB_SNAP_WAKTU = snap.waktu;
+        dbRender(snap.data);
+        if (typeof rjdSnapshotBar_ === "function") rjdSnapshotBar_("db-results", snap.waktu);
+      } catch (e) {
+        // Bentuk data lama yang tidak lagi cocok dengan dbRender tidak boleh
+        // menjatuhkan halaman -- buang snapshotnya, lanjut ke permintaan segar.
+        DB_SNAP_WAKTU = null;
+      }
+    }
+  }
   fetch(DB_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: DB_ID_TOKEN, page: "dashboard" })
@@ -1542,8 +1564,18 @@ function dbFetchIsi_() {
       return;
     }
     dbRender(data);
+    DB_SUDAH_SEGAR = true; DB_SNAP_WAKTU = null;
+    if (typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("dashboard", data);
+    if (typeof rjdSnapshotBarHapus_ === "function") rjdSnapshotBarHapus_("db-results");
   })
   .catch(function(){
+    // v229: kalau angka yang sedang tampil berasal dari snapshot, JANGAN
+    // tutup dengan layar galat penuh -- itu membuang data yang masih berguna.
+    // Katakan apa adanya bahwa angkanya bukan yang terbaru.
+    if (DB_SNAP_WAKTU && typeof rjdSnapshotBarGagal_ === "function") {
+      rjdSnapshotBarGagal_("db-results", DB_SNAP_WAKTU);
+      return;
+    }
     document.getElementById("db-error-message").textContent = "Gagal menghubungi server. Coba beberapa saat lagi.";
     dbShow("db-error");
   });

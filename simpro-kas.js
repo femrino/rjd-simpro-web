@@ -83,14 +83,25 @@ function ksKirim_(action, muatan) {
    keluar adalah cara tercepat membuat orang mencatatnya dua kali.
    Kuncinya memuat BULAN supaya bulan berbeda tidak saling menimpa. */
 var KS_SUDAH_SEGAR = false;
+/* v229: umur snapshot halaman uang dipendekkan dari 3 hari jadi 1 hari.
+   Daftar produksi yang basi cuma bikin orang menyegarkan; saldo kas yang basi
+   bisa jadi dasar keputusan. Ubah angka ini ke 8 * 60 kalau ingin snapshot
+   selalu mati semalam. */
+var KS_SNAP_UMUR_MENIT = 24 * 60;
+/* Waktu snapshot yang SEDANG ditampilkan -- dipakai bilah versi gagal. */
+var KS_SNAP_WAKTU = null;
 
 function ksMuatPertama_() {
   if (!KS_SUDAH_SEGAR && typeof rjdSnapshotBaca_ === "function") {
-    var snap = rjdSnapshotBaca_("kas_" + (KS_BULAN || "kini"), 3 * 24 * 60);
+    var snap = rjdSnapshotBaca_("kas_" + (KS_BULAN || "kini"), KS_SNAP_UMUR_MENIT);
     if (snap && snap.data && snap.data.akun) {
-      KS_DATA = snap.data; KS_BULAN = snap.data.bulan;
+      KS_DATA = snap.data; KS_BULAN = snap.data.bulan; KS_SNAP_WAKTU = snap.waktu;
       ksShow("ks-isi"); ksRender();
-      if (typeof rjdSnapshotBar_ === "function") rjdSnapshotBar_("ks-buku", snap.waktu);
+      // v229: bilah ditaruh di #ks-saldo, BUKAN #ks-buku. Penangan galat
+      // ksMuat menimpa seluruh isi #ks-buku -- dulu bilahnya ikut terhapus
+      // justru saat paling dibutuhkan, sementara kartu saldo di #ks-saldo
+      // tetap memajang angka lama tanpa keterangan apa pun.
+      if (typeof rjdSnapshotBar_ === "function") rjdSnapshotBar_("ks-saldo", snap.waktu);
     }
   }
   return ksMuat(KS_BULAN);
@@ -100,13 +111,18 @@ function ksMuat(bulan) {
   return ksKirim_("getKas", { bulan: bulan || KS_BULAN || undefined })
     .then(function (d) {
       KS_DATA = d; KS_BULAN = d.bulan; ksShow("ks-isi"); ksRender();
-      KS_SUDAH_SEGAR = true;
+      KS_SUDAH_SEGAR = true; KS_SNAP_WAKTU = null;
       if (typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("kas_" + d.bulan, d);
-      if (typeof rjdSnapshotBarHapus_ === "function") rjdSnapshotBarHapus_("ks-buku");
+      if (typeof rjdSnapshotBarHapus_ === "function") rjdSnapshotBarHapus_("ks-saldo");
     })
     .catch(function (e) {
       ksShow("ks-isi");
       document.getElementById("ks-buku").innerHTML = '<div class="ks-kartu"><p class="ks-galat">' + ksEsc_(e.message || "Gagal memuat.") + '</p></div>';
+      // v229: kalau yang tampil di atas adalah SALDO TERSIMPAN, katakan begitu.
+      // ksRender menulis ulang #ks-saldo, jadi bilahnya dipasang SESUDAH ini.
+      if (KS_SNAP_WAKTU && typeof rjdSnapshotBarGagal_ === "function") {
+        rjdSnapshotBarGagal_("ks-saldo", KS_SNAP_WAKTU);
+      }
     });
 }
 
