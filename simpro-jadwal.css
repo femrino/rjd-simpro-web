@@ -91,6 +91,7 @@
 .jm-form-item  { flex: 3 1 280px; }
 .jm-form-tahap { flex: 1 1 160px; }
 .jm-form-line  { flex: 1 1 140px; }
+.jm-form-sub   { flex: 1 1 150px; }   /* v224 */
 .jm-form-tgl   { flex: 1 1 150px; }
 .jm-form-qty   { flex: 1 1 120px; }
 .jm-form-ket   { flex: 3 1 240px; }
@@ -113,6 +114,7 @@ body.jm-bisa-tulis td.jm-bar[data-id]:not([data-id=""]):hover { box-shadow: inse
 
 /* ---------- warna tahap ---------- */
 .jm-t-pola        { background: #B9D7A8; }
+.jm-t-sampel      { background: #F1C0CC; }   /* v224 */
 .jm-t-bahan       { background: #E9B97A; }
 .jm-t-cutting     { background: #A9BEEE; }
 .jm-t-interlining { background: #A8D5D2; }

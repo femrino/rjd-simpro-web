@@ -1,7 +1,8 @@
 /**
  * ============================================================
  * SIMPRO -- simpro-jadwal  (v214, form v215, pesan galat jujur v217, periksa-sendiri v217.1,
- *                           pesan tenang v219, header kiri sticky tanpa rowspan v221)
+ *                           pesan tenang v219, header kiri sticky tanpa rowspan v221,
+ *                           Sub Tahap (Sampel/Pengiriman) v224)
  * ============================================================
  * MATRIKS JADWAL PRODUKSI (jadwal.html).
  *
@@ -57,7 +58,9 @@ const JM_BULAN = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep",
 // Kelas warna per tahap. Nama tahap datang dari backend (TAHAP_JADWAL); kalau
 // backend menambah tahap baru yang belum ada di sini, jatuh ke kelas "lain".
 const JM_KELAS_TAHAP = {
-  "Pola & Konsumsi": "pola",
+  "Pola & Marker": "pola",
+  "Pola & Konsumsi": "pola",   // nama lama (v214-v223), masih bisa datang dari sheet
+  "Sampel": "sampel",          // v224
   "Pengadaan Bahan": "bahan",
   "Cutting": "cutting",
   "Interlining": "interlining",
@@ -374,6 +377,16 @@ function jmBarisGrup_(g) {
         if (JM_LIHAT.line && idLine !== JM_LIHAT.line) return;
         baris.push({ label: "Sewing", sub: perLine[idLine][0].namaLine || idLine, tahap: tahap, bar: perLine[idLine] });
       });
+    } else if (JM_DATA.subTahap && JM_DATA.subTahap[tahap]) {
+      // v224: tahap berjenis (Sampel, Pengiriman) -> satu baris per jenis,
+      // urut sesuai daftar jenisnya; bar tanpa jenis (Pengiriman lama) di
+      // baris "polos" paling atas.
+      const perSub = {};
+      bars.forEach(function (b) { (perSub[b.sub || ""] = perSub[b.sub || ""] || []).push(b); });
+      [""].concat(JM_DATA.subTahap[tahap]).forEach(function (sub) {
+        if (!perSub[sub]) return;
+        baris.push({ label: tahap, sub: sub, tahap: tahap, bar: perSub[sub] });
+      });
     } else {
       baris.push({ label: tahap, sub: "", tahap: tahap, bar: bars });
     }
@@ -507,8 +520,10 @@ function jmIsiFormPilihan_() {
     }).join("");
   if (nilaiItem) selItem.value = nilaiItem;
 
+  const nilaiTahap = selTahap.value;
   selTahap.innerHTML = '<option value="">-- tahap --</option>' +
     (JM_DATA.tahap || []).map(function (t) { return '<option value="' + jmEsc_(t) + '">' + jmEsc_(t) + '</option>'; }).join("");
+  if (nilaiTahap) selTahap.value = nilaiTahap;
   selLine.innerHTML = '<option value="">-- line --</option>' +
     (JM_DATA.lines || []).filter(function (l) { return l.aktif !== false; }).map(function (l) {
       return '<option value="' + jmEsc_(l.idLine) + '">' + jmEsc_(l.namaLine) + '</option>';
@@ -516,11 +531,25 @@ function jmIsiFormPilihan_() {
   jmFormTahapBerubah();
 }
 
-/** Line hanya relevan untuk Sewing -- disembunyikan di tahap lain, bukan sekadar dinonaktifkan. */
+/** Line hanya relevan untuk Sewing; Jenis hanya untuk tahap berjenis (v224). Keduanya
+ *  disembunyikan di tahap lain, bukan sekadar dinonaktifkan. */
 function jmFormTahapBerubah() {
   const tahap = (document.getElementById("jm-in-tahap") || {}).value || "";
   const w = document.getElementById("jm-in-line-wrap");
   if (w) w.classList.toggle("hidden", tahap !== "Sewing");
+  const ws = document.getElementById("jm-in-sub-wrap");
+  const sel = document.getElementById("jm-in-sub");
+  const daftar = (JM_DATA && JM_DATA.subTahap && JM_DATA.subTahap[tahap]) || null;
+  if (ws) ws.classList.toggle("hidden", !daftar);
+  if (sel) {
+    const lama = sel.value;
+    const wajib = !!(JM_DATA && JM_DATA.subWajib && JM_DATA.subWajib[tahap]);
+    sel.innerHTML = (daftar ? '<option value="">' + (wajib ? "-- pilih jenis --" : "(tanpa jenis)") + '</option>' +
+      daftar.map(function (x) { return '<option value="' + jmEsc_(x) + '">' + jmEsc_(x) + '</option>'; }).join("") : "");
+    if (daftar && daftar.indexOf(lama) !== -1) sel.value = lama;
+    const lbl = document.getElementById("jm-in-sub-label");
+    if (lbl) lbl.textContent = "Jenis" + (wajib ? "" : " (opsional)");
+  }
 }
 
 /**
@@ -571,11 +600,12 @@ function jmEdit(id) {
   document.getElementById("jm-in-item").value = b.item;
   document.getElementById("jm-in-tahap").value = b.tahap;
   document.getElementById("jm-in-line").value = b.line || "";
+  jmFormTahapBerubah();                                         // isi daftar jenis dulu
+  document.getElementById("jm-in-sub").value = b.sub || "";
   document.getElementById("jm-in-mulai").value = b.mulai;
   document.getElementById("jm-in-selesai").value = b.selesai;
   document.getElementById("jm-in-qty").value = b.qty || "";
   document.getElementById("jm-in-ket").value = b.keterangan || "";
-  jmFormTahapBerubah();
   jmFormPesan_("");
   jmFormModeTampil_();
   const w = document.getElementById("jm-form-wrap");
@@ -609,6 +639,7 @@ function jmFormSimpan() {
     item: document.getElementById("jm-in-item").value,
     tahap: document.getElementById("jm-in-tahap").value,
     line: document.getElementById("jm-in-line").value,
+    sub: (document.getElementById("jm-in-sub") || {}).value || "",
     mulai: document.getElementById("jm-in-mulai").value,
     selesai: document.getElementById("jm-in-selesai").value,
     qty: Number(document.getElementById("jm-in-qty").value) || 0,
@@ -618,6 +649,7 @@ function jmFormSimpan() {
   if (!data.item) { jmFormPesan_("Pilih item produksi dulu.", true); return; }
   if (!data.tahap) { jmFormPesan_("Pilih tahap.", true); return; }
   if (data.tahap === "Sewing" && !data.line) { jmFormPesan_("Tahap Sewing wajib pilih line.", true); return; }
+  if (JM_DATA.subWajib && JM_DATA.subWajib[data.tahap] && !data.sub) { jmFormPesan_("Tahap " + data.tahap + " wajib pilih jenis.", true); return; }
   if (!data.mulai || !data.selesai) { jmFormPesan_("Isi tanggal mulai dan selesai.", true); return; }
   if (data.selesai < data.mulai) { jmFormPesan_("Tanggal selesai lebih awal dari mulai.", true); return; }
 
@@ -625,13 +657,13 @@ function jmFormSimpan() {
   jmFormPesan_("Menyimpan...");
   const cocok = function (b) {
     return b.item === data.item && b.tahap === data.tahap && (b.line || "") === (data.line || "") &&
-      b.mulai === data.mulai && b.selesai === data.selesai;
+      (b.sub || "") === (data.sub || "") && b.mulai === data.mulai && b.selesai === data.selesai;
   };
   const periksaSimpan = function (baru) {
     const ada = (baru.bar || []).filter(cocok)[0];
     if (!ada) return "";
     // kalau ini edit, bar lama (ID sama) harus sudah berubah -- cocok() memastikan itu
-    return (JM_EDIT_ID ? "Perubahan tersimpan: " : "Tersimpan: ") + ada.tahap + (ada.namaLine ? " " + ada.namaLine : "") +
+    return (JM_EDIT_ID ? "Perubahan tersimpan: " : "Tersimpan: ") + ada.tahap + (ada.namaLine ? " " + ada.namaLine : "") + (ada.sub ? " " + ada.sub : "") +
       " " + jmTanggalPendek_(ada.mulai) + "\u2013" + jmTanggalPendek_(ada.selesai) + ".";
   };
   jmKirim_("simpanJadwalManual", { data: data }, function (res) {
@@ -651,7 +683,7 @@ function jmFormSimpan() {
       (res.kembar
         ? "Sudah ada baris yang sama persis, jadi tidak ditambah lagi: "
         : (wasEdit ? "Perubahan tersimpan: " : "Tersimpan: ")) +
-      bar.tahap + (bar.namaLine ? " " + bar.namaLine : "") +
+      bar.tahap + (bar.namaLine ? " " + bar.namaLine : "") + (bar.sub ? " " + bar.sub : "") +
       " " + jmTanggalPendek_(bar.mulai) + "\u2013" + jmTanggalPendek_(bar.selesai) + ".");
     // siap untuk tahap berikutnya dari item yang sama
     document.getElementById("jm-in-qty").value = "";
@@ -821,7 +853,7 @@ function jmRenderInfo_(jumlahItem, jumlahBaris) {
 function jmRenderLegenda_() {
   const el = document.getElementById("jm-legenda");
   if (!el) return;
-  el.innerHTML = Object.keys(JM_KELAS_TAHAP).map(function (t) {
+  el.innerHTML = Object.keys(JM_KELAS_TAHAP).filter(function (t) { return t !== "Pola & Konsumsi"; }).map(function (t) {
     return '<span class="jm-leg"><span class="jm-swatch jm-t-' + JM_KELAS_TAHAP[t] + '"></span>' + jmEsc_(t) + '</span>';
   }).join("") +
   '<span class="jm-leg"><span class="jm-swatch jm-swatch-dl"></span>deadline PO</span>' +
