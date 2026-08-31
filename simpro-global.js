@@ -3632,7 +3632,9 @@ function rjdJagaHalaman(idToken, apiUrl, saatLolos) {
     rjdLayarTolak_("Gagal memeriksa akses",
       "Sambungan ke server terlalu lama menjawab. Ini biasanya masalah jaringan sesaat, bukan soal hak akses Anda.",
       { teks: "Coba lagi", saatKlik: function () { window.location.reload(); } });
-  }, 8000);
+  }, 25000);   // v219: dulu 8000. Sekarang ada pengulangan otomatis di penjaga
+               // fetch (dua ulang, jeda 1,5 s + 3 s) -- 8 detik akan memutus
+               // pengulangan itu sebelum sempat menolong.
 
   rjdAmbilPeran_(apiUrl, idToken)
     .then(function (d) {
@@ -3759,6 +3761,11 @@ function rjdJagaHalaman(idToken, apiUrl, saatLolos) {
     if (typeof OL_API_URL !== "undefined") u.push(String(OL_API_URL));   // order list
     if (typeof OF_API_URL !== "undefined") u.push(String(OF_API_URL));   // order form
     if (typeof KH_API_URL !== "undefined") u.push(String(KH_API_URL));   // kalkulator harga
+    // v219: tiga pintu yang belum terdaftar. Halaman-halaman ini sebelumnya
+    // tidak dijaga penjaga sesi DAN tidak dapat pengulangan otomatis di bawah.
+    if (typeof JM_API_URL !== "undefined") u.push(String(JM_API_URL));   // jadwal produksi
+    if (typeof SOP_API_URL !== "undefined") u.push(String(SOP_API_URL)); // sop
+    if (typeof CK_API_URL !== "undefined") u.push(String(CK_API_URL));   // cetak
     return u;
   }
 
@@ -3781,17 +3788,64 @@ function rjdJagaHalaman(idToken, apiUrl, saatLolos) {
     };
   };
 
+  /* ------------------------------------------------------------
+     v219: ULANG OTOMATIS UNTUK AKSI BACA.
+
+     1 Sep 2026, terbukti lewat eksperimen di Console: server SIMPRO sehat,
+     deployment sehat, kode sehat -- permintaan yang sama persis dijawab
+     JSON benar saat dikirim sebagai navigasi -- tapi saat dikirim lewat
+     fetch lintas-asal, Google KADANG membalas 200 tanpa header
+     Access-Control-Allow-Origin. Browser lalu melempar "Failed to fetch"
+     padahal server sudah mengerjakan permintaannya. Ini perilaku di
+     infrastruktur Google, bukan sesuatu yang bisa diperbaiki di skrip.
+
+     Yang bisa dilakukan: tidak menyerah pada percobaan pertama. Aksi BACA
+     (get*, cek*, diagnosa*) aman diulang -- tidak mengubah apa pun -- jadi
+     diulang sampai dua kali dengan jeda. Aksi TULIS tidak diulang di sini:
+     halaman yang menulis punya cara sendiri memastikan hasilnya (jadwal:
+     baca ulang sheet; distribusi: penjaga batch), dan mengulang tulis dari
+     lapisan yang tidak tahu artinya adalah cara terbaik menggandakan data.
+     ------------------------------------------------------------ */
+  function rjdAksiDariBody_(opts) {
+    try { return String(JSON.parse(opts && opts.body).action || ""); } catch (e) { return ""; }
+  }
+  function rjdTunggu_(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
+
   window.fetch = function (url, opts) {
-    const p = fetchAsli(url, opts);
+    const alamatAwal = (url && url.url) ? String(url.url) : String(url);
+    const apiKita = rjdDaftarApi_().indexOf(alamatAwal) !== -1;
+    const aksi = apiKita ? rjdAksiDariBody_(opts) : "";
+    const bacaSaja = /^(get|cek|diagnosa|hitung|ambil|cari)/i.test(aksi);
+    const kirim = function () { return fetchAsli(url, opts); };
+
+    let p = kirim();
+    if (apiKita && bacaSaja) {
+      // Hanya TypeError (jaringan/CORS) yang diulang. Jawaban HTTP apa pun,
+      // termasuk error, sudah sampai -- tidak ada gunanya diulang.
+      p = p.catch(function (e1) {
+        if (!(e1 instanceof TypeError)) throw e1;
+        return rjdTunggu_(1500).then(kirim);
+      }).catch(function (e2) {
+        if (!(e2 instanceof TypeError)) throw e2;
+        return rjdTunggu_(3000).then(kirim);
+      });
+    }
+
     try {
-      const alamat = (url && url.url) ? String(url.url) : String(url);
-      if (rjdDaftarApi_().indexOf(alamat) !== -1) {
+      const alamat = alamatAwal;
+      if (apiKita) {
         return p.then(function (r) {
-          r.clone().json().then(function (d) {
-            if (d && d.error && /login gagal diverifikasi/i.test(String(d.error))) {
-              window.rjdSesiHabis_();
+          // v219: mengintip tidak boleh menjatuhkan permintaan. Kalau objeknya
+          // bukan Response sungguhan (tanpa clone), lewati saja.
+          try {
+            if (r && typeof r.clone === "function") {
+              r.clone().json().then(function (d) {
+                if (d && d.error && /login gagal diverifikasi/i.test(String(d.error))) {
+                  window.rjdSesiHabis_();
+                }
+              }).catch(function () { /* bukan json -- biarkan */ });
             }
-          }).catch(function () { /* bukan json -- biarkan */ });
+          } catch (eIntip) { /* penjaga tidak boleh mematikan fetch */ }
           return r;
         });
       }

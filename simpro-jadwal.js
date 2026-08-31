@@ -1,6 +1,7 @@
 /**
  * ============================================================
- * SIMPRO -- simpro-jadwal  (v214, form v215, pesan galat jujur v217, periksa-sendiri v217.1)
+ * SIMPRO -- simpro-jadwal  (v214, form v215, pesan galat jujur v217, periksa-sendiri v217.1,
+ *                           pesan tenang v219)
  * ============================================================
  * MATRIKS JADWAL PRODUKSI (jadwal.html).
  *
@@ -739,7 +740,11 @@ function jmKirim_(action, muatan, saatBerhasil, periksa) {
         jmFormPesan_("Hasilnya TIDAK DIKETAHUI (" + sebab + "). Klik Muat ulang untuk memeriksa.", true);
         return;
       }
-      jmFormPesan_("Jawaban server tidak sampai (" + sebab + "). Memeriksa ke sheet...");
+      // v219: tidak lagi "jawaban tidak sampai" dengan huruf besar. Ini
+      // kejadian biasa (lihat catatan v219 di simpro-global.js), dan orang
+      // tidak perlu tahu mekanismenya -- cukup tahu hasil akhirnya benar.
+      jmFormPesan_("Menyimpan... memastikan ke sheet.");
+      if (window.console && console.info) console.info("[jadwal] jawaban simpan tidak terbaca (" + sebab + "); memastikan lewat baca ulang.");
       jmAmbilData_()
         .then(function (data) {
           jmFormSibuk_(false);
@@ -748,7 +753,7 @@ function jmKirim_(action, muatan, saatBerhasil, periksa) {
           if (hasil) {
             JM_EDIT_ID = "";
             jmFormModeTampil_();
-            jmFormPesan_(hasil + " (dipastikan dengan membaca ulang sheet; jawaban simpan sempat tidak sampai.)");
+            jmFormPesan_(hasil);
             document.getElementById("jm-in-qty").value = "";
             document.getElementById("jm-in-ket").value = "";
             jmFormItemBerubah();
