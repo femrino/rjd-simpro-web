@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * SIMPRO -- simpro-jadwal  (v214, form v215, pesan galat jujur v217)
+ * SIMPRO -- simpro-jadwal  (v214, form v215, pesan galat jujur v217, periksa-sendiri v217.1)
  * ============================================================
  * MATRIKS JADWAL PRODUKSI (jadwal.html).
  *
@@ -206,33 +206,47 @@ function jmSimpanLihat_() {
 
 // ---------- muat data ----------
 
-function jmMuat() {
-  fetch(JM_API_URL, {
+/**
+ * Ambil data jadwal dari server. Mengembalikan Promise berisi data mentah;
+ * tidak menyentuh layar. jmMuat() memakainya untuk memuat halaman, jmKirim_()
+ * memakainya untuk MEMERIKSA hasil saat jawaban simpan/hapus tidak sampai.
+ */
+function jmAmbilData_() {
+  return fetch(JM_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: JM_ID_TOKEN, action: "getJadwalManual" })
   })
-  .then(function (r) { return r.json(); })
-  .then(function (data) {
-    if (!data || !data.success) {
+  .then(function (r) { return r.text(); })
+  .then(function (teks) {
+    let data;
+    try { data = JSON.parse(teks); }
+    catch (e) { throw new Error("jawaban server tidak terbaca: " + String(teks).replace(/<[^>]*>/g, " ").trim().slice(0, 90)); }
+    if (!data || !data.success) throw new Error((data && data.error) || "Gagal memuat jadwal.");
+    return data;
+  });
+}
+
+function jmTerapkanData_(data) {
+  JM_DATA = data;
+  // Jendela default: seminggu ke belakang dari hari ini, supaya bar yang
+  // sedang berjalan kelihatan awalnya.
+  if (!JM_LIHAT.mulai) JM_LIHAT.mulai = jmSenin_(jmTambahHari_(jmDariIso_(data.hariIni), -7));
+  jmIsiFilter_();
+  jmIsiFormPilihan_();
+  jmRender();
+}
+
+function jmMuat() {
+  jmAmbilData_()
+    .then(function (data) {
+      jmShow("jm-isi");
+      jmTerapkanData_(data);
+    })
+    .catch(function (e) {
       jmShow("jm-isi");
       document.getElementById("jm-matriks").innerHTML =
-        '<div class="jm-kartu"><p class="jm-galat">' + jmEsc_((data && data.error) || "Gagal memuat jadwal.") + '</p></div>';
-      return;
-    }
-    JM_DATA = data;
-    // Jendela default: seminggu ke belakang dari hari ini, supaya bar yang
-    // sedang berjalan kelihatan awalnya.
-    if (!JM_LIHAT.mulai) JM_LIHAT.mulai = jmSenin_(jmTambahHari_(jmDariIso_(data.hariIni), -7));
-    jmShow("jm-isi");
-    jmIsiFilter_();
-    jmIsiFormPilihan_();
-    jmRender();
-  })
-  .catch(function () {
-    jmShow("jm-isi");
-    document.getElementById("jm-matriks").innerHTML =
-      '<div class="jm-kartu"><p class="jm-galat">Gagal menghubungi server. Periksa jaringan lalu muat ulang.</p></div>';
-  });
+        '<div class="jm-kartu"><p class="jm-galat">' + jmEsc_((e && e.message) || "Gagal menghubungi server. Periksa jaringan lalu muat ulang.") + '</p></div>';
+    });
 }
 
 function jmIsiFilter_() {
@@ -602,6 +616,17 @@ function jmFormSimpan() {
 
   jmFormSibuk_(true);
   jmFormPesan_("Menyimpan...");
+  const cocok = function (b) {
+    return b.item === data.item && b.tahap === data.tahap && (b.line || "") === (data.line || "") &&
+      b.mulai === data.mulai && b.selesai === data.selesai;
+  };
+  const periksaSimpan = function (baru) {
+    const ada = (baru.bar || []).filter(cocok)[0];
+    if (!ada) return "";
+    // kalau ini edit, bar lama (ID sama) harus sudah berubah -- cocok() memastikan itu
+    return (JM_EDIT_ID ? "Perubahan tersimpan: " : "Tersimpan: ") + ada.tahap + (ada.namaLine ? " " + ada.namaLine : "") +
+      " " + jmTanggalPendek_(ada.mulai) + "\u2013" + jmTanggalPendek_(ada.selesai) + ".";
+  };
   jmKirim_("simpanJadwalManual", { data: data }, function (res) {
     const bar = res.bar;
     if (!bar || !bar.id) throw new Error("jawaban server tanpa data baris");
@@ -626,7 +651,7 @@ function jmFormSimpan() {
     document.getElementById("jm-in-ket").value = "";
     jmFormItemBerubah();
     jmGulirKeBar_(bar);
-  });
+  }, periksaSimpan);
 }
 
 function jmFormHapus() {
@@ -637,6 +662,9 @@ function jmFormHapus() {
   jmFormSibuk_(true);
   jmFormPesan_("Menghapus...");
   const id = JM_EDIT_ID;
+  const periksaHapus = function (baru) {
+    return (baru.bar || []).some(function (b) { return b.id === id; }) ? "" : "Jadwal dihapus.";
+  };
   jmKirim_("hapusJadwalManual", { id: id }, function () {
     JM_DATA.bar = (JM_DATA.bar || []).filter(function (x) { return x.id !== id; });
     jmSinkronItems_();
@@ -646,7 +674,7 @@ function jmFormHapus() {
     jmRender();
     jmFormPesan_("Jadwal dihapus.");
     jmFormItemBerubah();
-  });
+  }, periksaHapus);
 }
 
 /**
@@ -666,7 +694,7 @@ function jmFormHapus() {
  *   3. Jawaban tidak sampai / tidak terbaca      -> katakan hasilnya TIDAK
  *      DIKETAHUI dan minta Muat ulang, JANGAN menyuruh mencoba lagi
  */
-function jmKirim_(action, muatan, saatBerhasil) {
+function jmKirim_(action, muatan, saatBerhasil, periksa) {
   const badan = Object.assign({ idToken: JM_ID_TOKEN, action: action }, muatan || {});
   fetch(JM_API_URL, { method: "POST", body: JSON.stringify(badan) })
     .then(function (r) { return r.text(); })
@@ -692,16 +720,48 @@ function jmKirim_(action, muatan, saatBerhasil) {
         jmFormPesan_("Tersimpan di server, tapi tampilan gagal diperbarui. Memuat ulang...", false);
         JM_EDIT_ID = "";
         jmFormModeTampil_();
-        JM_DATA = null;
-        jmShow("jm-loading");
-        jmMuat();
+        jmAmbilData_().then(jmTerapkanData_).catch(function () {});
       }
     })
     .catch(function (e) {
-      jmFormSibuk_(false);
-      jmFormPesan_("Hasilnya TIDAK DIKETAHUI (" +
-        ((e && e.message) ? e.message : "sambungan terputus") +
-        "). Jangan menekan Simpan berulang -- klik Muat ulang dulu untuk memeriksa.", true);
+      // v217.1: JAWABAN TIDAK SAMPAI -> JANGAN MENYERAH, PERIKSA.
+      //
+      // "Failed to fetch" dari Apps Script hampir selalu berarti permintaan
+      // SUDAH dikerjakan tapi jawabannya hilang di jalan (1 Sep 2026: tiga
+      // klik, tiga baris, tiga kali "gagal"). Kalau halaman cuma bilang
+      // "tidak diketahui", orang tetap harus menebak. Jadi halaman membaca
+      // ulang data dari server -- jalur baca terbukti sampai -- lalu melihat
+      // sendiri apakah perubahannya sudah ada. Yang dilaporkan ke orang
+      // adalah KENYATAAN di sheet, bukan nasib satu paket HTTP.
+      const sebab = (e && e.message) ? e.message : "sambungan terputus";
+      if (typeof periksa !== "function") {
+        jmFormSibuk_(false);
+        jmFormPesan_("Hasilnya TIDAK DIKETAHUI (" + sebab + "). Klik Muat ulang untuk memeriksa.", true);
+        return;
+      }
+      jmFormPesan_("Jawaban server tidak sampai (" + sebab + "). Memeriksa ke sheet...");
+      jmAmbilData_()
+        .then(function (data) {
+          jmFormSibuk_(false);
+          jmTerapkanData_(data);
+          const hasil = periksa(data);
+          if (hasil) {
+            JM_EDIT_ID = "";
+            jmFormModeTampil_();
+            jmFormPesan_(hasil + " (dipastikan dengan membaca ulang sheet; jawaban simpan sempat tidak sampai.)");
+            document.getElementById("jm-in-qty").value = "";
+            document.getElementById("jm-in-ket").value = "";
+            jmFormItemBerubah();
+          } else {
+            jmFormPesan_("TIDAK tersimpan (dipastikan dengan membaca ulang sheet). Sebab: " + sebab +
+              ". Coba Simpan sekali lagi; kalau berulang, kirim pesan ini ke admin.", true);
+          }
+        })
+        .catch(function (e2) {
+          jmFormSibuk_(false);
+          jmFormPesan_("Sambungan ke server bermasalah dua kali berturut-turut (" +
+            ((e2 && e2.message) || "terputus") + "). Muat ulang halaman, lalu periksa apakah barisnya sudah ada.", true);
+        });
     });
 }
 
