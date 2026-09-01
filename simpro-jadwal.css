@@ -225,8 +225,11 @@ th.jm-hari-ini { background: #FBE7B3; }
   border:1px solid var(--line, #d8d3c8);
   border-radius:8px;
   overflow:hidden;
-  margin-right:10px;
   vertical-align:middle;
+  /* v238: margin-right dibuang. Dulu ia jarak ke dropdown di sebelahnya;
+     sejak sumbu jadi elemen TERAKHIR baris pertama, margin itu justru
+     mendorongnya menjauh dari tepi kanan. Jarak antar-kontrol sudah diurus
+     `gap` pada .jm-alat. */
 }
 .jm-sumbu button{
   appearance:none;
@@ -260,10 +263,28 @@ th.jm-hari-ini { background: #FBE7B3; }
    .jm-th-kiri{min-width:250px} = 64% lebar layar, plus toolbar
    menumpuk satu layar penuh dan legenda 4 baris. */
 
-/* Laci: di desktop TIDAK KASATMATA secara tata letak -- display:contents
-   membuat anak-anaknya mengalir seolah masih anak langsung .jm-alat,
-   jadi desktop piksel-identik walau DOM-nya sudah pindah. */
-.jm-laci{ display:contents; }
+/* Laci = BARIS KEDUA toolbar di layar lebar.
+   v232 memberinya display:contents supaya desktop piksel-identik dengan
+   sebelum laci ada. Itu benar saat itu, tapi akibatnya kontrol filter
+   mengalir sebagai anak langsung .jm-alat dan membungkus sembarangan:
+   `.jm-alat-spasi{flex:1}` mendorong sebagian ke kanan baris pertama,
+   sisanya tumpah ke baris kedua rata kiri -- tidak ada yang sejajar dengan
+   apa pun (terlihat 2 Sep 2026).
+   Sekarang laci adalah kotak flex-nya sendiri selebar penuh, jadi:
+     baris 1 = navigasi + rentang (kiri) ... sumbu tampilan (kanan)
+     baris 2 = seluruh filter, sejajar rata kiri, dipisah garis tipis
+   Di <=640px aturan ini ditimpa media query di bawah (laci jadi laci
+   sungguhan: tersembunyi sampai tombol Filter ditekan). */
+.jm-laci{
+  display: flex;
+  flex-basis: 100%;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  margin-top: 2px;
+  border-top: 1px solid var(--line, #E5E0D6);
+}
 .jm-btn-laci{ display:none; }
 .jm-btn-legenda{ display:none; }
 .jm-laci-lencana{
