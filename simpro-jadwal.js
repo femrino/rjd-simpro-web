@@ -55,6 +55,10 @@ const JM_LIHAT = {
   klien: "",          // filter ID klien ("" = semua)
   line: "",           // filter ID line ("" = semua)
   sembunyiLewat: true, // sembunyikan item yang semua bar-nya sudah lewat
+  tahap: "",           // v233: filter tahap ("" = semua). SARINGAN TINGKAT-BARIS,
+                       // beda dengan line yang tingkat-item -- lihat catatan di
+                       // jmRenderLaci_. Nilainya utama saat dipadukan mode tahap:
+                       // "Per tahap + Cutting" = daftar kerja harian kepala cutting.
   mode: "artikel"      // v231: "artikel" (grup = item, baris = tahap) | "tahap" (dibalik)
 };
 
@@ -126,6 +130,28 @@ function jmRenderLaci_() {
     pindah.forEach(function (el) { if (el) laci.appendChild(el); });
   }
 
+  // v233: dropdown tahap. SEMANTIK YANG DIPUTUSKAN SADAR (2 Sep 2026):
+  // filter line tetap tingkat-ITEM -- "item yang dijahit di line ini",
+  // dihitung dari SEMUA bar item -- sedangkan tahap tingkat-BARIS. Dengan
+  // begitu "Cutting + line Bu Tini" berarti "baris Cutting milik item yang
+  // dijahit di line Bu Tini". Kalau keduanya di-AND-kan di tingkat bar,
+  // hasilnya SELALU kosong (bar Cutting tidak punya line) -- jebakan.
+  let selT = document.getElementById("jm-f-tahap");
+  if (!selT) {
+    selT = document.createElement("select");
+    selT.id = "jm-f-tahap"; selT.onchange = jmUbahFilter;
+    const selM2 = document.getElementById("jm-f-minggu");
+    if (selM2 && selM2.parentNode === laci) laci.insertBefore(selT, selM2.nextSibling);
+    else laci.insertBefore(selT, laci.firstChild);
+  }
+  const daftarTahap = (JM_DATA && JM_DATA.tahap) || [];
+  if (selT.options.length !== daftarTahap.length + 1) {
+    const nilaiT = selT.value;
+    selT.innerHTML = '<option value="">Semua tahap</option>' +
+      daftarTahap.map(function (t) { return '<option value="' + jmEsc_(t) + '">' + jmEsc_(t) + '</option>'; }).join("");
+    selT.value = (nilaiT && daftarTahap.indexOf(nilaiT) !== -1) ? nilaiT : (JM_LIHAT.tahap || "");
+  }
+
   let btn = document.getElementById("jm-btn-laci");
   if (!btn) {
     btn = document.createElement("button");
@@ -133,7 +159,7 @@ function jmRenderLaci_() {
     btn.onclick = jmToggleLaci;
     laci.parentNode.insertBefore(btn, laci);
   }
-  const n = (JM_LIHAT.klien ? 1 : 0) + (JM_LIHAT.line ? 1 : 0);
+  const n = (JM_LIHAT.klien ? 1 : 0) + (JM_LIHAT.line ? 1 : 0) + (JM_LIHAT.tahap ? 1 : 0);
   btn.innerHTML = "Filter" + (n ? ' <span class="jm-laci-lencana">' + n + "</span>" : "");
 
   // Pelipat legenda -- hidup hanya di layar sempit (diatur CSS).
@@ -325,6 +351,7 @@ function jmBacaLihat_() {
     if (typeof d.klien === "string") JM_LIHAT.klien = d.klien;
     if (typeof d.line === "string") JM_LIHAT.line = d.line;
     if (typeof d.sembunyiLewat === "boolean") JM_LIHAT.sembunyiLewat = d.sembunyiLewat;
+    if (typeof d.tahap === "string") JM_LIHAT.tahap = d.tahap;
   } catch (e) { /* abaikan */ }
 }
 
@@ -333,7 +360,7 @@ function jmSimpanLihat_() {
     sessionStorage.setItem("jm_lihat", JSON.stringify({
       mulai: JM_LIHAT.mulai ? jmIso_(JM_LIHAT.mulai) : null,
       minggu: JM_LIHAT.minggu, klien: JM_LIHAT.klien, line: JM_LIHAT.line,
-      sembunyiLewat: JM_LIHAT.sembunyiLewat
+      sembunyiLewat: JM_LIHAT.sembunyiLewat, tahap: JM_LIHAT.tahap
     }));
   } catch (e) { /* abaikan */ }
 }
@@ -502,6 +529,7 @@ function jmKeHariIni() {
 }
 function jmUbahFilter() {
   JM_LIHAT.klien = (document.getElementById("jm-f-klien") || {}).value || "";
+  JM_LIHAT.tahap = (document.getElementById("jm-f-tahap") || {}).value || "";
   JM_LIHAT.line = (document.getElementById("jm-f-line") || {}).value || "";
   JM_LIHAT.minggu = Number((document.getElementById("jm-f-minggu") || {}).value) || 6;
   JM_LIHAT.sembunyiLewat = !!((document.getElementById("jm-f-lewat") || {}).checked);
@@ -571,6 +599,9 @@ function jmKelompok_() {
       if (JM_LIHAT.sembunyiLewat && g.selesaiMax < hariIni) return false;
       // Filter line: tampilkan item yang punya bar Sewing di line itu.
       if (JM_LIHAT.line && !g.bar.some(function (b) { return b.line === JM_LIHAT.line; })) return false;
+      // v233: filter tahap -- item tanpa satu pun bar tahap itu ikut hilang,
+      // supaya tidak ada judul item yang menggantung tanpa baris.
+      if (JM_LIHAT.tahap && !g.bar.some(function (b) { return b.tahap === JM_LIHAT.tahap; })) return false;
       return true;
     })
     .sort(function (a, b) {
@@ -663,7 +694,8 @@ function jmKelompokTahap_() {
     g.keterangan = nItem + " item" + ((g.tahap !== "Sewing" && pcs) ? " \u00b7 " + pcs.toLocaleString("id-ID") + " pcs" : "");
     g.baris = baris;
     return g;
-  }).filter(function (g) { return g.baris.length; });
+  }).filter(function (g) { return g.baris.length; })
+    .filter(function (g) { return !JM_LIHAT.tahap || g.tahap === JM_LIHAT.tahap; });   // v233
 }
 
 /** Baris-baris matriks untuk satu grup: satu per tahap; Sewing satu per line. */
@@ -671,6 +703,7 @@ function jmBarisGrup_(g) {
   const urutan = JM_DATA.tahap || Object.keys(JM_KELAS_TAHAP);
   const baris = [];
   urutan.forEach(function (tahap) {
+    if (JM_LIHAT.tahap && tahap !== JM_LIHAT.tahap) return;   // v233
     const bars = g.bar.filter(function (b) { return b.tahap === tahap; });
     if (!bars.length) return;
     if (tahap === "Sewing") {
