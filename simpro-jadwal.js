@@ -54,8 +54,47 @@ const JM_LIHAT = {
   minggu: 6,          // jumlah minggu yang digambar
   klien: "",          // filter ID klien ("" = semua)
   line: "",           // filter ID line ("" = semua)
-  sembunyiLewat: true // sembunyikan item yang semua bar-nya sudah lewat
+  sembunyiLewat: true, // sembunyikan item yang semua bar-nya sudah lewat
+  mode: "artikel"      // v231: "artikel" (grup = item, baris = tahap) | "tahap" (dibalik)
 };
+
+/* v231 -- DUA SUMBU, SATU DATA
+   "artikel" menjawab "order ini sudah sampai mana?" (PPIC, owner, CS).
+   "tahap"   menjawab "beban tahap ini minggu ini seberapa?" (kepala cutting,
+             kepala line, kepala finishing).
+   Yang kedua memperlihatkan hal yang pertama menyembunyikannya: TABRAKAN.
+   Lima PO yang semuanya Cutting di tanggal yang sama tersebar di lima grup
+   pada tampilan artikel -- tidak ada yang terlihat aneh. Pada tampilan tahap
+   kelimanya bertumpuk di satu grup dan overload terlihat sekali pandang.
+   Mode disimpan di localStorage (bukan sessionStorage seperti filter lain):
+   ini preferensi peran, kepala cutting tidak perlu mengganti tiap pagi. */
+const JM_MODE_KUNCI = "jm_mode";
+function jmBacaMode_() {
+  try { const m = localStorage.getItem(JM_MODE_KUNCI); if (m === "tahap" || m === "artikel") JM_LIHAT.mode = m; }
+  catch (e) { /* abaikan */ }
+}
+function jmGantiMode(mode) {
+  JM_LIHAT.mode = (mode === "tahap") ? "tahap" : "artikel";
+  try { localStorage.setItem(JM_MODE_KUNCI, JM_LIHAT.mode); } catch (e) { /* abaikan */ }
+  jmRenderTombolMode_();
+  jmRender();
+}
+/** Tombol disuntik ke toolbar dari JS supaya template Blogger hanya naik tag. */
+function jmRenderTombolMode_() {
+  const jangkar = document.getElementById("jm-f-minggu");
+  if (!jangkar || !jangkar.parentNode) return;
+  let w = document.getElementById("jm-sumbu");
+  if (!w) {
+    w = document.createElement("div");
+    w.id = "jm-sumbu"; w.className = "jm-sumbu";
+    w.innerHTML = '<button type="button" data-mode="artikel" onclick="jmGantiMode(\'artikel\')">Per artikel</button>' +
+                  '<button type="button" data-mode="tahap" onclick="jmGantiMode(\'tahap\')">Per tahap</button>';
+    jangkar.parentNode.insertBefore(w, jangkar);
+  }
+  Array.prototype.forEach.call(w.querySelectorAll("button"), function (b) {
+    b.classList.toggle("jm-sumbu-aktif", b.getAttribute("data-mode") === JM_LIHAT.mode);
+  });
+}
 
 const JM_HARI = ["S", "S", "R", "K", "J", "S"]; // Senin..Sabtu
 const JM_BULAN = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
@@ -208,6 +247,7 @@ function jmTerapkanBagian_(d) {
 // ---------- keadaan tampilan ----------
 
 function jmBacaLihat_() {
+  jmBacaMode_();
   try {
     const raw = sessionStorage.getItem("jm_lihat");
     if (!raw) return;
@@ -404,6 +444,7 @@ function jmUbahFilter() {
 
 function jmRender() {
   if (!JM_DATA) return;
+  jmRenderTombolMode_();   // v231: idempoten -- menggambar sekali, sesudahnya cuma menyetel yang aktif
   jmRenderPeringatan_();
   jmRenderMatriks_();
 }
@@ -469,6 +510,93 @@ function jmKelompok_() {
     });
 }
 
+/**
+ * v231: PIVOT -- grup = tahap (Sewing: tahap x line), baris = item.
+ * Mengembalikan bentuk umum yang dimengerti jmRenderMatriks_ mode "tahap":
+ *   { judul, sub, keterangan, tahap, baris: [ { item, label, sub, tahap, bar, mulaiMin } ] }
+ *
+ * Filter mengikuti semantik mode artikel supaya mengganti mode tidak mengubah
+ * "siapa yang tampil": klien menyaring item; line menyaring item yang punya
+ * bar Sewing di line itu (semua tahapnya tetap tampil) DAN di dalam Sewing
+ * hanya sub-grup line itu. Satu pengecualian sadar: "sembunyikan yang lewat"
+ * berlaku PER BARIS, bukan per item -- pada antrean cutting, cutting yang
+ * sudah selesai memang harus hilang walau sewing-nya masih jalan.
+ */
+function jmKelompokTahap_() {
+  const hariIni = JM_DATA.hariIni;
+  const petaItem = {};
+  (JM_DATA.items || []).forEach(function (it) { petaItem[it.kunci] = it; });
+
+  // item yang lolos filter klien/line (semantik sama dengan jmKelompok_)
+  const barPerItem = {};
+  (JM_DATA.bar || []).forEach(function (b) {
+    const it = petaItem[b.item]; if (!it) return;
+    if (JM_LIHAT.klien && it.idKlien !== JM_LIHAT.klien) return;
+    (barPerItem[b.item] = barPerItem[b.item] || []).push(b);
+  });
+  const itemLolos = {};
+  Object.keys(barPerItem).forEach(function (k) {
+    if (JM_LIHAT.line && !barPerItem[k].some(function (b) { return b.line === JM_LIHAT.line; })) return;
+    itemLolos[k] = true;
+  });
+
+  // kunci grup: tahap | tahap+line (Sewing) -- disusun dalam urutan tahap resmi
+  const grupPeta = {}, urutanGrup = [];
+  function ambilGrup(kunci, judul, sub, tahap) {
+    if (!grupPeta[kunci]) { grupPeta[kunci] = { judul: judul, sub: sub, tahap: tahap, barisPeta: {} }; urutanGrup.push(kunci); }
+    return grupPeta[kunci];
+  }
+  const urutanTahap = JM_DATA.tahap || Object.keys(JM_KELAS_TAHAP);
+  urutanTahap.forEach(function (tahap) {
+    Object.keys(itemLolos).forEach(function (kItem) {
+      barPerItem[kItem].filter(function (b) { return b.tahap === tahap; }).forEach(function (b) {
+        let g, kunciBaris;
+        if (tahap === "Sewing") {
+          if (JM_LIHAT.line && b.line !== JM_LIHAT.line) return;
+          g = ambilGrup(tahap + "|" + b.line, tahap, b.namaLine || b.line, tahap);
+          kunciBaris = kItem;
+        } else {
+          g = ambilGrup(tahap, tahap, "", tahap);
+          kunciBaris = kItem + "|" + (b.sub || "");
+        }
+        if (!g.barisPeta[kunciBaris]) {
+          const it = petaItem[kItem];
+          g.barisPeta[kunciBaris] = { item: it, label: [it.artikel, it.style].filter(String).join(" ") || it.po,
+            sub: (tahap === "Sewing") ? "" : (b.sub || ""), tahap: tahap, bar: [], mulaiMin: b.mulai, selesaiMax: b.selesai };
+        }
+        const r = g.barisPeta[kunciBaris];
+        r.bar.push(b);
+        if (b.mulai < r.mulaiMin) r.mulaiMin = b.mulai;
+        if (b.selesai > r.selesaiMax) r.selesaiMax = b.selesai;
+      });
+    });
+  });
+
+  // urut Sewing per line (line id), susun baris, hitung header
+  return urutanGrup.map(function (k) { return grupPeta[k]; }).map(function (g) {
+    const baris = Object.keys(g.barisPeta).map(function (k) { return g.barisPeta[k]; })
+      .filter(function (r) { return !(JM_LIHAT.sembunyiLewat && r.selesaiMax < hariIni); })
+      // ANTREAN: yang mulai paling awal dulu; seri dipecah oleh deadline PO
+      // terdekat (kosong paling belakang), lalu nama.
+      .sort(function (a, b) {
+        if (a.mulaiMin !== b.mulaiMin) return a.mulaiMin < b.mulaiMin ? -1 : 1;
+        const da = a.item.deadline || "9999", db = b.item.deadline || "9999";
+        if (da !== db) return da < db ? -1 : 1;
+        return a.label.localeCompare(b.label);
+      });
+    // Total pcs hanya di tempat ia JUJUR: pada sub-grup Sewing per line satu
+    // item bisa terbagi ke dua line, dan qtyPo penuh akan terhitung dua kali.
+    // Di sana cukup jumlah item.
+    let pcs = 0;
+    const itemUnik = {};
+    baris.forEach(function (r) { if (!itemUnik[r.item.kunci]) { itemUnik[r.item.kunci] = true; pcs += Number(r.item.qtyPo) || 0; } });
+    const nItem = Object.keys(itemUnik).length;
+    g.keterangan = nItem + " item" + ((g.tahap !== "Sewing" && pcs) ? " \u00b7 " + pcs.toLocaleString("id-ID") + " pcs" : "");
+    g.baris = baris;
+    return g;
+  }).filter(function (g) { return g.baris.length; });
+}
+
 /** Baris-baris matriks untuk satu grup: satu per tahap; Sewing satu per line. */
 function jmBarisGrup_(g) {
   const urutan = JM_DATA.tahap || Object.keys(JM_KELAS_TAHAP);
@@ -500,12 +628,30 @@ function jmBarisGrup_(g) {
   return baris;
 }
 
+/** v231: sel-sel tanggal untuk SATU baris bar. Dipakai kedua mode. */
+function jmSelBaris_(b, kolom, hariIni, deadline) {
+  let html = "";
+  kolom.forEach(function (k) {
+    const kelas = jmKelasSel_(k, hariIni, deadline);
+    const bar = b.bar.filter(function (x) { return x.mulai <= k.iso && k.iso <= x.selesai; });
+    if (!bar.length) { html += '<td class="' + kelas + '"></td>'; return; }
+    const x = bar[0];
+    const tepi = (x.mulai === k.iso ? " jm-bar-awal" : "") + (x.selesai === k.iso ? " jm-bar-akhir" : "");
+    const tip = b.label + (b.sub ? " " + b.sub : "") + ": " + jmTanggalPendek_(x.mulai) + " - " + jmTanggalPendek_(x.selesai) +
+      (x.qty ? " \u00b7 " + x.qty + " pcs" : "") + (x.keterangan ? "\n" + x.keterangan : "");
+    html += '<td class="' + kelas + ' jm-bar jm-t-' + (JM_KELAS_TAHAP[b.tahap] || "lain") + tepi + (x.menunggu ? " jm-bar-menunggu" : "") +
+      '" data-id="' + jmEsc_(x.id || "") + '" title="' + jmEsc_(tip) + (x.id ? "\n(klik untuk mengubah)" : "") + '"></td>';
+  });
+  return html;
+}
+
 function jmRenderMatriks_() {
   const wadah = document.getElementById("jm-matriks");
   if (!JM_DATA.sheetAda) { wadah.innerHTML = ""; jmRenderInfo_(0, 0); return; }
 
   const kolom = jmKolom_();
-  const grup = jmKelompok_();
+  const modeTahap = JM_LIHAT.mode === "tahap";
+  const grup = modeTahap ? jmKelompokTahap_() : jmKelompok_();
   const hariIni = JM_DATA.hariIni;
 
   if (!grup.length) {
@@ -528,7 +674,7 @@ function jmRenderMatriks_() {
   // tampak menabrak kolom kiri. Sekarang tiap baris header punya sel kirinya
   // sendiri (baris kedua kosong), keduanya sticky kiri+atas.
   let thead = '<tr class="jm-h-minggu"><th class="jm-sticky jm-th-kiri">' +
-    '<span>Artikel &amp; Tahap</span></th>';
+    '<span>' + (modeTahap ? 'Tahap &amp; Artikel' : 'Artikel &amp; Tahap') + '</span></th>';
   for (let m = 0; m < JM_LIHAT.minggu; m++) {
     const a = kolom[m * 6].tgl, z = kolom[m * 6 + 5].tgl;
     const label = (a.getMonth() === z.getMonth())
@@ -549,6 +695,33 @@ function jmRenderMatriks_() {
   // ---- badan
   let tbody = "";
   let jumlahBaris = 0;
+
+  if (modeTahap) {
+    const itemUnik = {};
+    grup.forEach(function (g, gi) {
+      tbody += '<tr class="jm-r-item jm-r-grup-tahap"><td class="jm-sticky jm-td-item">' +
+        '<div class="jm-item-nama"><span class="jm-swatch jm-t-' + (JM_KELAS_TAHAP[g.tahap] || "lain") + '"></span>' +
+          jmEsc_(g.judul) + (g.sub ? ' <span class="jm-tahap-sub">' + jmEsc_(g.sub) + '</span>' : '') + '</div>' +
+        '<div class="jm-item-meta">' + jmEsc_(g.keterangan) + '</div></td>';
+      kolom.forEach(function (k) { tbody += '<td class="' + jmKelasSel_(k, hariIni, null) + '"></td>'; });
+      tbody += '</tr>';
+      g.baris.forEach(function (b) {
+        jumlahBaris++; itemUnik[b.item.kunci] = true;
+        const it = b.item, dlLewat = it.deadline && it.deadline < hariIni;
+        tbody += '<tr class="jm-r-tahap"><td class="jm-sticky jm-td-tahap jm-td-tahap-item">' +
+          '<div class="jm-item-nama-kecil">' + jmEsc_(b.label) +
+            (b.sub ? ' <span class="jm-tahap-sub">' + jmEsc_(b.sub) + '</span>' : '') + '</div>' +
+          '<div class="jm-item-meta-kecil">' + jmEsc_(it.namaKlien || it.idKlien) + ' <span class="jm-mono">' + jmEsc_(it.po) + '</span>' +
+            (it.deadline ? ' \u00b7 <span class="jm-dl' + (dlLewat ? ' jm-dl-lewat' : '') + '">' + jmTanggalPendek_(it.deadline) + '</span>' : '') +
+          '</div></td>' + jmSelBaris_(b, kolom, hariIni, it.deadline) + '</tr>';
+      });
+      if (gi < grup.length - 1) tbody += '<tr class="jm-r-pisah"><td colspan="' + (kolom.length + 1) + '"></td></tr>';
+    });
+    wadah.innerHTML = '<div class="jm-gulir"><table class="jm-tabel"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table></div>';
+    jmRenderInfo_(Object.keys(itemUnik).length, jumlahBaris);
+    return;
+  }
+
   grup.forEach(function (g, gi) {
     const it = g.item;
     const baris = jmBarisGrup_(g);
@@ -578,18 +751,7 @@ function jmRenderMatriks_() {
         '<td class="jm-sticky jm-td-tahap"><span class="jm-swatch jm-t-' + (JM_KELAS_TAHAP[b.tahap] || "lain") + '"></span>' +
           jmEsc_(b.label) + (b.sub ? ' <span class="jm-tahap-sub">' + jmEsc_(b.sub) + '</span>' : '') +
         '</td>';
-      kolom.forEach(function (k) {
-        const kelas = jmKelasSel_(k, hariIni, it.deadline);
-        const bar = b.bar.filter(function (x) { return x.mulai <= k.iso && k.iso <= x.selesai; });
-        if (!bar.length) { tbody += '<td class="' + kelas + '"></td>'; return; }
-        const x = bar[0];
-        const tepi = (x.mulai === k.iso ? " jm-bar-awal" : "") + (x.selesai === k.iso ? " jm-bar-akhir" : "");
-        const tip = b.label + (b.sub ? " " + b.sub : "") + ": " + jmTanggalPendek_(x.mulai) + " - " + jmTanggalPendek_(x.selesai) +
-          (x.qty ? " \u00b7 " + x.qty + " pcs" : "") + (x.keterangan ? "\n" + x.keterangan : "");
-        tbody += '<td class="' + kelas + ' jm-bar jm-t-' + (JM_KELAS_TAHAP[b.tahap] || "lain") + tepi + (x.menunggu ? " jm-bar-menunggu" : "") +
-          '" data-id="' + jmEsc_(x.id || "") + '" title="' + jmEsc_(tip) + (x.id ? "\n(klik untuk mengubah)" : "") + '"></td>';
-      });
-      tbody += '</tr>';
+      tbody += jmSelBaris_(b, kolom, hariIni, it.deadline) + '</tr>';
     });
     if (gi < grup.length - 1) tbody += '<tr class="jm-r-pisah"><td colspan="' + (kolom.length + 1) + '"></td></tr>';
   });

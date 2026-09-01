@@ -215,3 +215,38 @@ th.jm-hari-ini { background: #FBE7B3; }
   .jm-bar, .jm-t-pola, .jm-t-bahan, .jm-t-cutting, .jm-t-interlining, .jm-t-sewing, .jm-t-finishing, .jm-t-kirim,
   .jm-hari-ini, .jm-r-item td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+
+/* ============================================================
+   SUMBU TAMPILAN (v231): per artikel / per tahap
+   ============================================================ */
+.jm-sumbu{
+  display:inline-flex;
+  border:1px solid var(--line, #d8d3c8);
+  border-radius:8px;
+  overflow:hidden;
+  margin-right:10px;
+  vertical-align:middle;
+}
+.jm-sumbu button{
+  appearance:none;
+  border:0;
+  background:transparent;
+  padding:8px 12px;
+  font:inherit;
+  font-size:13px;
+  color:var(--ink-soft, #5a5a5a);
+  cursor:pointer;
+}
+.jm-sumbu button + button{ border-left:1px solid var(--line, #d8d3c8); }
+.jm-sumbu button.jm-sumbu-aktif{
+  background:var(--ink, #1e2330);
+  color:#fff;
+  font-weight:600;
+}
+/* Header grup tahap: swatch warna tahap ikut di judul. */
+.jm-r-grup-tahap .jm-item-nama .jm-swatch{ margin-right:6px; vertical-align:middle; }
+/* Baris item di dalam grup tahap: dua tingkat teks, lebih padat dari header item. */
+.jm-td-tahap-item{ line-height:1.3; }
+.jm-item-nama-kecil{ font-weight:600; font-size:13px; }
+.jm-item-meta-kecil{ font-size:11.5px; color:var(--ink-soft, #6b6b6b); margin-top:1px; }
