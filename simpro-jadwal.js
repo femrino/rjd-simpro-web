@@ -79,6 +79,74 @@ function jmGantiMode(mode) {
   jmRenderTombolMode_();
   jmRender();
 }
+/* v232 -- LAYAR SEMPIT
+   Di ~390 px, toolbar yang menumpuk vertikal memakan satu layar penuh sebelum
+   data pertama terlihat, dan legenda 4 baris lagi. Solusinya laci: kontrol
+   filter DIPINDAH (bukan disalin) ke #jm-laci lewat JS. Di desktop laci diberi
+   display:contents -- anak-anaknya mengalir seolah tidak pernah pindah, jadi
+   desktop piksel-identik. Di layar sempit laci tertutup untuk semua orang
+   (keputusan 2 Sep 2026) dan dibuka tombol Filter.
+
+   Tombol Filter WAJIB berlencana jumlah filter aktif. Filter tersembunyi yang
+   menyala tanpa penanda adalah jebakan klasik: "kok PO-nya hilang?" padahal
+   filter klien menyala di laci yang tertutup. Lencana hanya menghitung filter
+   yang MENYEMBUNYIKAN data (klien, line) -- lebar minggu dan centang bawaan
+   bukan jebakan. */
+var JM_LACI_BUKA = false;   // sengaja tidak dipersistensi: selalu tertutup saat halaman dibuka
+
+function jmToggleLaci() {
+  JM_LACI_BUKA = !JM_LACI_BUKA;
+  const laci = document.getElementById("jm-laci");
+  if (laci) laci.classList.toggle("jm-laci-buka", JM_LACI_BUKA);
+  const btn = document.getElementById("jm-btn-laci");
+  if (btn) btn.classList.toggle("jm-sumbu-aktif", JM_LACI_BUKA);
+}
+function jmToggleLegenda() {
+  const l = document.getElementById("jm-legenda");
+  if (l) l.classList.toggle("jm-legenda-buka");
+}
+
+function jmRenderLaci_() {
+  const alat = document.querySelector(".jm-alat");
+  if (!alat) return;
+
+  let laci = document.getElementById("jm-laci");
+  if (!laci) {
+    laci = document.createElement("div");
+    laci.id = "jm-laci"; laci.className = "jm-laci";
+    // Elemen DIPINDAH utuh -- id, value, dan onchange ikut, jadi
+    // jmIsiFilter_/jmUbahFilter tidak perlu tahu apa-apa soal laci.
+    const pindah = [document.getElementById("jm-f-minggu"),
+      document.getElementById("jm-f-klien"), document.getElementById("jm-f-line"),
+      alat.querySelector("label.jm-cek")];
+    Array.prototype.forEach.call(alat.querySelectorAll("button"), function (b) {
+      if (b.textContent.trim() === "Muat ulang") pindah.push(b);
+    });
+    alat.appendChild(laci);
+    pindah.forEach(function (el) { if (el) laci.appendChild(el); });
+  }
+
+  let btn = document.getElementById("jm-btn-laci");
+  if (!btn) {
+    btn = document.createElement("button");
+    btn.id = "jm-btn-laci"; btn.type = "button"; btn.className = "jm-btn jm-btn-laci";
+    btn.onclick = jmToggleLaci;
+    laci.parentNode.insertBefore(btn, laci);
+  }
+  const n = (JM_LIHAT.klien ? 1 : 0) + (JM_LIHAT.line ? 1 : 0);
+  btn.innerHTML = "Filter" + (n ? ' <span class="jm-laci-lencana">' + n + "</span>" : "");
+
+  // Pelipat legenda -- hidup hanya di layar sempit (diatur CSS).
+  const legenda = document.getElementById("jm-legenda");
+  if (legenda && !document.getElementById("jm-btn-legenda")) {
+    const bl = document.createElement("button");
+    bl.id = "jm-btn-legenda"; bl.type = "button"; bl.className = "jm-btn-legenda";
+    bl.textContent = "Keterangan";
+    bl.onclick = jmToggleLegenda;
+    legenda.parentNode.insertBefore(bl, legenda);
+  }
+}
+
 /** Tombol disuntik ke toolbar dari JS supaya template Blogger hanya naik tag. */
 function jmRenderTombolMode_() {
   const jangkar = document.getElementById("jm-f-minggu");
@@ -445,6 +513,7 @@ function jmUbahFilter() {
 function jmRender() {
   if (!JM_DATA) return;
   jmRenderTombolMode_();   // v231: idempoten -- menggambar sekali, sesudahnya cuma menyetel yang aktif
+  jmRenderLaci_();         // v232: idem; juga memperbarui lencana jumlah filter aktif
   jmRenderPeringatan_();
   jmRenderMatriks_();
 }
@@ -711,7 +780,7 @@ function jmRenderMatriks_() {
         tbody += '<tr class="jm-r-tahap"><td class="jm-sticky jm-td-tahap jm-td-tahap-item">' +
           '<div class="jm-item-nama-kecil">' + jmEsc_(b.label) +
             (b.sub ? ' <span class="jm-tahap-sub">' + jmEsc_(b.sub) + '</span>' : '') + '</div>' +
-          '<div class="jm-item-meta-kecil">' + jmEsc_(it.namaKlien || it.idKlien) + ' <span class="jm-mono">' + jmEsc_(it.po) + '</span>' +
+          '<div class="jm-item-meta-kecil"><span class="jm-klien">' + jmEsc_(it.namaKlien || it.idKlien) + ' </span><span class="jm-mono">' + jmEsc_(it.po) + '</span>' +
             (it.deadline ? ' \u00b7 <span class="jm-dl' + (dlLewat ? ' jm-dl-lewat' : '') + '">' + jmTanggalPendek_(it.deadline) + '</span>' : '') +
           '</div></td>' + jmSelBaris_(b, kolom, hariIni, it.deadline) + '</tr>';
       });
