@@ -954,8 +954,14 @@ function jmRenderMatriks_() {
         tbody += '<tr class="jm-r-tahap"><td class="jm-sticky jm-td-tahap jm-td-tahap-item">' +
           '<div class="jm-item-nama-kecil">' + jmEsc_(b.label) +
             (b.sub ? ' <span class="jm-tahap-sub">' + jmEsc_(b.sub) + '</span>' : '') + '</div>' +
-          '<div class="jm-item-meta-kecil"><span class="jm-klien">' + jmEsc_(it.namaKlien || it.idKlien) + ' </span><span class="jm-mono">' + jmEsc_(it.po) + '</span>' +
-            (it.deadline ? ' \u00b7 <span class="jm-dl' + (dlLewat ? ' jm-dl-lewat' : '') + '">' + jmTanggalPendek_(it.deadline) + '</span>' : '') +
+          // v236: tiap bagian dibungkus span sendiri, dan pemisah "\u00b7" ikut MASUK
+          // ke dalam span deadline. Alasannya bukan kosmetik: barisnya dijadikan
+          // flex supaya kode PO yang menyusut (ellipsis) sementara DEADLINE tidak
+          // pernah menyusut. Sebelumnya justru sebaliknya -- "260708/Himeka 12 \u00b7 5 S..."
+          // memotong tanggal, bagian yang paling dibutuhkan orang lantai.
+          '<div class="jm-item-meta-kecil"><span class="jm-klien">' + jmEsc_(it.namaKlien || it.idKlien) + '</span>' +
+            '<span class="jm-mono">' + jmEsc_(it.po) + '</span>' +
+            (it.deadline ? '<span class="jm-dl' + (dlLewat ? ' jm-dl-lewat' : '') + '">\u00b7 ' + jmTanggalPendek_(it.deadline) + '</span>' : '') +
           '</div></td>' + jmSelBaris_(b, kolom, hariIni, it.deadline) + '</tr>';
       });
       if (gi < grup.length - 1) tbody += '<tr class="jm-r-pisah"><td colspan="' + (kolom.length + 1) + '"></td></tr>';
@@ -976,10 +982,12 @@ function jmRenderMatriks_() {
     tbody += '<tr class="jm-r-item">' +
       '<td class="jm-sticky jm-td-item">' +
         '<div class="jm-item-nama">' + jmEsc_(judul || it.po) + '</div>' +
-        '<div class="jm-item-meta">' + jmEsc_(it.namaKlien || it.idKlien) +
-          ' <span class="jm-mono">' + jmEsc_(it.po) + '</span>' +
-          (it.qtyPo ? ' &#183; ' + it.qtyPo.toLocaleString("id-ID") + ' pcs' : '') +
-          (it.deadline ? ' &#183; <span class="jm-dl' + (deadlineLewat ? ' jm-dl-lewat' : '') + '">deadline ' +
+        // v236: sama dengan mode tahap -- klien & PO boleh menyusut, qty dan
+        // deadline tidak.
+        '<div class="jm-item-meta"><span class="jm-klien">' + jmEsc_(it.namaKlien || it.idKlien) + '</span>' +
+          '<span class="jm-mono">' + jmEsc_(it.po) + '</span>' +
+          (it.qtyPo ? '<span class="jm-qty">&#183; ' + it.qtyPo.toLocaleString("id-ID") + ' pcs</span>' : '') +
+          (it.deadline ? '<span class="jm-dl' + (deadlineLewat ? ' jm-dl-lewat' : '') + '">&#183; ' +
             jmTanggalPendek_(it.deadline) + '</span>' : '') +
         '</div>' +
       '</td>';

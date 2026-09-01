@@ -352,13 +352,67 @@ th.jm-hari-ini { background: #FBE7B3; }
 .jm-td-tahap:hover{ background: #FAF7F1; }
 
 /* Penanda muncul HANYA saat seluruh bar baris itu di luar layar. */
+/* v236: DILUAR ALIRAN TEKS. Versi v235 memakai float:right -- saat tidak muat
+   di sisa baris ia turun jadi baris KETIGA, dan tinggi baris ikut berubah
+   (~97px berpenanda vs ~48px tidak). Artinya tinggi baris bergantung pada
+   posisi gulir: daftar yang "bergoyang" saat digulir, persis keluhan 2 Sep.
+   Absolute membuat penanda tidak pernah menyumbang tinggi sama sekali. */
 .jm-penanda{
-  float: right;
-  margin-left: 6px;
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 10px;
-  line-height: 1.6;
+  line-height: 1;
   color: var(--ink-soft, #8A93A0);
+  pointer-events: none;
 }
 @media (max-width: 640px){
   .jm-penanda{ font-size: 9px; }
+}
+
+
+/* ============================================================
+   TINGGI BARIS TETAP & LABEL BERSIH (v236)
+   ============================================================
+   Dua keluhan 2 Sep 2026 yang ternyata satu akar: label yang membungkus ke
+   baris ketiga. Sekali label bisa membungkus, tinggi baris jadi tidak bisa
+   ditebak -- dan yang terpotong justru bagian terpenting (deadline). */
+
+/* Wadah penanda absolut. */
+.jm-td-tahap, .jm-td-item{ position: relative; }
+/* Ruang untuk penanda supaya teks tidak pernah menabraknya. */
+.jm-td-tahap{ padding-right: 18px; }
+
+/* Meta jadi satu baris flex: klien & PO MENYUSUT, qty & deadline TIDAK.
+   Sebelumnya semuanya satu aliran teks, jadi yang terpotong adalah yang
+   paling kanan -- selalu deadline. */
+.jm-item-meta, .jm-item-meta-kecil{
+  display: flex; align-items: baseline; gap: 4px;
+  white-space: nowrap; overflow: hidden;
+}
+.jm-item-meta .jm-klien, .jm-item-meta .jm-mono,
+.jm-item-meta-kecil .jm-klien, .jm-item-meta-kecil .jm-mono{
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.jm-item-meta .jm-qty, .jm-item-meta .jm-dl,
+.jm-item-meta-kecil .jm-dl{ flex: 0 0 auto; }
+
+/* Judul tidak pernah membungkus. */
+.jm-item-nama, .jm-item-nama-kecil{
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
+}
+
+/* Tinggi baris DIKUNCI -- tidak lagi bergantung pada isi atau posisi gulir. */
+.jm-r-tahap > td{ height: 30px; }
+.jm-r-tahap .jm-td-tahap-item{ height: 44px; }
+
+@media (max-width: 640px){
+  .jm-td-tahap{ padding-right: 16px; }
+  .jm-r-tahap > td{ height: 28px; }
+  .jm-r-tahap .jm-td-tahap-item{ height: 42px; }
+  .jm-item-meta, .jm-item-meta-kecil{ gap: 3px; }
+  /* Kode PO panjang ("260716/Kafana Style 14") memakan seluruh baris. Di layar
+     sempit ia boleh menyusut jauh -- deadline yang harus selamat. */
+  .jm-item-meta-kecil .jm-mono{ font-size: 11px; }
 }
