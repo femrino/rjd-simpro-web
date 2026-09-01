@@ -313,3 +313,30 @@ th.jm-hari-ini { background: #FBE7B3; }
   .jm-th-hari, .jm-sel{ width:24px; min-width:24px; }
   .jm-sel{ height:24px; }
 }
+
+
+/* ============================================================
+   BARIS KONTROL SEJAJAR (v234, layar sempit)
+   ============================================================
+   Permintaan 2 Sep 2026: nav + sumbu + Filter satu baris. Hitungannya ketat
+   di 390 px, jadi tiga hal dikecilkan bersamaan: label toggle memendek
+   (Artikel|Tahap), padding tombol dirapatkan, dan baris rentang tanggal turun
+   ke bawah sebagai baris info (order flex, bukan perubahan DOM). */
+.jm-lbl-pendek{ display:none; }
+
+@media (max-width: 640px){
+  .jm-lbl-panjang{ display:none; }
+  .jm-lbl-pendek{ display:inline; }
+
+  .jm-alat{ gap:6px; }
+  .jm-alat-spasi{ display:none; }         /* pendorong-kanan tak relevan saat wrap */
+  .jm-rentang{ order:10; width:100%; margin-top:2px; }
+  #jm-laci{ order:5; }                    /* laci terbuka: di bawah baris tombol,
+                                             di atas rentang */
+  .jm-nav .jm-btn{ padding:8px 10px; }
+  .jm-sumbu button{ padding:8px 9px; font-size:12.5px; }
+  .jm-btn-laci{ padding:8px 10px; }
+  /* nav, sumbu, dan Filter tingginya beda beberapa px karena padding masing-
+     masing; stretch menyamakannya supaya barisnya terlihat satu garis rapi. */
+  .jm-nav, .jm-sumbu, .jm-btn-laci{ align-self:stretch; align-items:center; }
+}

@@ -181,8 +181,14 @@ function jmRenderTombolMode_() {
   if (!w) {
     w = document.createElement("div");
     w.id = "jm-sumbu"; w.className = "jm-sumbu";
-    w.innerHTML = '<button type="button" data-mode="artikel" onclick="jmGantiMode(\'artikel\')">Per artikel</button>' +
-                  '<button type="button" data-mode="tahap" onclick="jmGantiMode(\'tahap\')">Per tahap</button>';
+    // v234: dua versi label. Di 390 px, "Per artikel | Per tahap" + nav +
+    // Filter = +-430 px -- meluber. Label pendek + padding rapat membuat
+    // ketiganya muat SEJAJAR di satu baris. CSS yang memilih versi mana yang
+    // tampil; JS-nya selalu menggambar keduanya.
+    w.innerHTML = '<button type="button" data-mode="artikel" onclick="jmGantiMode(\'artikel\')">' +
+                    '<span class="jm-lbl-panjang">Per artikel</span><span class="jm-lbl-pendek">Artikel</span></button>' +
+                  '<button type="button" data-mode="tahap" onclick="jmGantiMode(\'tahap\')">' +
+                    '<span class="jm-lbl-panjang">Per tahap</span><span class="jm-lbl-pendek">Tahap</span></button>';
     jangkar.parentNode.insertBefore(w, jangkar);
   }
   Array.prototype.forEach.call(w.querySelectorAll("button"), function (b) {
