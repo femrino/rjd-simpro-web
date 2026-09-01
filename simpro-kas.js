@@ -92,8 +92,26 @@ var KS_SNAP_UMUR_MENIT = 24 * 60;
 var KS_SNAP_WAKTU = null;
 
 function ksMuatPertama_() {
+  // v229r2: bulan yang DIMINTA dicatat SEBELUM snapshot menyentuh KS_BULAN.
+  // Tanpa ini, membuka halaman tanggal 1 sesudah terakhir dipakai bulan lalu
+  // akan meminta BULAN LALU ke server -- diam-diam, di halaman uang. `null`
+  // berarti "biar server yang pilih bulan berjalan" (lihat ksMuat).
+  var bulanDiminta = KS_BULAN || null;
+
   if (!KS_SUDAH_SEGAR && typeof rjdSnapshotBaca_ === "function") {
-    var snap = rjdSnapshotBaca_("kas_" + (KS_BULAN || "kini"), KS_SNAP_UMUR_MENIT);
+    // v229r2: KUNCINYA TETAP, bukan per bulan.
+    //
+    // v228 menyimpan dengan kunci "kas_<bulan>" (mis. kas_2026-09) tapi
+    // MEMBACANYA dengan "kas_" + (KS_BULAN || "kini") -- dan pada pemuatan
+    // pertama KS_BULAN masih null, karena bulan berjalan baru diketahui dari
+    // jawaban server. Jadi yang dicari selalu "kas_kini", yang tidak pernah
+    // ditulis. Snapshot kas TIDAK PERNAH kena sejak v228; halaman ini selalu
+    // menunggu satu bolak-balik penuh, dan itulah "Memuat buku kas..." yang
+    // tidak kunjung hilang.
+    //
+    // Kunci per bulan juga tidak ada gunanya: satu-satunya pembaca snapshot
+    // adalah pemuatan pertama, dan ksGeser() sengaja tidak memakai snapshot.
+    var snap = rjdSnapshotBaca_("kas_terakhir", KS_SNAP_UMUR_MENIT);
     if (snap && snap.data && snap.data.akun) {
       KS_DATA = snap.data; KS_BULAN = snap.data.bulan; KS_SNAP_WAKTU = snap.waktu;
       ksShow("ks-isi"); ksRender();
@@ -104,15 +122,19 @@ function ksMuatPertama_() {
       if (typeof rjdSnapshotBar_ === "function") rjdSnapshotBar_("ks-saldo", snap.waktu);
     }
   }
-  return ksMuat(KS_BULAN);
+  return ksMuat(bulanDiminta);
 }
 
 function ksMuat(bulan) {
-  return ksKirim_("getKas", { bulan: bulan || KS_BULAN || undefined })
+  // v229r2: `null` EKSPLISIT = jangan pakai KS_BULAN, biar server memilih bulan
+  // berjalan. Dibutuhkan karena snapshot sudah mengisi KS_BULAN dengan bulan
+  // terakhir yang dilihat, dan itu belum tentu bulan sekarang. Pemanggil lama
+  // (ksMuat(), ksMuat(KS_BULAN), ksMuat(ksGeserBulan(...))) tidak berubah.
+  return ksKirim_("getKas", { bulan: (bulan === null ? undefined : (bulan || KS_BULAN || undefined)) })
     .then(function (d) {
       KS_DATA = d; KS_BULAN = d.bulan; ksShow("ks-isi"); ksRender();
       KS_SUDAH_SEGAR = true; KS_SNAP_WAKTU = null;
-      if (typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("kas_" + d.bulan, d);
+      if (typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("kas_terakhir", d);
       if (typeof rjdSnapshotBarHapus_ === "function") rjdSnapshotBarHapus_("ks-saldo");
     })
     .catch(function (e) {
