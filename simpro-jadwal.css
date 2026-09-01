@@ -379,8 +379,19 @@ th.jm-hari-ini { background: #FBE7B3; }
    baris ketiga. Sekali label bisa membungkus, tinggi baris jadi tidak bisa
    ditebak -- dan yang terpotong justru bagian terpenting (deadline). */
 
-/* Wadah penanda absolut. */
-.jm-td-tahap, .jm-td-item{ position: relative; }
+/* v237 NISAN: di sini pernah ada `.jm-td-tahap, .jm-td-item{ position:relative }`
+   sebagai "wadah penanda absolut". Aturan itu MEMATIKAN KOLOM KIRI YANG
+   MENEMPEL: sel-sel itu juga membawa kelas .jm-sticky (position:sticky),
+   spesifisitasnya setara (sama-sama satu kelas), dan aturan ini berada lebih
+   BELAKANG di berkas -- jadi relative menang dan sticky mati diam-diam.
+
+   Aturan itu memang tidak pernah dibutuhkan: position:sticky SUDAH termasuk
+   elemen ter-posisi, jadi ia sendiri yang menjadi acuan bagi anak
+   position:absolute. Penanda tetap terjangkar dengan benar tanpanya.
+
+   Pelajaran: sebelum menambah `position:` pada selektor apa pun, periksa
+   apakah elemen yang sama sudah membawa position dari kelas lain. */
+
 /* Ruang untuk penanda supaya teks tidak pernah menabraknya. */
 .jm-td-tahap{ padding-right: 18px; }
 
