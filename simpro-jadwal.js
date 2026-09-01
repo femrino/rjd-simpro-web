@@ -736,6 +736,141 @@ function jmBarisGrup_(g) {
   return baris;
 }
 
+/* ============================================================
+   v235 -- POSISI GULIR HORIZONTAL
+   ============================================================
+   Sampai v234 matriks selalu terbuka di kolom PALING KIRI. Dengan jendela 6
+   minggu (36 kolom) di layar HP yang cuma memuat ~9, "hari ini" dan hampir
+   semua bar ada di luar layar sejak detik pertama -- tangkapan layar 2 Sep
+   2026 memperlihatkan matriks terbuka di Sep 19-28 dengan SELURUH sel kosong.
+   Orang harus menggulir mencari-cari sebelum melihat data apa pun.
+
+   Tiga lapisan, sengaja saling melengkapi:
+     1. gulir awal ke "hari ini" (atau bar paling awal kalau hari ini di luar
+        jendela) -- menolong SEMUA orang tanpa satu klik pun
+     2. penanda arah per baris untuk bar di luar layar -- PASIF, jadi orang
+        tahu ke mana melihat tanpa mengklik dulu
+     3. klik label kolom kiri -> gulir ke bar PERTAMA baris itu
+
+   Yang SENGAJA TIDAK dilakukan: menggulir otomatis saat filter berubah atau
+   saat baris lain diklik. Gulir yang bergerak sendiri tanpa diminta membuat
+   orang kehilangan tempatnya -- lebih buruk daripada menggulir manual.
+   Gerakan hanya saat digambar ulang total dan saat diklik. */
+
+/** Sel <td>/<th> pertama pada kolom ke-i (0-based) di dalam wadah gulir. */
+function jmKolomKiri_(gulir, i) {
+  const th = gulir.querySelectorAll(".jm-h-hari .jm-th-hari")[i];
+  return th ? th.offsetLeft : null;
+}
+
+/** Lebar kolom kiri yang menempel -- area yang TIDAK boleh dipakai menaruh bar. */
+function jmLebarSticky_(gulir) {
+  const s = gulir.querySelector(".jm-th-kiri");
+  return s ? s.getBoundingClientRect().width : 0;
+}
+
+/**
+ * Menggulir supaya kolom index `i` terlihat, dengan sedikit konteks di kirinya.
+ * `mulus` false saat gambar pertama -- animasi ke posisi awal terlihat seperti
+ * kegagalan, bukan fitur.
+ */
+function jmGulirKeKolom_(i, mulus) {
+  const gulir = document.querySelector("#jm-matriks .jm-gulir");
+  if (!gulir || i == null || i < 0) return;
+  const kiri = jmKolomKiri_(gulir, i);
+  if (kiri == null) return;
+  const konteks = jmLebarSticky_(gulir) + 48;   // sedikit hari sebelumnya tetap terlihat
+  const target = Math.max(0, kiri - konteks);
+  if (mulus && gulir.scrollTo) gulir.scrollTo({ left: target, behavior: "smooth" });
+  else gulir.scrollLeft = target;
+}
+
+/** Index kolom untuk sebuah tanggal ISO; -1 kalau di luar jendela. */
+function jmIndexKolom_(iso, kolom) {
+  for (let i = 0; i < kolom.length; i++) if (kolom[i].iso === iso) return i;
+  return -1;
+}
+
+/** Lapisan 1: posisi awal = hari ini; kalau di luar jendela, bar paling awal. */
+function jmGulirAwal_(kolom) {
+  let i = jmIndexKolom_(JM_DATA.hariIni, kolom);
+  if (i === -1) {
+    let paling = null;
+    (JM_DATA.bar || []).forEach(function (b) { if (!paling || b.mulai < paling) paling = b.mulai; });
+    if (paling) {
+      i = jmIndexKolom_(paling, kolom);
+      // Bar mulai sebelum jendela -> kolom pertama sudah benar.
+      if (i === -1) i = 0;
+    }
+  }
+  if (i >= 0) jmGulirKeKolom_(i, false);
+}
+
+/**
+ * Lapisan 2: penanda arah untuk baris yang SELURUH bar-nya di luar layar.
+ * Dihitung dari posisi gulir NYATA, jadi ikut berubah saat orang menggulir.
+ */
+function jmPerbaruiPenanda_() {
+  const gulir = document.querySelector("#jm-matriks .jm-gulir");
+  if (!gulir) return;
+  const batasKiri = gulir.scrollLeft + jmLebarSticky_(gulir);
+  const batasKanan = gulir.scrollLeft + gulir.clientWidth;
+  Array.prototype.forEach.call(gulir.querySelectorAll("tr.jm-r-tahap"), function (tr) {
+    const label = tr.querySelector("td.jm-sticky");
+    if (!label) return;
+    let lama = label.querySelector(".jm-penanda");
+    const sel = tr.querySelectorAll("td.jm-bar");
+    let adaTerlihat = false, kiri = 0, kanan = 0;
+    Array.prototype.forEach.call(sel, function (td) {
+      const a = td.offsetLeft, z = a + td.offsetWidth;
+      if (z > batasKiri && a < batasKanan) adaTerlihat = true;
+      else if (z <= batasKiri) kiri++; else kanan++;
+    });
+    if (lama) lama.remove();
+    if (!sel.length || adaTerlihat) return;
+    const p = document.createElement("span");
+    p.className = "jm-penanda";
+    p.textContent = kiri ? "\u25C0" : "\u25B6";
+    p.title = kiri ? "Jadwal baris ini ada di sebelah kiri" : "Jadwal baris ini ada di sebelah kanan";
+    label.appendChild(p);
+  });
+}
+
+/** Lapisan 3: klik label kolom kiri -> gulir ke bar PERTAMA baris itu. */
+function jmKlikLabel_(tr) {
+  const gulir = document.querySelector("#jm-matriks .jm-gulir");
+  if (!gulir) return;
+  const sel = tr.querySelectorAll("td.jm-bar");
+  if (!sel.length) return;
+  let paling = null;
+  Array.prototype.forEach.call(sel, function (td) { if (paling === null || td.offsetLeft < paling) paling = td.offsetLeft; });
+  const konteks = jmLebarSticky_(gulir) + 48;
+  gulir.scrollTo
+    ? gulir.scrollTo({ left: Math.max(0, paling - konteks), behavior: "smooth" })
+    : (gulir.scrollLeft = Math.max(0, paling - konteks));
+}
+
+/** Dipasang sesudah matriks digambar. Idempoten -- wadahnya selalu baru. */
+function jmPasangGulir_(kolom) {
+  const gulir = document.querySelector("#jm-matriks .jm-gulir");
+  if (!gulir) return;
+  gulir.addEventListener("scroll", function () {
+    if (gulir.__jmTunggu) return;
+    gulir.__jmTunggu = true;
+    // Penanda dihitung ulang saat menggulir, tapi lewat rAF: menghitung tiap
+    // event scroll pada tabel 89 baris membuat gulirannya tersendat.
+    requestAnimationFrame(function () { gulir.__jmTunggu = false; jmPerbaruiPenanda_(); });
+  });
+  gulir.addEventListener("click", function (ev) {
+    const td = ev.target.closest && ev.target.closest("td.jm-sticky");
+    if (!td) return;
+    const tr = td.parentNode;
+    if (tr && tr.classList.contains("jm-r-tahap")) jmKlikLabel_(tr);
+  });
+  jmGulirAwal_(kolom);
+  jmPerbaruiPenanda_();
+}
+
 /** v231: sel-sel tanggal untuk SATU baris bar. Dipakai kedua mode. */
 function jmSelBaris_(b, kolom, hariIni, deadline) {
   let html = "";
@@ -827,6 +962,7 @@ function jmRenderMatriks_() {
     });
     wadah.innerHTML = '<div class="jm-gulir"><table class="jm-tabel"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table></div>';
     jmRenderInfo_(Object.keys(itemUnik).length, jumlahBaris);
+    jmPasangGulir_(kolom);   // v235
     return;
   }
 
@@ -866,6 +1002,7 @@ function jmRenderMatriks_() {
 
   wadah.innerHTML = '<div class="jm-gulir"><table class="jm-tabel"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table></div>';
   jmRenderInfo_(grup.length, jumlahBaris);
+  jmPasangGulir_(kolom);   // v235
 }
 
 // ---------- form (v215) ----------

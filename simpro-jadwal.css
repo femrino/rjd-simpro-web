@@ -340,3 +340,25 @@ th.jm-hari-ini { background: #FBE7B3; }
      masing; stretch menyamakannya supaya barisnya terlihat satu garis rapi. */
   .jm-nav, .jm-sumbu, .jm-btn-laci{ align-self:stretch; align-items:center; }
 }
+
+
+/* ============================================================
+   PENANDA ARAH & LABEL BISA DIKLIK (v235)
+   ============================================================ */
+/* Label kolom kiri baris tahap bisa diklik untuk melompat ke jadwalnya.
+   Kursor + sorotan supaya keterklikannya terlihat -- tanpa itu, fitur yang
+   tidak kelihatan sama saja dengan tidak ada. */
+.jm-td-tahap{ cursor: pointer; }
+.jm-td-tahap:hover{ background: #FAF7F1; }
+
+/* Penanda muncul HANYA saat seluruh bar baris itu di luar layar. */
+.jm-penanda{
+  float: right;
+  margin-left: 6px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--ink-soft, #8A93A0);
+}
+@media (max-width: 640px){
+  .jm-penanda{ font-size: 9px; }
+}
