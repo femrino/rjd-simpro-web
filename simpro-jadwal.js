@@ -982,8 +982,11 @@ function jmRenderMatriks_() {
     tbody += '<tr class="jm-r-item">' +
       '<td class="jm-sticky jm-td-item">' +
         '<div class="jm-item-nama">' + jmEsc_(judul || it.po) + '</div>' +
-        // v236: sama dengan mode tahap -- klien & PO boleh menyusut, qty dan
-        // deadline tidak.
+        // v236: klien & PO boleh menyusut, qty dan deadline tidak.
+        // v239: di >=641px PO ikut dikunci (flex:0 0 auto), jadi hanya nama
+        // klien yang menyusut. Ini BEDA dengan mode tahap (.jm-item-meta-kecil)
+        // yang PO-nya masih menyusut di semua lebar -- sengaja, jangan
+        // diseragamkan tanpa cek simpro-jadwal.css.
         '<div class="jm-item-meta"><span class="jm-klien">' + jmEsc_(it.namaKlien || it.idKlien) + '</span>' +
           '<span class="jm-mono">' + jmEsc_(it.po) + '</span>' +
           (it.qtyPo ? '<span class="jm-qty">&#183; ' + it.qtyPo.toLocaleString("id-ID") + ' pcs</span>' : '') +
