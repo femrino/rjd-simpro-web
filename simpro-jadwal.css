@@ -430,6 +430,14 @@ th.jm-hari-ini { background: #FBE7B3; }
 .jm-item-meta .jm-qty, .jm-item-meta .jm-dl,
 .jm-item-meta-kecil .jm-dl{ flex: 0 0 auto; }
 
+/* v239: di layar lebar, KODE PO tidak ikut menyusut -- hanya nama klien.
+   Keduanya flex-shrink:1 membuat penyusutan dibagi proporsional, jadi PO
+   ter-ellipsis padahal memotong klien saja sudah cukup. Di <=640px perilaku
+   lama dipertahankan: di sana PO memang boleh menyusut jauh. */
+@media (min-width: 641px){
+  .jm-item-meta .jm-mono{ flex: 0 0 auto; }
+}
+
 /* Judul tidak pernah membungkus. */
 .jm-item-nama, .jm-item-nama-kecil{
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
