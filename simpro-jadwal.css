@@ -189,10 +189,9 @@ th.jm-hari-ini { background: #FBE7B3; }
 /* ---------- layar sempit ---------- */
 @media (max-width: 760px) {
   .jm-wrap { padding: 0 10px 60px; }
-  /* Di HP, matriksnya yang harus terlihat lebih dulu, bukan judul halaman. */
-  .jm-hero { padding: 26px 0 10px !important; }
-  .jm-hero .lead { display: none; }
-  .jm-hero h1 { font-size: 24px !important; }
+  /* NISAN v241: dulu ada tiga aturan .jm-hero di sini (padding, sembunyikan
+     .lead, kecilkan h1). Hero halaman jadwal dicabut dari template di v241 --
+     memakan satu layar penuh sebelum matriks. Tidak ada elemen yang tersisa. */
   .jm-th-kiri { min-width: 150px; max-width: 170px; }
   .jm-item-meta { max-width: 150px; }
   .jm-td-tahap { padding-left: 12px; }
