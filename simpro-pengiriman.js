@@ -168,6 +168,7 @@ function krBukaDariTautan_() {
    snapshot berarti memperlihatkan keadaan SEBELUM perubahan yang baru saja
    dibuat orang. Itu bukan lambat, itu salah. */
 var KR_SUDAH_SEGAR = false;
+var KR_SNAP_WAKTU = null;   // v243: jam snapshot yang sedang TAMPIL; null = yang tampil data segar
 
 function krMuat(){
   if(window.KR_DAFTAR && KR_SUDAH_SEGAR){ krRender(); return; }
@@ -178,6 +179,7 @@ function krMuat(){
       krShow("kr-isi");
       krRender();
       if(typeof rjdSnapshotBar_ === "function") rjdSnapshotBar_("kr-tabel", snap.waktu);
+      KR_SNAP_WAKTU = snap.waktu;
     }
   }
   fetch(KR_API_URL, {
@@ -188,21 +190,39 @@ function krMuat(){
   .then(function(d){
     krShow("kr-isi");
     if(!d || !d.success){
+      if(krGagalDenganSnapshot_()) return;
       document.getElementById("kr-tabel").innerHTML =
         '<p style="font-size:12.5px;color:var(--thread)">' + rjdEscapeHtml_((d && d.error) || "Gagal memuat data.") + '</p>';
       return;
     }
     window.KR_DAFTAR = d.daftar || [];
     KR_SUDAH_SEGAR = true;
+    KR_SNAP_WAKTU = null;
     if(typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("pengiriman_daftar", window.KR_DAFTAR);
     krRender();
     if(typeof rjdSnapshotBarHapus_ === "function") rjdSnapshotBarHapus_("kr-tabel");
   })
   .catch(function(){
     krShow("kr-isi");
+    if(krGagalDenganSnapshot_()) return;
     document.getElementById("kr-tabel").innerHTML =
       '<p style="font-size:12.5px;color:var(--thread)">Gagal menghubungi server.</p>';
   });
+}
+
+/* v243: jalur GAGAL saat yang sedang tampil adalah SNAPSHOT. Pola Dashboard
+   v229: jangan timpa tabel tersimpan dengan layar galat -- itu membuang data
+   yang masih berguna -- dan jangan biarkan bilah "memperbarui dari server..."
+   menetap, karena itu menyiratkan sesuatu masih berjalan padahal sudah
+   menyerah. Ganti bilahnya dengan versi gagal yang menyebut jam snapshot-nya.
+   Bilah adalah SAUDARA #kr-tabel (v229), jadi ia bertahan walau innerHTML tabel
+   ditulis ulang -- itulah kenapa dulu ia menetap dengan kalimat yang salah.
+   Ditemukan jalan27 (v230), tertimbun 23 merah palsu sampai 2 Sep 2026.
+   @return {boolean} true = sudah ditangani di sini, pemanggil harus berhenti. */
+function krGagalDenganSnapshot_(){
+  if(!KR_SNAP_WAKTU || typeof rjdSnapshotBarGagal_ !== "function") return false;
+  rjdSnapshotBarGagal_("kr-tabel", KR_SNAP_WAKTU);
+  return true;
 }
 
 function krRefresh(){

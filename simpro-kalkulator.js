@@ -36,10 +36,8 @@ function khShow(id){
   if (t) t.classList.remove("hidden");
 }
 
-function khTampilkanError(pesan){
-  document.getElementById("kh-error-message").textContent = pesan;
-  khShow("kh-error");
-}
+// NISAN v243: khTampilkanError dihapus -- nol pemanggil di JS maupun template Blogger.
+
 
 /* ============================================================
  * SESI & KELUAR (v222)

@@ -2595,14 +2595,8 @@ function rjdTotalQtyWarna_(it){
   return total;
 }
 
-/** Ringkas "S:1, M:3, L:5" dari sizeQty. Fallback ke detailAllSize. */
-function rjdRingkasSize_(it){
-  const sq = it.sizeQty || {};
-  const bagian = Object.keys(sq).filter(function(s){ return Number(sq[s]) > 0; })
-    .map(function(s){ return s + ":" + sq[s]; });
-  if(bagian.length) return bagian.join(", ");
-  return it.detailAllSize || "-";
-}
+// NISAN v243: rjdRingkasSize_ dihapus -- nol pemanggil di JS maupun template Blogger.
+
 
 function renderOrderanList(daftar, filter){
   const listEl = document.getElementById("lp-orderan-list");

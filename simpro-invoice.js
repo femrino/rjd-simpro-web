@@ -86,6 +86,7 @@ function ivMulai(){
    snapshot berarti memperlihatkan keadaan SEBELUM perubahan yang baru saja
    dibuat orang. Itu bukan lambat, itu salah. */
 var IV_SUDAH_SEGAR = false;
+var IV_SNAP_WAKTU = null;   // v243: jam snapshot yang sedang TAMPIL; null = yang tampil data segar
 
 function ivMuat(){
   if(window.IV_DAFTAR && IV_SUDAH_SEGAR){ ivRender(); return; }
@@ -97,6 +98,7 @@ function ivMuat(){
       ivShow("iv-isi");
       ivRender();
       if(typeof rjdSnapshotBar_ === "function") rjdSnapshotBar_("iv-tabel", snap.waktu);
+      IV_SNAP_WAKTU = snap.waktu;
     }
   }
   fetch(IV_API_URL, {
@@ -107,6 +109,7 @@ function ivMuat(){
   .then(function(d){
     ivShow("iv-isi");
     if(!d || !d.success){
+      if(ivGagalDenganSnapshot_()) return;
       document.getElementById("iv-tabel").innerHTML =
         '<p style="font-size:12.5px;color:var(--thread)">' + rjdEscapeHtml_((d && d.error) || "Gagal memuat data.") + '</p>';
       return;
@@ -114,6 +117,7 @@ function ivMuat(){
     window.IV_DAFTAR = d.daftar || [];
     window.IV_RINGKASAN = d.ringkasan || {};
     IV_SUDAH_SEGAR = true;
+    IV_SNAP_WAKTU = null;
     if(typeof rjdSnapshotSimpan_ === "function")
       rjdSnapshotSimpan_("invoice_daftar", { daftar: window.IV_DAFTAR, ringkasan: window.IV_RINGKASAN });
     ivRender();
@@ -121,9 +125,25 @@ function ivMuat(){
   })
   .catch(function(){
     ivShow("iv-isi");
+    if(ivGagalDenganSnapshot_()) return;
     document.getElementById("iv-tabel").innerHTML =
       '<p style="font-size:12.5px;color:var(--thread)">Gagal menghubungi server.</p>';
   });
+}
+
+/* v243: jalur GAGAL saat yang sedang tampil adalah SNAPSHOT. Pola Dashboard
+   v229: jangan timpa tabel tersimpan dengan layar galat -- itu membuang data
+   yang masih berguna -- dan jangan biarkan bilah "memperbarui dari server..."
+   menetap, karena itu menyiratkan sesuatu masih berjalan padahal sudah
+   menyerah. Ganti bilahnya dengan versi gagal yang menyebut jam snapshot-nya.
+   Bilah adalah SAUDARA #iv-tabel (v229), jadi ia bertahan walau innerHTML tabel
+   ditulis ulang -- itulah kenapa dulu ia menetap dengan kalimat yang salah.
+   Ditemukan jalan27 (v230), tertimbun 23 merah palsu sampai 2 Sep 2026.
+   @return {boolean} true = sudah ditangani di sini, pemanggil harus berhenti. */
+function ivGagalDenganSnapshot_(){
+  if(!IV_SNAP_WAKTU || typeof rjdSnapshotBarGagal_ !== "function") return false;
+  rjdSnapshotBarGagal_("iv-tabel", IV_SNAP_WAKTU);
+  return true;
 }
 
 function ivRefresh(){
