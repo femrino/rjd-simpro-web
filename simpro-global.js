@@ -3179,17 +3179,46 @@ var RJD_AREA_HALAMAN = {
  * memang cuma jalan di tiga cabang itu, dan memperluasnya menambah risiko
  * tanpa manfaat di sini.
  */
+/**
+ * SATU daftar pintu API untuk seluruh berkas ini. Halaman hanya mendefinisikan
+ * konstanta miliknya sendiri; `typeof` menjaga sisanya tanpa ReferenceError.
+ * Top-level const BUKAN properti window, jadi tidak bisa dienumerasi dinamis --
+ * daftar ini satu-satunya cara, dan karena itu harus SATU.
+ *
+ * v245: dulu ada DUA daftar -- yang ini (untuk menu) dan rjdDaftarApi_ di
+ * penjaga fetch (untuk sesi & pengulangan). Keduanya melewatkan halaman yang
+ * berbeda: daftar menu tidak kenal JM/SOP/CK/KS/KH, daftar penjaga tidak kenal
+ * UP. Akibat yang ketahuan 3 Sep 2026: di /p/sop.html rjdApiUrlMenu_ null ->
+ * jalur "belum ada token" -> ditandai publik dengan SEMUA area -> menu penuh
+ * (Invoice, Buku Kas, Laporan SPT) untuk peran mana pun. Jadwal/Kas/Kalkulator
+ * punya lubang yang sama tapi selamat karena terdaftar di RJD_JAGA_HALAMAN --
+ * satpamnya yang memasang menu.
+ *
+ * MENAMBAH HALAMAN BARU = menambah SATU baris di sini. Tidak ada tempat lain.
+ */
+function rjdDaftarApi_() {
+  var u = [];
+  if (typeof DB_API_URL !== "undefined") u.push(String(DB_API_URL));   // dashboard
+  if (typeof SP_API_URL !== "undefined") u.push(String(SP_API_URL));   // spk/produksi
+  if (typeof LP_API_URL !== "undefined") u.push(String(LP_API_URL));   // portal tracking
+  if (typeof LO_API_URL !== "undefined") u.push(String(LO_API_URL));   // laporan omset
+  if (typeof QC_API_URL !== "undefined") u.push(String(QC_API_URL));   // qc
+  if (typeof IV_API_URL !== "undefined") u.push(String(IV_API_URL));   // invoice
+  if (typeof KR_API_URL !== "undefined") u.push(String(KR_API_URL));   // pengiriman
+  if (typeof OL_API_URL !== "undefined") u.push(String(OL_API_URL));   // order list
+  if (typeof OF_API_URL !== "undefined") u.push(String(OF_API_URL));   // order form
+  if (typeof KH_API_URL !== "undefined") u.push(String(KH_API_URL));   // kalkulator harga
+  if (typeof JM_API_URL !== "undefined") u.push(String(JM_API_URL));   // jadwal produksi
+  if (typeof SOP_API_URL !== "undefined") u.push(String(SOP_API_URL)); // sop
+  if (typeof CK_API_URL !== "undefined") u.push(String(CK_API_URL));   // cetak
+  if (typeof KS_API_URL !== "undefined") u.push(String(KS_API_URL));   // buku kas
+  if (typeof UP_API_URL !== "undefined") u.push(String(UP_API_URL));   // upah borongan (v245: dulu tak terdaftar di mana pun)
+  return u;
+}
+
 function rjdApiUrlMenu_() {
-  if (typeof DB_API_URL !== "undefined") return DB_API_URL;
-  if (typeof SP_API_URL !== "undefined") return SP_API_URL;
-  if (typeof KR_API_URL !== "undefined") return KR_API_URL;
-  if (typeof IV_API_URL !== "undefined") return IV_API_URL;
-  if (typeof OL_API_URL !== "undefined") return OL_API_URL;
-  if (typeof QC_API_URL !== "undefined") return QC_API_URL;
-  if (typeof LO_API_URL !== "undefined") return LO_API_URL;
-  if (typeof LP_API_URL !== "undefined") return LP_API_URL;
-  if (typeof OF_API_URL !== "undefined") return OF_API_URL;
-  return null;
+  var u = rjdDaftarApi_();
+  return u.length ? u[0] : null;
 }
 
 function rjdBacaTokenStaff_() {
@@ -3372,6 +3401,13 @@ var RJD_JAGA_HALAMAN = {
   // BARANG (tahap & tanggal, nol rupiah), jadi areanya "produksi" -- semua
   // staf internal boleh melihat, seperti halaman produksi.
   "/p/jadwal.html":       "produksi",
+  // v245: SOP Lantai Produksi. Dokumen internal (alur, aturan tahap, skenario)
+  // -- nol rupiah, semua staf internal boleh baca, seperti jadwal. Halaman ini
+  // sudah memanggil rjdJagaHalaman sejak awal tapi tidak pernah didaftarkan,
+  // jadi satpamnya selalu lolos tanpa memeriksa siapa pun -- dan tanpa
+  // memasang menu per peran. Tautannya SENGAJA tidak masuk RJD_AREA_HALAMAN:
+  // semua staf boleh membacanya, jadi tidak ada yang perlu disembunyikan.
+  "/p/sop.html":          "produksi",
   // v225: buku kas & bank. Uang = area keuangan (finance, admin, owner).
   "/p/kas.html":          "keuangan",
   // Daftar PO boleh dilihat peran produksi; yang ditolak cuma tab Edit PO di
@@ -3968,28 +4004,9 @@ function rjdJamPendek_(d) { return String(d.getHours()).padStart(2, "0") + "." +
   const fetchAsli = window.fetch.bind(window);
   let sudahTampil = false;
 
-  // Semua pintu API SIMPRO. Halaman hanya mendefinisikan miliknya sendiri;
-  // typeof menjaga sisanya tetap aman tanpa ReferenceError.
-  function rjdDaftarApi_() {
-    const u = [];
-    if (typeof DB_API_URL !== "undefined") u.push(String(DB_API_URL));   // dashboard
-    if (typeof SP_API_URL !== "undefined") u.push(String(SP_API_URL));   // spk/produksi
-    if (typeof LP_API_URL !== "undefined") u.push(String(LP_API_URL));   // portal tracking
-    if (typeof LO_API_URL !== "undefined") u.push(String(LO_API_URL));   // laporan omset
-    if (typeof QC_API_URL !== "undefined") u.push(String(QC_API_URL));   // qc
-    if (typeof IV_API_URL !== "undefined") u.push(String(IV_API_URL));   // invoice
-    if (typeof KR_API_URL !== "undefined") u.push(String(KR_API_URL));   // pengiriman
-    if (typeof OL_API_URL !== "undefined") u.push(String(OL_API_URL));   // order list
-    if (typeof OF_API_URL !== "undefined") u.push(String(OF_API_URL));   // order form
-    if (typeof KH_API_URL !== "undefined") u.push(String(KH_API_URL));   // kalkulator harga
-    // v219: tiga pintu yang belum terdaftar. Halaman-halaman ini sebelumnya
-    // tidak dijaga penjaga sesi DAN tidak dapat pengulangan otomatis di bawah.
-    if (typeof JM_API_URL !== "undefined") u.push(String(JM_API_URL));   // jadwal produksi
-    if (typeof SOP_API_URL !== "undefined") u.push(String(SOP_API_URL)); // sop
-    if (typeof CK_API_URL !== "undefined") u.push(String(CK_API_URL));   // cetak
-    if (typeof KS_API_URL !== "undefined") u.push(String(KS_API_URL));   // buku kas (v225)
-    return u;
-  }
+  // NISAN v245: daftar pintu API yang dulu ada di sini dipindah ke top-level
+  // rjdDaftarApi_() dan dipakai bersama rjdApiUrlMenu_. Dua daftar untuk satu
+  // hal sudah terbukti melewatkan halaman yang berbeda-beda.
 
   window.rjdSesiHabis_ = function () {
     if (sudahTampil || document.getElementById("rjd-sesi-habis")) return;
