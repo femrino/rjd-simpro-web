@@ -358,17 +358,18 @@ body.jm-modal-terbuka{ overflow: hidden; }
      bingkainya di HP. Dihapus. Legenda tertutup diatur aturan global. */
   .jm-alat .jm-btn-jadwal{ min-width:58px; justify-content:center; }   /* "+" selebar Filter/Ket. */
 
-  /* --- kolom kiri: v232 150-170 px (8 hari terlihat); v253 120 px supaya
-     >= 10 hari terlihat di 390 px: (368 - 120) / 24 = 10,3. Nama terpotong lebih
-     awal -- diterima 3 Sep 2026, "kecilkan saja bagian artikel & tahap". --- */
-  .jm-th-kiri{ min-width:120px; max-width:120px; }
-  .jm-td-item, .jm-td-tahap{ max-width:120px; overflow:hidden; }
+  /* --- kolom kiri: v232 150-170 px (8 hari terlihat); v253 120 px (10 hari)
+     ternyata menyisakan ~58 px untuk nama (~7 huruf) di samping deadline;
+     v254 144 px = 9 hari: (368 - 144) / 24 = 9,3, nama dapat ~82 px. --- */
+  .jm-th-kiri{ min-width:144px; max-width:144px; }
+  .jm-td-item, .jm-td-tahap{ max-width:144px; overflow:hidden; }
   .jm-td-item{ padding:6px 8px 4px; }
   .jm-td-tahap{ padding-left:8px; padding-right:8px; }
   .jm-item-nama, .jm-item-nama-kecil{
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
-  .jm-item-meta{ max-width:104px; overflow:hidden; text-overflow:ellipsis; }
+  .jm-item-meta{ max-width:128px; overflow:hidden; text-overflow:ellipsis; }
+  .jm-item-baris-kecil .jm-dl{ font-size:11px; }   /* v254: deadline lebih kecil di HP, nama dapat lebih */
 
   /* --- sel hari 24px: +1 kolom lagi --- */
   .jm-th-hari, .jm-sel{ width:24px; min-width:24px; }
@@ -557,6 +558,12 @@ td[data-kunci]:hover .jm-item-nama-kecil{ text-decoration: underline dotted; tex
 .jm-menu-item button:hover{ background: rgba(27,37,64,.06); }
 
 .jm-panel-sembunyi{ min-width: 280px; max-width: min(420px, 92vw); }
+/* v254: panel filter tahap (kotak centang) memakai kerangka panel yang sama. */
+.jm-panel-tahap{ min-width: 220px; }
+.jm-panel-tahap .jm-panel-baris{ cursor: pointer; gap: 10px; }
+.jm-panel-tahap input{ margin: 0; accent-color: var(--navy, #17212F); }
+.jm-f-tahap{ font-weight: 500; }
+.jm-f-tahap::after{ content: " \25BE"; color: var(--ink-soft, #5F6B7A); }
 .jm-panel-kepala{
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 10px 12px; border-bottom: 1px solid #E3DED3;
@@ -601,3 +608,5 @@ body.jm-fokus #jm-wrap{ padding-top: 8px !important; }
    maksud mode ini. */
 body.jm-fokus .jm-wrap{ max-width: none; padding-left: 12px; padding-right: 12px; }
 @media print { .jm-btn-fokus { display: none !important; } }
+
+@media print { #jm-panel-tahap { display: none !important; } }

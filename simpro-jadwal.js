@@ -55,7 +55,7 @@ const JM_LIHAT = {
   klien: "",          // filter ID klien ("" = semua)
   line: "",           // filter ID line ("" = semua)
   sembunyiLewat: true, // sembunyikan item yang semua bar-nya sudah lewat
-  tahap: "",           // v233: filter tahap ("" = semua). SARINGAN TINGKAT-BARIS,
+  tahap: [],           // v233: filter tahap; v254: DAFTAR nama ([] = semua). SARINGAN TINGKAT-BARIS,
                        // beda dengan line yang tingkat-item -- lihat catatan di
                        // jmRenderLaci_. Nilainya utama saat dipadukan mode tahap:
                        // "Per tahap + Cutting" = daftar kerja harian kepala cutting.
@@ -399,6 +399,69 @@ function jmTambahJadwal() {
   jmBukaForm();
 }
 
+/** v254: true kalau tahap ini lolos filter tahap (kosong = semua). */
+function jmTahapAktif_(t) {
+  return !JM_LIHAT.tahap.length || JM_LIHAT.tahap.indexOf(t) !== -1;
+}
+function jmLabelFilterTahap_() {
+  const n = JM_LIHAT.tahap.length;
+  if (!n) return "Semua tahap";
+  if (n === 1) return JM_LIHAT.tahap[0];
+  return n + " tahap";
+}
+function jmPanelTahap_() {
+  let p = document.getElementById("jm-panel-tahap");
+  if (!p) {
+    p = document.createElement("div");
+    p.id = "jm-panel-tahap"; p.className = "jm-panel-sembunyi jm-panel-tahap hidden";
+    document.body.appendChild(p);
+    p.addEventListener("change", function (ev) {
+      const cb = ev.target;
+      if (!cb || cb.tagName !== "INPUT") return;
+      if (cb.hasAttribute("data-semua")) {
+        JM_LIHAT.tahap = [];
+      } else {
+        const t = cb.getAttribute("data-tahap");
+        const ada = JM_LIHAT.tahap.indexOf(t);
+        if (cb.checked && ada === -1) JM_LIHAT.tahap.push(t);
+        if (!cb.checked && ada !== -1) JM_LIHAT.tahap.splice(ada, 1);
+        // urut sesuai daftar resmi supaya label & sessionStorage stabil
+        const urut = (JM_DATA && JM_DATA.tahap) || [];
+        JM_LIHAT.tahap.sort(function (a, b) { return urut.indexOf(a) - urut.indexOf(b); });
+      }
+      jmSimpanLihat_(); jmRender();       // jmRender -> jmRenderLaci_ memperbarui label & lencana
+      jmIsiPanelTahap_(p);                 // panel tetap terbuka, centangnya ikut keadaan baru
+    });
+  }
+  return p;
+}
+function jmIsiPanelTahap_(p) {
+  const daftar = (JM_DATA && JM_DATA.tahap) || [];
+  p.innerHTML = '<div class="jm-panel-kepala"><b>Tahap yang ditampilkan</b></div>' +
+    '<div class="jm-panel-daftar">' +
+    '<label class="jm-panel-baris"><input type="checkbox" data-semua="1"' + (JM_LIHAT.tahap.length ? '' : ' checked') + '> <span>Semua tahap</span></label>' +
+    daftar.map(function (t) {
+      return '<label class="jm-panel-baris"><input type="checkbox" data-tahap="' + jmEsc_(t) + '"' +
+        (JM_LIHAT.tahap.indexOf(t) !== -1 ? ' checked' : '') + '> <span>' + jmEsc_(t) + '</span></label>';
+    }).join("") + '</div>';
+}
+function jmBukaPanelTahap_(ev) {
+  const p = jmPanelTahap_();
+  if (!p.classList.contains("hidden")) { jmTutupPanelTahap_(); return; }
+  jmTutupMenuItem_(); jmTutupPanelSembunyi_();
+  jmIsiPanelTahap_(p);
+  p.classList.remove("hidden");
+  const btn = (ev && ev.currentTarget) || document.getElementById("jm-f-tahap");
+  const r = btn ? btn.getBoundingClientRect() : { left: 8, bottom: 8 };
+  const lebar = p.offsetWidth || 260, tinggi = p.offsetHeight || 200;
+  p.style.left = Math.max(8, Math.min(r.left, window.innerWidth - lebar - 8)) + "px";
+  p.style.top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - tinggi - 8)) + "px";
+}
+function jmTutupPanelTahap_() {
+  const p = document.getElementById("jm-panel-tahap");
+  if (p) p.classList.add("hidden");
+}
+
 function jmRenderLaci_() {
   const alat = document.querySelector(".jm-alat");
   if (!alat) return;
@@ -425,21 +488,21 @@ function jmRenderLaci_() {
   // begitu "Cutting + line Bu Tini" berarti "baris Cutting milik item yang
   // dijahit di line Bu Tini". Kalau keduanya di-AND-kan di tingkat bar,
   // hasilnya SELALU kosong (bar Cutting tidak punya line) -- jebakan.
+  // v254: filter tahap MULTI-PILIH. Dulu <select> satu nilai -- "Sewing DAN
+  // Finishing bersamaan" tidak mungkin, padahal itu pasangan yang lazim
+  // dipantau bersama. Sekarang tombol (id tetap #jm-f-tahap supaya harness
+  // pengukur baris tidak berubah) yang membuka panel kotak centang.
   let selT = document.getElementById("jm-f-tahap");
   if (!selT) {
-    selT = document.createElement("select");
-    selT.id = "jm-f-tahap"; selT.onchange = jmUbahFilter;
+    selT = document.createElement("button");
+    selT.id = "jm-f-tahap"; selT.type = "button"; selT.className = "jm-btn jm-f-tahap";
+    selT.onclick = function (ev) { jmBukaPanelTahap_(ev); };
     const selM2 = document.getElementById("jm-f-minggu");
     if (selM2 && selM2.parentNode === laci) laci.insertBefore(selT, selM2.nextSibling);
     else laci.insertBefore(selT, laci.firstChild);
   }
-  const daftarTahap = (JM_DATA && JM_DATA.tahap) || [];
-  if (selT.options.length !== daftarTahap.length + 1) {
-    const nilaiT = selT.value;
-    selT.innerHTML = '<option value="">Semua tahap</option>' +
-      daftarTahap.map(function (t) { return '<option value="' + jmEsc_(t) + '">' + jmEsc_(t) + '</option>'; }).join("");
-    selT.value = (nilaiT && daftarTahap.indexOf(nilaiT) !== -1) ? nilaiT : (JM_LIHAT.tahap || "");
-  }
+  selT.textContent = jmLabelFilterTahap_();
+  selT.title = JM_LIHAT.tahap.length ? "Tahap: " + JM_LIHAT.tahap.join(", ") : "Pilih tahap yang ditampilkan (boleh lebih dari satu)";
 
   let btn = document.getElementById("jm-btn-laci");
   if (!btn) {
@@ -448,7 +511,7 @@ function jmRenderLaci_() {
     btn.onclick = jmToggleLaci;
     laci.parentNode.insertBefore(btn, laci);
   }
-  const n = (JM_LIHAT.klien ? 1 : 0) + (JM_LIHAT.line ? 1 : 0) + (JM_LIHAT.tahap ? 1 : 0);
+  const n = (JM_LIHAT.klien ? 1 : 0) + (JM_LIHAT.line ? 1 : 0) + (JM_LIHAT.tahap.length ? 1 : 0);
   btn.innerHTML = "Filter" + (n ? ' <span class="jm-laci-lencana">' + n + "</span>" : "");
 
   // v250: tombol legenda di TOOLBAR (semua lebar), bukan baris sendiri di atas
@@ -672,7 +735,9 @@ function jmBacaLihat_() {
     if (typeof d.klien === "string") JM_LIHAT.klien = d.klien;
     if (typeof d.line === "string") JM_LIHAT.line = d.line;
     if (typeof d.sembunyiLewat === "boolean") JM_LIHAT.sembunyiLewat = d.sembunyiLewat;
-    if (typeof d.tahap === "string") JM_LIHAT.tahap = d.tahap;
+    // v254: dulu string tunggal; sesi lama yang masih menyimpan string diterima.
+    if (Array.isArray(d.tahap)) JM_LIHAT.tahap = d.tahap.filter(function (x) { return typeof x === "string" && x; });
+    else if (typeof d.tahap === "string") JM_LIHAT.tahap = d.tahap ? [d.tahap] : [];
   } catch (e) { /* abaikan */ }
 }
 
@@ -851,7 +916,7 @@ function jmKeHariIni() {
 }
 function jmUbahFilter() {
   JM_LIHAT.klien = (document.getElementById("jm-f-klien") || {}).value || "";
-  JM_LIHAT.tahap = (document.getElementById("jm-f-tahap") || {}).value || "";
+  // v254: JM_LIHAT.tahap diubah langsung oleh kotak centang di panel tahap, bukan dibaca dari sini.
   JM_LIHAT.line = (document.getElementById("jm-f-line") || {}).value || "";
   JM_LIHAT.minggu = Number((document.getElementById("jm-f-minggu") || {}).value) || 8;
   JM_LIHAT.sembunyiLewat = !!((document.getElementById("jm-f-lewat") || {}).checked);
@@ -924,7 +989,7 @@ function jmKelompok_() {
       if (JM_LIHAT.line && !g.bar.some(function (b) { return b.line === JM_LIHAT.line; })) return false;
       // v233: filter tahap -- item tanpa satu pun bar tahap itu ikut hilang,
       // supaya tidak ada judul item yang menggantung tanpa baris.
-      if (JM_LIHAT.tahap && !g.bar.some(function (b) { return b.tahap === JM_LIHAT.tahap; })) return false;
+      if (JM_LIHAT.tahap.length && !g.bar.some(function (b) { return jmTahapAktif_(b.tahap); })) return false;
       return true;
     });
   // v246: sembunyi manual SESUDAH filter -- yang dihitung "disembunyikan"
@@ -1026,7 +1091,7 @@ function jmKelompokTahap_() {
     g.baris = baris;
     return g;
   }).filter(function (g) { return g.baris.length; })
-    .filter(function (g) { return !JM_LIHAT.tahap || g.tahap === JM_LIHAT.tahap; });   // v233
+    .filter(function (g) { return jmTahapAktif_(g.tahap); });   // v233, v254: daftar
 }
 
 /** Baris-baris matriks untuk satu grup: satu per tahap; Sewing satu per line. */
@@ -1034,7 +1099,7 @@ function jmBarisGrup_(g) {
   const urutan = JM_DATA.tahap || Object.keys(JM_KELAS_TAHAP);
   const baris = [];
   urutan.forEach(function (tahap) {
-    if (JM_LIHAT.tahap && tahap !== JM_LIHAT.tahap) return;   // v233
+    if (!jmTahapAktif_(tahap)) return;   // v233, v254: daftar
     const bars = g.bar.filter(function (b) { return b.tahap === tahap; });
     if (!bars.length) return;
     if (tahap === "Sewing") {
@@ -1813,6 +1878,10 @@ window.addEventListener("load", function () {
     const p = document.getElementById("jm-panel-sembunyi");
     if (p && !p.classList.contains("hidden") && !p.contains(ev.target) &&
         !(ev.target.closest && ev.target.closest(".jm-rentang-sembunyi"))) jmTutupPanelSembunyi_();
+    // v254: panel tahap
+    const pt = document.getElementById("jm-panel-tahap");
+    if (pt && !pt.classList.contains("hidden") && !pt.contains(ev.target) &&
+        !(ev.target.closest && ev.target.closest("#jm-f-tahap"))) jmTutupPanelTahap_();
     const chip = ev.target.closest && ev.target.closest(".jm-sembunyi-chip[data-kunci]");
     if (chip) jmTampilkanItem(chip.getAttribute("data-kunci"));
   });
@@ -1822,10 +1891,12 @@ window.addEventListener("load", function () {
     // panel pemulih, modal); kalau tidak ada yang melayang, Esc keluar fokus.
     const mi = document.getElementById("jm-menu-item");
     const ps = document.getElementById("jm-panel-sembunyi");
+    const pt = document.getElementById("jm-panel-tahap");
     const m = document.getElementById("jm-modal");
     const adaMelayang = (mi && !mi.classList.contains("hidden")) ||
-      (ps && !ps.classList.contains("hidden")) || (m && !m.classList.contains("hidden"));
-    jmTutupMenuItem_(); jmTutupPanelSembunyi_();
+      (ps && !ps.classList.contains("hidden")) || (pt && !pt.classList.contains("hidden")) ||
+      (m && !m.classList.contains("hidden"));
+    jmTutupMenuItem_(); jmTutupPanelSembunyi_(); jmTutupPanelTahap_();
     if (m && !m.classList.contains("hidden")) jmTutupForm();
     if (!adaMelayang && JM_FOKUS) jmFokus(false);
   });
