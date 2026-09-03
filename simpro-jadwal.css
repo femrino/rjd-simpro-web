@@ -292,6 +292,9 @@ th.jm-hari-ini { background: #FBE7B3; }
 .jm-btn-legenda{ order: 2; }
 .jm-sumbu{ order: 3; }
 .jm-btn-jadwal{ order: 4; }
+/* v251: Fokus di kelompok tombol tampilan (Filter, Keterangan, Fokus), SEBELUM
+   sumbu -- sumbu tetap di tepi kanan bagi peran tanpa hak tulis (jalan35 #2). */
+.jm-btn-fokus{ order: 2; }
 #jm-legenda{ display: none; }
 #jm-legenda.jm-legenda-buka{ display: flex; flex-wrap: wrap; }
 .jm-btn.jm-sumbu-aktif{ background: var(--ink, #1e2330); color: #fff; border-color: var(--ink, #1e2330); }
@@ -393,6 +396,9 @@ body.jm-modal-terbuka{ overflow: hidden; }
   .jm-rentang{ order:10; flex:1 1 auto; min-width:0; margin-top:2px; }
   .jm-btn-legenda{ order:11; }
   .jm-btn-jadwal{ order:12; }
+  /* v251: mode fokus tidak ditawarkan di HP -- header cuma 68 px dari 800, dan
+     toolbar HP sudah penuh (dua baris, jalan40 H2). */
+  .jm-btn-fokus{ display:none; }
   #jm-laci{ order:5; }                    /* laci terbuka: tepat di bawah baris tombol,
                                              di atas rentang (v232, diuji jalan31) */
   .jm-nav .jm-btn{ padding:8px 10px; }
@@ -569,3 +575,9 @@ td[data-kunci]:hover .jm-item-nama-kecil{ text-decoration: underline dotted; tex
 }
 
 @media print { #jm-modal { display: none !important; } }
+
+/* v251 -- MODE FOKUS: header situs & latar dekoratif disembunyikan. Padding
+   atas #jm-wrap ditulis inline di template (v241), jadi butuh !important. */
+body.jm-fokus .db-header, body.jm-fokus .bg-canvas{ display: none !important; }
+body.jm-fokus #jm-wrap{ padding-top: 8px !important; }
+@media print { .jm-btn-fokus { display: none !important; } }

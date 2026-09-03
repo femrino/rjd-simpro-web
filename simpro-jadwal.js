@@ -294,6 +294,41 @@ window.addEventListener("resize", function () {
   JM_RESIZE_TUNGGU = setTimeout(jmPasTinggi_, 120);
 });
 
+/* v251 -- MODE FOKUS
+   Untuk layar besar (rapat pagi, monitor lantai): header situs dan latar
+   dekoratif disembunyikan, tinggal toolbar satu baris + matriks. Tidak
+   dipersistenkan -- seperti laci -- supaya orang yang tak sengaja menekannya
+   lalu memuat ulang halaman kembali ke tampilan biasa. Keluar: tombol yang
+   sama, atau Esc (bertingkat: modal/menu/panel yang terbuka ditutup dulu).
+   requestFullscreen dicoba sebagai bonus (klik tombol = gestur pengguna);
+   kalau browser keluar fullscreen sendiri, mode fokus ikut keluar. */
+let JM_FOKUS = false;
+function jmFokus(aktif) {
+  JM_FOKUS = (aktif === undefined) ? !JM_FOKUS : !!aktif;
+  document.body.classList.toggle("jm-fokus", JM_FOKUS);
+  const b = document.getElementById("jm-btn-fokus");
+  if (b) {
+    b.classList.toggle("jm-sumbu-aktif", JM_FOKUS);
+    b.innerHTML = JM_FOKUS
+      ? '<span class="jm-lbl-panjang">Keluar fokus</span><span class="jm-lbl-pendek">\u2716</span>'
+      : '<span class="jm-lbl-panjang">Fokus</span><span class="jm-lbl-pendek">\u2922</span>';
+    b.title = JM_FOKUS ? "Keluar mode fokus (Esc)" : "Mode fokus: sembunyikan header, matriks selebar layar";
+  }
+  try {
+    if (JM_FOKUS && document.documentElement.requestFullscreen && !document.fullscreenElement) {
+      const p = document.documentElement.requestFullscreen(); if (p && p.catch) p.catch(function () {});
+    } else if (!JM_FOKUS && document.fullscreenElement && document.exitFullscreen) {
+      const q = document.exitFullscreen(); if (q && q.catch) q.catch(function () {});
+    }
+  } catch (e) { /* fullscreen hanya bonus */ }
+  // Header hilang/muncul menggeser matriks; tunggu satu frame supaya layout selesai.
+  requestAnimationFrame(jmPasTinggi_);
+  setTimeout(jmPasTinggi_, 150);
+}
+document.addEventListener("fullscreenchange", function () {
+  if (!document.fullscreenElement && JM_FOKUS) jmFokus(false);
+});
+
 function jmModal_() {
   let m = document.getElementById("jm-modal");
   if (m) return m;
@@ -419,6 +454,14 @@ function jmRenderLaci_() {
   // <details>, baris "Tambah jadwal" tetap memakan 58 px di atas matriks --
   // persis yang mau dihilangkan. jmModal_ idempoten.
   jmModal_();
+  // v251: tombol mode fokus, untuk semua peran (hanya tampilan).
+  if (!document.getElementById("jm-btn-fokus")) {
+    const bf = document.createElement("button");
+    bf.id = "jm-btn-fokus"; bf.type = "button"; bf.className = "jm-btn jm-btn-fokus";
+    bf.onclick = function () { jmFokus(); };
+    alat.appendChild(bf);
+    jmFokus(false);   // isi label awal
+  }
 }
 
 /** Tombol disuntik ke toolbar dari JS supaya template Blogger hanya naik tag. */
@@ -1754,9 +1797,16 @@ window.addEventListener("load", function () {
   });
   document.addEventListener("keydown", function (ev) {
     if (ev.key !== "Escape") return;
-    jmTutupMenuItem_(); jmTutupPanelSembunyi_();
+    // v251: bertingkat. Esc pertama menutup apa pun yang melayang (menu item,
+    // panel pemulih, modal); kalau tidak ada yang melayang, Esc keluar fokus.
+    const mi = document.getElementById("jm-menu-item");
+    const ps = document.getElementById("jm-panel-sembunyi");
     const m = document.getElementById("jm-modal");
+    const adaMelayang = (mi && !mi.classList.contains("hidden")) ||
+      (ps && !ps.classList.contains("hidden")) || (m && !m.classList.contains("hidden"));
+    jmTutupMenuItem_(); jmTutupPanelSembunyi_();
     if (m && !m.classList.contains("hidden")) jmTutupForm();
+    if (!adaMelayang && JM_FOKUS) jmFokus(false);
   });
   const sesi = jmBacaSesi_();
   if (sesi) { JM_ID_TOKEN = sesi; jmMulai(); return; }
