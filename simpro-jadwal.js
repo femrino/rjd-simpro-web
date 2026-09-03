@@ -152,8 +152,12 @@ function jmTampilkanSemua() {
   jmSimpanSembunyi_(); jmRender();
 }
 
+/** v259: nama item = BRAND + artikel + style (identitas item produksi). Kosong -> nomor PO. */
+function jmNamaItem_(it) {
+  return [it.brand, it.artikel, it.style].filter(function (x) { return x !== undefined && x !== null && String(x).trim() !== ""; }).join(" ") || it.po;
+}
 function jmLabelItem_(it) {
-  return ([it.artikel, it.style].filter(String).join(" ") || it.po) + " \u00b7 " + it.po;
+  return jmNamaItem_(it) + " \u00b7 " + it.po;
 }
 
 /* v247: pemulih = PANEL MELAYANG yang dipicu pil "N disembunyikan" di baris
@@ -221,7 +225,7 @@ function jmBukaMenuItem_(kunci, ev) {
   // v253: info lengkap ada DI SINI, karena baris mode tahap kini hanya memuat nama.
   const rinci = it ? [it.namaKlien || it.idKlien, (it.jenis === "rencana" ? "Rencana \u00b7 " : "") + it.po, it.qtyPo ? it.qtyPo.toLocaleString("id-ID") + " pcs" : "",
     it.deadline ? "deadline " + jmTanggalPendek_(it.deadline) : ""].filter(String).join(" \u00b7 ") : "";
-  m.innerHTML = '<div class="jm-menu-judul"><b>' + jmEsc_(it ? ([it.artikel, it.style].filter(String).join(" ") || it.po) : kunci) + '</b>' +
+  m.innerHTML = '<div class="jm-menu-judul"><b>' + jmEsc_(it ? jmNamaItem_(it) : kunci) + '</b>' +
     (rinci ? '<br>' + jmEsc_(rinci) : '') + '</div>' +
     '<button type="button" onclick="jmSembunyikanItem(' + JSON.stringify(kunci).replace(/"/g, "&quot;") + ')">Sembunyikan item ini</button>' +
     '<button type="button" onclick="jmHanyaItem(' + JSON.stringify(kunci).replace(/"/g, "&quot;") + ')">Hanya tampilkan item ini</button>';
@@ -1145,7 +1149,7 @@ function jmKelompokTahap_() {
         }
         if (!g.barisPeta[kunciBaris]) {
           const it = petaItem[kItem];
-          g.barisPeta[kunciBaris] = { item: it, label: [it.artikel, it.style].filter(String).join(" ") || it.po,
+          g.barisPeta[kunciBaris] = { item: it, label: jmNamaItem_(it),
             sub: (tahap === "Sewing") ? "" : (b.sub || ""), tahap: tahap, bar: [], mulaiMin: b.mulai, selesaiMax: b.selesai };
         }
         const r = g.barisPeta[kunciBaris];
@@ -1244,7 +1248,9 @@ function jmLencanaKeadaan_(it, kecil) {
 }
 function jmItemTakDikenal_(kunci) {
   const bagian = String(kunci).split(" | ");
-  return { kunci: kunci, po: bagian[0] || kunci, artikel: bagian[1] || "", style: bagian[2] || "",
+  // v259: kunci 4 bagian (PO | brand | artikel | style); kunci lama 3 bagian tetap terbaca
+  const empat = bagian.length >= 4;
+  return { kunci: kunci, po: bagian[0] || kunci, brand: empat ? bagian[1] : "", artikel: (empat ? bagian[2] : bagian[1]) || "", style: (empat ? bagian[3] : bagian[2]) || "",
     idKlien: "", namaKlien: "(tidak dikenal)", produk: "", deadline: "", tahapSaatIni: "",
     aktif: false, status: "", dibatalkan: false, qtyPo: 0, jenis: "takdikenal", keadaan: "takdikenal" };
 }
@@ -1664,7 +1670,7 @@ function jmRenderMatriks_() {
     const deadlineLewat = it.deadline && it.deadline < hariIni;
 
     // Baris judul item
-    const judul = [it.artikel, it.style].filter(String).join(" ");
+    const judul = jmNamaItem_(it);   // v259: brand + artikel + style
     tbody += '<tr class="jm-r-item' + jmKelasKeadaan_(it) + '">' +
       '<td class="jm-sticky jm-td-item" data-kunci="' + jmEsc_(it.kunci) + '" title="Klik: sembunyikan / fokus item ini">' +
         '<div class="jm-item-nama">' + jmEsc_(judul || it.po) + jmLencanaKeadaan_(it) + '</div>' +
@@ -1723,7 +1729,7 @@ function jmIsiFormPilihan_() {
   selItem.innerHTML = '<option value="">-- pilih item --</option>' +
     Object.keys(perKlien).sort().map(function (k) {
       return '<optgroup label="' + jmEsc_(k) + '">' + perKlien[k].map(function (it) {
-        return '<option value="' + jmEsc_(it.kunci) + '">' + jmEsc_([it.artikel, it.style].filter(String).join(" ")) +
+        return '<option value="' + jmEsc_(it.kunci) + '">' + jmEsc_(jmNamaItem_(it)) +
           ' \u00b7 ' + (it.jenis === "rencana" ? 'Rencana \u00b7 ' : '') + jmEsc_(it.po) + (it.qtyPo ? ' (' + it.qtyPo + ' pcs)' : '') + '</option>';
       }).join("") + '</optgroup>';
     }).join("");
