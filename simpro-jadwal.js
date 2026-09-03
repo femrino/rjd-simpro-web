@@ -252,10 +252,93 @@ function jmToggleLaci() {
   if (laci) laci.classList.toggle("jm-laci-buka", JM_LACI_BUKA);
   const btn = document.getElementById("jm-btn-laci");
   if (btn) btn.classList.toggle("jm-sumbu-aktif", JM_LACI_BUKA);
+  jmPasTinggi_();   // v250: laci terbuka menggeser matriks ke bawah
 }
 function jmToggleLegenda() {
   const l = document.getElementById("jm-legenda");
   if (l) l.classList.toggle("jm-legenda-buka");
+  const b = document.getElementById("jm-btn-legenda");
+  if (b && l) b.classList.toggle("jm-sumbu-aktif", l.classList.contains("jm-legenda-buka"));
+  jmPasTinggi_();
+}
+
+/* v250 -- MEMAKSIMALKAN LAYAR UNTUK MATRIKS
+   Diukur 3 Sep 2026 di 1440x900: 312 px (35% layar) habis sebelum matriks --
+   header 68, baris form 58, kartu toolbar dua baris 132, legenda 32, jarak 22.
+   Dan max-height matriks dipatok calc(100vh - 220px): kotaknya 92 px lebih
+   panjang dari layar, halaman ikut bergulir, bilah gulir mendatarnya
+   tersembunyi -- "dua gulir".
+
+   Tiga perubahan, semuanya di halaman ini saja (header situs dipakai 18
+   halaman, tidak disentuh):
+   1. Toolbar SATU baris di semua lebar: laci filter v232 (tertutup + lencana
+      jumlah filter aktif) sekarang berlaku di desktop juga -- satu baris utuh
+      dengan empat select + centang tidak muat di 1400 px (~1.800 px).
+      Legenda di balik tombol "Keterangan" di toolbar.
+   2. Form jadi MODAL: elemen form dipindah utuh (id tetap, jadi seluruh kode
+      form tidak tahu bedanya) ke kotak melayang; dibuka tombol "+ Jadwal"
+      atau klik bar. Klik bar tidak lagi harus menggulir ke atas ke form.
+   3. Tinggi matriks dihitung dari posisi atasnya yang SEBENARNYA
+      (jmPasTinggi_), lewat variabel CSS supaya aturan @media print tetap
+      menang. Dihitung ulang saat resize dan saat laci/legenda dibuka. */
+function jmPasTinggi_() {
+  const gulir = document.querySelector("#jm-matriks .jm-gulir");
+  if (!gulir) return;
+  const atasDokumen = gulir.getBoundingClientRect().top + window.scrollY;
+  const tinggi = Math.max(240, window.innerHeight - atasDokumen - 16);
+  gulir.style.setProperty("--jm-tinggi", Math.round(tinggi) + "px");
+}
+let JM_RESIZE_TUNGGU = null;
+window.addEventListener("resize", function () {
+  clearTimeout(JM_RESIZE_TUNGGU);
+  JM_RESIZE_TUNGGU = setTimeout(jmPasTinggi_, 120);
+});
+
+function jmModal_() {
+  let m = document.getElementById("jm-modal");
+  if (m) return m;
+  const wrap = document.getElementById("jm-form-wrap");
+  const form = wrap ? wrap.querySelector(".jm-form") : null;
+  const judul = document.getElementById("jm-form-judul");
+  if (!wrap || !form) return null;
+  m = document.createElement("div");
+  m.id = "jm-modal"; m.className = "jm-modal hidden";
+  m.innerHTML = '<div class="jm-modal-kotak" role="dialog" aria-modal="true">' +
+    '<div class="jm-modal-kepala"><span class="jm-modal-judul"></span>' +
+    '<button type="button" class="jm-modal-tutup" onclick="jmTutupForm()" aria-label="Tutup" title="Tutup (Esc)">\u00d7</button></div>' +
+    '<div class="jm-modal-isi"></div></div>';
+  document.body.appendChild(m);
+  // Judul & form DIPINDAH, bukan disalin: id-nya tetap, kode form tidak berubah.
+  const kepala = m.querySelector(".jm-modal-judul");
+  if (judul) kepala.appendChild(judul);
+  m.querySelector(".jm-modal-isi").appendChild(form);
+  wrap.classList.add("jm-form-wrap-kosong");   // sisa <details> disembunyikan CSS
+  m.addEventListener("click", function (ev) { if (ev.target === m) jmTutupForm(); });
+  return m;
+}
+function jmBukaForm() {
+  if (!JM_BOLEH_TULIS) return;
+  const m = jmModal_();
+  if (!m) return;
+  m.classList.remove("hidden");
+  document.body.classList.add("jm-modal-terbuka");
+  const k = m.querySelector(".jm-modal-kotak");
+  if (k) k.classList.toggle("jm-mode-edit", !!JM_EDIT_ID);
+  const pertama = document.getElementById("jm-in-item");
+  if (pertama && pertama.focus && !JM_EDIT_ID) pertama.focus();
+}
+function jmTutupForm() {
+  const m = document.getElementById("jm-modal");
+  if (m) m.classList.add("hidden");
+  document.body.classList.remove("jm-modal-terbuka");
+  if (JM_EDIT_ID) jmFormBatal();   // keluar dari mode ubah: form kembali ke tambah
+}
+/** Tombol "+ Jadwal": buka form tambah baru untuk item apa pun. */
+function jmTambahJadwal() {
+  if (JM_EDIT_ID) jmFormBatal();
+  jmFormPesan_("");
+  jmFormItemBerubah();
+  jmBukaForm();
 }
 
 function jmRenderLaci_() {
@@ -310,15 +393,32 @@ function jmRenderLaci_() {
   const n = (JM_LIHAT.klien ? 1 : 0) + (JM_LIHAT.line ? 1 : 0) + (JM_LIHAT.tahap ? 1 : 0);
   btn.innerHTML = "Filter" + (n ? ' <span class="jm-laci-lencana">' + n + "</span>" : "");
 
-  // Pelipat legenda -- hidup hanya di layar sempit (diatur CSS).
-  const legenda = document.getElementById("jm-legenda");
-  if (legenda && !document.getElementById("jm-btn-legenda")) {
+  // v250: tombol legenda di TOOLBAR (semua lebar), bukan baris sendiri di atas
+  // legenda. Legenda tertutup sampai diminta.
+  if (!document.getElementById("jm-btn-legenda")) {
     const bl = document.createElement("button");
-    bl.id = "jm-btn-legenda"; bl.type = "button"; bl.className = "jm-btn-legenda";
-    bl.textContent = "Keterangan";
+    bl.id = "jm-btn-legenda"; bl.type = "button"; bl.className = "jm-btn jm-btn-legenda";
+    bl.innerHTML = '<span class="jm-lbl-panjang">Keterangan</span><span class="jm-lbl-pendek">Ket.</span>';
+    bl.title = "Tampilkan / sembunyikan keterangan warna";
     bl.onclick = jmToggleLegenda;
-    legenda.parentNode.insertBefore(bl, legenda);
+    btn.parentNode.insertBefore(bl, btn.nextSibling);
   }
+  // v250: "+ Jadwal" membuka form (modal). Mengikuti gerbang tulis yang sama
+  // dengan form: peran tanpa hak tulis tidak melihatnya.
+  let bj = document.getElementById("jm-btn-jadwal");
+  if (!bj) {
+    bj = document.createElement("button");
+    bj.id = "jm-btn-jadwal"; bj.type = "button"; bj.className = "jm-btn jm-btn-utama jm-btn-jadwal";
+    bj.innerHTML = '<span class="jm-lbl-panjang">+ Jadwal</span><span class="jm-lbl-pendek">+</span>';
+    bj.title = "Tambah jadwal";
+    bj.onclick = jmTambahJadwal;
+    alat.appendChild(bj);
+  }
+  bj.classList.toggle("hidden", !JM_BOLEH_TULIS);
+  // Modal dibuat SEKARANG, bukan saat pertama dibuka: selama form masih di
+  // <details>, baris "Tambah jadwal" tetap memakan 58 px di atas matriks --
+  // persis yang mau dihilangkan. jmModal_ idempoten.
+  jmModal_();
 }
 
 /** Tombol disuntik ke toolbar dari JS supaya template Blogger hanya naik tag. */
@@ -1027,6 +1127,7 @@ function jmPasangGulir_(kolom) {
   });
   jmGulirAwal_(kolom);
   jmPerbaruiPenanda_();
+  jmPasTinggi_();   // v250
 }
 
 /** v231: sel-sel tanggal untuk SATU baris bar. Dipakai kedua mode. */
@@ -1317,8 +1418,7 @@ function jmEdit(id) {
   document.getElementById("jm-in-ket").value = b.keterangan || "";
   jmFormPesan_("");
   jmFormModeTampil_();
-  const w = document.getElementById("jm-form-wrap");
-  if (w) { w.open = true; w.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  jmBukaForm();   // v250: modal, tidak perlu menggulir ke atas
 }
 
 function jmFormModeTampil_() {
@@ -1343,6 +1443,8 @@ function jmFormModeTampil_() {
   if (l) l.classList.toggle("hidden", !edit);
   const w = document.getElementById("jm-form-wrap");
   if (w) w.classList.toggle("jm-mode-edit", edit);
+  const k = document.querySelector("#jm-modal .jm-modal-kotak");
+  if (k) k.classList.toggle("jm-mode-edit", edit);
 }
 
 /* v249. Dari ruas yang sedang diedit, siapkan RUAS BARU untuk item, tahap,
@@ -1651,7 +1753,10 @@ window.addEventListener("load", function () {
     if (chip) jmTampilkanItem(chip.getAttribute("data-kunci"));
   });
   document.addEventListener("keydown", function (ev) {
-    if (ev.key === "Escape") { jmTutupMenuItem_(); jmTutupPanelSembunyi_(); }
+    if (ev.key !== "Escape") return;
+    jmTutupMenuItem_(); jmTutupPanelSembunyi_();
+    const m = document.getElementById("jm-modal");
+    if (m && !m.classList.contains("hidden")) jmTutupForm();
   });
   const sesi = jmBacaSesi_();
   if (sesi) { JM_ID_TOKEN = sesi; jmMulai(); return; }

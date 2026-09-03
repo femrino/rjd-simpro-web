@@ -11,7 +11,7 @@
    <section>, karena simpro-global.css memberi padding ke section{}.
    ============================================================ */
 
-.jm-wrap { max-width: 1440px; margin: 0 auto; padding: 0 20px 80px; }
+.jm-wrap { max-width: 1440px; margin: 0 auto; padding: 0 20px 12px; }   /* v250: bawah 80 -> 12, matriks pas layar */
 
 /* ---------- login ---------- */
 .jm-kotak-login {
@@ -130,7 +130,7 @@ body.jm-bisa-tulis td.jm-bar[data-id]:not([data-id=""]):hover { box-shadow: inse
 
 /* ---------- matriks ---------- */
 .jm-gulir {
-  overflow: auto; max-height: calc(100vh - 220px);
+  overflow: auto; max-height: var(--jm-tinggi, calc(100vh - 220px));   /* v250: diisi jmPasTinggi_ */
   background: #fff; border: 1px solid var(--line, #E5E0D6); border-radius: 14px;
 }
 .jm-tabel { border-collapse: separate; border-spacing: 0; font-size: 12.5px; color: var(--ink, #17212F); }
@@ -188,14 +188,14 @@ th.jm-hari-ini { background: #FBE7B3; }
 
 /* ---------- layar sempit ---------- */
 @media (max-width: 760px) {
-  .jm-wrap { padding: 0 10px 60px; }
+  .jm-wrap { padding: 0 10px 8px; }
   /* NISAN v241: dulu ada tiga aturan .jm-hero di sini (padding, sembunyikan
      .lead, kecilkan h1). Hero halaman jadwal dicabut dari template di v241 --
      memakan satu layar penuh sebelum matriks. Tidak ada elemen yang tersisa. */
   .jm-th-kiri { min-width: 150px; max-width: 170px; }
   .jm-item-meta { max-width: 150px; }
   .jm-td-tahap { padding-left: 12px; }
-  .jm-gulir { max-height: calc(100vh - 170px); }
+  .jm-gulir { max-height: var(--jm-tinggi, calc(100vh - 170px)); }
   .jm-rentang { font-size: 13px; }
   .jm-form-tgl { flex-basis: 45%; }
   .jm-form-pesan { margin-left: 0; width: 100%; }
@@ -274,9 +274,12 @@ th.jm-hari-ini { background: #FBE7B3; }
      baris 2 = seluruh filter, sejajar rata kiri, dipisah garis tipis
    Di <=640px aturan ini ditimpa media query di bawah (laci jadi laci
    sungguhan: tersembunyi sampai tombol Filter ditekan). */
+/* v250: laci tertutup di SEMUA lebar (bukan hanya <=640). Toolbar jadi satu
+   baris; filter dibuka tombol Filter yang berlencana jumlah filter aktif. */
 .jm-laci{
-  display: flex;
+  display: none;
   flex-basis: 100%;
+  order: 20;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
@@ -284,8 +287,43 @@ th.jm-hari-ini { background: #FBE7B3; }
   margin-top: 2px;
   border-top: 1px solid var(--line, #E5E0D6);
 }
-.jm-btn-laci{ display:none; }
-.jm-btn-legenda{ display:none; }
+.jm-laci.jm-laci-buka{ display: flex; }
+.jm-btn-laci{ display: inline-flex; align-items: center; order: 1; }
+.jm-btn-legenda{ order: 2; }
+.jm-sumbu{ order: 3; }
+.jm-btn-jadwal{ order: 4; }
+#jm-legenda{ display: none; }
+#jm-legenda.jm-legenda-buka{ display: flex; flex-wrap: wrap; }
+.jm-btn.jm-sumbu-aktif{ background: var(--ink, #1e2330); color: #fff; border-color: var(--ink, #1e2330); }
+
+/* Sisa <details> form sesudah isinya dipindah ke modal. */
+.jm-form-wrap.jm-form-wrap-kosong{ display: none; }
+
+/* Modal form (v250). */
+.jm-modal{
+  position: fixed; inset: 0; z-index: 75;
+  background: rgba(15,15,20,.45);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 24px 12px; overflow: auto;
+}
+.jm-modal-kotak{
+  width: min(960px, 100%); background: #fff;
+  border: 1px solid var(--line, #E5E0D6); border-radius: 14px;
+  box-shadow: 0 16px 48px rgba(0,0,0,.22);
+}
+.jm-modal-kotak.jm-mode-edit{ border-color: var(--navy, #17212F); }
+.jm-modal-kepala{
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 16px; border-bottom: 1px solid var(--line, #E5E0D6);
+  font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 15px; color: var(--navy, #17212F);
+}
+.jm-modal-tutup{
+  font: inherit; font-size: 22px; line-height: 1; border: 0; background: none;
+  color: var(--ink-soft, #5F6B7A); cursor: pointer; padding: 2px 8px; border-radius: 8px;
+}
+.jm-modal-tutup:hover{ background: rgba(27,37,64,.06); color: var(--navy, #17212F); }
+.jm-modal-isi .jm-form{ padding: 12px 16px 16px; }
+body.jm-modal-terbuka{ overflow: hidden; }
 .jm-laci-lencana{
   display:inline-block; min-width:16px; padding:1px 5px; margin-left:4px;
   border-radius:99px; background:#C8362B; color:#fff;
@@ -350,9 +388,13 @@ th.jm-hari-ini { background: #FBE7B3; }
 
   .jm-alat{ gap:6px; }
   .jm-alat-spasi{ display:none; }         /* pendorong-kanan tak relevan saat wrap */
-  .jm-rentang{ order:10; width:100%; margin-top:2px; }
-  #jm-laci{ order:5; }                    /* laci terbuka: di bawah baris tombol,
-                                             di atas rentang */
+  /* v250: baris 1 tetap nav + Filter + sumbu (v232, jalan31); Keterangan dan
+     "+" turun ke baris rentang -- keempatnya tidak muat di 390 px (~388 px). */
+  .jm-rentang{ order:10; flex:1 1 auto; min-width:0; margin-top:2px; }
+  .jm-btn-legenda{ order:11; }
+  .jm-btn-jadwal{ order:12; }
+  #jm-laci{ order:5; }                    /* laci terbuka: tepat di bawah baris tombol,
+                                             di atas rentang (v232, diuji jalan31) */
   .jm-nav .jm-btn{ padding:8px 10px; }
   .jm-sumbu button{ padding:8px 9px; font-size:12.5px; }
   .jm-btn-laci{ padding:8px 10px; }
@@ -525,3 +567,5 @@ td[data-kunci]:hover .jm-item-nama-kecil{ text-decoration: underline dotted; tex
   background-image: repeating-linear-gradient(90deg, #B9B1A2 0 5px, transparent 5px 9px);
   background-size: 100% 2px; background-repeat: no-repeat; background-position: center;
 }
+
+@media print { #jm-modal { display: none !important; } }
