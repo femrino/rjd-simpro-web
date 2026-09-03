@@ -237,6 +237,7 @@ th.jm-hari-ini { background: #FBE7B3; }
   padding:8px 12px;
   font:inherit;
   font-size:13px;
+  line-height:1;        /* v253: tanpa ini 37 px, kapsul lain 31 px -- besar-kecil */
   color:var(--ink-soft, #5a5a5a);
   cursor:pointer;
 }
@@ -251,7 +252,12 @@ th.jm-hari-ini { background: #FBE7B3; }
 /* Baris item di dalam grup tahap: dua tingkat teks, lebih padat dari header item. */
 .jm-td-tahap-item{ line-height:1.3; }
 .jm-item-nama-kecil{ font-weight:600; font-size:13px; }
-.jm-item-meta-kecil{ font-size:11.5px; color:var(--ink-soft, #6b6b6b); margin-top:1px; }
+/* v253: baris item mode tahap = nama + deadline dalam SATU baris flex; nama
+   menyusut (ellipsis), deadline tidak (janji v236 dipertahankan). Klien, PO,
+   qty pindah ke menu klik. */
+.jm-item-baris-kecil{ display:flex; align-items:baseline; gap:6px; white-space:nowrap; overflow:hidden; }
+.jm-item-baris-kecil .jm-item-nama-kecil{ min-width:0; flex:1 1 auto; }
+.jm-item-baris-kecil .jm-dl{ flex:0 0 auto; font-size:11.5px; }
 
 
 /* ============================================================
@@ -346,29 +352,23 @@ body.jm-modal-terbuka{ overflow: hidden; }
   }
   .jm-laci.jm-laci-buka{ display:flex; }
 
-  /* --- legenda: terlipat; nama tahap sudah tertulis di tiap baris --- */
-  .jm-btn-legenda{
-    display:inline-flex; appearance:none; border:0; background:transparent;
-    padding:6px 0; font:inherit; font-size:12px; color:var(--ink-soft, #5F6B7A);
-    cursor:pointer;
-  }
-  .jm-btn-legenda::after{ content:" \25BE"; }
-  #jm-legenda{ display:none; }
-  #jm-legenda.jm-legenda-buka{ display:flex; flex-wrap:wrap; }
+  /* NISAN v253: di sini pernah ada gaya "tautan teks" untuk .jm-btn-legenda
+     (tanpa bingkai, font 12, caret). Sejak v250 tombolnya berkelas .jm-btn dan
+     harus seragam dengan kapsul lain; aturan lama masih hidup dan mencabut
+     bingkainya di HP. Dihapus. Legenda tertutup diatur aturan global. */
+  .jm-alat .jm-btn-jadwal{ min-width:58px; justify-content:center; }   /* "+" selebar Filter/Ket. */
 
-  /* --- kolom kiri: dari 250px (64% layar) jadi 150-170px --- */
-  .jm-th-kiri{ min-width:150px; max-width:170px; }
-  .jm-td-item, .jm-td-tahap{ max-width:170px; overflow:hidden; }
+  /* --- kolom kiri: v232 150-170 px (8 hari terlihat); v253 120 px supaya
+     >= 10 hari terlihat di 390 px: (368 - 120) / 24 = 10,3. Nama terpotong lebih
+     awal -- diterima 3 Sep 2026, "kecilkan saja bagian artikel & tahap". --- */
+  .jm-th-kiri{ min-width:120px; max-width:120px; }
+  .jm-td-item, .jm-td-tahap{ max-width:120px; overflow:hidden; }
   .jm-td-item{ padding:6px 8px 4px; }
   .jm-td-tahap{ padding-left:8px; padding-right:8px; }
   .jm-item-nama, .jm-item-nama-kecil{
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
-  .jm-item-meta, .jm-item-meta-kecil{ max-width:150px; overflow:hidden; text-overflow:ellipsis; }
-
-  /* Nama klien di baris mode tahap dibuang -- kode PO sudah mewakilinya,
-     dan "PT Bahagia Bervisi Mulia" memakan setengah kolom. */
-  .jm-td-tahap-item .jm-klien{ display:none; }
+  .jm-item-meta{ max-width:104px; overflow:hidden; text-overflow:ellipsis; }
 
   /* --- sel hari 24px: +1 kolom lagi --- */
   .jm-th-hari, .jm-sel{ width:24px; min-width:24px; }
@@ -485,16 +485,16 @@ body.jm-modal-terbuka{ overflow: hidden; }
 /* Meta jadi satu baris flex: klien & PO MENYUSUT, qty & deadline TIDAK.
    Sebelumnya semuanya satu aliran teks, jadi yang terpotong adalah yang
    paling kanan -- selalu deadline. */
-.jm-item-meta, .jm-item-meta-kecil{
+.jm-item-meta{
   display: flex; align-items: baseline; gap: 4px;
   white-space: nowrap; overflow: hidden;
 }
-.jm-item-meta .jm-klien, .jm-item-meta .jm-mono,
-.jm-item-meta-kecil .jm-klien, .jm-item-meta-kecil .jm-mono{
+.jm-item-meta .jm-klien, .jm-item-meta .jm-mono{
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.jm-item-meta .jm-qty, .jm-item-meta .jm-dl,
-.jm-item-meta-kecil .jm-dl{ flex: 0 0 auto; }
+.jm-item-meta .jm-qty, .jm-item-meta .jm-dl{ flex: 0 0 auto; }
+/* NISAN v253: selektor .jm-item-meta-kecil dicabut dari aturan-aturan di atas
+   dan di bawah -- elemennya tidak digambar lagi (baris tahap kini satu baris). */
 
 /* v239: di layar lebar, KODE PO tidak ikut menyusut -- hanya nama klien.
    Keduanya flex-shrink:1 membuat penyusutan dibagi proporsional, jadi PO
@@ -511,16 +511,13 @@ body.jm-modal-terbuka{ overflow: hidden; }
 
 /* Tinggi baris DIKUNCI -- tidak lagi bergantung pada isi atau posisi gulir. */
 .jm-r-tahap > td{ height: 30px; }
-.jm-r-tahap .jm-td-tahap-item{ height: 44px; }
+.jm-r-tahap .jm-td-tahap-item{ height: 30px; }   /* v253: 44 -> 30, sama dengan baris tahap mode artikel */
 
 @media (max-width: 640px){
   .jm-td-tahap{ padding-right: 16px; }
   .jm-r-tahap > td{ height: 28px; }
-  .jm-r-tahap .jm-td-tahap-item{ height: 42px; }
-  .jm-item-meta, .jm-item-meta-kecil{ gap: 3px; }
-  /* Kode PO panjang ("260716/Kafana Style 14") memakan seluruh baris. Di layar
-     sempit ia boleh menyusut jauh -- deadline yang harus selamat. */
-  .jm-item-meta-kecil .jm-mono{ font-size: 11px; }
+  .jm-r-tahap .jm-td-tahap-item{ height: 28px; }   /* v253: 42 -> 28 */
+  .jm-item-meta{ gap: 3px; }
 }
 
 /* ============================================================

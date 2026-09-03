@@ -217,7 +217,11 @@ function jmBukaMenuItem_(kunci, ev) {
     document.body.appendChild(m);
   }
   const it = (JM_DATA && (JM_DATA.itemAktif || []).concat(JM_DATA.items || []).filter(function (x) { return x.kunci === kunci; })[0]) || null;
-  m.innerHTML = '<div class="jm-menu-judul">' + jmEsc_(it ? jmLabelItem_(it) : kunci) + '</div>' +
+  // v253: info lengkap ada DI SINI, karena baris mode tahap kini hanya memuat nama.
+  const rinci = it ? [it.namaKlien || it.idKlien, it.po, it.qtyPo ? it.qtyPo.toLocaleString("id-ID") + " pcs" : "",
+    it.deadline ? "deadline " + jmTanggalPendek_(it.deadline) : ""].filter(String).join(" \u00b7 ") : "";
+  m.innerHTML = '<div class="jm-menu-judul"><b>' + jmEsc_(it ? ([it.artikel, it.style].filter(String).join(" ") || it.po) : kunci) + '</b>' +
+    (rinci ? '<br>' + jmEsc_(rinci) : '') + '</div>' +
     '<button type="button" onclick="jmSembunyikanItem(' + JSON.stringify(kunci).replace(/"/g, "&quot;") + ')">Sembunyikan item ini</button>' +
     '<button type="button" onclick="jmHanyaItem(' + JSON.stringify(kunci).replace(/"/g, "&quot;") + ')">Hanya tampilkan item ini</button>';
   m.classList.remove("hidden");
@@ -1302,16 +1306,13 @@ function jmRenderMatriks_() {
         jumlahBaris++; itemUnik[b.item.kunci] = true;
         const it = b.item, dlLewat = it.deadline && it.deadline < hariIni;
         tbody += '<tr class="jm-r-tahap"><td class="jm-sticky jm-td-tahap jm-td-tahap-item" data-kunci="' + jmEsc_(it.kunci) + '" title="Klik: sembunyikan / fokus item ini">' +
-          '<div class="jm-item-nama-kecil">' + jmEsc_(b.label) +
-            (b.sub ? ' <span class="jm-tahap-sub">' + jmEsc_(b.sub) + '</span>' : '') + '</div>' +
-          // v236: tiap bagian dibungkus span sendiri, dan pemisah "\u00b7" ikut MASUK
-          // ke dalam span deadline. Alasannya bukan kosmetik: barisnya dijadikan
-          // flex supaya kode PO yang menyusut (ellipsis) sementara DEADLINE tidak
-          // pernah menyusut. Sebelumnya justru sebaliknya -- "260708/Himeka 12 \u00b7 5 S..."
-          // memotong tanggal, bagian yang paling dibutuhkan orang lantai.
-          '<div class="jm-item-meta-kecil"><span class="jm-klien">' + jmEsc_(it.namaKlien || it.idKlien) + '</span>' +
-            '<span class="jm-mono">' + jmEsc_(it.po) + '</span>' +
-            (it.deadline ? '<span class="jm-dl' + (dlLewat ? ' jm-dl-lewat' : '') + '">\u00b7 ' + jmTanggalPendek_(it.deadline) + '</span>' : '') +
+          // v253: SATU baris -- nama item + deadline. Klien, PO, dan qty pindah ke
+          // menu (klik nama). Alasannya dua: baris mode tahap jadi setinggi baris
+          // mode artikel (30 px, bukan 44), dan kolom kiri bersih. Yang dijaga dari
+          // v236 tetap dijaga: nama boleh menyusut (ellipsis), DEADLINE tidak pernah.
+          '<div class="jm-item-baris-kecil"><span class="jm-item-nama-kecil">' + jmEsc_(b.label) +
+            (b.sub ? ' <span class="jm-tahap-sub">' + jmEsc_(b.sub) + '</span>' : '') + '</span>' +
+            (it.deadline ? '<span class="jm-dl' + (dlLewat ? ' jm-dl-lewat' : '') + '">' + jmTanggalPendek_(it.deadline) + '</span>' : '') +
           '</div></td>' + jmSelBaris_(b, kolom, hariIni, it.deadline) + '</tr>';
       });
       if (gi < grup.length - 1) tbody += '<tr class="jm-r-pisah"><td colspan="' + (kolom.length + 1) + '"></td></tr>';
@@ -1334,9 +1335,8 @@ function jmRenderMatriks_() {
         '<div class="jm-item-nama">' + jmEsc_(judul || it.po) + '</div>' +
         // v236: klien & PO boleh menyusut, qty dan deadline tidak.
         // v239: di >=641px PO ikut dikunci (flex:0 0 auto), jadi hanya nama
-        // klien yang menyusut. Ini BEDA dengan mode tahap (.jm-item-meta-kecil)
-        // yang PO-nya masih menyusut di semua lebar -- sengaja, jangan
-        // diseragamkan tanpa cek simpro-jadwal.css.
+        // klien yang menyusut. (v253: mode tahap tidak lagi menampilkan klien/PO
+        // di baris -- hanya nama + deadline; rinciannya di menu klik.)
         '<div class="jm-item-meta"><span class="jm-klien">' + jmEsc_(it.namaKlien || it.idKlien) + '</span>' +
           '<span class="jm-mono">' + jmEsc_(it.po) + '</span>' +
           (it.qtyPo ? '<span class="jm-qty">&#183; ' + it.qtyPo.toLocaleString("id-ID") + ' pcs</span>' : '') +
