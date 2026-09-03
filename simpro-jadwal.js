@@ -59,7 +59,8 @@ const JM_LIHAT = {
                        // beda dengan line yang tingkat-item -- lihat catatan di
                        // jmRenderLaci_. Nilainya utama saat dipadukan mode tahap:
                        // "Per tahap + Cutting" = daftar kerja harian kepala cutting.
-  mode: "artikel"      // v231: "artikel" (grup = item, baris = tahap) | "tahap" (dibalik)
+  mode: "artikel",     // v231: "artikel" (grup = item, baris = tahap) | "tahap" (dibalik)
+  sembunyi: {}         // v246: {kunci item: true} -- disembunyikan MANUAL, di localStorage (lihat jmBacaSembunyi_)
 };
 
 /* v231 -- DUA SUMBU, SATU DATA
@@ -82,6 +83,120 @@ function jmGantiMode(mode) {
   try { localStorage.setItem(JM_MODE_KUNCI, JM_LIHAT.mode); } catch (e) { /* abaikan */ }
   jmRenderTombolMode_();
   jmRender();
+}
+
+/* v246 -- SEMBUNYIKAN / FOKUS ITEM
+   Filter (klien, line, tahap, lewat) menjawab "apa yang ADA". Ini menjawab
+   "apa yang mau saya LIHAT sekarang": kepala produksi yang sedang mengurus
+   dua order tidak perlu 19 order lain di layar yang sama.
+
+   Bentuknya satu set kunci item di JM_LIHAT.sembunyi, diterapkan SESUDAH
+   semua filter, di kedua mode. Disimpan di localStorage seperti mode -- fokus
+   itu dipasang lalu dipakai berhari-hari; kalau hilang tiap tab ditutup,
+   fiturnya menyebalkan. Syaratnya, dan ini bukan hiasan: bilah pemulih
+   (#jm-sembunyi-bar) SELALU tampil selama ada yang disembunyikan, dengan nama
+   tiap item dan tombol "Tampilkan semua". Item yang hilang tanpa penanda yang
+   terlihat adalah bug jenis "diam-diam" -- kali ini disengaja, tapi tetap
+   harus terlihat.
+
+   Kunci basi (item selesai, hilang dari data) DIBIARKAN di set: tidak dihitung,
+   tidak ditampilkan, dan kalau item itu kembali ia tetap tersembunyi -- itu
+   yang diharapkan orang yang pernah menyembunyikannya. */
+const JM_SEMBUNYI_KUNCI = "jm_sembunyi";
+let JM_SEMBUNYI_TERAKHIR = [];   // item yang lolos filter TAPI disembunyikan (untuk bilah & angka)
+let JM_TAMPIL_TERAKHIR = [];     // kunci item yang sedang tampil (untuk "hanya ini")
+
+function jmBacaSembunyi_() {
+  try {
+    const d = JSON.parse(localStorage.getItem(JM_SEMBUNYI_KUNCI) || "{}");
+    JM_LIHAT.sembunyi = (d && typeof d === "object" && !Array.isArray(d)) ? d : {};
+  } catch (e) { JM_LIHAT.sembunyi = {}; }
+}
+function jmSimpanSembunyi_() {
+  try { localStorage.setItem(JM_SEMBUNYI_KUNCI, JSON.stringify(JM_LIHAT.sembunyi)); } catch (e) { /* abaikan */ }
+}
+
+/** Pisahkan daftar (yang SUDAH lolos filter) jadi tampil vs disembunyikan.
+ *  Dipanggil kedua fungsi pengelompokan supaya definisinya satu. */
+function jmPisahSembunyi_(daftar, ambilItem) {
+  const tampil = [], sembunyi = [];
+  daftar.forEach(function (x) {
+    const it = ambilItem(x);
+    (it && JM_LIHAT.sembunyi[it.kunci] ? sembunyi : tampil).push(x);
+  });
+  JM_SEMBUNYI_TERAKHIR = sembunyi.map(ambilItem);
+  JM_TAMPIL_TERAKHIR = tampil.map(function (x) { return ambilItem(x).kunci; });
+  return tampil;
+}
+
+function jmSembunyikanItem(kunci) {
+  if (!kunci) return;
+  JM_LIHAT.sembunyi[kunci] = true;
+  jmSimpanSembunyi_(); jmTutupMenuItem_(); jmRender();
+}
+/** "Hanya tampilkan ini": semua item lain yang SEDANG tampil disembunyikan. */
+function jmHanyaItem(kunci) {
+  if (!kunci) return;
+  JM_TAMPIL_TERAKHIR.forEach(function (k) { if (k !== kunci) JM_LIHAT.sembunyi[k] = true; });
+  delete JM_LIHAT.sembunyi[kunci];
+  jmSimpanSembunyi_(); jmTutupMenuItem_(); jmRender();
+}
+function jmTampilkanItem(kunci) {
+  delete JM_LIHAT.sembunyi[kunci];
+  jmSimpanSembunyi_(); jmRender();
+}
+function jmTampilkanSemua() {
+  JM_LIHAT.sembunyi = {};
+  jmSimpanSembunyi_(); jmRender();
+}
+
+function jmLabelItem_(it) {
+  return ([it.artikel, it.style].filter(String).join(" ") || it.po) + " \u00b7 " + it.po;
+}
+
+/** Bilah pemulih di atas matriks. Dibuat sekali lewat JS (template tidak berubah). */
+function jmRenderSembunyi_() {
+  const matriks = document.getElementById("jm-matriks");
+  if (!matriks || !matriks.parentNode) return;
+  let bar = document.getElementById("jm-sembunyi-bar");
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.id = "jm-sembunyi-bar"; bar.className = "jm-sembunyi-bar hidden";
+    matriks.parentNode.insertBefore(bar, matriks);
+  }
+  const daftar = JM_SEMBUNYI_TERAKHIR;
+  if (!daftar.length) { bar.classList.add("hidden"); bar.innerHTML = ""; return; }
+  bar.innerHTML = '<b>' + daftar.length + ' item disembunyikan</b>' +
+    daftar.map(function (it) {
+      return '<button type="button" class="jm-sembunyi-chip" data-kunci="' + jmEsc_(it.kunci) + '" title="Tampilkan lagi">' +
+        jmEsc_(jmLabelItem_(it)) + '</button>';
+    }).join("") +
+    '<button type="button" class="jm-sembunyi-semua" onclick="jmTampilkanSemua()">Tampilkan semua</button>';
+  bar.classList.remove("hidden");
+}
+
+/** Menu kecil di sel nama item: Sembunyikan / Hanya tampilkan ini. */
+function jmBukaMenuItem_(kunci, ev) {
+  let m = document.getElementById("jm-menu-item");
+  if (!m) {
+    m = document.createElement("div");
+    m.id = "jm-menu-item"; m.className = "jm-menu-item hidden";
+    document.body.appendChild(m);
+  }
+  const it = (JM_DATA && (JM_DATA.itemAktif || []).concat(JM_DATA.items || []).filter(function (x) { return x.kunci === kunci; })[0]) || null;
+  m.innerHTML = '<div class="jm-menu-judul">' + jmEsc_(it ? jmLabelItem_(it) : kunci) + '</div>' +
+    '<button type="button" onclick="jmSembunyikanItem(' + JSON.stringify(kunci).replace(/"/g, "&quot;") + ')">Sembunyikan item ini</button>' +
+    '<button type="button" onclick="jmHanyaItem(' + JSON.stringify(kunci).replace(/"/g, "&quot;") + ')">Hanya tampilkan item ini</button>';
+  m.classList.remove("hidden");
+  // Diposisikan sesudah tampil supaya ukurannya terukur; dijaga tetap di layar.
+  const lebar = m.offsetWidth || 240, tinggi = m.offsetHeight || 110;
+  const x = Math.max(8, Math.min((ev && ev.clientX) || 8, window.innerWidth - lebar - 8));
+  const y = Math.max(8, Math.min((ev && ev.clientY) || 8, window.innerHeight - tinggi - 8));
+  m.style.left = x + "px"; m.style.top = y + "px";
+}
+function jmTutupMenuItem_() {
+  const m = document.getElementById("jm-menu-item");
+  if (m) m.classList.add("hidden");
 }
 /* v232 -- LAYAR SEMPIT
    Di ~390 px, toolbar yang menumpuk vertikal memakan satu layar penuh sebelum
@@ -348,6 +463,7 @@ function jmTerapkanBagian_(d) {
 
 function jmBacaLihat_() {
   jmBacaMode_();
+  jmBacaSembunyi_();   // v246
   try {
     const raw = sessionStorage.getItem("jm_lihat");
     if (!raw) return;
@@ -550,6 +666,7 @@ function jmRender() {
   jmRenderLaci_();         // v232: idem; juga memperbarui lencana jumlah filter aktif
   jmRenderPeringatan_();
   jmRenderMatriks_();
+  jmRenderSembunyi_();     // v246: butuh JM_SEMBUNYI_TERAKHIR dari pengelompokan di atas
 }
 
 function jmRenderPeringatan_() {
@@ -600,7 +717,7 @@ function jmKelompok_() {
     if (b.selesai > grup[b.item].selesaiMax) grup[b.item].selesaiMax = b.selesai;
   });
 
-  return Object.keys(grup).map(function (k) { return grup[k]; })
+  const lolos = Object.keys(grup).map(function (k) { return grup[k]; })
     .filter(function (g) {
       if (JM_LIHAT.sembunyiLewat && g.selesaiMax < hariIni) return false;
       // Filter line: tampilkan item yang punya bar Sewing di line itu.
@@ -609,7 +726,10 @@ function jmKelompok_() {
       // supaya tidak ada judul item yang menggantung tanpa baris.
       if (JM_LIHAT.tahap && !g.bar.some(function (b) { return b.tahap === JM_LIHAT.tahap; })) return false;
       return true;
-    })
+    });
+  // v246: sembunyi manual SESUDAH filter -- yang dihitung "disembunyikan"
+  // hanya yang memang akan tampil kalau tidak disembunyikan.
+  return jmPisahSembunyi_(lolos, function (g) { return g.item; })
     .sort(function (a, b) {
       if (a.mulaiMin !== b.mulaiMin) return a.mulaiMin < b.mulaiMin ? -1 : 1;
       return String(a.item.artikel).localeCompare(String(b.item.artikel));
@@ -645,6 +765,11 @@ function jmKelompokTahap_() {
     if (JM_LIHAT.line && !barPerItem[k].some(function (b) { return b.line === JM_LIHAT.line; })) return;
     itemLolos[k] = true;
   });
+  // v246: sembunyi manual, semantik sama dengan mode artikel (per item).
+  // Nilai baliknya tidak dipakai di sini; yang dibutuhkan efek sampingnya
+  // (JM_SEMBUNYI_TERAKHIR / JM_TAMPIL_TERAKHIR untuk bilah & "hanya ini").
+  jmPisahSembunyi_(Object.keys(itemLolos).map(function (k) { return petaItem[k]; }), function (it) { return it; });
+  Object.keys(itemLolos).forEach(function (k) { if (JM_LIHAT.sembunyi[k]) delete itemLolos[k]; });
 
   // kunci grup: tahap | tahap+line (Sewing) -- disusun dalam urutan tahap resmi
   const grupPeta = {}, urutanGrup = [];
@@ -890,6 +1015,7 @@ function jmSelBaris_(b, kolom, hariIni, deadline) {
 
 function jmRenderMatriks_() {
   const wadah = document.getElementById("jm-matriks");
+  JM_SEMBUNYI_TERAKHIR = []; JM_TAMPIL_TERAKHIR = [];   // v246: diisi ulang oleh pengelompokan
   if (!JM_DATA.sheetAda) { wadah.innerHTML = ""; jmRenderInfo_(0, 0); return; }
 
   const kolom = jmKolom_();
@@ -900,7 +1026,9 @@ function jmRenderMatriks_() {
   if (!grup.length) {
     wadah.innerHTML = '<div class="jm-kartu"><p class="jm-info">' +
       ((JM_DATA.bar || []).length
-        ? 'Tidak ada item yang cocok dengan filter ini.'
+        ? (JM_SEMBUNYI_TERAKHIR.length
+            ? 'Semua item yang cocok sedang disembunyikan. Pakai <b>Tampilkan semua</b> di atas.'
+            : 'Tidak ada item yang cocok dengan filter ini.')
         : (JM_BOLEH_TULIS
             ? 'Belum ada jadwal. Buka <b>Tambah jadwal</b> di atas untuk mulai mengisi.'
             : 'Belum ada baris jadwal. Isi lewat form (bagian PPIC/produksi) atau di sheet "SD Jadwal Produksi", lalu muat ulang.')) +
@@ -951,7 +1079,7 @@ function jmRenderMatriks_() {
       g.baris.forEach(function (b) {
         jumlahBaris++; itemUnik[b.item.kunci] = true;
         const it = b.item, dlLewat = it.deadline && it.deadline < hariIni;
-        tbody += '<tr class="jm-r-tahap"><td class="jm-sticky jm-td-tahap jm-td-tahap-item">' +
+        tbody += '<tr class="jm-r-tahap"><td class="jm-sticky jm-td-tahap jm-td-tahap-item" data-kunci="' + jmEsc_(it.kunci) + '" title="Klik: sembunyikan / fokus item ini">' +
           '<div class="jm-item-nama-kecil">' + jmEsc_(b.label) +
             (b.sub ? ' <span class="jm-tahap-sub">' + jmEsc_(b.sub) + '</span>' : '') + '</div>' +
           // v236: tiap bagian dibungkus span sendiri, dan pemisah "\u00b7" ikut MASUK
@@ -980,7 +1108,7 @@ function jmRenderMatriks_() {
     // Baris judul item
     const judul = [it.artikel, it.style].filter(String).join(" ");
     tbody += '<tr class="jm-r-item">' +
-      '<td class="jm-sticky jm-td-item">' +
+      '<td class="jm-sticky jm-td-item" data-kunci="' + jmEsc_(it.kunci) + '" title="Klik: sembunyikan / fokus item ini">' +
         '<div class="jm-item-nama">' + jmEsc_(judul || it.po) + '</div>' +
         // v236: klien & PO boleh menyusut, qty dan deadline tidak.
         // v239: di >=641px PO ikut dikunci (flex:0 0 auto), jadi hanya nama
@@ -1374,7 +1502,10 @@ function jmRenderInfo_(jumlahItem, jumlahBaris) {
   if (!el || !JM_LIHAT.mulai) return;
   const a = JM_LIHAT.mulai, z = jmTambahHari_(a, JM_LIHAT.minggu * 7 - 2);
   el.innerHTML = jmTanggalPendek_(jmIso_(a)) + " \u2013 " + jmTanggalPendek_(jmIso_(z)) + " " + z.getFullYear() +
-    (jumlahItem ? ' <span class="jm-rentang-sub">' + jumlahItem + ' item &#183; ' + jumlahBaris + ' baris</span>' : '');
+    (jumlahItem || JM_SEMBUNYI_TERAKHIR.length
+      ? ' <span class="jm-rentang-sub">' + jumlahItem + ' item &#183; ' + jumlahBaris + ' baris' +
+        (JM_SEMBUNYI_TERAKHIR.length ? ' &#183; <span class="jm-rentang-sembunyi">' + JM_SEMBUNYI_TERAKHIR.length + ' disembunyikan</span>' : '') + '</span>'
+      : '');
 }
 
 // ---------- legenda ----------
@@ -1398,9 +1529,21 @@ window.addEventListener("load", function () {
   // matriks bisa ribuan sel dan dirender ulang tiap geser.
   const wadah = document.getElementById("jm-matriks");
   if (wadah) wadah.addEventListener("click", function (ev) {
+    // v246: sel NAMA item (bukan sel bar) membuka menu sembunyikan/fokus.
+    const sel = ev.target.closest && ev.target.closest("td[data-kunci]");
+    if (sel) { jmBukaMenuItem_(sel.getAttribute("data-kunci"), ev); return; }
     const td = ev.target.closest && ev.target.closest("td.jm-bar[data-id]");
     if (td && td.getAttribute("data-id")) jmEdit(td.getAttribute("data-id"));
   });
+  // v246: menu tertutup oleh klik di luar / Escape; chip di bilah memulihkan satu item.
+  document.addEventListener("click", function (ev) {
+    const m = document.getElementById("jm-menu-item");
+    if (m && !m.classList.contains("hidden") && !m.contains(ev.target) &&
+        !(ev.target.closest && ev.target.closest("td[data-kunci]"))) jmTutupMenuItem_();
+    const chip = ev.target.closest && ev.target.closest(".jm-sembunyi-chip[data-kunci]");
+    if (chip) jmTampilkanItem(chip.getAttribute("data-kunci"));
+  });
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") jmTutupMenuItem_(); });
   const sesi = jmBacaSesi_();
   if (sesi) { JM_ID_TOKEN = sesi; jmMulai(); return; }
   if (typeof google === "undefined" || !google.accounts) { jmShow("jm-login-box"); return; }
