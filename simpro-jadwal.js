@@ -93,11 +93,12 @@ function jmGantiMode(mode) {
    Bentuknya satu set kunci item di JM_LIHAT.sembunyi, diterapkan SESUDAH
    semua filter, di kedua mode. Disimpan di localStorage seperti mode -- fokus
    itu dipasang lalu dipakai berhari-hari; kalau hilang tiap tab ditutup,
-   fiturnya menyebalkan. Syaratnya, dan ini bukan hiasan: bilah pemulih
-   (#jm-sembunyi-bar) SELALU tampil selama ada yang disembunyikan, dengan nama
-   tiap item dan tombol "Tampilkan semua". Item yang hilang tanpa penanda yang
-   terlihat adalah bug jenis "diam-diam" -- kali ini disengaja, tapi tetap
-   harus terlihat.
+   fiturnya menyebalkan. Syaratnya, dan ini bukan hiasan: penanda "N
+   disembunyikan" SELALU tampil selama ada yang disembunyikan -- pil di baris
+   info (v247; v246 memakai bilah chip di atas matriks, yang pada 23 item jadi
+   lima baris) -- dan membuka panel berisi nama tiap item serta "Tampilkan
+   semua". Item yang hilang tanpa penanda yang terlihat adalah bug jenis
+   "diam-diam" -- kali ini disengaja, tapi tetap harus terlihat.
 
    Kunci basi (item selesai, hilang dari data) DIBIARKAN di set: tidak dihitung,
    tidak ditampilkan, dan kalau item itu kembali ia tetap tersembunyi -- itu
@@ -154,25 +155,57 @@ function jmLabelItem_(it) {
   return ([it.artikel, it.style].filter(String).join(" ") || it.po) + " \u00b7 " + it.po;
 }
 
-/** Bilah pemulih di atas matriks. Dibuat sekali lewat JS (template tidak berubah). */
-function jmRenderSembunyi_() {
-  const matriks = document.getElementById("jm-matriks");
-  if (!matriks || !matriks.parentNode) return;
-  let bar = document.getElementById("jm-sembunyi-bar");
-  if (!bar) {
-    bar = document.createElement("div");
-    bar.id = "jm-sembunyi-bar"; bar.className = "jm-sembunyi-bar hidden";
-    matriks.parentNode.insertBefore(bar, matriks);
+/* v247: pemulih = PANEL MELAYANG yang dipicu pil "N disembunyikan" di baris
+   info, bukan bilah di atas matriks. v246 memakai bilah berisi chip semua item
+   yang disembunyikan; begitu "Hanya tampilkan ini" dipakai pada 23 item, bilah
+   itu jadi lima baris chip dan memakan layar -- kebalikan dari maksud fitur.
+   Penanda tetap SELALU terlihat (pil di baris info yang memang selalu dibaca),
+   tapi daftarnya baru muncul saat diminta, dan tidak menggeser matriks.
+   NISAN: #jm-sembunyi-bar tidak lagi dibuat; kalau tersisa dari render lama
+   pada sesi yang sama, dibuang di sini. */
+function jmPanelSembunyi_() {
+  let p = document.getElementById("jm-panel-sembunyi");
+  if (!p) {
+    p = document.createElement("div");
+    p.id = "jm-panel-sembunyi"; p.className = "jm-panel-sembunyi hidden";
+    document.body.appendChild(p);
   }
+  return p;
+}
+function jmRenderSembunyi_() {
+  const sisa = document.getElementById("jm-sembunyi-bar");
+  if (sisa && sisa.parentNode) sisa.parentNode.removeChild(sisa);
+  const p = document.getElementById("jm-panel-sembunyi");
+  if (!p || p.classList.contains("hidden")) return;      // panel tertutup: cukup pil di baris info
+  if (!JM_SEMBUNYI_TERAKHIR.length) { jmTutupPanelSembunyi_(); return; }
+  jmIsiPanelSembunyi_(p);                                 // panel terbuka: isinya ikut keadaan baru
+}
+function jmIsiPanelSembunyi_(p) {
   const daftar = JM_SEMBUNYI_TERAKHIR;
-  if (!daftar.length) { bar.classList.add("hidden"); bar.innerHTML = ""; return; }
-  bar.innerHTML = '<b>' + daftar.length + ' item disembunyikan</b>' +
-    daftar.map(function (it) {
-      return '<button type="button" class="jm-sembunyi-chip" data-kunci="' + jmEsc_(it.kunci) + '" title="Tampilkan lagi">' +
-        jmEsc_(jmLabelItem_(it)) + '</button>';
-    }).join("") +
-    '<button type="button" class="jm-sembunyi-semua" onclick="jmTampilkanSemua()">Tampilkan semua</button>';
-  bar.classList.remove("hidden");
+  p.innerHTML = '<div class="jm-panel-kepala"><b>' + daftar.length + ' item disembunyikan</b>' +
+    '<button type="button" class="jm-sembunyi-semua" onclick="jmTampilkanSemua()">Tampilkan semua</button></div>' +
+    '<div class="jm-panel-daftar">' + daftar.map(function (it) {
+      return '<div class="jm-panel-baris"><span>' + jmEsc_(jmLabelItem_(it)) + '</span>' +
+        '<button type="button" class="jm-sembunyi-chip" data-kunci="' + jmEsc_(it.kunci) + '" title="Tampilkan lagi" aria-label="Tampilkan lagi">\u00d7</button></div>';
+    }).join("") + '</div>';
+}
+function jmBukaPanelSembunyi_(ev) {
+  if (!JM_SEMBUNYI_TERAKHIR.length) return;
+  const p = jmPanelSembunyi_();
+  jmTutupMenuItem_();
+  jmIsiPanelSembunyi_(p);
+  p.classList.remove("hidden");
+  // Dijangkarkan ke pil-nya, dijaga tetap di layar (di HP pil bisa di tepi kanan).
+  const pil = (ev && ev.currentTarget) || document.querySelector(".jm-rentang-sembunyi");
+  const r = pil ? pil.getBoundingClientRect() : { left: 8, bottom: 8 };
+  const lebar = p.offsetWidth || 300, tinggi = p.offsetHeight || 200;
+  const x = Math.max(8, Math.min(r.left, window.innerWidth - lebar - 8));
+  const y = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - tinggi - 8));
+  p.style.left = x + "px"; p.style.top = y + "px";
+}
+function jmTutupPanelSembunyi_() {
+  const p = document.getElementById("jm-panel-sembunyi");
+  if (p) p.classList.add("hidden");
 }
 
 /** Menu kecil di sel nama item: Sembunyikan / Hanya tampilkan ini. */
@@ -1027,7 +1060,7 @@ function jmRenderMatriks_() {
     wadah.innerHTML = '<div class="jm-kartu"><p class="jm-info">' +
       ((JM_DATA.bar || []).length
         ? (JM_SEMBUNYI_TERAKHIR.length
-            ? 'Semua item yang cocok sedang disembunyikan. Pakai <b>Tampilkan semua</b> di atas.'
+            ? 'Semua item yang cocok sedang disembunyikan. Klik <b>disembunyikan</b> di baris info di atas, lalu <b>Tampilkan semua</b>.'
             : 'Tidak ada item yang cocok dengan filter ini.')
         : (JM_BOLEH_TULIS
             ? 'Belum ada jadwal. Buka <b>Tambah jadwal</b> di atas untuk mulai mengisi.'
@@ -1504,7 +1537,10 @@ function jmRenderInfo_(jumlahItem, jumlahBaris) {
   el.innerHTML = jmTanggalPendek_(jmIso_(a)) + " \u2013 " + jmTanggalPendek_(jmIso_(z)) + " " + z.getFullYear() +
     (jumlahItem || JM_SEMBUNYI_TERAKHIR.length
       ? ' <span class="jm-rentang-sub">' + jumlahItem + ' item &#183; ' + jumlahBaris + ' baris' +
-        (JM_SEMBUNYI_TERAKHIR.length ? ' &#183; <span class="jm-rentang-sembunyi">' + JM_SEMBUNYI_TERAKHIR.length + ' disembunyikan</span>' : '') + '</span>'
+        (JM_SEMBUNYI_TERAKHIR.length
+          ? ' &#183; <button type="button" class="jm-rentang-sembunyi" onclick="jmBukaPanelSembunyi_(event)" title="Lihat & pulihkan item yang disembunyikan">' +
+            JM_SEMBUNYI_TERAKHIR.length + ' disembunyikan</button>'
+          : '') + '</span>'
       : '');
 }
 
@@ -1540,10 +1576,16 @@ window.addEventListener("load", function () {
     const m = document.getElementById("jm-menu-item");
     if (m && !m.classList.contains("hidden") && !m.contains(ev.target) &&
         !(ev.target.closest && ev.target.closest("td[data-kunci]"))) jmTutupMenuItem_();
+    // v247: panel pemulih tertutup oleh klik di luar dirinya dan di luar pil-nya.
+    const p = document.getElementById("jm-panel-sembunyi");
+    if (p && !p.classList.contains("hidden") && !p.contains(ev.target) &&
+        !(ev.target.closest && ev.target.closest(".jm-rentang-sembunyi"))) jmTutupPanelSembunyi_();
     const chip = ev.target.closest && ev.target.closest(".jm-sembunyi-chip[data-kunci]");
     if (chip) jmTampilkanItem(chip.getAttribute("data-kunci"));
   });
-  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") jmTutupMenuItem_(); });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape") { jmTutupMenuItem_(); jmTutupPanelSembunyi_(); }
+  });
   const sesi = jmBacaSesi_();
   if (sesi) { JM_ID_TOKEN = sesi; jmMulai(); return; }
   if (typeof google === "undefined" || !google.accounts) { jmShow("jm-login-box"); return; }
