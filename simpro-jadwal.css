@@ -390,20 +390,39 @@ body.jm-modal-terbuka{ overflow: hidden; }
   .jm-lbl-pendek{ display:inline; }
 
   .jm-alat{ gap:6px; }
-  .jm-alat-spasi{ display:none; }         /* pendorong-kanan tak relevan saat wrap */
+  /* v252: pendorong-kanan DIPAKAI lagi. Dulu dibuang karena dianggap tak
+     relevan saat membungkus; nyatanya justru ia yang membuat Filter + sumbu
+     menempel ke tepi kanan baris 1 seperti di desktop. Basis lebarnya nol,
+     jadi tidak pernah memaksa pembungkusan. */
+  .jm-alat-spasi{ display:block; flex:1 1 0; min-width:0; }
   /* v250: baris 1 tetap nav + Filter + sumbu (v232, jalan31); Keterangan dan
      "+" turun ke baris rentang -- keempatnya tidak muat di 390 px (~388 px). */
-  .jm-rentang{ order:10; flex:1 1 auto; min-width:0; margin-top:2px; }
+  /* v252: basis NOL, bukan auto -- basis auto (lebar isi ~250 px) memaksa "+" turun
+     ke baris ketiga di 390 px; basis nol tidak pernah memaksa pembungkusan, lalu
+     tumbuh mengisi sisa sehingga Ket. dan "+" menempel ke tepi kanan. */
+  .jm-rentang{ order:10; flex:1 1 0; min-width:55%; margin-top:2px; }
+  /* min-width 55%: basis nol saja membuat rentang "muat" di baris 1 lalu berbagi
+     ruang dengan pendorong dan membungkus tiga baris (jalan31 #1 merah). 55% tidak
+     muat di sisa baris 1, tapi di baris 2 masih menyisakan Ket. + "+" (~108 px). */
+  /* v252: di HP rentang boleh dua baris DI DALAM kotaknya (tanggal / "N item · M baris ·
+     pil"). Dengan nowrap, sub-teks meluber ke kanan dan tertutup Ket. + "+" -- pil
+     "disembunyikan" jadi tidak bisa diklik (jalan38 G). */
+  .jm-rentang{ white-space:normal; line-height:1.25; }
+  .jm-rentang .jm-rentang-sub{ display:block; margin-top:2px; }
   .jm-btn-legenda{ order:11; }
   .jm-btn-jadwal{ order:12; }
   /* v251: mode fokus tidak ditawarkan di HP -- header cuma 68 px dari 800, dan
      toolbar HP sudah penuh (dua baris, jalan40 H2). */
-  .jm-btn-fokus{ display:none; }
+  .jm-alat .jm-btn.jm-btn-fokus{ display:none; }   /* v252: TIGA kelas -- harus menang atas .jm-alat .jm-btn{display:inline-flex} yang datang belakangan */
   #jm-laci{ order:5; }                    /* laci terbuka: tepat di bawah baris tombol,
                                              di atas rentang (v232, diuji jalan31) */
-  .jm-nav .jm-btn{ padding:8px 10px; }
-  .jm-sumbu button{ padding:8px 9px; font-size:12.5px; }
-  .jm-btn-laci{ padding:8px 10px; }
+  /* v252: SATU ukuran kapsul untuk semua tombol toolbar di HP, mengikuti
+     "Hari ini" (tinggi 36 px, font 13 px). Sebelumnya tiap tombol punya
+     padding & ukuran font sendiri, jadi besar-kecil tidak seragam. */
+  .jm-alat .jm-btn, .jm-sumbu, .jm-btn-laci{ height:36px; box-sizing:border-box; }
+  .jm-alat .jm-btn{ display:inline-flex; align-items:center; padding:0 12px; font-size:13px; }
+  .jm-nav .jm-btn{ padding:0 10px; }
+  .jm-sumbu button{ height:100%; padding:0 12px; font-size:13px; }
   /* nav, sumbu, dan Filter tingginya beda beberapa px karena padding masing-
      masing; stretch menyamakannya supaya barisnya terlihat satu garis rapi. */
   .jm-nav, .jm-sumbu, .jm-btn-laci{ align-self:stretch; align-items:center; }
@@ -580,4 +599,8 @@ td[data-kunci]:hover .jm-item-nama-kecil{ text-decoration: underline dotted; tex
    atas #jm-wrap ditulis inline di template (v241), jadi butuh !important. */
 body.jm-fokus .db-header, body.jm-fokus .bg-canvas{ display: none !important; }
 body.jm-fokus #jm-wrap{ padding-top: 8px !important; }
+/* v252: fokus = LEBAR penuh juga. .jm-wrap dibatasi 1440 px dan dipusatkan;
+   di layar 1920 itu menyisakan 240 px kosong di kiri-kanan -- kebalikan dari
+   maksud mode ini. */
+body.jm-fokus .jm-wrap{ max-width: none; padding-left: 12px; padding-right: 12px; }
 @media print { .jm-btn-fokus { display: none !important; } }

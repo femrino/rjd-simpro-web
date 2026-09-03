@@ -289,10 +289,29 @@ function jmPasTinggi_() {
   gulir.style.setProperty("--jm-tinggi", Math.round(tinggi) + "px");
 }
 let JM_RESIZE_TUNGGU = null;
-window.addEventListener("resize", function () {
+function jmPasTinggiNanti_() {
   clearTimeout(JM_RESIZE_TUNGGU);
   JM_RESIZE_TUNGGU = setTimeout(jmPasTinggi_, 120);
-});
+}
+window.addEventListener("resize", jmPasTinggiNanti_);
+
+/* v252. Diukur 3 Sep 2026 di produksi: sisa 61 px di bawah matriks, jadi 16
+   sesudah resize. Tingginya dihitung saat bilah "Data tersimpan pukul ...
+   memperbarui dari server" masih ada di atas matriks; bilah itu disembunyikan
+   SESUDAH render terakhir, dan tidak ada yang menghitung ulang. Memanggil
+   jmPasTinggi_ di tiap tempat yang mengubah tinggi di atas matriks akan
+   selalu tertinggal satu tempat -- yang benar: amati ukurannya. ResizeObserver
+   pada semua elemen di atas matriks memicu hitung ulang apa pun sebabnya
+   (bilah status, peringatan, antrean, laci, legenda, toolbar yang membungkus). */
+let JM_PENGAMAT_TINGGI = null;
+function jmPasangPengamatTinggi_() {
+  if (JM_PENGAMAT_TINGGI || typeof ResizeObserver === "undefined") return;
+  JM_PENGAMAT_TINGGI = new ResizeObserver(jmPasTinggiNanti_);
+  ["jm-status-data", "jm-peringatan", "jm-antrean", "jm-laci", "jm-legenda", "jm-form-wrap"]
+    .forEach(function (id) { const el = document.getElementById(id); if (el) JM_PENGAMAT_TINGGI.observe(el); });
+  const alat = document.querySelector(".jm-alat"); if (alat) JM_PENGAMAT_TINGGI.observe(alat);
+  const head = document.querySelector(".db-header"); if (head) JM_PENGAMAT_TINGGI.observe(head);
+}
 
 /* v251 -- MODE FOKUS
    Untuk layar besar (rapat pagi, monitor lantai): header situs dan latar
@@ -700,6 +719,7 @@ function jmStatusData_(teks) {
   if (!el) return;
   el.textContent = teks || "";
   el.classList.toggle("hidden", !teks);
+  jmPasTinggiNanti_();   // v252: bilah ini yang membuat sisa 61 px (lihat jmPasangPengamatTinggi_)
 }
 
 function jmMuat() {
@@ -1170,7 +1190,8 @@ function jmPasangGulir_(kolom) {
   });
   jmGulirAwal_(kolom);
   jmPerbaruiPenanda_();
-  jmPasTinggi_();   // v250
+  jmPasTinggi_();               // v250
+  jmPasangPengamatTinggi_();    // v252: sekali; idempoten
 }
 
 /** v231: sel-sel tanggal untuk SATU baris bar. Dipakai kedua mode. */
