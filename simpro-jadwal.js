@@ -1290,8 +1290,10 @@ function jmModalRencana_() {
       '<p class="jm-rencana-ket">Dicatat sebagai <b>order request Pending</b> atas nama klien yang sudah ada. ' +
       'Warna, kain, dan harga dilengkapi admin saat proofing. Begitu request disetujui menjadi PO, jadwalnya pindah sendiri.</p>' +
       '<div class="jm-form-baris"><label>Klien<select id="jm-rc-klien"><option value="">-- pilih klien --</option></select></label></div>' +
-      '<div class="jm-form-baris"><label>Artikel<input id="jm-rc-artikel" type="text" maxlength="80" placeholder="mis. Dress"></label>' +
-      '<label>Style / varian<input id="jm-rc-style" type="text" maxlength="80" placeholder="opsional"></label></div>' +
+      // v258: brand + artikel + style semuanya wajib -- identitas item produksi.
+      '<div class="jm-form-baris"><label>Brand<input id="jm-rc-brand" type="text" maxlength="80" placeholder="mis. BESHE"></label>' +
+      '<label>Artikel<input id="jm-rc-artikel" type="text" maxlength="80" placeholder="mis. Dress"></label>' +
+      '<label>Style<input id="jm-rc-style" type="text" maxlength="80" placeholder="mis. Aurora"></label></div>' +
       '<div class="jm-form-baris"><label>Qty rencana (pcs)<input id="jm-rc-qty" type="number" min="1" step="1"></label>' +
       '<label>Target kirim<input id="jm-rc-target" type="date"></label></div>' +
       '<div class="jm-form-aksi"><button type="button" class="jm-btn jm-btn-utama" id="jm-rc-simpan" onclick="jmSimpanRencana_()">Simpan rencana</button>' +
@@ -1334,11 +1336,13 @@ function jmPesanRencana_(teks, galat) {
 }
 function jmSimpanRencana_() {
   const v = function (id) { return (document.getElementById(id) || {}).value || ""; };
-  const data = { idKlien: v("jm-rc-klien").trim(), artikel: v("jm-rc-artikel").trim(), style: v("jm-rc-style").trim(),
-    qty: Number(v("jm-rc-qty")) || 0, target: v("jm-rc-target") };
+  const data = { idKlien: v("jm-rc-klien").trim(), brand: v("jm-rc-brand").trim(), artikel: v("jm-rc-artikel").trim(),
+    style: v("jm-rc-style").trim(), qty: Number(v("jm-rc-qty")) || 0, target: v("jm-rc-target") };
   const masalah = [];
   if (!data.idKlien) masalah.push("klien belum dipilih");
+  if (!data.brand) masalah.push("brand kosong");
   if (!data.artikel) masalah.push("artikel kosong");
+  if (!data.style) masalah.push("style kosong");
   if (data.artikel.indexOf("|") !== -1 || data.style.indexOf("|") !== -1) masalah.push("artikel/style tidak boleh memuat '|'");
   if (!(data.qty > 0)) masalah.push("qty harus lebih dari 0");
   if (!data.target) masalah.push("target kirim kosong");
