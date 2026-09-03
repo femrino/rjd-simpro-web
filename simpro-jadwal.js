@@ -1289,26 +1289,51 @@ function jmModalRencana_() {
   if (m) return m;
   m = document.createElement("div");
   m.id = "jm-modal-rencana"; m.className = "jm-modal jm-modal-atas hidden";
+  // v261: satu request = klien + brand + artikel + target, dengan BEBERAPA
+  // baris style + qty. Satu PO bisa memuat Dress dan Kemeja; form lama membuat
+  // satu request per style, jadi satu PO per style.
   m.innerHTML = '<div class="jm-modal-kotak jm-modal-kotak-rencana" role="dialog" aria-modal="true">' +
     '<div class="jm-modal-kepala"><span class="jm-modal-judul">Item rencana (order request)</span>' +
     '<button type="button" class="jm-modal-tutup" onclick="jmTutupRencana_()" aria-label="Tutup" title="Tutup (Esc)">\u00d7</button></div>' +
     '<div class="jm-modal-isi"><div class="jm-form jm-form-rencana">' +
-      '<p class="jm-rencana-ket">Dicatat sebagai <b>order request Pending</b> atas nama klien yang sudah ada. ' +
+      '<p class="jm-rencana-ket">Dicatat sebagai <b>satu order request Pending</b> atas nama klien yang sudah ada; tiap baris style jadi satu item di request itu. ' +
       'Warna, kain, dan harga dilengkapi admin saat proofing. Begitu request disetujui menjadi PO, jadwalnya pindah sendiri.</p>' +
-      '<div class="jm-form-baris"><label>Klien<select id="jm-rc-klien"><option value="">-- pilih klien --</option></select></label></div>' +
-      // v258: brand + artikel + style semuanya wajib -- identitas item produksi.
-      '<div class="jm-form-baris"><label>Brand<input id="jm-rc-brand" type="text" maxlength="80" placeholder="mis. BESHE"></label>' +
-      '<label>Artikel<input id="jm-rc-artikel" type="text" maxlength="80" placeholder="mis. Dress"></label>' +
-      '<label>Style<input id="jm-rc-style" type="text" maxlength="80" placeholder="mis. Aurora"></label></div>' +
-      '<div class="jm-form-baris"><label>Qty rencana (pcs)<input id="jm-rc-qty" type="number" min="1" step="1"></label>' +
+      '<div class="jm-form-baris"><label>Klien<select id="jm-rc-klien"><option value="">-- pilih klien --</option></select></label>' +
       '<label>Target kirim<input id="jm-rc-target" type="date"></label></div>' +
+      '<div class="jm-form-baris"><label>Brand<input id="jm-rc-brand" type="text" maxlength="80" placeholder="mis. BESHE"></label>' +
+      '<label>Artikel<input id="jm-rc-artikel" type="text" maxlength="80" placeholder="mis. Aurora"></label></div>' +
+      '<div class="jm-rc-daftar-judul">Style dan qty rencana (satu baris per style)</div>' +
+      '<div id="jm-rc-daftar"></div>' +
+      '<div><button type="button" class="jm-btn jm-btn-kecil" id="jm-rc-tambah" onclick="jmTambahBarisRencana_()">+ Style</button></div>' +
       '<div class="jm-form-aksi"><button type="button" class="jm-btn jm-btn-utama" id="jm-rc-simpan" onclick="jmSimpanRencana_()">Simpan rencana</button>' +
       '<button type="button" class="jm-btn" onclick="jmTutupRencana_()">Batal</button>' +
       '<span class="jm-form-pesan hidden" id="jm-rc-pesan"></span></div>' +
     '</div></div></div>';
   document.body.appendChild(m);
   m.addEventListener("click", function (ev) { if (ev.target === m) jmTutupRencana_(); });
+  jmTambahBarisRencana_();
   return m;
+}
+function jmTambahBarisRencana_() {
+  const wadah = document.getElementById("jm-rc-daftar");
+  if (!wadah) return;
+  const baris = document.createElement("div");
+  baris.className = "jm-form-baris jm-rc-baris";
+  baris.innerHTML = '<label>Style<input type="text" class="jm-rc-style" maxlength="80" placeholder="mis. Dress / Kemeja"></label>' +
+    '<label>Qty rencana (pcs)<input type="number" class="jm-rc-qty" min="1" step="1"></label>' +
+    '<button type="button" class="jm-btn jm-btn-kecil jm-rc-hapus" title="Hapus baris ini">\u00d7</button>';
+  baris.querySelector(".jm-rc-hapus").onclick = function () {
+    if (wadah.querySelectorAll(".jm-rc-baris").length <= 1) { jmPesanRencana_("Minimal satu baris style.", true); return; }
+    baris.remove();
+  };
+  wadah.appendChild(baris);
+  const st = baris.querySelector(".jm-rc-style");
+  if (st && st.focus && wadah.querySelectorAll(".jm-rc-baris").length > 1) st.focus();
+}
+function jmBarisRencana_() {
+  return Array.prototype.map.call(document.querySelectorAll("#jm-rc-daftar .jm-rc-baris"), function (b) {
+    return { style: (b.querySelector(".jm-rc-style") || {}).value || "", qty: Number((b.querySelector(".jm-rc-qty") || {}).value) || 0 };
+  }).map(function (x) { return { style: x.style.trim(), qty: x.qty }; });
 }
 function jmIsiKlienRencana_() {
   const sel = document.getElementById("jm-rc-klien");
@@ -1343,15 +1368,21 @@ function jmPesanRencana_(teks, galat) {
 function jmSimpanRencana_() {
   const v = function (id) { return (document.getElementById(id) || {}).value || ""; };
   const data = { idKlien: v("jm-rc-klien").trim(), brand: v("jm-rc-brand").trim(), artikel: v("jm-rc-artikel").trim(),
-    style: v("jm-rc-style").trim(), qty: Number(v("jm-rc-qty")) || 0, target: v("jm-rc-target") };
+    target: v("jm-rc-target"), items: jmBarisRencana_() };
   const masalah = [];
   if (!data.idKlien) masalah.push("klien belum dipilih");
   if (!data.brand) masalah.push("brand kosong");
   if (!data.artikel) masalah.push("artikel kosong");
-  if (!data.style) masalah.push("style kosong");
-  if (data.artikel.indexOf("|") !== -1 || data.style.indexOf("|") !== -1) masalah.push("artikel/style tidak boleh memuat '|'");
-  if (!(data.qty > 0)) masalah.push("qty harus lebih dari 0");
   if (!data.target) masalah.push("target kirim kosong");
+  if (data.brand.indexOf("|") !== -1 || data.artikel.indexOf("|") !== -1) masalah.push("brand/artikel tidak boleh memuat '|'");
+  const terlihat = {};
+  data.items.forEach(function (x, i) {
+    if (!x.style) masalah.push("style baris " + (i + 1) + " kosong");
+    else if (terlihat[x.style]) masalah.push("style '" + x.style + "' ditulis dua kali");
+    terlihat[x.style] = true;
+    if (!(x.qty > 0)) masalah.push("qty baris " + (i + 1) + " harus lebih dari 0");
+    if (x.style.indexOf("|") !== -1) masalah.push("style tidak boleh memuat '|'");
+  });
   if (masalah.length) { jmPesanRencana_("Belum bisa disimpan: " + masalah.join(", ") + ".", true); return; }
   const btn = document.getElementById("jm-rc-simpan");
   if (btn) btn.disabled = true;
@@ -1360,9 +1391,13 @@ function jmSimpanRencana_() {
     .then(function (res) {
       if (btn) btn.disabled = false;
       jmTutupRencana_();
-      JM_PILIH_ITEM_NANTI = res.kunci || "";
-      jmFormPesan_((res.sudahAda ? "Rencana ini sudah ada sebagai request " : "Rencana tersimpan sebagai request ") +
-        (res.idOrderRequest || "") + ". Pilih tahap dan tanggalnya, lalu Simpan.");
+      const daftarKunci = Array.isArray(res.kunci) ? res.kunci : (res.kunci ? [res.kunci] : []);
+      JM_PILIH_ITEM_NANTI = daftarKunci[0] || "";
+      const styles = data.items.map(function (x) { return x.style; }).join(", ");
+      jmFormPesan_((res.semuaSudahAda ? "Rencana ini sudah ada sebagai request " : "Rencana tersimpan sebagai request ") +
+        (res.idOrderRequest || "") + " (" + data.items.length + " item: " + styles + ")" +
+        (res.sudahAda && !res.semuaSudahAda ? ", " + res.sudahAda + " style sudah ada sebelumnya" : "") +
+        ". Item pertama terpilih -- pilih tahap dan tanggalnya, lalu Simpan; item lainnya ada di dropdown.");
       jmMuat();   // data segar dari server: item baru masuk dropdown, lalu terpilih (JM_PILIH_ITEM_NANTI)
     })
     .catch(function (e) {
