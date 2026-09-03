@@ -610,3 +610,27 @@ body.jm-fokus .jm-wrap{ max-width: none; padding-left: 12px; padding-right: 12px
 @media print { .jm-btn-fokus { display: none !important; } }
 
 @media print { #jm-panel-tahap, #jm-panel-klien, #jm-panel-line { display: none !important; } }
+
+/* ---------- v256: KEADAAN ITEM (rencana / batal / selesai / tak dikenal) ---------- */
+/* Bar: rupa ikut nasib item. Hanya opacity + gambar, warna tahap tetap. */
+.jm-bar.jm-bar-rencana, .jm-swatch.jm-bar-rencana{ opacity: .55; background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.75) 0 5px, transparent 5px 11px); box-shadow: inset 0 0 0 1.5px rgba(23,33,47,.35); }
+.jm-bar.jm-bar-batal, .jm-swatch.jm-bar-batal{ opacity: .32; filter: grayscale(1); background-image: linear-gradient(to top, transparent 44%, rgba(0,0,0,.55) 44%, rgba(0,0,0,.55) 56%, transparent 56%); }
+.jm-bar.jm-bar-selesai{ opacity: .5; filter: grayscale(.6); }
+.jm-bar.jm-bar-takdikenal{ background-color: #F3D6D3; background-image: repeating-linear-gradient(45deg, rgba(200,54,43,.55) 0 4px, transparent 4px 9px); }
+/* Nama item */
+.jm-k-batal .jm-item-nama, .jm-k-batal .jm-item-nama-kecil{ text-decoration: line-through; opacity: .6; }
+.jm-k-selesai .jm-item-nama, .jm-k-selesai .jm-item-nama-kecil{ opacity: .6; }
+.jm-k-rencana .jm-item-nama, .jm-k-rencana .jm-item-nama-kecil{ font-style: italic; }
+/* Lencana: di luar aliran tinggi -- line-height 16px, tidak menambah tinggi baris 30 px */
+.jm-lencana{ display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; font: 600 10px/16px 'Archivo', sans-serif; letter-spacing: .02em; vertical-align: middle; white-space: nowrap; text-decoration: none; font-style: normal; }
+.jm-lencana-kecil{ margin-left: 4px; padding: 0 5px; font-size: 9px; line-height: 14px; flex: 0 0 auto; }
+.jm-lencana-rencana{ background: #E6EEF9; color: #1F4E8C; border: 1px dashed #7FA3D6; }
+.jm-lencana-batal{ background: #F3E1DF; color: #8A2A22; }
+.jm-lencana-selesai{ background: #E3EFE5; color: #256B3A; }
+.jm-lencana-takdikenal{ background: #C8362B; color: #fff; }
+/* Legenda memakai swatch yang sama (selektor gabungan di atas) */
+/* Panel peringatan + catatan */
+.jm-peringatan-blok + .jm-peringatan-blok{ margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,.12); }
+.jm-catatan li.jm-catatan-kunci-belum-pindah{ font-weight: 600; }
+.jm-btn-kecil{ padding: 2px 10px; font-size: 12px; height: auto; margin-left: 6px; vertical-align: middle; }
+@media print { .jm-catatan-batal button { display: none !important; } }

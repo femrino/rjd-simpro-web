@@ -55,6 +55,7 @@ const JM_LIHAT = {
   klien: [],          // filter ID klien; v255: DAFTAR ([] = semua)
   line: [],           // filter ID line;  v255: DAFTAR ([] = semua)
   sembunyiLewat: true, // sembunyikan item yang semua bar-nya sudah lewat
+  keadaan: [],         // v256: filter keadaan item (aktif/rencana/batal/selesai); DAFTAR, [] = semua
   tahap: [],           // v233: filter tahap; v254: DAFTAR nama ([] = semua). SARINGAN TINGKAT-BARIS,
                        // beda dengan line yang tingkat-item -- lihat catatan di
                        // jmRenderLaci_. Nilainya utama saat dipadukan mode tahap:
@@ -218,7 +219,7 @@ function jmBukaMenuItem_(kunci, ev) {
   }
   const it = (JM_DATA && (JM_DATA.itemAktif || []).concat(JM_DATA.items || []).filter(function (x) { return x.kunci === kunci; })[0]) || null;
   // v253: info lengkap ada DI SINI, karena baris mode tahap kini hanya memuat nama.
-  const rinci = it ? [it.namaKlien || it.idKlien, it.po, it.qtyPo ? it.qtyPo.toLocaleString("id-ID") + " pcs" : "",
+  const rinci = it ? [it.namaKlien || it.idKlien, (it.jenis === "rencana" ? "Rencana \u00b7 " : "") + it.po, it.qtyPo ? it.qtyPo.toLocaleString("id-ID") + " pcs" : "",
     it.deadline ? "deadline " + jmTanggalPendek_(it.deadline) : ""].filter(String).join(" \u00b7 ") : "";
   m.innerHTML = '<div class="jm-menu-judul"><b>' + jmEsc_(it ? ([it.artikel, it.style].filter(String).join(" ") || it.po) : kunci) + '</b>' +
     (rinci ? '<br>' + jmEsc_(rinci) : '') + '</div>' +
@@ -425,8 +426,15 @@ const JM_FILTER_PILIH = {
       ((JM_DATA && JM_DATA.lines) || []).forEach(function (l) { if (l.idLine && !peta[l.idLine]) { peta[l.idLine] = l.namaLine || l.idLine; urut.push(l.idLine); } });
       ((JM_DATA && JM_DATA.bar) || []).forEach(function (b) { if (b.line && !peta[b.line]) { peta[b.line] = b.namaLine || b.line; urut.push(b.line); } });
       return urut.map(function (id) { return { v: id, l: peta[id] }; });
-    } }
+    } },
+  // v256: nasib item. Nilai yang disimpan = hasil jmKeadaan_(item).
+  keadaan: { judul: "Keadaan item yang ditampilkan", semua: "Semua keadaan", satuan: "keadaan",
+    opsi: function () { return JM_DAFTAR_KEADAAN.slice(); } }
 };
+const JM_DAFTAR_KEADAAN = [
+  { v: "aktif", l: "Aktif (PO berjalan)" }, { v: "rencana", l: "Rencana (order request)" },
+  { v: "batal", l: "Batal (request ditolak / PO cancel)" }, { v: "selesai", l: "Selesai" }
+];
 function jmDaftarDari_(x) {
   if (Array.isArray(x)) return x.filter(function (v) { return typeof v === "string" && v; });
   if (typeof x === "string" && x) return [x];
@@ -467,7 +475,7 @@ function jmTombolPilih_(jenis, laci) {
   return el;
 }
 function jmSegarkanTombolPilih_() {
-  ["tahap", "klien", "line"].forEach(function (j) { if (document.getElementById("jm-f-" + j)) jmTombolPilih_(j); });
+  ["tahap", "klien", "line", "keadaan"].forEach(function (j) { if (document.getElementById("jm-f-" + j)) jmTombolPilih_(j); });
 }
 function jmPanelPilih_(jenis) {
   let p = document.getElementById("jm-panel-" + jenis);
@@ -522,7 +530,7 @@ function jmBukaPanelPilih_(jenis, ev) {
 }
 /** Menutup panel pilih mana pun yang terbuka. */
 function jmTutupPanelPilih_() {
-  ["tahap", "klien", "line"].forEach(function (j) {
+  ["tahap", "klien", "line", "keadaan"].forEach(function (j) {
     const p = document.getElementById("jm-panel-" + j);
     if (p) p.classList.add("hidden");
   });
@@ -565,6 +573,12 @@ function jmRenderLaci_() {
     if (selM2 && selM2.parentNode === laci) laci.insertBefore(selT, selM2.nextSibling);
     else laci.insertBefore(selT, laci.firstChild);
   }
+  // v256: tombol keadaan, tepat sesudah tahap.
+  if (!document.getElementById("jm-f-keadaan")) {
+    const selK = jmTombolPilih_("keadaan", laci);
+    const selT2 = document.getElementById("jm-f-tahap");
+    if (selT2 && selT2.parentNode === laci) laci.insertBefore(selK, selT2.nextSibling);
+  }
   // v255: <select> klien & line dari template diganti tombol ber-id sama (di tempatnya).
   jmSegarkanTombolPilih_();
 
@@ -575,7 +589,8 @@ function jmRenderLaci_() {
     btn.onclick = jmToggleLaci;
     laci.parentNode.insertBefore(btn, laci);
   }
-  const n = (JM_LIHAT.klien.length ? 1 : 0) + (JM_LIHAT.line.length ? 1 : 0) + (JM_LIHAT.tahap.length ? 1 : 0);
+  const n = (JM_LIHAT.klien.length ? 1 : 0) + (JM_LIHAT.line.length ? 1 : 0) + (JM_LIHAT.tahap.length ? 1 : 0) +
+    (JM_LIHAT.keadaan.length ? 1 : 0);
   btn.innerHTML = "Filter" + (n ? ' <span class="jm-laci-lencana">' + n + "</span>" : "");
 
   // v250: tombol legenda di TOOLBAR (semua lebar), bukan baris sendiri di atas
@@ -799,6 +814,7 @@ function jmBacaLihat_() {
     // v255: dulu string tunggal; sesi lama diterima dan diubah jadi daftar.
     JM_LIHAT.klien = jmDaftarDari_(d.klien);
     JM_LIHAT.line = jmDaftarDari_(d.line);
+    JM_LIHAT.keadaan = jmDaftarDari_(d.keadaan);
     if (typeof d.sembunyiLewat === "boolean") JM_LIHAT.sembunyiLewat = d.sembunyiLewat;
     // v254: dulu string tunggal; sesi lama yang masih menyimpan string diterima.
     if (Array.isArray(d.tahap)) JM_LIHAT.tahap = d.tahap.filter(function (x) { return typeof x === "string" && x; });
@@ -811,7 +827,7 @@ function jmSimpanLihat_() {
     sessionStorage.setItem("jm_lihat", JSON.stringify({
       mulai: JM_LIHAT.mulai ? jmIso_(JM_LIHAT.mulai) : null,
       minggu: JM_LIHAT.minggu, klien: JM_LIHAT.klien, line: JM_LIHAT.line,
-      sembunyiLewat: JM_LIHAT.sembunyiLewat, tahap: JM_LIHAT.tahap
+      sembunyiLewat: JM_LIHAT.sembunyiLewat, tahap: JM_LIHAT.tahap, keadaan: JM_LIHAT.keadaan
     }));
   } catch (e) { /* abaikan */ }
 }
@@ -994,13 +1010,31 @@ function jmRenderPeringatan_() {
       'lalu <code>segarkanPilihanJadwal()</code> di Apps Script, isi jadwalnya, dan muat ulang halaman ini.';
     return;
   }
-  if (!p.length) { el.classList.add("hidden"); el.innerHTML = ""; return; }
+  // v256: selain baris rusak, panel ini memuat CATATAN dari server (request
+  // diam, kunci belum pindah, sumber tidak terbaca) dan tombol bersih-bersih
+  // bar batal. Semua terlihat, tidak ada yang diam-diam.
+  const c = JM_DATA.catatan || [];
+  const batal = jmBarBatal_();
+  if (!p.length && !c.length && !batal.length) { el.classList.add("hidden"); el.innerHTML = ""; return; }
   el.classList.remove("hidden");
-  el.innerHTML = '<b>' + p.length + ' baris di sheet tidak bisa digambar</b> -- perbaiki di "SD Jadwal Produksi":' +
-    '<ul>' + p.map(function (x) {
-      return '<li>Baris ' + x.baris + (x.item ? ' <span class="jm-mono">' + jmEsc_(x.item) + '</span>' : '') +
-        (x.tahap ? ' (' + jmEsc_(x.tahap) + ')' : '') + ': ' + jmEsc_(x.pesan) + '</li>';
-    }).join("") + '</ul>';
+  let html = "";
+  if (p.length) {
+    html += '<div class="jm-peringatan-blok"><b>' + p.length + ' baris di sheet tidak bisa digambar</b> -- perbaiki di "SD Jadwal Produksi":' +
+      '<ul>' + p.map(function (x) {
+        return '<li>Baris ' + x.baris + (x.item ? ' <span class="jm-mono">' + jmEsc_(x.item) + '</span>' : '') +
+          (x.tahap ? ' (' + jmEsc_(x.tahap) + ')' : '') + ': ' + jmEsc_(x.pesan) + '</li>';
+      }).join("") + '</ul></div>';
+  }
+  if (c.length) {
+    html += '<div class="jm-peringatan-blok jm-catatan"><b>' + c.length + ' catatan</b><ul>' + c.map(function (x) {
+      return '<li class="jm-catatan-' + jmEsc_(x.jenis || "") + '">' + jmEsc_(x.pesan) + '</li>';
+    }).join("") + '</ul></div>';
+  }
+  if (batal.length) {
+    html += '<div class="jm-peringatan-blok jm-catatan-batal"><b>' + batal.length + ' bar milik item batal</b> (tergambar redup dan dicoret). ' +
+      'Tidak dihapus otomatis. <button type="button" class="jm-btn jm-btn-kecil" id="jm-btn-bersih-batal" onclick="jmBersihkanBatal_()">Bersihkan bar batal</button></div>';
+  }
+  el.innerHTML = html;
 }
 
 /** Susun kolom hari kerja (Senin-Sabtu) untuk jendela yang dilihat. */
@@ -1023,9 +1057,12 @@ function jmKelompok_() {
 
   const grup = {};
   (JM_DATA.bar || []).forEach(function (b) {
-    const it = petaItem[b.item];
-    if (!it) return;
+    // v256: item tak dikenal dulu dibuang diam-diam (return). Sekarang diberi
+    // item pengganti bertanda supaya barnya TAMPAK -- kunci yang salah pindah
+    // atau request yang hilang dari data harus kelihatan, bukan lenyap.
+    const it = petaItem[b.item] || (petaItem[b.item] = jmItemTakDikenal_(b.item));
     if (!jmPilihAktif_("klien", it.idKlien)) return;
+    if (!jmKeadaanLolos_(it)) return;
     if (!grup[b.item]) grup[b.item] = { item: it, bar: [], mulaiMin: b.mulai, selesaiMax: b.selesai };
     grup[b.item].bar.push(b);
     if (b.mulai < grup[b.item].mulaiMin) grup[b.item].mulaiMin = b.mulai;
@@ -1071,8 +1108,9 @@ function jmKelompokTahap_() {
   // item yang lolos filter klien/line (semantik sama dengan jmKelompok_)
   const barPerItem = {};
   (JM_DATA.bar || []).forEach(function (b) {
-    const it = petaItem[b.item]; if (!it) return;
+    const it = petaItem[b.item] || (petaItem[b.item] = jmItemTakDikenal_(b.item));   // v256: lihat jmKelompok_
     if (!jmPilihAktif_("klien", it.idKlien)) return;
+    if (!jmKeadaanLolos_(it)) return;
     (barPerItem[b.item] = barPerItem[b.item] || []).push(b);
   });
   const itemLolos = {};
@@ -1173,7 +1211,87 @@ function jmBarisGrup_(g) {
       baris.push({ label: tahap, sub: "", tahap: tahap, bar: bars });
     }
   });
+  baris.forEach(function (b) { b.keadaan = jmKeadaan_(g.item); });   // v256: rupa bar ikut nasib item
   return baris;
+}
+
+/* v256 -- KEADAAN ITEM: nasib item diturunkan backend dari sumbernya (PO atau
+   order request); halaman hanya menampilkannya. aktif | rencana | batal |
+   selesai | takdikenal. "disetujui" (request sudah jadi PO tapi kunci bar belum
+   pindah) ditampilkan sebagai rencana + catatan. */
+function jmKeadaan_(it) {
+  const k = (it && it.keadaan) || "aktif";
+  if (k === "disetujui") return "rencana";
+  return k;
+}
+function jmKeadaanLolos_(it) {
+  const k = jmKeadaan_(it);
+  if (k === "takdikenal") return true;   // selalu tampil, apa pun filternya
+  return jmPilihAktif_("keadaan", k);
+}
+function jmKelasKeadaan_(it) {
+  const k = jmKeadaan_(it);
+  return k === "aktif" ? "" : " jm-k-" + k;
+}
+const JM_LABEL_KEADAAN = { rencana: "Rencana", batal: "Batal", selesai: "Selesai", takdikenal: "Item tidak dikenal" };
+function jmLencanaKeadaan_(it, kecil) {
+  const k = jmKeadaan_(it);
+  if (k === "aktif") return "";
+  const tip = k === "rencana" ? "Order request " + (it.idOr || it.po) + (it.keadaan === "disetujui" ? " sudah disetujui -- kunci bar belum pindah ke PO" : " belum disetujui") :
+    k === "batal" ? (it.jenis === "rencana" ? "Order request ditolak" : "PO " + (it.status || "dibatalkan")) :
+    k === "selesai" ? "PO sudah selesai" : "Kunci item ini tidak ada di data PO maupun order request";
+  return '<span class="jm-lencana jm-lencana-' + k + (kecil ? ' jm-lencana-kecil' : '') + '" title="' + jmEsc_(tip) + '">' + JM_LABEL_KEADAAN[k] + '</span>';
+}
+function jmItemTakDikenal_(kunci) {
+  const bagian = String(kunci).split(" | ");
+  return { kunci: kunci, po: bagian[0] || kunci, artikel: bagian[1] || "", style: bagian[2] || "",
+    idKlien: "", namaKlien: "(tidak dikenal)", produk: "", deadline: "", tahapSaatIni: "",
+    aktif: false, status: "", dibatalkan: false, qtyPo: 0, jenis: "takdikenal", keadaan: "takdikenal" };
+}
+/** Bar yang itemnya batal -- untuk tombol bersih-bersih. */
+function jmBarBatal_() {
+  const peta = {};
+  (JM_DATA.items || []).forEach(function (it) { peta[it.kunci] = it; });
+  return (JM_DATA.bar || []).filter(function (b) { return jmKeadaan_(peta[b.item]) === "batal"; });
+}
+/** fetch sederhana ke API, hasilnya promise JSON. Bukan jalur form (jmKirim_) -- tidak menyentuh pesan form. */
+function jmPanggil_(action, muatan) {
+  return fetch(JM_API_URL, { method: "POST", body: JSON.stringify(Object.assign({ idToken: JM_ID_TOKEN, action: action }, muatan || {})) })
+    .then(function (r) { return r.text(); })
+    .then(function (t) {
+      let j; try { j = JSON.parse(t); } catch (e) { throw new Error("jawaban server tidak terbaca: " + String(t).replace(/<[^>]*>/g, " ").trim().slice(0, 90)); }
+      if (!j || !j.success) throw new Error((j && j.error) || "Permintaan ditolak server.");
+      return j;
+    });
+}
+/**
+ * v256: bersih-bersih bar batal. Dua langkah, tidak pernah otomatis:
+ *   1. minta PRATINJAU ke server (daftar id yang batal SAAT INI)
+ *   2. tampilkan daftarnya, minta persetujuan, lalu COMMIT dengan id yang
+ *      persis sama -- server hanya menghapus id yang diminta DAN masih batal.
+ */
+function jmBersihkanBatal_() {
+  const tombol = document.getElementById("jm-btn-bersih-batal");
+  if (tombol) { tombol.disabled = true; tombol.textContent = "Memeriksa…"; }
+  jmPanggil_("bersihkanBarBatalJadwal", { commit: false })
+    .then(function (res) {
+      const calon = res.calon || [];
+      if (!calon.length) { alert("Tidak ada bar batal di server saat ini."); return null; }
+      const daftar = calon.map(function (c) {
+        return "• " + c.item + " — " + c.tahap + (c.line ? " " + c.line : "") + " " + jmTanggalPendek_(c.mulai) + "–" + jmTanggalPendek_(c.selesai) + " (" + c.alasan + ")";
+      }).join("\n");
+      if (!confirm("Hapus " + calon.length + " bar batal dari SD Jadwal Produksi?\n\n" + daftar + "\n\nBaris di sheet akan dihapus. Ini tidak bisa dibatalkan.")) return null;
+      return jmPanggil_("bersihkanBarBatalJadwal", { commit: true, ids: calon.map(function (c) { return c.id; }) });
+    })
+    .then(function (res) {
+      if (res) alert(res.dihapus + " bar dihapus." + (res.masihBatal !== res.diminta ? " (" + (res.diminta - res.masihBatal) + " sudah berubah keadaan, dilewati)" : ""));
+      if (tombol) { tombol.disabled = false; tombol.textContent = "Bersihkan bar batal"; }
+      if (res) jmMuat();   // data segar dari server, bukan snapshot
+    })
+    .catch(function (e) {
+      if (tombol) { tombol.disabled = false; tombol.textContent = "Bersihkan bar batal"; }
+      alert("Bersih-bersih gagal: " + (e && e.message || e));
+    });
 }
 
 /* ============================================================
@@ -1325,6 +1443,7 @@ function jmPasangGulir_(kolom) {
 function jmSelBaris_(b, kolom, hariIni, deadline) {
   let html = "";
   const namaBaris = b.label + (b.sub ? " " + b.sub : "");
+  if (!b.keadaan && b.item && typeof b.item === "object") b.keadaan = jmKeadaan_(b.item);   // v256: mode tahap
   kolom.forEach(function (k) {
     const kelas = jmKelasSel_(k, hariIni, deadline);
     const bar = b.bar.filter(function (x) { return x.mulai <= k.iso && k.iso <= x.selesai; });
@@ -1349,6 +1468,7 @@ function jmSelBaris_(b, kolom, hariIni, deadline) {
     const tip = b.label + (b.sub ? " " + b.sub : "") + ": " + jmTanggalPendek_(x.mulai) + " - " + jmTanggalPendek_(x.selesai) +
       (x.qty ? " \u00b7 " + x.qty + " pcs" : "") + (x.keterangan ? "\n" + x.keterangan : "");
     html += '<td class="' + kelas + ' jm-bar jm-t-' + (JM_KELAS_TAHAP[b.tahap] || "lain") + tepi + (x.menunggu ? " jm-bar-menunggu" : "") +
+      (b.keadaan && b.keadaan !== "aktif" ? " jm-bar-" + b.keadaan : "") +
       '" data-id="' + jmEsc_(x.id || "") + '" title="' + jmEsc_(tip) + (x.id ? "\n(klik untuk mengubah)" : "") + '"></td>';
   });
   return html;
@@ -1420,13 +1540,13 @@ function jmRenderMatriks_() {
       g.baris.forEach(function (b) {
         jumlahBaris++; itemUnik[b.item.kunci] = true;
         const it = b.item, dlLewat = it.deadline && it.deadline < hariIni;
-        tbody += '<tr class="jm-r-tahap"><td class="jm-sticky jm-td-tahap jm-td-tahap-item" data-kunci="' + jmEsc_(it.kunci) + '" title="Klik: sembunyikan / fokus item ini">' +
+        tbody += '<tr class="jm-r-tahap' + jmKelasKeadaan_(it) + '"><td class="jm-sticky jm-td-tahap jm-td-tahap-item" data-kunci="' + jmEsc_(it.kunci) + '" title="Klik: sembunyikan / fokus item ini">' +
           // v253: SATU baris -- nama item + deadline. Klien, PO, dan qty pindah ke
           // menu (klik nama). Alasannya dua: baris mode tahap jadi setinggi baris
           // mode artikel (30 px, bukan 44), dan kolom kiri bersih. Yang dijaga dari
           // v236 tetap dijaga: nama boleh menyusut (ellipsis), DEADLINE tidak pernah.
           '<div class="jm-item-baris-kecil"><span class="jm-item-nama-kecil">' + jmEsc_(b.label) +
-            (b.sub ? ' <span class="jm-tahap-sub">' + jmEsc_(b.sub) + '</span>' : '') + '</span>' +
+            (b.sub ? ' <span class="jm-tahap-sub">' + jmEsc_(b.sub) + '</span>' : '') + '</span>' + jmLencanaKeadaan_(it, true) +
             (it.deadline ? '<span class="jm-dl' + (dlLewat ? ' jm-dl-lewat' : '') + '">' + jmTanggalPendek_(it.deadline) + '</span>' : '') +
           '</div></td>' + jmSelBaris_(b, kolom, hariIni, it.deadline) + '</tr>';
       });
@@ -1445,9 +1565,9 @@ function jmRenderMatriks_() {
 
     // Baris judul item
     const judul = [it.artikel, it.style].filter(String).join(" ");
-    tbody += '<tr class="jm-r-item">' +
+    tbody += '<tr class="jm-r-item' + jmKelasKeadaan_(it) + '">' +
       '<td class="jm-sticky jm-td-item" data-kunci="' + jmEsc_(it.kunci) + '" title="Klik: sembunyikan / fokus item ini">' +
-        '<div class="jm-item-nama">' + jmEsc_(judul || it.po) + '</div>' +
+        '<div class="jm-item-nama">' + jmEsc_(judul || it.po) + jmLencanaKeadaan_(it) + '</div>' +
         // v236: klien & PO boleh menyusut, qty dan deadline tidak.
         // v239: di >=641px PO ikut dikunci (flex:0 0 auto), jadi hanya nama
         // klien yang menyusut. (v253: mode tahap tidak lagi menampilkan klien/PO
@@ -1504,7 +1624,7 @@ function jmIsiFormPilihan_() {
     Object.keys(perKlien).sort().map(function (k) {
       return '<optgroup label="' + jmEsc_(k) + '">' + perKlien[k].map(function (it) {
         return '<option value="' + jmEsc_(it.kunci) + '">' + jmEsc_([it.artikel, it.style].filter(String).join(" ")) +
-          ' \u00b7 ' + jmEsc_(it.po) + (it.qtyPo ? ' (' + it.qtyPo + ' pcs)' : '') + '</option>';
+          ' \u00b7 ' + (it.jenis === "rencana" ? 'Rencana \u00b7 ' : '') + jmEsc_(it.po) + (it.qtyPo ? ' (' + it.qtyPo + ' pcs)' : '') + '</option>';
       }).join("") + '</optgroup>';
     }).join("");
   if (nilaiItem) selItem.value = nilaiItem;
@@ -1901,7 +2021,10 @@ function jmRenderLegenda_() {
     return '<span class="jm-leg"><span class="jm-swatch jm-t-' + JM_KELAS_TAHAP[t] + '"></span>' + jmEsc_(t) + '</span>';
   }).join("") +
   '<span class="jm-leg"><span class="jm-swatch jm-swatch-dl"></span>deadline PO</span>' +
-  '<span class="jm-leg"><span class="jm-swatch jm-swatch-ini"></span>hari ini</span>';
+  '<span class="jm-leg"><span class="jm-swatch jm-swatch-ini"></span>hari ini</span>' +
+  // v256: rupa keadaan
+  '<span class="jm-leg"><span class="jm-swatch jm-t-sewing jm-bar-rencana"></span>rencana (order request)</span>' +
+  '<span class="jm-leg"><span class="jm-swatch jm-t-sewing jm-bar-batal"></span>batal</span>';
 }
 
 // ---------- mulai ----------
@@ -1929,7 +2052,7 @@ window.addEventListener("load", function () {
     if (p && !p.classList.contains("hidden") && !p.contains(ev.target) &&
         !(ev.target.closest && ev.target.closest(".jm-rentang-sembunyi"))) jmTutupPanelSembunyi_();
     // v254/v255: panel pilih (tahap, klien, line)
-    ["tahap", "klien", "line"].forEach(function (j) {
+    ["tahap", "klien", "line", "keadaan"].forEach(function (j) {
       const pt = document.getElementById("jm-panel-" + j);
       if (pt && !pt.classList.contains("hidden") && !pt.contains(ev.target) &&
           !(ev.target.closest && ev.target.closest("#jm-f-" + j))) pt.classList.add("hidden");
@@ -1943,7 +2066,7 @@ window.addEventListener("load", function () {
     // panel pemulih, modal); kalau tidak ada yang melayang, Esc keluar fokus.
     const mi = document.getElementById("jm-menu-item");
     const ps = document.getElementById("jm-panel-sembunyi");
-    const pt = ["tahap", "klien", "line"].map(function (j) { return document.getElementById("jm-panel-" + j); })
+    const pt = ["tahap", "klien", "line", "keadaan"].map(function (j) { return document.getElementById("jm-panel-" + j); })
       .filter(function (p) { return p && !p.classList.contains("hidden"); })[0];
     const m = document.getElementById("jm-modal");
     const adaMelayang = (mi && !mi.classList.contains("hidden")) ||
