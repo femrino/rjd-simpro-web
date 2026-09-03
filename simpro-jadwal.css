@@ -634,3 +634,11 @@ body.jm-fokus .jm-wrap{ max-width: none; padding-left: 12px; padding-right: 12px
 .jm-catatan li.jm-catatan-kunci-belum-pindah{ font-weight: 600; }
 .jm-btn-kecil{ padding: 2px 10px; font-size: 12px; height: auto; margin-left: 6px; vertical-align: middle; }
 @media print { .jm-catatan-batal button { display: none !important; } }
+
+/* ---------- v257: item rencana = request cepat dari form jadwal ---------- */
+.jm-tautan-rencana{ font-size: 12px; color: var(--thread, #C2410C); text-decoration: none; align-self: flex-start; margin-top: 2px; }
+.jm-tautan-rencana:hover{ text-decoration: underline; }
+.jm-modal.jm-modal-atas{ z-index: 97; }            /* di atas modal form jadwal */
+.jm-modal-kotak-rencana{ max-width: 540px; }
+.jm-rencana-ket{ margin: 0 0 2px; font-size: 12.5px; line-height: 1.45; color: var(--ink-soft, #5F6B7A); }
+.jm-form-rencana input[type=text]{ min-width: 180px; }

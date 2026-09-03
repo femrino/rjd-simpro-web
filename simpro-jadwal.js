@@ -1264,6 +1264,102 @@ function jmPanggil_(action, muatan) {
       return j;
     });
 }
+/* v257 -- ITEM RENCANA = REQUEST CEPAT. Rencana order dicatat sebagai order
+   request (Pending) dari form jadwal, empat isian, klien existing saja. Sesudah
+   tersimpan, data dimuat ulang dari server dan item barunya terpilih di form.
+   Warna/kain/harga dilengkapi admin saat proofing seperti biasa. */
+let JM_PILIH_ITEM_NANTI = "";   // kunci item yang harus terpilih di form sesudah muat ulang
+function jmPasangTautanRencana_(selItem) {
+  if (!JM_BOLEH_TULIS || !selItem || document.getElementById("jm-tautan-rencana")) return;
+  const a = document.createElement("a");
+  a.href = "#"; a.id = "jm-tautan-rencana"; a.className = "jm-tautan-rencana";
+  a.textContent = "+ Item rencana (belum ada PO)";
+  a.title = "Catat rencana order sebagai order request Pending, lalu jadwalkan";
+  a.onclick = function (ev) { ev.preventDefault(); jmBukaRencana_(); };
+  selItem.parentNode.insertBefore(a, selItem.nextSibling);
+}
+function jmModalRencana_() {
+  let m = document.getElementById("jm-modal-rencana");
+  if (m) return m;
+  m = document.createElement("div");
+  m.id = "jm-modal-rencana"; m.className = "jm-modal jm-modal-atas hidden";
+  m.innerHTML = '<div class="jm-modal-kotak jm-modal-kotak-rencana" role="dialog" aria-modal="true">' +
+    '<div class="jm-modal-kepala"><span class="jm-modal-judul">Item rencana (order request)</span>' +
+    '<button type="button" class="jm-modal-tutup" onclick="jmTutupRencana_()" aria-label="Tutup" title="Tutup (Esc)">\u00d7</button></div>' +
+    '<div class="jm-modal-isi"><div class="jm-form jm-form-rencana">' +
+      '<p class="jm-rencana-ket">Dicatat sebagai <b>order request Pending</b> atas nama klien yang sudah ada. ' +
+      'Warna, kain, dan harga dilengkapi admin saat proofing. Begitu request disetujui menjadi PO, jadwalnya pindah sendiri.</p>' +
+      '<div class="jm-form-baris"><label>Klien<select id="jm-rc-klien"><option value="">-- pilih klien --</option></select></label></div>' +
+      '<div class="jm-form-baris"><label>Artikel<input id="jm-rc-artikel" type="text" maxlength="80" placeholder="mis. Dress"></label>' +
+      '<label>Style / varian<input id="jm-rc-style" type="text" maxlength="80" placeholder="opsional"></label></div>' +
+      '<div class="jm-form-baris"><label>Qty rencana (pcs)<input id="jm-rc-qty" type="number" min="1" step="1"></label>' +
+      '<label>Target kirim<input id="jm-rc-target" type="date"></label></div>' +
+      '<div class="jm-form-aksi"><button type="button" class="jm-btn jm-btn-utama" id="jm-rc-simpan" onclick="jmSimpanRencana_()">Simpan rencana</button>' +
+      '<button type="button" class="jm-btn" onclick="jmTutupRencana_()">Batal</button>' +
+      '<span class="jm-form-pesan hidden" id="jm-rc-pesan"></span></div>' +
+    '</div></div></div>';
+  document.body.appendChild(m);
+  m.addEventListener("click", function (ev) { if (ev.target === m) jmTutupRencana_(); });
+  return m;
+}
+function jmIsiKlienRencana_() {
+  const sel = document.getElementById("jm-rc-klien");
+  if (!sel) return;
+  const nilai = sel.value;
+  const daftar = (JM_DATA && JM_DATA.klien) || [];
+  sel.innerHTML = '<option value="">-- pilih klien --</option>' + daftar.map(function (k) {
+    return '<option value="' + jmEsc_(k.id) + '">' + jmEsc_(k.nama || k.id) + '</option>';
+  }).join("");
+  if (nilai) sel.value = nilai;
+}
+function jmBukaRencana_() {
+  if (!JM_BOLEH_TULIS) return;
+  const m = jmModalRencana_();
+  jmIsiKlienRencana_();
+  jmPesanRencana_(((JM_DATA && JM_DATA.klien) || []).length ? "" : "Daftar klien kosong -- SD Master Klien tidak terbaca. Muat ulang halaman.", true);
+  m.classList.remove("hidden");
+  const k = document.getElementById("jm-rc-klien");
+  if (k && k.focus) k.focus();
+}
+function jmTutupRencana_() {
+  const m = document.getElementById("jm-modal-rencana");
+  if (m) m.classList.add("hidden");
+}
+function jmPesanRencana_(teks, galat) {
+  const el = document.getElementById("jm-rc-pesan");
+  if (!el) return;
+  el.textContent = teks || "";
+  el.classList.toggle("jm-form-galat", !!galat);
+  el.classList.toggle("hidden", !teks);
+}
+function jmSimpanRencana_() {
+  const v = function (id) { return (document.getElementById(id) || {}).value || ""; };
+  const data = { idKlien: v("jm-rc-klien").trim(), artikel: v("jm-rc-artikel").trim(), style: v("jm-rc-style").trim(),
+    qty: Number(v("jm-rc-qty")) || 0, target: v("jm-rc-target") };
+  const masalah = [];
+  if (!data.idKlien) masalah.push("klien belum dipilih");
+  if (!data.artikel) masalah.push("artikel kosong");
+  if (data.artikel.indexOf("|") !== -1 || data.style.indexOf("|") !== -1) masalah.push("artikel/style tidak boleh memuat '|'");
+  if (!(data.qty > 0)) masalah.push("qty harus lebih dari 0");
+  if (!data.target) masalah.push("target kirim kosong");
+  if (masalah.length) { jmPesanRencana_("Belum bisa disimpan: " + masalah.join(", ") + ".", true); return; }
+  const btn = document.getElementById("jm-rc-simpan");
+  if (btn) btn.disabled = true;
+  jmPesanRencana_("Menyimpan\u2026");
+  jmPanggil_("buatRequestRencana", { data: data })
+    .then(function (res) {
+      if (btn) btn.disabled = false;
+      jmTutupRencana_();
+      JM_PILIH_ITEM_NANTI = res.kunci || "";
+      jmFormPesan_((res.sudahAda ? "Rencana ini sudah ada sebagai request " : "Rencana tersimpan sebagai request ") +
+        (res.idOrderRequest || "") + ". Pilih tahap dan tanggalnya, lalu Simpan.");
+      jmMuat();   // data segar dari server: item baru masuk dropdown, lalu terpilih (JM_PILIH_ITEM_NANTI)
+    })
+    .catch(function (e) {
+      if (btn) btn.disabled = false;
+      jmPesanRencana_("Gagal: " + (e && e.message || e), true);
+    });
+}
 /**
  * v256: bersih-bersih bar batal. Dua langkah, tidak pernah otomatis:
  *   1. minta PRATINJAU ke server (daftar id yang batal SAAT INI)
@@ -1628,6 +1724,14 @@ function jmIsiFormPilihan_() {
       }).join("") + '</optgroup>';
     }).join("");
   if (nilaiItem) selItem.value = nilaiItem;
+  // v257: sesudah request cepat tersimpan, data dimuat ulang dan item barunya
+  // langsung terpilih di sini (bukan dipilih dari respons -- daftar item yang
+  // sah hanya datang dari server).
+  if (JM_PILIH_ITEM_NANTI) {
+    selItem.value = JM_PILIH_ITEM_NANTI;
+    if (selItem.value === JM_PILIH_ITEM_NANTI) { JM_PILIH_ITEM_NANTI = ""; jmFormItemBerubah(); }
+  }
+  jmPasangTautanRencana_(selItem);
 
   const nilaiTahap = selTahap.value;
   selTahap.innerHTML = '<option value="">-- tahap --</option>' +
@@ -2068,6 +2172,8 @@ window.addEventListener("load", function () {
     const ps = document.getElementById("jm-panel-sembunyi");
     const pt = ["tahap", "klien", "line", "keadaan"].map(function (j) { return document.getElementById("jm-panel-" + j); })
       .filter(function (p) { return p && !p.classList.contains("hidden"); })[0];
+    const mr = document.getElementById("jm-modal-rencana");   // v257: paling atas
+    if (mr && !mr.classList.contains("hidden")) { jmTutupRencana_(); return; }
     const m = document.getElementById("jm-modal");
     const adaMelayang = (mi && !mi.classList.contains("hidden")) ||
       (ps && !ps.classList.contains("hidden")) || !!pt || (m && !m.classList.contains("hidden"));
