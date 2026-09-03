@@ -653,8 +653,8 @@ body.jm-fokus .jm-wrap{ max-width: none; padding-left: 12px; padding-right: 12px
    (pseudo-elemen absolut) -- tinggi baris 30/28 px tidak berubah. position
    hanya dipasang pada sel hari (tidak pernah sticky), jadi tidak mengganggu
    kolom kiri. */
-.jm-r-tahap td.jm-real-rentang, .jm-r-tahap td.jm-real-hari{ position: relative; }
-.jm-r-tahap td.jm-real-rentang::after{ content: ""; position: absolute; left: 0; right: 0; bottom: 1px; height: 3px; background: rgba(23,33,47,.28); pointer-events: none; }
-.jm-r-tahap td.jm-real-hari::after{ background: var(--navy, #17212F); height: 4px; bottom: 1px; border-radius: 1px; }
+/* v263: garis rentang (v262) dibuang -- hanya titik hari laporan. */
+.jm-r-tahap td.jm-real-hari{ position: relative; }
+.jm-r-tahap td.jm-real-hari::after{ content: ""; position: absolute; left: 2px; right: 2px; bottom: 1px; height: 4px; background: var(--navy, #17212F); border-radius: 1px; pointer-events: none; }
 .jm-swatch-real{ height: 4px; width: 18px; background: var(--navy, #17212F); border: 0; border-radius: 1px; vertical-align: middle; }
 .jm-lencana-laporan{ background: #FFF1D6; color: #8A5A00; border: 1px solid #E8C978; }

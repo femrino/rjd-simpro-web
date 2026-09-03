@@ -1593,7 +1593,8 @@ function jmSelBaris_(b, kolom, hariIni, deadline) {
     let kelas = jmKelasSel_(k, hariIni, deadline);
     let tipReal = "";
     if (real) {
-      if (real.mulai <= k.iso && k.iso <= real.selesai) kelas += " jm-real-rentang";
+      // v263: hanya HARI yang ada laporannya. Garis rentang pertama..terakhir
+      // (v262) menyamarkan hari kosong sebagai kerja berkelanjutan -- dibuang.
       if (real.hari[k.iso] !== undefined) {
         kelas += " jm-real-hari";
         tipReal = "\nLaporan " + jmTanggalPendek_(k.iso) + (real.hari[k.iso] ? ": " + real.hari[k.iso].toLocaleString("id-ID") + " pcs" : "") +
@@ -1633,6 +1634,14 @@ function jmSelBaris_(b, kolom, hariIni, deadline) {
    Cocokan item PERSIS (4 bagian); baris Sewing hanya menerima realisasi yang
    lokasinya menunjuk line baris itu (ambigu = semua line di lokasi itu). */
 const JM_TAHAP_SUMBER_DR_BAWAAN = ["Cutting", "Interlining", "Sewing", "Finishing"];
+function jmNormLokasi_(v) { return String(v || "").trim().toLowerCase().replace(/\s+/g, " "); }
+function jmLineInfo_(idLine) {
+  return ((JM_DATA && JM_DATA.lines) || []).filter(function (l) { return l.idLine === idLine; })[0] || null;
+}
+function jmLineSampel_(idLine) {
+  const l = jmLineInfo_(idLine);
+  return !!l && (jmNormLokasi_(l.jenis).indexOf("sampel") !== -1 || jmNormLokasi_(l.namaLine).indexOf("sampel") !== -1);
+}
 function jmTahapSumberDr_() { return (JM_DATA && JM_DATA.realisasi && JM_DATA.realisasi.tahapSumber) || JM_TAHAP_SUMBER_DR_BAWAAN; }
 function jmRealisasiBaris_(b) {
   const kunci = b.kunci || (b.item && typeof b.item === "object" ? b.item.kunci : "");
@@ -1640,8 +1649,17 @@ function jmRealisasiBaris_(b) {
   const t = kunci && per[kunci] ? per[kunci][b.tahap] : null;
   if (!t) return null;
   if (b.tahap === "Sewing") {
+    // v263: baris Sewing hanya menerima hari laporan dari LOKASI line-nya.
+    // Dua line di satu lokasi (Piyungan: Payak & Tim Sampel) berbagi hari yang
+    // sama -- laporan memang tidak membedakannya. Line tanpa lokasi: semua hari.
     const lineBaris = (b.bar && b.bar[0] && b.bar[0].line) || "";
-    if (lineBaris && t.line && t.line.length && t.line.indexOf(lineBaris) === -1) return null;   // laporan milik line lain
+    const info = lineBaris ? jmLineInfo_(lineBaris) : null;
+    const lk = info ? jmNormLokasi_(info.lokasi) : "";
+    if (lk && t.perLokasi) {
+      const hari = t.perLokasi[lk];
+      if (!hari || !Object.keys(hari).length) return null;
+      return { hari: hari, lokasi: [lk] };
+    }
   }
   return t;
 }
@@ -1649,6 +1667,7 @@ function jmRealisasiBaris_(b) {
 function jmLencanaLaporan_(b, hariIni) {
   if (!JM_DATA || !JM_DATA.realisasi || !JM_DATA.realisasi.info || !JM_DATA.realisasi.info.aktif) return "";
   if (jmTahapSumberDr_().indexOf(b.tahap) === -1) return "";
+  if (b.tahap === "Sewing" && b.bar && b.bar[0] && jmLineSampel_(b.bar[0].line)) return "";   // v263: tim sampel tidak melapor harian
   if (jmRealisasiBaris_(b)) return "";
   const mulaiMin = (b.bar || []).reduce(function (m, x) { return (!m || x.mulai < m) ? x.mulai : m; }, "");
   if (!mulaiMin || mulaiMin >= hariIni) return "";
