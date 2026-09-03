@@ -647,3 +647,14 @@ body.jm-fokus .jm-wrap{ max-width: none; padding-left: 12px; padding-right: 12px
 .jm-rc-daftar-judul{ font-size: 12px; color: var(--ink-soft, #5F6B7A); margin-top: 2px; }
 .jm-rc-baris{ align-items: flex-end; }
 .jm-rc-baris .jm-rc-hapus{ height: 34px; padding: 0 10px; align-self: flex-end; }
+
+/* ---------- v262: REALISASI dari laporan harian ---------- */
+/* Digambar sebagai garis tipis + titik di tepi bawah sel, LEPAS dari aliran
+   (pseudo-elemen absolut) -- tinggi baris 30/28 px tidak berubah. position
+   hanya dipasang pada sel hari (tidak pernah sticky), jadi tidak mengganggu
+   kolom kiri. */
+.jm-r-tahap td.jm-real-rentang, .jm-r-tahap td.jm-real-hari{ position: relative; }
+.jm-r-tahap td.jm-real-rentang::after{ content: ""; position: absolute; left: 0; right: 0; bottom: 1px; height: 3px; background: rgba(23,33,47,.28); pointer-events: none; }
+.jm-r-tahap td.jm-real-hari::after{ background: var(--navy, #17212F); height: 4px; bottom: 1px; border-radius: 1px; }
+.jm-swatch-real{ height: 4px; width: 18px; background: var(--navy, #17212F); border: 0; border-radius: 1px; vertical-align: middle; }
+.jm-lencana-laporan{ background: #FFF1D6; color: #8A5A00; border: 1px solid #E8C978; }

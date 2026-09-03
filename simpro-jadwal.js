@@ -1017,7 +1017,10 @@ function jmRenderPeringatan_() {
   // v256: selain baris rusak, panel ini memuat CATATAN dari server (request
   // diam, kunci belum pindah, sumber tidak terbaca) dan tombol bersih-bersih
   // bar batal. Semua terlihat, tidak ada yang diam-diam.
-  const c = JM_DATA.catatan || [];
+  const c = (JM_DATA.catatan || []).slice();
+  // v262: jalur realisasi wajib memberi tahu kalau tidak aktif
+  const ri = JM_DATA.realisasi && JM_DATA.realisasi.info;
+  if (ri && !ri.aktif) c.push({ jenis: "realisasi", pesan: "Realisasi dari laporan harian TIDAK AKTIF: " + (ri.alasan || "tanpa alasan") + "." });
   const batal = jmBarBatal_();
   if (!p.length && !c.length && !batal.length) { el.classList.add("hidden"); el.innerHTML = ""; return; }
   el.classList.remove("hidden");
@@ -1215,7 +1218,7 @@ function jmBarisGrup_(g) {
       baris.push({ label: tahap, sub: "", tahap: tahap, bar: bars });
     }
   });
-  baris.forEach(function (b) { b.keadaan = jmKeadaan_(g.item); });   // v256: rupa bar ikut nasib item
+  baris.forEach(function (b) { b.keadaan = jmKeadaan_(g.item); b.kunci = g.item.kunci; });   // v256 rupa; v262 realisasi
   return baris;
 }
 
@@ -1585,8 +1588,18 @@ function jmSelBaris_(b, kolom, hariIni, deadline) {
   let html = "";
   const namaBaris = b.label + (b.sub ? " " + b.sub : "");
   if (!b.keadaan && b.item && typeof b.item === "object") b.keadaan = jmKeadaan_(b.item);   // v256: mode tahap
+  const real = jmRealisasiBaris_(b);   // v262: laporan harian untuk baris tahap ini (null = tidak ada)
   kolom.forEach(function (k) {
-    const kelas = jmKelasSel_(k, hariIni, deadline);
+    let kelas = jmKelasSel_(k, hariIni, deadline);
+    let tipReal = "";
+    if (real) {
+      if (real.mulai <= k.iso && k.iso <= real.selesai) kelas += " jm-real-rentang";
+      if (real.hari[k.iso] !== undefined) {
+        kelas += " jm-real-hari";
+        tipReal = "\nLaporan " + jmTanggalPendek_(k.iso) + (real.hari[k.iso] ? ": " + real.hari[k.iso].toLocaleString("id-ID") + " pcs" : "") +
+          (real.lokasi && real.lokasi.length ? " \u00b7 " + real.lokasi.join(", ") : "");
+      }
+    }
     const bar = b.bar.filter(function (x) { return x.mulai <= k.iso && k.iso <= x.selesai; });
     if (!bar.length) {
       let sebelum = null, sesudah = null;
@@ -1598,9 +1611,9 @@ function jmSelBaris_(b, kolom, hariIni, deadline) {
         const tipJeda = "Jeda " + namaBaris + ": " + jmTanggalPendek_(jmIso_(jmTambahHari_(jmDariIso_(sebelum.selesai), 1))) +
           " - " + jmTanggalPendek_(jmIso_(jmTambahHari_(jmDariIso_(sesudah.mulai), -1))) +
           (sesudah.keterangan ? "\n" + sesudah.keterangan : "");
-        html += '<td class="' + kelas + ' jm-jeda" title="' + jmEsc_(tipJeda) + '"></td>';
+        html += '<td class="' + kelas + ' jm-jeda" title="' + jmEsc_(tipJeda + tipReal) + '"></td>';
       } else {
-        html += '<td class="' + kelas + '"></td>';
+        html += '<td class="' + kelas + '"' + (tipReal ? ' title="' + jmEsc_(tipReal.slice(1)) + '"' : '') + '></td>';
       }
       return;
     }
@@ -1610,9 +1623,39 @@ function jmSelBaris_(b, kolom, hariIni, deadline) {
       (x.qty ? " \u00b7 " + x.qty + " pcs" : "") + (x.keterangan ? "\n" + x.keterangan : "");
     html += '<td class="' + kelas + ' jm-bar jm-t-' + (JM_KELAS_TAHAP[b.tahap] || "lain") + tepi + (x.menunggu ? " jm-bar-menunggu" : "") +
       (b.keadaan && b.keadaan !== "aktif" ? " jm-bar-" + b.keadaan : "") +
-      '" data-id="' + jmEsc_(x.id || "") + '" title="' + jmEsc_(tip) + (x.id ? "\n(klik untuk mengubah)" : "") + '"></td>';
+      '" data-id="' + jmEsc_(x.id || "") + '" title="' + jmEsc_(tip + tipReal) + (x.id ? "\n(klik untuk mengubah)" : "") + '"></td>';
   });
   return html;
+}
+
+/* v262 -- REALISASI dari laporan harian (tahap A). Server mengirim
+   JM_DATA.realisasi = { info, per: {kunci -> {tahap -> {mulai, selesai, hari, line, lokasi}}}, tahapSumber }.
+   Cocokan item PERSIS (4 bagian); baris Sewing hanya menerima realisasi yang
+   lokasinya menunjuk line baris itu (ambigu = semua line di lokasi itu). */
+const JM_TAHAP_SUMBER_DR_BAWAAN = ["Cutting", "Interlining", "Sewing", "Finishing"];
+function jmTahapSumberDr_() { return (JM_DATA && JM_DATA.realisasi && JM_DATA.realisasi.tahapSumber) || JM_TAHAP_SUMBER_DR_BAWAAN; }
+function jmRealisasiBaris_(b) {
+  const kunci = b.kunci || (b.item && typeof b.item === "object" ? b.item.kunci : "");
+  const per = (JM_DATA && JM_DATA.realisasi && JM_DATA.realisasi.per) || {};
+  const t = kunci && per[kunci] ? per[kunci][b.tahap] : null;
+  if (!t) return null;
+  if (b.tahap === "Sewing") {
+    const lineBaris = (b.bar && b.bar[0] && b.bar[0].line) || "";
+    if (lineBaris && t.line && t.line.length && t.line.indexOf(lineBaris) === -1) return null;   // laporan milik line lain
+  }
+  return t;
+}
+/** Lencana "belum ada laporan": tahap punya sumber, rencana sudah lewat mulai, laporan nihil. */
+function jmLencanaLaporan_(b, hariIni) {
+  if (!JM_DATA || !JM_DATA.realisasi || !JM_DATA.realisasi.info || !JM_DATA.realisasi.info.aktif) return "";
+  if (jmTahapSumberDr_().indexOf(b.tahap) === -1) return "";
+  if (jmRealisasiBaris_(b)) return "";
+  const mulaiMin = (b.bar || []).reduce(function (m, x) { return (!m || x.mulai < m) ? x.mulai : m; }, "");
+  if (!mulaiMin || mulaiMin >= hariIni) return "";
+  const k = b.keadaan || (b.item && typeof b.item === "object" ? jmKeadaan_(b.item) : "aktif");
+  if (k !== "aktif") return "";
+  return '<span class="jm-lencana jm-lencana-laporan jm-lencana-kecil" title="Rencana sudah lewat mulai (' + jmEsc_(jmTanggalPendek_(mulaiMin)) +
+    ') tetapi belum ada laporan harian untuk item dan tahap ini' + (b.tahap === "Sewing" ? " di line ini" : "") + '">belum ada laporan</span>';
 }
 
 function jmRenderMatriks_() {
@@ -1687,7 +1730,7 @@ function jmRenderMatriks_() {
           // mode artikel (30 px, bukan 44), dan kolom kiri bersih. Yang dijaga dari
           // v236 tetap dijaga: nama boleh menyusut (ellipsis), DEADLINE tidak pernah.
           '<div class="jm-item-baris-kecil"><span class="jm-item-nama-kecil">' + jmEsc_(b.label) +
-            (b.sub ? ' <span class="jm-tahap-sub">' + jmEsc_(b.sub) + '</span>' : '') + '</span>' + jmLencanaKeadaan_(it, true) +
+            (b.sub ? ' <span class="jm-tahap-sub">' + jmEsc_(b.sub) + '</span>' : '') + '</span>' + jmLencanaKeadaan_(it, true) + jmLencanaLaporan_(b, hariIni) +
             (it.deadline ? '<span class="jm-dl' + (dlLewat ? ' jm-dl-lewat' : '') + '">' + jmTanggalPendek_(it.deadline) + '</span>' : '') +
           '</div></td>' + jmSelBaris_(b, kolom, hariIni, it.deadline) + '</tr>';
       });
@@ -1730,7 +1773,7 @@ function jmRenderMatriks_() {
       jumlahBaris++;
       tbody += '<tr class="jm-r-tahap">' +
         '<td class="jm-sticky jm-td-tahap"><span class="jm-swatch jm-t-' + (JM_KELAS_TAHAP[b.tahap] || "lain") + '"></span>' +
-          jmEsc_(b.label) + (b.sub ? ' <span class="jm-tahap-sub">' + jmEsc_(b.sub) + '</span>' : '') +
+          jmEsc_(b.label) + (b.sub ? ' <span class="jm-tahap-sub">' + jmEsc_(b.sub) + '</span>' : '') + jmLencanaLaporan_(b, hariIni) +
         '</td>';
       tbody += jmSelBaris_(b, kolom, hariIni, it.deadline) + '</tr>';
     });
@@ -2173,7 +2216,10 @@ function jmRenderLegenda_() {
   '<span class="jm-leg"><span class="jm-swatch jm-swatch-ini"></span>hari ini</span>' +
   // v256: rupa keadaan
   '<span class="jm-leg"><span class="jm-swatch jm-t-sewing jm-bar-rencana"></span>rencana (order request)</span>' +
-  '<span class="jm-leg"><span class="jm-swatch jm-t-sewing jm-bar-batal"></span>batal</span>';
+  '<span class="jm-leg"><span class="jm-swatch jm-t-sewing jm-bar-batal"></span>batal</span>' +
+  // v262: realisasi
+  '<span class="jm-leg"><span class="jm-swatch jm-swatch-real"></span>hari ada laporan harian (realisasi)</span>' +
+  '<span class="jm-leg"><span class="jm-lencana jm-lencana-laporan jm-lencana-kecil">belum ada laporan</span> rencana lewat, laporan nihil</span>';
 }
 
 // ---------- mulai ----------
