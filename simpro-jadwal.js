@@ -51,7 +51,7 @@ let JM_PENGIRIM_ANTREAN = null;
 // melihat 2-3 minggu ke depan, dan kehilangan posisi itu menyebalkan.
 const JM_LIHAT = {
   mulai: null,        // Date (Senin) kolom pertama
-  minggu: 6,          // jumlah minggu yang digambar
+  minggu: 8,          // jumlah minggu yang digambar (v248: 6 -> 8, permintaan 3 Sep 2026 -- deadline PO lazim 5-7 minggu ke depan, 6 minggu sering memotongnya)
   klien: "",          // filter ID klien ("" = semua)
   line: "",           // filter ID line ("" = semua)
   sembunyiLewat: true, // sembunyikan item yang semua bar-nya sudah lewat
@@ -502,7 +502,7 @@ function jmBacaLihat_() {
     if (!raw) return;
     const d = JSON.parse(raw);
     if (d.mulai) JM_LIHAT.mulai = jmDariIso_(d.mulai);
-    if (d.minggu) JM_LIHAT.minggu = Number(d.minggu) || 6;
+    if (d.minggu) JM_LIHAT.minggu = Number(d.minggu) || 8;
     if (typeof d.klien === "string") JM_LIHAT.klien = d.klien;
     if (typeof d.line === "string") JM_LIHAT.line = d.line;
     if (typeof d.sembunyiLewat === "boolean") JM_LIHAT.sembunyiLewat = d.sembunyiLewat;
@@ -686,7 +686,7 @@ function jmUbahFilter() {
   JM_LIHAT.klien = (document.getElementById("jm-f-klien") || {}).value || "";
   JM_LIHAT.tahap = (document.getElementById("jm-f-tahap") || {}).value || "";
   JM_LIHAT.line = (document.getElementById("jm-f-line") || {}).value || "";
-  JM_LIHAT.minggu = Number((document.getElementById("jm-f-minggu") || {}).value) || 6;
+  JM_LIHAT.minggu = Number((document.getElementById("jm-f-minggu") || {}).value) || 8;
   JM_LIHAT.sembunyiLewat = !!((document.getElementById("jm-f-lewat") || {}).checked);
   jmSimpanLihat_(); jmRender();
 }
