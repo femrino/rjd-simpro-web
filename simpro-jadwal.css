@@ -558,12 +558,12 @@ td[data-kunci]:hover .jm-item-nama-kecil{ text-decoration: underline dotted; tex
 .jm-menu-item button:hover{ background: rgba(27,37,64,.06); }
 
 .jm-panel-sembunyi{ min-width: 280px; max-width: min(420px, 92vw); }
-/* v254: panel filter tahap (kotak centang) memakai kerangka panel yang sama. */
-.jm-panel-tahap{ min-width: 220px; }
-.jm-panel-tahap .jm-panel-baris{ cursor: pointer; gap: 10px; }
-.jm-panel-tahap input{ margin: 0; accent-color: var(--navy, #17212F); }
-.jm-f-tahap{ font-weight: 500; }
-.jm-f-tahap::after{ content: " \25BE"; color: var(--ink-soft, #5F6B7A); }
+/* v254/v255: panel filter pilih (tahap, klien, line) memakai kerangka panel yang sama. */
+.jm-panel-pilih{ min-width: 220px; }
+.jm-panel-pilih .jm-panel-baris{ cursor: pointer; gap: 10px; }
+.jm-panel-pilih input{ margin: 0; accent-color: var(--navy, #17212F); }
+.jm-f-pilih{ font-weight: 500; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jm-f-pilih::after{ content: " \25BE"; color: var(--ink-soft, #5F6B7A); }
 .jm-panel-kepala{
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 10px 12px; border-bottom: 1px solid #E3DED3;
@@ -609,4 +609,4 @@ body.jm-fokus #jm-wrap{ padding-top: 8px !important; }
 body.jm-fokus .jm-wrap{ max-width: none; padding-left: 12px; padding-right: 12px; }
 @media print { .jm-btn-fokus { display: none !important; } }
 
-@media print { #jm-panel-tahap { display: none !important; } }
+@media print { #jm-panel-tahap, #jm-panel-klien, #jm-panel-line { display: none !important; } }

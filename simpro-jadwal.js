@@ -52,8 +52,8 @@ let JM_PENGIRIM_ANTREAN = null;
 const JM_LIHAT = {
   mulai: null,        // Date (Senin) kolom pertama
   minggu: 8,          // jumlah minggu yang digambar (v248: 6 -> 8, permintaan 3 Sep 2026 -- deadline PO lazim 5-7 minggu ke depan, 6 minggu sering memotongnya)
-  klien: "",          // filter ID klien ("" = semua)
-  line: "",           // filter ID line ("" = semua)
+  klien: [],          // filter ID klien; v255: DAFTAR ([] = semua)
+  line: [],           // filter ID line;  v255: DAFTAR ([] = semua)
   sembunyiLewat: true, // sembunyikan item yang semua bar-nya sudah lewat
   tahap: [],           // v233: filter tahap; v254: DAFTAR nama ([] = semua). SARINGAN TINGKAT-BARIS,
                        // beda dengan line yang tingkat-item -- lihat catatan di
@@ -399,68 +399,135 @@ function jmTambahJadwal() {
   jmBukaForm();
 }
 
-/** v254: true kalau tahap ini lolos filter tahap (kosong = semua). */
-function jmTahapAktif_(t) {
-  return !JM_LIHAT.tahap.length || JM_LIHAT.tahap.indexOf(t) !== -1;
+/* v254 -- FILTER MULTI-PILIH (tahap); v255 -- juga KLIEN dan LINE, satu
+   mekanisme. Tiap filter: tombol #jm-f-<jenis> (id sama dengan <select> lama,
+   jadi harness pengukur toolbar tidak berubah) yang membuka panel kotak
+   centang #jm-panel-<jenis>. Nilai disimpan sebagai DAFTAR di JM_LIHAT;
+   kosong = semua. Sesi lama yang menyimpan string diterima (jmDaftarDari_).
+
+   Opsi klien & line diturunkan dari DATA YANG ADA (items + lines + line yang
+   muncul di bar), bukan dari <option> di template: line yang dipakai bar tapi
+   belum ada di master tetap bisa dipilih -- kalau tidak, bar-nya ada tapi
+   tidak bisa disaring, jebakan diam-diam. */
+const JM_FILTER_PILIH = {
+  tahap: { judul: "Tahap yang ditampilkan", semua: "Semua tahap", satuan: "tahap",
+    opsi: function () { return ((JM_DATA && JM_DATA.tahap) || []).map(function (t) { return { v: t, l: t }; }); } },
+  klien: { judul: "Klien yang ditampilkan", semua: "Semua klien", satuan: "klien",
+    opsi: function () {
+      const peta = {};
+      ((JM_DATA && JM_DATA.items) || []).forEach(function (it) { if (it.idKlien) peta[it.idKlien] = it.namaKlien || it.idKlien; });
+      return Object.keys(peta).sort(function (a, b) { return String(peta[a]).localeCompare(String(peta[b])); })
+        .map(function (id) { return { v: id, l: peta[id] }; });
+    } },
+  line: { judul: "Line yang ditampilkan", semua: "Semua line", satuan: "line",
+    opsi: function () {
+      const peta = {}, urut = [];
+      ((JM_DATA && JM_DATA.lines) || []).forEach(function (l) { if (l.idLine && !peta[l.idLine]) { peta[l.idLine] = l.namaLine || l.idLine; urut.push(l.idLine); } });
+      ((JM_DATA && JM_DATA.bar) || []).forEach(function (b) { if (b.line && !peta[b.line]) { peta[b.line] = b.namaLine || b.line; urut.push(b.line); } });
+      return urut.map(function (id) { return { v: id, l: peta[id] }; });
+    } }
+};
+function jmDaftarDari_(x) {
+  if (Array.isArray(x)) return x.filter(function (v) { return typeof v === "string" && v; });
+  if (typeof x === "string" && x) return [x];
+  return [];
 }
-function jmLabelFilterTahap_() {
-  const n = JM_LIHAT.tahap.length;
-  if (!n) return "Semua tahap";
-  if (n === 1) return JM_LIHAT.tahap[0];
-  return n + " tahap";
+/** true kalau nilai ini lolos filter jenis tsb (daftar kosong = semua). */
+function jmPilihAktif_(jenis, v) {
+  const d = JM_LIHAT[jenis];
+  return !d.length || d.indexOf(v) !== -1;
 }
-function jmPanelTahap_() {
-  let p = document.getElementById("jm-panel-tahap");
+function jmTahapAktif_(t) { return jmPilihAktif_("tahap", t); }
+function jmLabelPilih_(jenis) {
+  const k = JM_FILTER_PILIH[jenis], d = JM_LIHAT[jenis];
+  if (!d.length) return k.semua;
+  if (d.length === 1) {
+    const o = k.opsi().filter(function (x) { return x.v === d[0]; })[0];
+    return o ? o.l : d[0];
+  }
+  return d.length + " " + k.satuan;
+}
+/** Tombol filter: <select> dari template diganti tombol ber-id sama; label & title disegarkan. */
+function jmTombolPilih_(jenis, laci) {
+  let el = document.getElementById("jm-f-" + jenis);
+  if (el && el.tagName === "SELECT") {
+    const b = document.createElement("button");
+    b.id = el.id; b.type = "button"; b.className = "jm-btn jm-f-pilih jm-f-" + jenis;
+    el.parentNode.replaceChild(b, el);
+    el = b;
+  } else if (!el) {
+    el = document.createElement("button");
+    el.id = "jm-f-" + jenis; el.type = "button"; el.className = "jm-btn jm-f-pilih jm-f-" + jenis;
+    (laci || document.querySelector(".jm-alat")).appendChild(el);
+  }
+  el.onclick = function (ev) { jmBukaPanelPilih_(jenis, ev); };
+  el.textContent = jmLabelPilih_(jenis);
+  const d = JM_LIHAT[jenis];
+  el.title = d.length ? JM_FILTER_PILIH[jenis].judul + ": " + d.join(", ") : "Pilih " + JM_FILTER_PILIH[jenis].satuan + " yang ditampilkan (boleh lebih dari satu)";
+  return el;
+}
+function jmSegarkanTombolPilih_() {
+  ["tahap", "klien", "line"].forEach(function (j) { if (document.getElementById("jm-f-" + j)) jmTombolPilih_(j); });
+}
+function jmPanelPilih_(jenis) {
+  let p = document.getElementById("jm-panel-" + jenis);
   if (!p) {
     p = document.createElement("div");
-    p.id = "jm-panel-tahap"; p.className = "jm-panel-sembunyi jm-panel-tahap hidden";
+    p.id = "jm-panel-" + jenis; p.className = "jm-panel-sembunyi jm-panel-pilih hidden";
     document.body.appendChild(p);
     p.addEventListener("change", function (ev) {
       const cb = ev.target;
       if (!cb || cb.tagName !== "INPUT") return;
       if (cb.hasAttribute("data-semua")) {
-        JM_LIHAT.tahap = [];
+        JM_LIHAT[jenis] = [];
       } else {
-        const t = cb.getAttribute("data-tahap");
-        const ada = JM_LIHAT.tahap.indexOf(t);
-        if (cb.checked && ada === -1) JM_LIHAT.tahap.push(t);
-        if (!cb.checked && ada !== -1) JM_LIHAT.tahap.splice(ada, 1);
-        // urut sesuai daftar resmi supaya label & sessionStorage stabil
-        const urut = (JM_DATA && JM_DATA.tahap) || [];
-        JM_LIHAT.tahap.sort(function (a, b) { return urut.indexOf(a) - urut.indexOf(b); });
+        const v = cb.getAttribute("data-nilai");
+        const d = JM_LIHAT[jenis], ada = d.indexOf(v);
+        if (cb.checked && ada === -1) d.push(v);
+        if (!cb.checked && ada !== -1) d.splice(ada, 1);
+        const urut = JM_FILTER_PILIH[jenis].opsi().map(function (o) { return o.v; });
+        d.sort(function (a, b) { return urut.indexOf(a) - urut.indexOf(b); });   // stabil untuk label & sessionStorage
       }
-      jmSimpanLihat_(); jmRender();       // jmRender -> jmRenderLaci_ memperbarui label & lencana
-      jmIsiPanelTahap_(p);                 // panel tetap terbuka, centangnya ikut keadaan baru
+      jmSimpanLihat_(); jmRender();   // jmRender -> jmRenderLaci_ -> label & lencana
+      jmIsiPanelPilih_(jenis, p);      // panel tetap terbuka, centang ikut keadaan baru
     });
   }
   return p;
 }
-function jmIsiPanelTahap_(p) {
-  const daftar = (JM_DATA && JM_DATA.tahap) || [];
-  p.innerHTML = '<div class="jm-panel-kepala"><b>Tahap yang ditampilkan</b></div>' +
+function jmIsiPanelPilih_(jenis, p) {
+  const k = JM_FILTER_PILIH[jenis], d = JM_LIHAT[jenis], opsi = k.opsi();
+  const adaDiOpsi = {}; opsi.forEach(function (o) { adaDiOpsi[o.v] = true; });
+  // Nilai yang sedang aktif tapi tidak ada di data hari ini tetap ditampilkan
+  // (bertanda), supaya bisa dilepas -- bukan hilang diam-diam.
+  const yatim = d.filter(function (v) { return !adaDiOpsi[v]; }).map(function (v) { return { v: v, l: v + " (tidak ada di data)" }; });
+  p.innerHTML = '<div class="jm-panel-kepala"><b>' + jmEsc_(k.judul) + '</b></div>' +
     '<div class="jm-panel-daftar">' +
-    '<label class="jm-panel-baris"><input type="checkbox" data-semua="1"' + (JM_LIHAT.tahap.length ? '' : ' checked') + '> <span>Semua tahap</span></label>' +
-    daftar.map(function (t) {
-      return '<label class="jm-panel-baris"><input type="checkbox" data-tahap="' + jmEsc_(t) + '"' +
-        (JM_LIHAT.tahap.indexOf(t) !== -1 ? ' checked' : '') + '> <span>' + jmEsc_(t) + '</span></label>';
+    '<label class="jm-panel-baris"><input type="checkbox" data-semua="1"' + (d.length ? '' : ' checked') + '> <span>' + jmEsc_(k.semua) + '</span></label>' +
+    opsi.concat(yatim).map(function (o) {
+      return '<label class="jm-panel-baris"><input type="checkbox" data-nilai="' + jmEsc_(o.v) + '"' +
+        (d.indexOf(o.v) !== -1 ? ' checked' : '') + '> <span>' + jmEsc_(o.l) + '</span></label>';
     }).join("") + '</div>';
 }
-function jmBukaPanelTahap_(ev) {
-  const p = jmPanelTahap_();
-  if (!p.classList.contains("hidden")) { jmTutupPanelTahap_(); return; }
-  jmTutupMenuItem_(); jmTutupPanelSembunyi_();
-  jmIsiPanelTahap_(p);
+function jmBukaPanelPilih_(jenis, ev) {
+  const p = jmPanelPilih_(jenis);
+  if (!p.classList.contains("hidden")) { jmTutupPanelPilih_(); return; }
+  jmTutupMenuItem_(); jmTutupPanelSembunyi_(); jmTutupPanelPilih_();
+  jmIsiPanelPilih_(jenis, p);
   p.classList.remove("hidden");
-  const btn = (ev && ev.currentTarget) || document.getElementById("jm-f-tahap");
+  const btn = (ev && ev.currentTarget) || document.getElementById("jm-f-" + jenis);
   const r = btn ? btn.getBoundingClientRect() : { left: 8, bottom: 8 };
   const lebar = p.offsetWidth || 260, tinggi = p.offsetHeight || 200;
   p.style.left = Math.max(8, Math.min(r.left, window.innerWidth - lebar - 8)) + "px";
   p.style.top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - tinggi - 8)) + "px";
 }
-function jmTutupPanelTahap_() {
-  const p = document.getElementById("jm-panel-tahap");
-  if (p) p.classList.add("hidden");
+/** Menutup panel pilih mana pun yang terbuka. */
+function jmTutupPanelPilih_() {
+  ["tahap", "klien", "line"].forEach(function (j) {
+    const p = document.getElementById("jm-panel-" + j);
+    if (p) p.classList.add("hidden");
+  });
 }
+function jmTutupPanelTahap_() { jmTutupPanelPilih_(); }   // nama lama (v254) masih dipakai harness
 
 function jmRenderLaci_() {
   const alat = document.querySelector(".jm-alat");
@@ -492,17 +559,14 @@ function jmRenderLaci_() {
   // Finishing bersamaan" tidak mungkin, padahal itu pasangan yang lazim
   // dipantau bersama. Sekarang tombol (id tetap #jm-f-tahap supaya harness
   // pengukur baris tidak berubah) yang membuka panel kotak centang.
-  let selT = document.getElementById("jm-f-tahap");
-  if (!selT) {
-    selT = document.createElement("button");
-    selT.id = "jm-f-tahap"; selT.type = "button"; selT.className = "jm-btn jm-f-tahap";
-    selT.onclick = function (ev) { jmBukaPanelTahap_(ev); };
+  if (!document.getElementById("jm-f-tahap")) {
+    const selT = jmTombolPilih_("tahap", laci);
     const selM2 = document.getElementById("jm-f-minggu");
     if (selM2 && selM2.parentNode === laci) laci.insertBefore(selT, selM2.nextSibling);
     else laci.insertBefore(selT, laci.firstChild);
   }
-  selT.textContent = jmLabelFilterTahap_();
-  selT.title = JM_LIHAT.tahap.length ? "Tahap: " + JM_LIHAT.tahap.join(", ") : "Pilih tahap yang ditampilkan (boleh lebih dari satu)";
+  // v255: <select> klien & line dari template diganti tombol ber-id sama (di tempatnya).
+  jmSegarkanTombolPilih_();
 
   let btn = document.getElementById("jm-btn-laci");
   if (!btn) {
@@ -511,7 +575,7 @@ function jmRenderLaci_() {
     btn.onclick = jmToggleLaci;
     laci.parentNode.insertBefore(btn, laci);
   }
-  const n = (JM_LIHAT.klien ? 1 : 0) + (JM_LIHAT.line ? 1 : 0) + (JM_LIHAT.tahap.length ? 1 : 0);
+  const n = (JM_LIHAT.klien.length ? 1 : 0) + (JM_LIHAT.line.length ? 1 : 0) + (JM_LIHAT.tahap.length ? 1 : 0);
   btn.innerHTML = "Filter" + (n ? ' <span class="jm-laci-lencana">' + n + "</span>" : "");
 
   // v250: tombol legenda di TOOLBAR (semua lebar), bukan baris sendiri di atas
@@ -732,8 +796,9 @@ function jmBacaLihat_() {
     const d = JSON.parse(raw);
     if (d.mulai) JM_LIHAT.mulai = jmDariIso_(d.mulai);
     if (d.minggu) JM_LIHAT.minggu = Number(d.minggu) || 8;
-    if (typeof d.klien === "string") JM_LIHAT.klien = d.klien;
-    if (typeof d.line === "string") JM_LIHAT.line = d.line;
+    // v255: dulu string tunggal; sesi lama diterima dan diubah jadi daftar.
+    JM_LIHAT.klien = jmDaftarDari_(d.klien);
+    JM_LIHAT.line = jmDaftarDari_(d.line);
     if (typeof d.sembunyiLewat === "boolean") JM_LIHAT.sembunyiLewat = d.sembunyiLewat;
     // v254: dulu string tunggal; sesi lama yang masih menyimpan string diterima.
     if (Array.isArray(d.tahap)) JM_LIHAT.tahap = d.tahap.filter(function (x) { return typeof x === "string" && x; });
@@ -882,25 +947,11 @@ window.addEventListener("online", function () { jmKirimAntrean_(); });
 setInterval(function () { if (JM_ID_TOKEN && jmAntreanBaca_().length) jmKirimAntrean_(); }, 60000);
 
 function jmIsiFilter_() {
-  const selK = document.getElementById("jm-f-klien");
-  const selL = document.getElementById("jm-f-line");
-  if (selK) {
-    const klien = {};
-    (JM_DATA.items || []).forEach(function (it) { klien[it.idKlien] = it.namaKlien || it.idKlien; });
-    selK.innerHTML = '<option value="">Semua klien</option>' +
-      Object.keys(klien).sort(function (a, b) { return String(klien[a]).localeCompare(String(klien[b])); })
-        .map(function (id) { return '<option value="' + jmEsc_(id) + '">' + jmEsc_(klien[id]) + '</option>'; }).join("");
-    selK.value = JM_LIHAT.klien;
-    if (selK.value !== JM_LIHAT.klien) { JM_LIHAT.klien = ""; selK.value = ""; }
-  }
-  if (selL) {
-    selL.innerHTML = '<option value="">Semua line</option>' +
-      (JM_DATA.lines || []).map(function (l) {
-        return '<option value="' + jmEsc_(l.idLine) + '">' + jmEsc_(l.namaLine) + '</option>';
-      }).join("");
-    selL.value = JM_LIHAT.line;
-    if (selL.value !== JM_LIHAT.line) { JM_LIHAT.line = ""; selL.value = ""; }
-  }
+  // v255: klien & line kini tombol + panel (lihat JM_FILTER_PILIH). Nilai yang
+  // tidak ada lagi di data dibuang diam-diam? TIDAK -- dipertahankan: PO yang
+  // hilang dari data hari ini bisa kembali besok, dan filter yang diam-diam
+  // kosong adalah jebakan yang lebih buruk daripada filter yang tampak menyala.
+  jmSegarkanTombolPilih_();
   const cb = document.getElementById("jm-f-lewat");
   if (cb) cb.checked = JM_LIHAT.sembunyiLewat;
   const selM = document.getElementById("jm-f-minggu");
@@ -915,9 +966,8 @@ function jmKeHariIni() {
   jmSimpanLihat_(); jmRender();
 }
 function jmUbahFilter() {
-  JM_LIHAT.klien = (document.getElementById("jm-f-klien") || {}).value || "";
+  // v255: klien, tahap, line diubah langsung oleh panel kotak centang masing-masing.
   // v254: JM_LIHAT.tahap diubah langsung oleh kotak centang di panel tahap, bukan dibaca dari sini.
-  JM_LIHAT.line = (document.getElementById("jm-f-line") || {}).value || "";
   JM_LIHAT.minggu = Number((document.getElementById("jm-f-minggu") || {}).value) || 8;
   JM_LIHAT.sembunyiLewat = !!((document.getElementById("jm-f-lewat") || {}).checked);
   jmSimpanLihat_(); jmRender();
@@ -975,7 +1025,7 @@ function jmKelompok_() {
   (JM_DATA.bar || []).forEach(function (b) {
     const it = petaItem[b.item];
     if (!it) return;
-    if (JM_LIHAT.klien && it.idKlien !== JM_LIHAT.klien) return;
+    if (!jmPilihAktif_("klien", it.idKlien)) return;
     if (!grup[b.item]) grup[b.item] = { item: it, bar: [], mulaiMin: b.mulai, selesaiMax: b.selesai };
     grup[b.item].bar.push(b);
     if (b.mulai < grup[b.item].mulaiMin) grup[b.item].mulaiMin = b.mulai;
@@ -986,7 +1036,7 @@ function jmKelompok_() {
     .filter(function (g) {
       if (JM_LIHAT.sembunyiLewat && g.selesaiMax < hariIni) return false;
       // Filter line: tampilkan item yang punya bar Sewing di line itu.
-      if (JM_LIHAT.line && !g.bar.some(function (b) { return b.line === JM_LIHAT.line; })) return false;
+      if (JM_LIHAT.line.length && !g.bar.some(function (b) { return jmPilihAktif_("line", b.line); })) return false;
       // v233: filter tahap -- item tanpa satu pun bar tahap itu ikut hilang,
       // supaya tidak ada judul item yang menggantung tanpa baris.
       if (JM_LIHAT.tahap.length && !g.bar.some(function (b) { return jmTahapAktif_(b.tahap); })) return false;
@@ -1022,12 +1072,12 @@ function jmKelompokTahap_() {
   const barPerItem = {};
   (JM_DATA.bar || []).forEach(function (b) {
     const it = petaItem[b.item]; if (!it) return;
-    if (JM_LIHAT.klien && it.idKlien !== JM_LIHAT.klien) return;
+    if (!jmPilihAktif_("klien", it.idKlien)) return;
     (barPerItem[b.item] = barPerItem[b.item] || []).push(b);
   });
   const itemLolos = {};
   Object.keys(barPerItem).forEach(function (k) {
-    if (JM_LIHAT.line && !barPerItem[k].some(function (b) { return b.line === JM_LIHAT.line; })) return;
+    if (JM_LIHAT.line.length && !barPerItem[k].some(function (b) { return jmPilihAktif_("line", b.line); })) return;
     itemLolos[k] = true;
   });
   // v246: sembunyi manual, semantik sama dengan mode artikel (per item).
@@ -1048,7 +1098,7 @@ function jmKelompokTahap_() {
       barPerItem[kItem].filter(function (b) { return b.tahap === tahap; }).forEach(function (b) {
         let g, kunciBaris;
         if (tahap === "Sewing") {
-          if (JM_LIHAT.line && b.line !== JM_LIHAT.line) return;
+          if (!jmPilihAktif_("line", b.line)) return;
           g = ambilGrup(tahap + "|" + b.line, tahap, b.namaLine || b.line, tahap);
           kunciBaris = kItem;
         } else {
@@ -1106,7 +1156,7 @@ function jmBarisGrup_(g) {
       const perLine = {};
       bars.forEach(function (b) { (perLine[b.line] = perLine[b.line] || []).push(b); });
       Object.keys(perLine).sort().forEach(function (idLine) {
-        if (JM_LIHAT.line && idLine !== JM_LIHAT.line) return;
+        if (!jmPilihAktif_("line", idLine)) return;
         baris.push({ label: "Sewing", sub: perLine[idLine][0].namaLine || idLine, tahap: tahap, bar: perLine[idLine] });
       });
     } else if (JM_DATA.subTahap && JM_DATA.subTahap[tahap]) {
@@ -1878,10 +1928,12 @@ window.addEventListener("load", function () {
     const p = document.getElementById("jm-panel-sembunyi");
     if (p && !p.classList.contains("hidden") && !p.contains(ev.target) &&
         !(ev.target.closest && ev.target.closest(".jm-rentang-sembunyi"))) jmTutupPanelSembunyi_();
-    // v254: panel tahap
-    const pt = document.getElementById("jm-panel-tahap");
-    if (pt && !pt.classList.contains("hidden") && !pt.contains(ev.target) &&
-        !(ev.target.closest && ev.target.closest("#jm-f-tahap"))) jmTutupPanelTahap_();
+    // v254/v255: panel pilih (tahap, klien, line)
+    ["tahap", "klien", "line"].forEach(function (j) {
+      const pt = document.getElementById("jm-panel-" + j);
+      if (pt && !pt.classList.contains("hidden") && !pt.contains(ev.target) &&
+          !(ev.target.closest && ev.target.closest("#jm-f-" + j))) pt.classList.add("hidden");
+    });
     const chip = ev.target.closest && ev.target.closest(".jm-sembunyi-chip[data-kunci]");
     if (chip) jmTampilkanItem(chip.getAttribute("data-kunci"));
   });
@@ -1891,12 +1943,12 @@ window.addEventListener("load", function () {
     // panel pemulih, modal); kalau tidak ada yang melayang, Esc keluar fokus.
     const mi = document.getElementById("jm-menu-item");
     const ps = document.getElementById("jm-panel-sembunyi");
-    const pt = document.getElementById("jm-panel-tahap");
+    const pt = ["tahap", "klien", "line"].map(function (j) { return document.getElementById("jm-panel-" + j); })
+      .filter(function (p) { return p && !p.classList.contains("hidden"); })[0];
     const m = document.getElementById("jm-modal");
     const adaMelayang = (mi && !mi.classList.contains("hidden")) ||
-      (ps && !ps.classList.contains("hidden")) || (pt && !pt.classList.contains("hidden")) ||
-      (m && !m.classList.contains("hidden"));
-    jmTutupMenuItem_(); jmTutupPanelSembunyi_(); jmTutupPanelTahap_();
+      (ps && !ps.classList.contains("hidden")) || !!pt || (m && !m.classList.contains("hidden"));
+    jmTutupMenuItem_(); jmTutupPanelSembunyi_(); jmTutupPanelPilih_();
     if (m && !m.classList.contains("hidden")) jmTutupForm();
     if (!adaMelayang && JM_FOKUS) jmFokus(false);
   });
