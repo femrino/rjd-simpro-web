@@ -1030,12 +1030,36 @@ function jmPasangGulir_(kolom) {
 }
 
 /** v231: sel-sel tanggal untuk SATU baris bar. Dipakai kedua mode. */
+/* v249 -- JEDA. Satu tahap boleh punya beberapa ruas (baris data) di baris
+   tampilan yang sama: jahit 1-10 Agu, berhenti karena kain kurang, lanjut
+   8-15 Sep. Modelnya sudah menerimanya sejak v217 ("kembar" hanya kalau kedua
+   tanggalnya sama). Yang belum ada: sel kosong DI ANTARA dua ruas tampak sama
+   dengan sel kosong biasa, jadi jeda tidak terbaca sebagai jeda. Sekarang sel
+   itu diberi garis putus-putus dan tooltip berisi keterangan ruas berikutnya
+   (tempat alasan jedanya lazim ditulis). Sel sebelum ruas pertama dan sesudah
+   ruas terakhir TIDAK ditandai -- itu bukan jeda. */
 function jmSelBaris_(b, kolom, hariIni, deadline) {
   let html = "";
+  const namaBaris = b.label + (b.sub ? " " + b.sub : "");
   kolom.forEach(function (k) {
     const kelas = jmKelasSel_(k, hariIni, deadline);
     const bar = b.bar.filter(function (x) { return x.mulai <= k.iso && k.iso <= x.selesai; });
-    if (!bar.length) { html += '<td class="' + kelas + '"></td>'; return; }
+    if (!bar.length) {
+      let sebelum = null, sesudah = null;
+      b.bar.forEach(function (x) {
+        if (x.selesai < k.iso && (!sebelum || x.selesai > sebelum.selesai)) sebelum = x;
+        if (x.mulai > k.iso && (!sesudah || x.mulai < sesudah.mulai)) sesudah = x;
+      });
+      if (sebelum && sesudah) {
+        const tipJeda = "Jeda " + namaBaris + ": " + jmTanggalPendek_(jmIso_(jmTambahHari_(jmDariIso_(sebelum.selesai), 1))) +
+          " - " + jmTanggalPendek_(jmIso_(jmTambahHari_(jmDariIso_(sesudah.mulai), -1))) +
+          (sesudah.keterangan ? "\n" + sesudah.keterangan : "");
+        html += '<td class="' + kelas + ' jm-jeda" title="' + jmEsc_(tipJeda) + '"></td>';
+      } else {
+        html += '<td class="' + kelas + '"></td>';
+      }
+      return;
+    }
     const x = bar[0];
     const tepi = (x.mulai === k.iso ? " jm-bar-awal" : "") + (x.selesai === k.iso ? " jm-bar-akhir" : "");
     const tip = b.label + (b.sub ? " " + b.sub : "") + ": " + jmTanggalPendek_(x.mulai) + " - " + jmTanggalPendek_(x.selesai) +
@@ -1305,8 +1329,51 @@ function jmFormModeTampil_() {
   if (h) h.classList.toggle("hidden", !edit);
   const c = document.getElementById("jm-btn-batal");
   if (c) c.classList.toggle("hidden", !edit);
+  // v249: "Lanjutkan tahap ini" -- dibuat lewat JS (template tidak berubah),
+  // diselipkan sesudah tombol Batal, hanya tampil saat mengedit sebuah ruas.
+  let l = document.getElementById("jm-btn-lanjut");
+  if (!l && c && c.parentNode) {
+    l = document.createElement("button");
+    l.id = "jm-btn-lanjut"; l.type = "button"; l.className = "jm-btn hidden";
+    l.textContent = "Lanjutkan tahap ini";
+    l.title = "Buat ruas baru untuk tahap & line yang sama -- untuk jahit/potong yang terjeda lalu lanjut";
+    l.onclick = jmFormLanjutkan;
+    c.parentNode.insertBefore(l, c.nextSibling);
+  }
+  if (l) l.classList.toggle("hidden", !edit);
   const w = document.getElementById("jm-form-wrap");
   if (w) w.classList.toggle("jm-mode-edit", edit);
+}
+
+/* v249. Dari ruas yang sedang diedit, siapkan RUAS BARU untuk item, tahap,
+   line, dan jenis yang sama: tanggal mulai = hari kerja pertama sesudah ruas
+   itu selesai, keterangan diawali "Lanjutan" supaya alasan jedanya ditulis di
+   situ (dan tampil di tooltip sel jeda). Ruas lama tidak disentuh -- kalau
+   tanggal selesainya perlu dipendekkan ke hari berhentinya, ubah dulu lalu
+   simpan, baru klik ini. */
+function jmFormLanjutkan() {
+  if (!JM_BOLEH_TULIS || !JM_EDIT_ID) return;
+  const b = jmBarDariId_(JM_EDIT_ID);
+  if (!b) return;
+  JM_EDIT_ID = "";
+  document.getElementById("jm-in-item").value = b.item;
+  document.getElementById("jm-in-tahap").value = b.tahap;
+  document.getElementById("jm-in-line").value = b.line || "";
+  jmFormTahapBerubah();
+  document.getElementById("jm-in-sub").value = b.sub || "";
+  let awal = jmTambahHari_(jmDariIso_(b.selesai), 1);
+  if (awal.getDay() === 0) awal = jmTambahHari_(awal, 1);   // Minggu -> Senin
+  document.getElementById("jm-in-mulai").value = jmIso_(awal);
+  document.getElementById("jm-in-selesai").value = jmIso_(awal);
+  document.getElementById("jm-in-qty").value = "";
+  document.getElementById("jm-in-ket").value = "Lanjutan";
+  jmFormModeTampil_();
+  const j = document.getElementById("jm-form-judul");
+  if (j) j.textContent = "Tambah jadwal (lanjutan)";
+  jmFormPesan_("Ruas lanjutan " + b.tahap + (b.namaLine ? " " + b.namaLine : "") +
+    " -- isi tanggalnya, dan tulis alasan jedanya di keterangan.");
+  const m = document.getElementById("jm-in-mulai");
+  if (m && m.focus) m.focus();
 }
 
 function jmFormBatal() {

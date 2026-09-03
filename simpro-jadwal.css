@@ -517,3 +517,11 @@ td[data-kunci]:hover .jm-item-nama-kecil{ text-decoration: underline dotted; tex
 }
 .jm-sembunyi-chip:hover{ background: #FCF3E3; }
 @media print { #jm-panel-sembunyi, #jm-menu-item { display: none !important; } }
+
+/* v249 -- JEDA: sel kosong di antara dua ruas pada baris yang sama. Garis
+   putus-putus di tengah sel; warna sel (hari ini, deadline) tetap di bawahnya
+   karena ini background-image, bukan background-color. */
+.jm-jeda{
+  background-image: repeating-linear-gradient(90deg, #B9B1A2 0 5px, transparent 5px 9px);
+  background-size: 100% 2px; background-repeat: no-repeat; background-position: center;
+}
