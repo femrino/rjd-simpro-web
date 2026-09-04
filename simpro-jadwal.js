@@ -2595,6 +2595,127 @@ function jmRenderInfo_(jumlahItem, jumlahBaris) {
       : '');
   const pd = document.getElementById("jm-panel-deviasi");
   if (pd && !pd.classList.contains("hidden")) jmIsiPanelDeviasi_(pd);   // panel terbuka ikut segar
+  // v276: pil beban line -- dipasang sesudah innerHTML supaya tidak mengganggu
+  // susunan pil yang ada; hanya tampil kalau ada line berkapasitas.
+  JM_BEBAN_TERAKHIR = jmBebanLine_();
+  if (JM_BEBAN_TERAKHIR) {
+    let sub = el.querySelector(".jm-rentang-sub");
+    if (!sub) { sub = document.createElement("span"); sub.className = "jm-rentang-sub"; el.appendChild(sub); }
+    const n = JM_BEBAN_TERAKHIR.lebih;
+    sub.insertAdjacentHTML("beforeend", (sub.innerHTML.trim() ? ' &#183; ' : '') +
+      '<button type="button" class="jm-rentang-beban' + (n ? ' jm-rentang-beban-lebih' : '') + '" id="jm-pil-beban" onclick="jmBukaPanelBeban_(event)" ' +
+      'title="Beban Sewing per line per minggu dibanding kapasitas -- klik untuk tabelnya">' +
+      (n ? n + ' kelebihan beban' : 'beban line') + '</button>');
+    const pb = document.getElementById("jm-panel-beban");
+    if (pb && !pb.classList.contains("hidden")) jmIsiPanelBeban_(pb);
+  }
+}
+
+/* v276 -- BEBAN LINE per minggu vs KAPASITAS.
+   Diagnosa 5 Sep 2026: Total Output laporan harian menghitung PROSES, bukan
+   baju jadi (Kalasan 544 pcs/orang/hari), jadi kapasitas TIDAK diturunkan
+   dari laporan. Sumbernya kolom "Kapasitas (pcs/hari)" di SD Master Line
+   (baju jadi/hari kerja, diisi tangan; v275 gs), dikirim sebagai
+   lines[].kapasitas -- 0/kosong = line itu tidak dibandingkan, dan kalau
+   tidak ada satu pun line berkapasitas, fitur ini diam (tanpa pil).
+   Beban = qty bar Sewing tersebar rata per hari kerja (Senin-Sabtu) yang
+   jatuh di minggu itu. Qty Rencana kosong -> cadangan qty PO item dibagi
+   jumlah bar Sewing item itu, ditandai *. Kapasitas seminggu = pcs/hari x 6.
+   Semua bar dihitung (bukan hanya yang lolos filter) kecuali item batal:
+   beban line adalah fakta fisik, bukan tampilan. */
+let JM_BEBAN_TERAKHIR = null;
+function jmBebanLine_() {
+  if (!JM_DATA || !JM_LIHAT.mulai) return null;
+  const lines = (JM_DATA.lines || []).filter(function (l) { return Number(l.kapasitas) > 0; });
+  if (!lines.length) return null;
+  const itemPeta = {};
+  (JM_DATA.items || []).forEach(function (it) { itemPeta[it.kunci] = it; });
+  const sew = (JM_DATA.bar || []).filter(function (b) {
+    return b.tahap === "Sewing" && b.line && b.mulai && b.selesai && jmKeadaan_(itemPeta[b.item] || {}) !== "batal";
+  });
+  const nBar = {};
+  sew.forEach(function (b) { nBar[b.item] = (nBar[b.item] || 0) + 1; });
+  const minggu = [];
+  const senin = jmSenin_(JM_LIHAT.mulai);
+  for (let m = 0; m < JM_LIHAT.minggu; m++) minggu.push(jmIso_(jmTambahHari_(senin, 7 * m)));
+  const hk = function (a, z) { return a > z ? 0 : jmHariKerjaAntara_(a, jmIso_(jmTambahHari_(jmDariIso_(z), 1))); };   // inklusif
+  const per = {};   // idLine -> minggu -> {pcs, cad, rinci:[]}
+  sew.forEach(function (b) {
+    let qty = Number(b.qty) || 0, cad = false;
+    if (!qty) { const it = itemPeta[b.item]; if (it && Number(it.qtyPo) > 0) { qty = Number(it.qtyPo) / nBar[b.item]; cad = true; } }
+    const total = hk(b.mulai, b.selesai);
+    if (!qty || !total) return;
+    minggu.forEach(function (mg) {
+      const z = jmIso_(jmTambahHari_(jmDariIso_(mg), 5));
+      const n = hk(b.mulai > mg ? b.mulai : mg, b.selesai < z ? b.selesai : z);
+      if (!n) return;
+      const pl = (per[b.line] = per[b.line] || {});
+      const c = (pl[mg] = pl[mg] || { pcs: 0, cad: false, rinci: [] });
+      const pcs = qty / total * n;
+      c.pcs += pcs; if (cad) c.cad = true;
+      c.rinci.push((itemPeta[b.item] ? jmNamaItem_(itemPeta[b.item]) : b.item) + ": " + Math.round(pcs) + (cad ? "*" : ""));
+    });
+  });
+  let lebih = 0;
+  const baris = (JM_DATA.lines || []).filter(function (l) { return Number(l.kapasitas) > 0 || per[l.idLine]; }).map(function (l) {
+    const kap = Number(l.kapasitas) > 0 ? Number(l.kapasitas) * 6 : 0;
+    const sel = minggu.map(function (mg) {
+      const c = per[l.idLine] && per[l.idLine][mg];
+      const pcs = c ? Math.round(c.pcs) : 0;
+      const over = !!(kap && pcs > kap);
+      if (over) lebih++;
+      return { pcs: pcs, kap: kap, lebih: over, cad: !!(c && c.cad), rinci: c ? c.rinci : [] };
+    });
+    return { idLine: l.idLine, namaLine: l.namaLine || l.idLine, kap: kap, sel: sel };
+  });
+  return { minggu: minggu, baris: baris, lebih: lebih };
+}
+function jmPanelBeban_() {
+  let p = document.getElementById("jm-panel-beban");
+  if (p) return p;
+  p = document.createElement("div");
+  p.id = "jm-panel-beban"; p.className = "jm-panel-sembunyi jm-panel-beban hidden";
+  document.body.appendChild(p);
+  document.addEventListener("click", function (ev) {
+    if (p.classList.contains("hidden")) return;
+    if (p.contains(ev.target) || (ev.target.closest && ev.target.closest("#jm-pil-beban"))) return;
+    jmTutupPanelBeban_();
+  });
+  return p;
+}
+function jmIsiPanelBeban_(p) {
+  const d = JM_BEBAN_TERAKHIR || jmBebanLine_();
+  if (!d) { p.innerHTML = ""; return; }
+  let html = '<div class="jm-panel-kepala"><b>Beban Sewing per line per minggu</b>' +
+    '<span class="jm-panel-sub">rencana / kapasitas (baju jadi \u00d7 6 hari)</span></div>' +
+    '<div class="jm-panel-daftar jm-beban-gulir"><table class="jm-beban"><thead><tr><th>Line</th>' +
+    d.minggu.map(function (mg) { return '<th>' + jmEsc_(jmTanggalPendek_(mg)) + '</th>'; }).join("") + '</tr></thead><tbody>';
+  d.baris.forEach(function (r) {
+    html += '<tr><th>' + jmEsc_(r.namaLine) + '</th>' + r.sel.map(function (c) {
+      if (!c.pcs) return '<td class="jm-beban-kosong">' + (c.kap ? '\u2013/' + c.kap : '\u2013') + '</td>';
+      return '<td class="' + (c.lebih ? 'jm-beban-lebih' : '') + '" title="' + jmEsc_(c.rinci.join("\n")) + '">' +
+        c.pcs + '/' + (c.kap || '\u2013') + (c.cad ? '<span class="jm-beban-cad">*</span>' : '') + '</td>';
+    }).join("") + '</tr>';
+  });
+  html += '</tbody></table></div><div class="jm-beban-kaki">' + (d.lebih ? d.lebih + ' minggu-line melebihi kapasitas. ' : '') +
+    '* qty dari qty PO dibagi jumlah bar Sewing item (Qty Rencana kosong). Line tanpa kapasitas ditampilkan tanpa pembanding.</div>';
+  p.innerHTML = html;
+}
+function jmBukaPanelBeban_(ev) {
+  const p = jmPanelBeban_();
+  if (!p.classList.contains("hidden")) { jmTutupPanelBeban_(); return; }
+  jmTutupMenuItem_(); jmTutupPanelSembunyi_(); jmTutupPanelPilih_(); jmTutupPanelDeviasi_();
+  jmIsiPanelBeban_(p);
+  p.classList.remove("hidden");
+  const pil = (ev && ev.currentTarget) || document.getElementById("jm-pil-beban");
+  const r = pil ? pil.getBoundingClientRect() : { left: 8, bottom: 8 };
+  const lebar = p.offsetWidth || 360, tinggi = p.offsetHeight || 240;
+  p.style.left = Math.max(8, Math.min(r.left, window.innerWidth - lebar - 8)) + "px";
+  p.style.top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - tinggi - 8)) + "px";
+}
+function jmTutupPanelBeban_() {
+  const p = document.getElementById("jm-panel-beban");
+  if (p) p.classList.add("hidden");
 }
 
 /* v265 -- PANEL DEVIASI melayang (menggantikan blok kuning v264 yang memakan
@@ -2647,7 +2768,7 @@ function jmIsiPanelDeviasi_(p) {
 function jmBukaPanelDeviasi_(ev) {
   const p = jmPanelDeviasi_();
   if (!p.classList.contains("hidden")) { jmTutupPanelDeviasi_(); return; }
-  jmTutupMenuItem_(); jmTutupPanelSembunyi_(); jmTutupPanelPilih_();
+  jmTutupMenuItem_(); jmTutupPanelSembunyi_(); jmTutupPanelPilih_(); jmTutupPanelBeban_();   // v276
   jmIsiPanelDeviasi_(p);
   p.classList.remove("hidden");
   const pil = (ev && ev.currentTarget) || document.getElementById("jm-pil-deviasi");
@@ -2736,6 +2857,8 @@ window.addEventListener("load", function () {
     if (mr && !mr.classList.contains("hidden")) { jmTutupRencana_(); return; }
     const pdv = document.getElementById("jm-panel-deviasi");   // v265
     if (pdv && !pdv.classList.contains("hidden")) { jmTutupPanelDeviasi_(); return; }
+    const pbb = document.getElementById("jm-panel-beban");   // v276
+    if (pbb && !pbb.classList.contains("hidden")) { jmTutupPanelBeban_(); return; }
     const mf = document.getElementById("jm-modal-filter");   // v268: panel centang dulu, lalu modalnya
     if (mf && !mf.classList.contains("hidden")) { if (pt) jmTutupPanelPilih_(); else jmToggleLaci(false); return; }
     const m = document.getElementById("jm-modal");

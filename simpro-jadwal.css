@@ -697,6 +697,27 @@ tr.jm-sorot td{ animation: jm-sorot-kedip 2.2s ease-out; }
 @keyframes jm-sorot-kedip{ 0%{ background-color: #FFE8A3; } 70%{ background-color: #FFF4D6; } 100%{ background-color: transparent; } }
 @media print { #jm-panel-deviasi, .jm-rentang-deviasi { display: none !important; } }
 
+/* ---------- v276: pil + panel beban line ---------- */
+.jm-rentang-beban{
+  font: inherit; font-size: 12px; font-weight: 600; color: #1F4E8C;
+  background: #E8EFF8; border: 1px solid #B7C8E2; border-radius: 999px;
+  padding: 1px 9px; cursor: pointer; vertical-align: baseline;
+}
+.jm-rentang-beban:hover{ border-color: #1F4E8C; }
+.jm-rentang-beban.jm-rentang-beban-lebih{ color: #8A2A22; background: #F8E7E5; border-color: #E0B0AA; }
+.jm-rentang-beban.jm-rentang-beban-lebih:hover{ border-color: #8A2A22; }
+.jm-panel-beban{ min-width: 340px; max-width: min(720px, 94vw); }
+.jm-beban-gulir{ max-height: 60vh; overflow: auto; }
+table.jm-beban{ border-collapse: collapse; font-size: 12.5px; white-space: nowrap; }
+table.jm-beban th, table.jm-beban td{ padding: 4px 8px; text-align: right; border-bottom: 1px solid var(--line, #E5E0D6); }
+table.jm-beban thead th{ font: 700 11px/1.2 'Archivo', sans-serif; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft, #5F6B7A); }
+table.jm-beban tbody th{ text-align: left; font-weight: 700; color: var(--navy, #17212F); position: sticky; left: 0; background: #fff; }
+table.jm-beban td.jm-beban-kosong{ color: #B8B2A8; }
+table.jm-beban td.jm-beban-lebih{ color: #8A2A22; font-weight: 700; background: #F8E7E5; }
+.jm-beban-cad{ color: #8A5A00; margin-left: 1px; }
+.jm-beban-kaki{ font-size: 11.5px; color: var(--ink-soft, #5F6B7A); padding: 8px 6px 2px; }
+@media print { #jm-panel-beban, .jm-rentang-beban { display: none !important; } }
+
 /* ---------- v266: bilah alat HP dua baris rapat; lencana jadi titik di HP ---------- */
 .jm-alat-putus{ display:none; }
 .jm-laci-legenda{ display:none; }
