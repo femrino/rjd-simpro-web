@@ -2148,12 +2148,66 @@ function jmFormMulaiBerubah() {
   if (a && z && (!z.value || z.value < a.value)) z.value = a.value;
 }
 
-function jmFormPesan_(teks, galat) {
+function jmFormPesan_(teks, galat, peringatan) {
   const el = document.getElementById("jm-form-pesan");
   if (!el) return;
   el.textContent = teks || "";
   el.classList.toggle("jm-form-galat", !!galat);
+  el.classList.toggle("jm-form-peringatan", !!peringatan);   // v273
   el.classList.toggle("hidden", !teks);
+  // v273: pesan apa pun selain peringatan dependensi mengembalikan tombol
+  // Simpan ke bentuk biasa (simpan sukses, batal, edit, galat validasi).
+  if (!peringatan) jmTombolSimpanNormal_();
+}
+
+/* v273 -- DEPENDENSI ANTAR TAHAP: PERINGATAN, BUKAN LARANGAN.
+   Alur maklon berurutan; tanpa ini cepat atau lambat ada Sewing yang
+   dijadwalkan mulai sebelum Cutting selesai tanpa disadari. Tapi tumpang
+   tindih SENGAJA itu lazim (jahit mulai saat potong 40%), jadi simpan tidak
+   ditolak: klik Simpan pertama menampilkan peringatan dan tombol jadi
+   "Tetap simpan"; klik kedua dengan isian yang SAMA mengirim. Isian berubah =
+   dinilai ulang. Hanya bar item yang sama yang dibandingkan; bar yang sedang
+   diedit dikecualikan. Interlining dan Sampel sengaja tanpa aturan: keduanya
+   lazim berjalan sejajar tahap lain. */
+const JM_TAHAP_SEBELUM = {
+  "Cutting": ["Pengadaan Bahan", "Pola & Marker", "Pola & Konsumsi"],   // nama lama ikut (alias backend)
+  "Sewing": ["Cutting"],
+  "Finishing": ["Sewing"],
+  "Pengiriman": ["Finishing"]
+};
+let JM_DEP_DIABAIKAN = "";   // tanda isian yang peringatannya sudah dilihat & dilewati
+function jmPeringatanDependensi_(data) {
+  const keluar = [];
+  if (!JM_DATA || !data.item || !data.mulai || !data.selesai) return keluar;
+  const bars = (JM_DATA.bar || []).filter(function (b) { return b.item === data.item && b.id !== data.id && !b.menunggu; });
+  const nama = function (t) { return t === "Pola & Konsumsi" ? "Pola & Marker" : t; };
+  // 1. tahap SEBELUM ini belum selesai saat ini mulai
+  (JM_TAHAP_SEBELUM[data.tahap] || []).forEach(function (p) {
+    let akhir = "";
+    bars.forEach(function (b) { if (b.tahap === p && b.selesai > akhir) akhir = b.selesai; });
+    if (akhir && data.mulai < akhir) {
+      const n = jmHariKerjaAntara_(data.mulai, akhir);
+      keluar.push(nama(p) + " item ini direncanakan sampai " + jmTanggalPendek_(akhir) + ", " + data.tahap + " mulai " +
+        jmTanggalPendek_(data.mulai) + " (" + n + " hari kerja sebelum " + nama(p).toLowerCase() + " selesai).");
+    }
+  });
+  // 2. tahap SESUDAH ini sudah mulai sebelum ini selesai
+  Object.keys(JM_TAHAP_SEBELUM).forEach(function (q) {
+    if (JM_TAHAP_SEBELUM[q].indexOf(data.tahap) === -1) return;
+    let awal = "";
+    bars.forEach(function (b) { if (b.tahap === q && (!awal || b.mulai < awal)) awal = b.mulai; });
+    if (awal && data.selesai > awal) {
+      const n = jmHariKerjaAntara_(awal, data.selesai);
+      keluar.push(q + " item ini sudah direncanakan mulai " + jmTanggalPendek_(awal) + ", " + nama(data.tahap) + " ini selesai " +
+        jmTanggalPendek_(data.selesai) + " (" + n + " hari kerja sesudahnya).");
+    }
+  });
+  return keluar;
+}
+function jmTombolSimpanNormal_() {
+  const bs = document.getElementById("jm-btn-simpan");
+  if (bs && bs.textContent !== "Simpan") bs.textContent = "Simpan";
+  JM_DEP_DIABAIKAN = "";
 }
 
 function jmFormSibuk_(sibuk) {
@@ -2268,6 +2322,16 @@ function jmFormSimpan() {
   if (JM_DATA.subWajib && JM_DATA.subWajib[data.tahap] && !data.sub) { jmFormPesan_("Tahap " + data.tahap + " wajib pilih jenis.", true); return; }
   if (!data.mulai || !data.selesai) { jmFormPesan_("Isi tanggal mulai dan selesai.", true); return; }
   if (data.selesai < data.mulai) { jmFormPesan_("Tanggal selesai lebih awal dari mulai.", true); return; }
+  // v273: dependensi antar tahap -- peringatan yang bisa dilewati dengan klik kedua.
+  const dep = jmPeringatanDependensi_(data);
+  const tandaDep = JSON.stringify(data);
+  if (dep.length && JM_DEP_DIABAIKAN !== tandaDep) {
+    jmFormPesan_(dep.join(" ") + " Tumpang tindih disengaja? Klik \u201cTetap simpan\u201d.", false, true);
+    JM_DEP_DIABAIKAN = tandaDep;
+    const bs = document.getElementById("jm-btn-simpan");
+    if (bs) bs.textContent = "Tetap simpan";
+    return;
+  }
 
   jmFormSibuk_(true);
   jmFormPesan_("Menyimpan...");
