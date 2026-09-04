@@ -711,7 +711,12 @@ tr.jm-sorot td{ animation: jm-sorot-kedip 2.2s ease-out; }
 table.jm-beban{ border-collapse: collapse; font-size: 12.5px; white-space: nowrap; }
 table.jm-beban th, table.jm-beban td{ padding: 4px 8px; text-align: right; border-bottom: 1px solid var(--line, #E5E0D6); }
 table.jm-beban thead th{ font: 700 11px/1.2 'Archivo', sans-serif; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft, #5F6B7A); }
-table.jm-beban tbody th{ text-align: left; font-weight: 700; color: var(--navy, #17212F); position: sticky; left: 0; background: #fff; }
+/* v277: kolom nama line & judul 'Line' sticky kiri. Wadah gulir tanpa padding --
+   padding 6px bawaan .jm-panel-daftar membuat sel yang tergulir mengintip di kiri th sticky (HP, 5 Sep 2026). */
+.jm-panel-beban .jm-panel-daftar.jm-beban-gulir{ padding: 0; }
+.jm-panel-beban .jm-panel-sub{ white-space: normal; }
+table.jm-beban tbody th{ text-align: left; font-weight: 700; color: var(--navy, #17212F); position: sticky; left: 0; z-index: 1; background: #fff; }
+table.jm-beban thead th:first-child{ position: sticky; left: 0; z-index: 2; background: #fff; text-align: left; }
 table.jm-beban td.jm-beban-kosong{ color: #B8B2A8; }
 table.jm-beban td.jm-beban-lebih{ color: #8A2A22; font-weight: 700; background: #F8E7E5; }
 .jm-beban-cad{ color: #8A5A00; margin-left: 1px; }
