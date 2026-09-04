@@ -2121,6 +2121,7 @@ function jmFormTahapBerubah() {
     const lbl = document.getElementById("jm-in-sub-label");
     if (lbl) lbl.textContent = "Jenis" + (wajib ? "" : " (opsional)");
   }
+  jmIsiQtyOtomatis_();   // v274: Sewing -> sisa qty PO; tahap lain -> isian otomatis dikosongkan
 }
 
 /**
@@ -2141,6 +2142,7 @@ function jmFormItemBerubah() {
   if (awal.getDay() === 0) awal = jmTambahHari_(awal, 1); // Minggu -> Senin
   inMulai.value = jmIso_(awal);
   if (!inSelesai.value || inSelesai.value < inMulai.value) inSelesai.value = inMulai.value;
+  jmIsiQtyOtomatis_();   // v274
 }
 
 function jmFormMulaiBerubah() {
@@ -2210,6 +2212,52 @@ function jmTombolSimpanNormal_() {
   JM_DEP_DIABAIKAN = "";
 }
 
+/* v274 -- QTY RENCANA OTOMATIS untuk bar Sewing.
+   Diagnosa 5 Sep 2026: 0 dari 45 bar Sewing punya Qty Rencana, jadi beban
+   line per minggu tidak punya pembilang. Isi otomatis = SISA qty PO item yang
+   belum dibagi ke bar Sewing lain (item lazim terbagi ke beberapa line).
+   Hanya saat kolom kosong atau isinya masih hasil otomatis (data-auto), dan
+   bukan sedang edit. Pindah tahap ke selain Sewing mengosongkan isian
+   otomatis; angka yang diketik tangan tidak pernah disentuh. Simpan Sewing
+   tanpa qty = peringatan lunak lewat mekanisme v273 (klik kedua tetap
+   simpan), bukan larangan. */
+function jmQtyItem_(kunci) {
+  const it = ((JM_DATA && JM_DATA.items) || []).concat((JM_DATA && JM_DATA.itemAktif) || [])
+    .filter(function (x) { return x && x.kunci === kunci; })[0];
+  return it ? (Number(it.qtyPo) || 0) : 0;
+}
+function jmSisaQtySewing_(kunci, kecualiId) {
+  let terbagi = 0;
+  ((JM_DATA && JM_DATA.bar) || []).forEach(function (b) {
+    if (b.item === kunci && b.tahap === "Sewing" && b.id !== kecualiId) terbagi += Number(b.qty) || 0;
+  });
+  return jmQtyItem_(kunci) - terbagi;
+}
+function jmIsiQtyOtomatis_() {
+  const q = document.getElementById("jm-in-qty");
+  if (!q) return;
+  if (!q.dataset.hook) {   // ketikan tangan mencabut tanda otomatis
+    q.dataset.hook = "1";
+    q.addEventListener("input", function () { delete q.dataset.auto; });
+  }
+  if (JM_EDIT_ID) return;
+  const tahap = (document.getElementById("jm-in-tahap") || {}).value || "";
+  const otomatis = q.dataset.auto === "1";
+  if (tahap !== "Sewing") { if (otomatis) { q.value = ""; delete q.dataset.auto; } return; }
+  if (q.value && !otomatis) return;
+  const kunci = (document.getElementById("jm-in-item") || {}).value || "";
+  const sisa = kunci ? jmSisaQtySewing_(kunci, "") : 0;
+  if (sisa > 0) { q.value = sisa; q.dataset.auto = "1"; }
+  else if (otomatis) { q.value = ""; delete q.dataset.auto; }
+}
+function jmPeringatanQty_(data) {
+  if (data.tahap !== "Sewing" || data.qty > 0) return [];
+  const total = jmQtyItem_(data.item);
+  return ["Bar Sewing tanpa Qty Rencana tidak terhitung dalam beban line" +
+    (total ? " (qty PO " + total.toLocaleString("id-ID") + " pcs, sudah dibagi ke bar Sewing lain " +
+      (total - jmSisaQtySewing_(data.item, data.id)).toLocaleString("id-ID") + " pcs)" : "") + "."];
+}
+
 function jmFormSibuk_(sibuk) {
   ["jm-btn-simpan", "jm-btn-hapus", "jm-btn-batal"].forEach(function (id) {
     const b = document.getElementById(id);
@@ -2231,6 +2279,7 @@ function jmEdit(id) {
   document.getElementById("jm-in-mulai").value = b.mulai;
   document.getElementById("jm-in-selesai").value = b.selesai;
   document.getElementById("jm-in-qty").value = b.qty || "";
+  delete document.getElementById("jm-in-qty").dataset.auto;   // v274: isian edit bukan otomatis
   document.getElementById("jm-in-ket").value = b.keterangan || "";
   jmFormPesan_("");
   jmFormModeTampil_();
@@ -2284,6 +2333,8 @@ function jmFormLanjutkan() {
   document.getElementById("jm-in-mulai").value = jmIso_(awal);
   document.getElementById("jm-in-selesai").value = jmIso_(awal);
   document.getElementById("jm-in-qty").value = "";
+  delete document.getElementById("jm-in-qty").dataset.auto;
+  jmIsiQtyOtomatis_();   // v274: ruas lanjutan Sewing mendapat sisa qty
   document.getElementById("jm-in-ket").value = "Lanjutan";
   jmFormModeTampil_();
   const j = document.getElementById("jm-form-judul");
@@ -2323,10 +2374,10 @@ function jmFormSimpan() {
   if (!data.mulai || !data.selesai) { jmFormPesan_("Isi tanggal mulai dan selesai.", true); return; }
   if (data.selesai < data.mulai) { jmFormPesan_("Tanggal selesai lebih awal dari mulai.", true); return; }
   // v273: dependensi antar tahap -- peringatan yang bisa dilewati dengan klik kedua.
-  const dep = jmPeringatanDependensi_(data);
+  const dep = jmPeringatanDependensi_(data).concat(jmPeringatanQty_(data));   // v274: + qty Sewing kosong
   const tandaDep = JSON.stringify(data);
   if (dep.length && JM_DEP_DIABAIKAN !== tandaDep) {
-    jmFormPesan_(dep.join(" ") + " Tumpang tindih disengaja? Klik \u201cTetap simpan\u201d.", false, true);
+    jmFormPesan_(dep.join(" ") + " Klik \u201cTetap simpan\u201d untuk melanjutkan.", false, true);
     JM_DEP_DIABAIKAN = tandaDep;
     const bs = document.getElementById("jm-btn-simpan");
     if (bs) bs.textContent = "Tetap simpan";
