@@ -295,6 +295,9 @@ th.jm-hari-ini { background: #FBE7B3; }
 .jm-modal-filter .jm-laci label.jm-cek, .jm-modal-filter .jm-laci #jm-f-keadaan{ grid-column: 1 / -1; }   /* minggu|tahap, keadaan, klien|line, lewat */
 .jm-modal-filter .jm-laci .jm-alat-putus{ display: none; }
 .jm-modal-kotak-filter{ width: min(640px, 100%); }
+.jm-modal-legenda{ padding: 8px 16px 12px; border-top: 1px dashed var(--line, #E5E0D6); margin-top: 8px; }
+.jm-modal-legenda-judul{ font: 700 11px/1.2 'Archivo', sans-serif; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft, #5F6B7A); margin-bottom: 6px; }
+.jm-modal-filter .jm-legenda{ display: flex; margin: 0; }   /* dua kelas: menang atas aturan tertutup global */
 .jm-modal-kaki{ display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 10px 16px 14px; border-top: 1px solid var(--line, #E5E0D6); }
 .jm-modal-kaki-ket{ font-size: 12px; color: var(--ink-soft, #5F6B7A); margin-right: auto; }
 .jm-panel-sembunyi.jm-panel-pilih{ z-index: 99; }   /* dua kelas: .jm-panel-sembunyi{z-index:70} ditulis SESUDAH baris ini; di atas modal filter (96) */
@@ -734,3 +737,17 @@ tr.jm-sorot td{ animation: jm-sorot-kedip 2.2s ease-out; }
 .jm-item-b-sub{ font-size:11.5px; color:var(--ink-soft, #5F6B7A); font-family:'IBM Plex Mono', monospace; }
 .jm-item-terpilih{ background:rgba(27,37,64,.08); }
 .jm-item-kosong{ padding:12px 8px; color:var(--ink-soft, #5F6B7A); font-size:12.5px; }
+
+/* ---------- v269: toolbar lebar-menengah (641-1280 px): tombol selalu SATU baris ---------- */
+/* Di lebar ini nav + rentang + Filter(+lencana) + Fokus + sumbu + "+ Jadwal" tidak
+   muat sebaris; dulu yang membungkus adalah tombol paling kanan (acak). Sekarang
+   pemutus baris (#jm-alat-putus, v266) dipakai juga di sini: baris 1 = nav +
+   tombol-tombol, baris 2 = rentang (tanggal, item, baris, pil). */
+@media (min-width: 641px) and (max-width: 1280px){
+  .jm-alat .jm-alat-putus{ display:block; flex-basis:100%; height:0; order:6; }
+  .jm-rentang{ order:10; flex:1 1 100%; white-space:normal; padding-top:4px; }
+  .jm-btn-laci{ order:1; }
+  .jm-btn-fokus{ order:2; }
+  .jm-sumbu{ order:3; }
+  .jm-btn-jadwal{ order:4; }
+}

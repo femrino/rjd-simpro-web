@@ -290,6 +290,16 @@ function jmModalFilter_() {
   document.body.appendChild(m);
   m.querySelector(".jm-modal-isi").appendChild(laci);   // dipindah, bukan disalin
   laci.classList.add("jm-laci-buka");                    // di dalam modal laci selalu tergelar; modal-lah yang disembunyikan
+  // v269: legenda ikut ke modal, selalu tergelar di bawah filter.
+  const leg = document.getElementById("jm-legenda");
+  if (leg) {
+    const bag = document.createElement("div");
+    bag.className = "jm-modal-legenda";
+    bag.innerHTML = '<div class="jm-modal-legenda-judul">Keterangan warna</div>';
+    bag.appendChild(leg);
+    leg.classList.add("jm-legenda-buka");
+    m.querySelector(".jm-modal-isi").appendChild(bag);
+  }
   m.addEventListener("click", function (ev) { if (ev.target === m) jmToggleLaci(false); });
   return m;
 }
@@ -637,16 +647,10 @@ function jmRenderLaci_() {
     (JM_LIHAT.keadaan.length ? 1 : 0);
   btn.innerHTML = "Filter" + (n ? ' <span class="jm-laci-lencana">' + n + "</span>" : "");
 
-  // v250: tombol legenda di TOOLBAR (semua lebar), bukan baris sendiri di atas
-  // legenda. Legenda tertutup sampai diminta.
-  if (!document.getElementById("jm-btn-legenda")) {
-    const bl = document.createElement("button");
-    bl.id = "jm-btn-legenda"; bl.type = "button"; bl.className = "jm-btn jm-btn-legenda";
-    bl.innerHTML = '<span class="jm-lbl-panjang">Keterangan</span><span class="jm-lbl-pendek">Ket.</span>';
-    bl.title = "Tampilkan / sembunyikan keterangan warna";
-    bl.onclick = jmToggleLegenda;
-    btn.parentNode.insertBefore(bl, btn.nextSibling);
-  }
+  // NISAN v269: tombol "Keterangan" di toolbar (v250) dan tautan "Keterangan
+  // warna" di laci (v266) dihapus -- legenda kini SELALU tergelar di bagian
+  // bawah modal Filter (jmModalFilter_), semua lebar layar. Satu tempat, satu
+  // perilaku, satu kapsul lebih sedikit di toolbar.
   // v250: "+ Jadwal" membuka form (modal). Mengikuti gerbang tulis yang sama
   // dengan form: peran tanpa hak tulis tidak melihatnya.
   let bj = document.getElementById("jm-btn-jadwal");
@@ -671,14 +675,6 @@ function jmRenderLaci_() {
     const pt = document.createElement("div");
     pt.id = "jm-alat-putus"; pt.className = "jm-alat-putus"; pt.setAttribute("aria-hidden", "true");
     alat.appendChild(pt);
-  }
-  if (!document.getElementById("jm-laci-legenda")) {
-    const ll = document.createElement("button");
-    ll.id = "jm-laci-legenda"; ll.type = "button"; ll.className = "jm-btn jm-laci-legenda";
-    ll.textContent = "Keterangan warna";
-    ll.title = "Tampilkan / sembunyikan keterangan warna";
-    ll.onclick = jmToggleLegenda;
-    laci.appendChild(ll);
   }
   // v251: tombol mode fokus, untuk semua peran (hanya tampilan).
   if (!document.getElementById("jm-btn-fokus")) {
