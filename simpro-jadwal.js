@@ -54,7 +54,9 @@ const JM_LIHAT = {
   minggu: 8,          // jumlah minggu yang digambar (v248: 6 -> 8, permintaan 3 Sep 2026 -- deadline PO lazim 5-7 minggu ke depan, 6 minggu sering memotongnya)
   klien: [],          // filter ID klien; v255: DAFTAR ([] = semua)
   line: [],           // filter ID line;  v255: DAFTAR ([] = semua)
-  sembunyiLewat: true, // sembunyikan item yang semua bar-nya sudah lewat
+  sembunyiLewat: true, // v272: sembunyikan item yang sudah TUNTAS -- semua bar-nya lewat DAN tidak
+                       // ada deviasi laporan yang terbuka (lihat jmGrupTerbuka_). Nama kunci
+                       // dipertahankan (sessionStorage lama tetap terbaca).
   keadaan: [],         // v256: filter keadaan item (aktif/rencana/batal/selesai); DAFTAR, [] = semua
   tahap: [],           // v233: filter tahap; v254: DAFTAR nama ([] = semua). SARINGAN TINGKAT-BARIS,
                        // beda dengan line yang tingkat-item -- lihat catatan di
@@ -1028,6 +1030,11 @@ function jmIsiFilter_() {
   jmSegarkanTombolPilih_();
   const cb = document.getElementById("jm-f-lewat");
   if (cb) cb.checked = JM_LIHAT.sembunyiLewat;
+  // v272: arti checkbox berubah (tuntas, bukan lewat) -- dijelaskan di tooltip
+  // label supaya tidak perlu menebak dari teksnya yang pendek.
+  if (cb && cb.parentNode && cb.parentNode.tagName === "LABEL")
+    cb.parentNode.title = "Menyembunyikan item yang rencananya sudah lewat DAN tidak punya deviasi laporan. " +
+      "Yang lewat tapi belum ada laporan atau masih dilaporkan tetap tampil. Tanpa data laporan harian, semua yang lewat disembunyikan.";
   const selM = document.getElementById("jm-f-minggu");
   if (selM) selM.value = String(JM_LIHAT.minggu);
 }
@@ -1133,7 +1140,12 @@ function jmKelompok_() {
 
   const lolos = Object.keys(grup).map(function (k) { return grup[k]; })
     .filter(function (g) {
-      if (JM_LIHAT.sembunyiLewat && g.selesaiMax < hariIni) return false;
+      // v272: "sembunyikan yang sudah TUNTAS", dulu "yang sudah lewat". Item yang
+      // rencananya lewat tetap tampil selama masih punya deviasi laporan terbuka
+      // (belum ada laporan / melewati rencana) -- pekerjaan lewat-tapi-belum-beres
+      // justru yang wajib paling kelihatan; checkbox lama menyembunyikannya.
+      // Tanpa realisasi aktif tidak ada dasar membedakan: perilaku lama.
+      if (JM_LIHAT.sembunyiLewat && g.selesaiMax < hariIni && !jmGrupTerbuka_(g, hariIni)) return false;
       // Filter line: tampilkan item yang punya bar Sewing di line itu.
       if (JM_LIHAT.line.length && !g.bar.some(function (b) { return jmPilihAktif_("line", b.line); })) return false;
       // v233: filter tahap -- item tanpa satu pun bar tahap itu ikut hilang,
@@ -1158,9 +1170,10 @@ function jmKelompok_() {
  * Filter mengikuti semantik mode artikel supaya mengganti mode tidak mengubah
  * "siapa yang tampil": klien menyaring item; line menyaring item yang punya
  * bar Sewing di line itu (semua tahapnya tetap tampil) DAN di dalam Sewing
- * hanya sub-grup line itu. Satu pengecualian sadar: "sembunyikan yang lewat"
+ * hanya sub-grup line itu. Satu pengecualian sadar: "sembunyikan yang tuntas"
  * berlaku PER BARIS, bukan per item -- pada antrean cutting, cutting yang
- * sudah selesai memang harus hilang walau sewing-nya masih jalan.
+ * sudah selesai memang harus hilang walau sewing-nya masih jalan. (v272: baris
+ * lewat yang masih berdeviasi laporan tetap tampil, sama seperti mode artikel.)
  */
 function jmKelompokTahap_() {
   const hariIni = JM_DATA.hariIni;
@@ -1221,7 +1234,8 @@ function jmKelompokTahap_() {
   // urut Sewing per line (line id), susun baris, hitung header
   return urutanGrup.map(function (k) { return grupPeta[k]; }).map(function (g) {
     const baris = Object.keys(g.barisPeta).map(function (k) { return g.barisPeta[k]; })
-      .filter(function (r) { return !(JM_LIHAT.sembunyiLewat && r.selesaiMax < hariIni); })
+      // v272: per baris -- baris yang lewat tapi masih berdeviasi tetap tampil.
+      .filter(function (r) { return !(JM_LIHAT.sembunyiLewat && r.selesaiMax < hariIni && !jmDeviasiBaris_(r, hariIni)); })
       // ANTREAN: yang mulai paling awal dulu; seri dipecah oleh deadline PO
       // terdekat (kosong paling belakang), lalu nama.
       .sort(function (a, b) {
@@ -1242,6 +1256,17 @@ function jmKelompokTahap_() {
     return g;
   }).filter(function (g) { return g.baris.length; })
     .filter(function (g) { return jmTahapAktif_(g.tahap); });   // v233, v254: daftar
+}
+
+/**
+ * v272. true kalau item (grup) yang rencananya sudah lewat masih punya deviasi
+ * laporan terbuka pada salah satu barisnya -- "belum ada laporan" atau
+ * "melewati rencana" -- sehingga tidak boleh disembunyikan sebagai tuntas.
+ * Memakai baris yang memang akan digambar (filter tahap & line dihormati):
+ * kalau baris berdeviasinya disaring, itemnya pun boleh hilang.
+ */
+function jmGrupTerbuka_(g, hariIni) {
+  return jmBarisGrup_(g).some(function (r) { return !!jmDeviasiBaris_(r, hariIni); });
 }
 
 /** Baris-baris matriks untuk satu grup: satu per tahap; Sewing satu per line. */
