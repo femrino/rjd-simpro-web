@@ -282,18 +282,22 @@ th.jm-hari-ini { background: #FBE7B3; }
    sungguhan: tersembunyi sampai tombol Filter ditekan). */
 /* v250: laci tertutup di SEMUA lebar (bukan hanya <=640). Toolbar jadi satu
    baris; filter dibuka tombol Filter yang berlencana jumlah filter aktif. */
-.jm-laci{
-  display: none;
-  flex-basis: 100%;
-  order: 20;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding-top: 10px;
-  margin-top: 2px;
-  border-top: 1px solid var(--line, #E5E0D6);
+/* v268: laci hidup di dalam modal filter (#jm-modal-filter). Sebelum dipindah
+   (sepersekian detik saat render pertama) ia tersembunyi. */
+.jm-laci{ display: none; }
+.jm-modal-filter .jm-laci{
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; align-items: center;
+  padding: 14px 16px 6px;
 }
-.jm-laci.jm-laci-buka{ display: flex; }
+.jm-modal-filter .jm-laci > *{ min-width: 0; }
+.jm-modal-filter .jm-laci select, .jm-modal-filter .jm-laci .jm-btn{ width: 100%; box-sizing: border-box; justify-content: space-between; }
+.jm-modal-filter .jm-laci .jm-f-pilih{ max-width: none; text-align: left; }
+.jm-modal-filter .jm-laci label.jm-cek, .jm-modal-filter .jm-laci #jm-f-keadaan{ grid-column: 1 / -1; }   /* minggu|tahap, keadaan, klien|line, lewat */
+.jm-modal-filter .jm-laci .jm-alat-putus{ display: none; }
+.jm-modal-kotak-filter{ width: min(640px, 100%); }
+.jm-modal-kaki{ display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 10px 16px 14px; border-top: 1px solid var(--line, #E5E0D6); }
+.jm-modal-kaki-ket{ font-size: 12px; color: var(--ink-soft, #5F6B7A); margin-right: auto; }
+.jm-panel-sembunyi.jm-panel-pilih{ z-index: 99; }   /* dua kelas: .jm-panel-sembunyi{z-index:70} ditulis SESUDAH baris ini; di atas modal filter (96) */
 .jm-btn-laci{ display: inline-flex; align-items: center; order: 1; }
 .jm-btn-legenda{ order: 2; }
 .jm-sumbu{ order: 3; }
@@ -342,15 +346,8 @@ body.jm-modal-terbuka{ overflow: hidden; }
 @media (max-width: 640px){
   /* --- laci filter: tertutup untuk semua orang, dibuka tombol Filter --- */
   .jm-btn-laci{ display:inline-flex; align-items:center; }
-  .jm-laci{
-    display:none;
-    width:100%;
-    flex-direction:column;
-    align-items:stretch;
-    gap:8px;
-    padding-top:10px;
-  }
-  .jm-laci.jm-laci-buka{ display:flex; }
+  /* v268: laci di dalam modal, satu kolom di HP */
+  .jm-modal-filter .jm-laci{ grid-template-columns:1fr; gap:8px; padding:12px 12px 4px; }
 
   /* NISAN v253: di sini pernah ada gaya "tautan teks" untuk .jm-btn-legenda
      (tanpa bingkai, font 12, caret). Sejak v250 tombolnya berkelas .jm-btn dan
@@ -418,11 +415,11 @@ body.jm-modal-terbuka{ overflow: hidden; }
      dan menang kalau spesifisitasnya sama (terbukti di fixture jalan31, 4 Sep 2026). */
   .jm-alat .jm-alat-putus{ display:block; flex-basis:100%; height:0; order:6; }
   .jm-btn-laci{ order:11; }                            /* v266: Filter di baris 2, kanan rentang */
-  .jm-laci .jm-laci-legenda{ display:inline-flex; align-self:flex-start; }   /* dua kelas, alasan sama */
+  .jm-laci .jm-laci-legenda{ display:inline-flex; }   /* dua kelas, alasan sama; v268: di modal, sekolom penuh */
   /* v251: mode fokus tidak ditawarkan di HP -- header cuma 68 px dari 800, dan
      toolbar HP sudah penuh (dua baris, jalan40 H2). */
   .jm-alat .jm-btn.jm-btn-fokus{ display:none; }   /* v252: TIGA kelas -- harus menang atas .jm-alat .jm-btn{display:inline-flex} yang datang belakangan */
-  #jm-laci{ order:12; }                   /* v266: laci terbuka tepat di bawah baris 2 (Filter) */
+  /* NISAN v268: #jm-laci{order:12} -- laci tidak lagi di bilah alat. */
   /* v252: SATU ukuran kapsul untuk semua tombol toolbar di HP, mengikuti
      "Hari ini" (tinggi 36 px, font 13 px). Sebelumnya tiap tombol punya
      padding & ukuran font sendiri, jadi besar-kecil tidak seragam. */

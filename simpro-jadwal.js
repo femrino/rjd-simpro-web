@@ -269,13 +269,39 @@ function jmTutupMenuItem_() {
    bukan jebakan. */
 var JM_LACI_BUKA = false;   // sengaja tidak dipersistensi: selalu tertutup saat halaman dibuka
 
-function jmToggleLaci() {
-  JM_LACI_BUKA = !JM_LACI_BUKA;
+/* v268 -- FILTER = MODAL, bukan laci. Laci terbuka mendorong matriks 600 px ke
+   bawah di tablet, padahal filter bekerja seketika dan tidak perlu menetap di
+   layar. Elemen #jm-laci (dan semua kontrol ber-id di dalamnya) DIPINDAH utuh
+   ke dalam modal, jadi jmIsiFilter_/jmUbahFilter/harness tidak berubah.
+   Berlaku di semua lebar layar: satu jalur kode, satu perilaku. */
+function jmModalFilter_() {
+  let m = document.getElementById("jm-modal-filter");
+  if (m) return m;
   const laci = document.getElementById("jm-laci");
-  if (laci) laci.classList.toggle("jm-laci-buka", JM_LACI_BUKA);
+  if (!laci) return null;
+  m = document.createElement("div");
+  m.id = "jm-modal-filter"; m.className = "jm-modal jm-modal-filter hidden";
+  m.innerHTML = '<div class="jm-modal-kotak jm-modal-kotak-filter" role="dialog" aria-modal="true">' +
+    '<div class="jm-modal-kepala"><span class="jm-modal-judul">Filter tampilan</span>' +
+    '<button type="button" class="jm-modal-tutup" onclick="jmToggleLaci(false)" aria-label="Tutup" title="Tutup (Esc)">\u00d7</button></div>' +
+    '<div class="jm-modal-isi"></div>' +
+    '<div class="jm-modal-kaki"><span class="jm-modal-kaki-ket">Perubahan langsung diterapkan ke matriks.</span>' +
+    '<button type="button" class="jm-btn jm-btn-utama" id="jm-filter-selesai" onclick="jmToggleLaci(false)">Selesai</button></div></div>';
+  document.body.appendChild(m);
+  m.querySelector(".jm-modal-isi").appendChild(laci);   // dipindah, bukan disalin
+  laci.classList.add("jm-laci-buka");                    // di dalam modal laci selalu tergelar; modal-lah yang disembunyikan
+  m.addEventListener("click", function (ev) { if (ev.target === m) jmToggleLaci(false); });
+  return m;
+}
+function jmToggleLaci(paksa) {
+  const m = jmModalFilter_();
+  if (!m) return;
+  JM_LACI_BUKA = typeof paksa === "boolean" ? paksa : !JM_LACI_BUKA;
+  m.classList.toggle("hidden", !JM_LACI_BUKA);
+  document.body.classList.toggle("jm-modal-terbuka", JM_LACI_BUKA || !!(document.getElementById("jm-modal") && !document.getElementById("jm-modal").classList.contains("hidden")));
+  if (!JM_LACI_BUKA) jmTutupPanelPilih_();
   const btn = document.getElementById("jm-btn-laci");
   if (btn) btn.classList.toggle("jm-sumbu-aktif", JM_LACI_BUKA);
-  jmPasTinggi_();   // v250: laci terbuka menggeser matriks ke bawah
 }
 function jmToggleLegenda() {
   const l = document.getElementById("jm-legenda");
@@ -662,6 +688,7 @@ function jmRenderLaci_() {
     alat.appendChild(bf);
     jmFokus(false);   // isi label awal
   }
+  jmModalFilter_();   // v268: laci pindah ke modal SEKARANG (idempoten), bukan saat pertama dibuka
 }
 
 /** Tombol disuntik ke toolbar dari JS supaya template Blogger hanya naik tag. */
@@ -2573,6 +2600,8 @@ window.addEventListener("load", function () {
     if (mr && !mr.classList.contains("hidden")) { jmTutupRencana_(); return; }
     const pdv = document.getElementById("jm-panel-deviasi");   // v265
     if (pdv && !pdv.classList.contains("hidden")) { jmTutupPanelDeviasi_(); return; }
+    const mf = document.getElementById("jm-modal-filter");   // v268: panel centang dulu, lalu modalnya
+    if (mf && !mf.classList.contains("hidden")) { if (pt) jmTutupPanelPilih_(); else jmToggleLaci(false); return; }
     const m = document.getElementById("jm-modal");
     const adaMelayang = (mi && !mi.classList.contains("hidden")) ||
       (ps && !ps.classList.contains("hidden")) || !!pt || (m && !m.classList.contains("hidden"));
