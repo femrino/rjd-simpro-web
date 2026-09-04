@@ -401,22 +401,28 @@ body.jm-modal-terbuka{ overflow: hidden; }
   /* v252: basis NOL, bukan auto -- basis auto (lebar isi ~250 px) memaksa "+" turun
      ke baris ketiga di 390 px; basis nol tidak pernah memaksa pembungkusan, lalu
      tumbuh mengisi sisa sehingga Ket. dan "+" menempel ke tepi kanan. */
-  .jm-rentang{ order:10; flex:1 1 0; min-width:55%; margin-top:2px; }
+  /* v266: pemutus baris (#jm-alat-putus, order 6) yang memaksa rentang turun ke
+     baris 2 -- bukan lagi min-width 55%. Baris 2 = rentang (tumbuh) + Filter. */
+  .jm-rentang{ order:10; flex:1 1 0; min-width:0; margin-top:0; font-size:12px; }
   /* min-width 55%: basis nol saja membuat rentang "muat" di baris 1 lalu berbagi
      ruang dengan pendorong dan membungkus tiga baris (jalan31 #1 merah). 55% tidak
      muat di sisa baris 1, tapi di baris 2 masih menyisakan Ket. + "+" (~108 px). */
   /* v252: di HP rentang boleh dua baris DI DALAM kotaknya (tanggal / "N item · M baris ·
      pil"). Dengan nowrap, sub-teks meluber ke kanan dan tertutup Ket. + "+" -- pil
      "disembunyikan" jadi tidak bisa diklik (jalan38 G). */
-  .jm-rentang{ white-space:normal; line-height:1.25; }
-  .jm-rentang .jm-rentang-sub{ display:block; margin-top:2px; }
-  .jm-btn-legenda{ order:11; }
-  .jm-btn-jadwal{ order:12; }
+  .jm-rentang{ white-space:normal; line-height:1.3; }
+  .jm-rentang .jm-rentang-sub{ display:inline; margin-top:0; }   /* v266: satu baris teks, boleh membungkus */
+  .jm-alat .jm-btn.jm-btn-legenda{ display:none; }   /* v266: "Ket." pindah ke laci (tiga kelas, lihat .jm-btn-fokus) */
+  .jm-btn-jadwal{ order:4; }                           /* v266: "+" ikut baris 1 di kanan sumbu */
+  /* DUA kelas: aturan global .jm-alat-putus{display:none} ditulis SESUDAH blok ini
+     dan menang kalau spesifisitasnya sama (terbukti di fixture jalan31, 4 Sep 2026). */
+  .jm-alat .jm-alat-putus{ display:block; flex-basis:100%; height:0; order:6; }
+  .jm-btn-laci{ order:11; }                            /* v266: Filter di baris 2, kanan rentang */
+  .jm-laci .jm-laci-legenda{ display:inline-flex; align-self:flex-start; }   /* dua kelas, alasan sama */
   /* v251: mode fokus tidak ditawarkan di HP -- header cuma 68 px dari 800, dan
      toolbar HP sudah penuh (dua baris, jalan40 H2). */
   .jm-alat .jm-btn.jm-btn-fokus{ display:none; }   /* v252: TIGA kelas -- harus menang atas .jm-alat .jm-btn{display:inline-flex} yang datang belakangan */
-  #jm-laci{ order:5; }                    /* laci terbuka: tepat di bawah baris tombol,
-                                             di atas rentang (v232, diuji jalan31) */
+  #jm-laci{ order:12; }                   /* v266: laci terbuka tepat di bawah baris 2 (Filter) */
   /* v252: SATU ukuran kapsul untuk semua tombol toolbar di HP, mengikuti
      "Hari ini" (tinggi 36 px, font 13 px). Sebelumnya tiap tombol punya
      padding & ukuran font sendiri, jadi besar-kecil tidak seragam. */
@@ -689,3 +695,22 @@ body.jm-fokus .jm-wrap{ max-width: none; padding-left: 12px; padding-right: 12px
 tr.jm-sorot td{ animation: jm-sorot-kedip 2.2s ease-out; }
 @keyframes jm-sorot-kedip{ 0%{ background-color: #FFE8A3; } 70%{ background-color: #FFF4D6; } 100%{ background-color: transparent; } }
 @media print { #jm-panel-deviasi, .jm-rentang-deviasi { display: none !important; } }
+
+/* ---------- v266: bilah alat HP dua baris rapat; lencana jadi titik di HP ---------- */
+.jm-alat-putus{ display:none; }
+.jm-laci-legenda{ display:none; }
+@media (max-width: 640px){
+  /* Lencana di kolom kiri (144 px) terpotong sebagai teks; jadi TITIK berwarna.
+     Teks tetap ada di DOM (font-size 0) -> tooltip & panel deviasi memuatnya. */
+  .jm-td-item .jm-lencana, .jm-td-tahap .jm-lencana, .jm-td-tahap-item .jm-lencana{
+    font-size:0; line-height:0; width:8px; height:8px; min-width:8px; padding:0; margin-left:5px;
+    border-radius:50%; border-width:1px; vertical-align:middle; flex:0 0 auto;
+  }
+  .jm-td-item .jm-lencana-laporan, .jm-td-tahap .jm-lencana-laporan, .jm-td-tahap-item .jm-lencana-laporan{ background:#C98A00; border-color:#C98A00; }
+  .jm-td-item .jm-lencana-mandek, .jm-td-tahap .jm-lencana-mandek, .jm-td-tahap-item .jm-lencana-mandek{ background:#C8362B; border-color:#C8362B; }
+  .jm-td-item .jm-lencana-lewat, .jm-td-tahap .jm-lencana-lewat, .jm-td-tahap-item .jm-lencana-lewat{ background:#1F4E8C; border-color:#1F4E8C; }
+  .jm-td-item .jm-lencana-rencana, .jm-td-tahap-item .jm-lencana-rencana{ background:#7FA3D6; border-color:#1F4E8C; border-style:dashed; }
+  .jm-td-item .jm-lencana-batal, .jm-td-tahap-item .jm-lencana-batal{ background:#8A2A22; border-color:#8A2A22; }
+  .jm-td-item .jm-lencana-selesai, .jm-td-tahap-item .jm-lencana-selesai{ background:#256B3A; border-color:#256B3A; }
+  .jm-td-item .jm-lencana-takdikenal, .jm-td-tahap-item .jm-lencana-takdikenal{ background:#C8362B; border-color:#C8362B; }
+}

@@ -623,6 +623,23 @@ function jmRenderLaci_() {
   // <details>, baris "Tambah jadwal" tetap memakan 58 px di atas matriks --
   // persis yang mau dihilangkan. jmModal_ idempoten.
   jmModal_();
+  // v266 (HP): pemutus baris memaksa bilah alat jadi dua baris rapat:
+  //   [nav] ........ [sumbu] [+]   |   [rentang · item · baris · deviasi] [Filter]
+  // Di desktop elemen ini display:none (tanpa efek). Legenda: tombol "Ket."
+  // disembunyikan di HP, penggantinya tautan di dalam laci Filter.
+  if (!document.getElementById("jm-alat-putus")) {
+    const pt = document.createElement("div");
+    pt.id = "jm-alat-putus"; pt.className = "jm-alat-putus"; pt.setAttribute("aria-hidden", "true");
+    alat.appendChild(pt);
+  }
+  if (!document.getElementById("jm-laci-legenda")) {
+    const ll = document.createElement("button");
+    ll.id = "jm-laci-legenda"; ll.type = "button"; ll.className = "jm-btn jm-laci-legenda";
+    ll.textContent = "Keterangan warna";
+    ll.title = "Tampilkan / sembunyikan keterangan warna";
+    ll.onclick = jmToggleLegenda;
+    laci.appendChild(ll);
+  }
   // v251: tombol mode fokus, untuk semua peran (hanya tampilan).
   if (!document.getElementById("jm-btn-fokus")) {
     const bf = document.createElement("button");
