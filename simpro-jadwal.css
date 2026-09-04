@@ -666,3 +666,26 @@ body.jm-fokus .jm-wrap{ max-width: none; padding-left: 12px; padding-right: 12px
 .jm-catatan-deviasi li.jm-dev-belum b{ color: #8A5A00; }
 .jm-catatan-deviasi li.jm-dev-mandek b{ color: #8A2A22; }
 .jm-catatan-deviasi li.jm-dev-lewat b{ color: #1F4E8C; }
+
+/* ---------- v265: pil + panel deviasi ---------- */
+.jm-rentang-deviasi{
+  font: inherit; font-size: 12px; font-weight: 600; color: #8A2A22;
+  background: #F8E7E5; border: 1px solid #E0B0AA; border-radius: 999px;
+  padding: 1px 9px; cursor: pointer; vertical-align: baseline;
+}
+.jm-rentang-deviasi:hover{ border-color: #8A2A22; }
+.jm-panel-deviasi{ min-width: 340px; max-width: min(560px, 94vw); }
+.jm-panel-deviasi .jm-panel-daftar{ max-height: 60vh; }
+.jm-panel-sub{ font-size: 11.5px; color: var(--ink-soft, #5F6B7A); margin-left: 8px; white-space: nowrap; }
+.jm-dev-judul{ font: 700 11px/1.2 'Archivo', sans-serif; letter-spacing: .04em; text-transform: uppercase; padding: 8px 6px 4px; }
+.jm-dev-judul.jm-dev-belum{ color: #8A5A00; }
+.jm-dev-judul.jm-dev-mandek{ color: #8A2A22; }
+.jm-dev-judul.jm-dev-lewat{ color: #1F4E8C; }
+.jm-dev-item{ padding: 2px 0 4px; }
+.jm-dev-nama{ font-weight: 700; font-size: 12.5px; color: var(--navy, #17212F); padding: 2px 6px; }
+.jm-dev-baris{ width: 100%; text-align: left; font: inherit; font-size: 12.5px; background: none; border: 0; color: inherit; cursor: pointer; padding-left: 16px; }
+.jm-dev-baris b{ flex: 0 0 auto; margin-left: 8px; white-space: nowrap; }
+.jm-dev-belum .jm-dev-baris b, .jm-dev-judul.jm-dev-belum ~ .jm-dev-item .jm-dev-baris b{ color: #8A5A00; }
+tr.jm-sorot td{ animation: jm-sorot-kedip 2.2s ease-out; }
+@keyframes jm-sorot-kedip{ 0%{ background-color: #FFE8A3; } 70%{ background-color: #FFF4D6; } 100%{ background-color: transparent; } }
+@media print { #jm-panel-deviasi, .jm-rentang-deviasi { display: none !important; } }

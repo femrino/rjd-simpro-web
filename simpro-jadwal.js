@@ -1022,8 +1022,8 @@ function jmRenderPeringatan_() {
   const ri = JM_DATA.realisasi && JM_DATA.realisasi.info;
   if (ri && !ri.aktif) c.push({ jenis: "realisasi", pesan: "Realisasi dari laporan harian TIDAK AKTIF: " + (ri.alasan || "tanpa alasan") + "." });
   const batal = jmBarBatal_();
-  const dev = jmDaftarDeviasi_(JM_DATA.hariIni);   // v264
-  if (!p.length && !c.length && !batal.length && !dev.length) { el.classList.add("hidden"); el.innerHTML = ""; return; }
+  // v265: deviasi tidak lagi di sini (memakan sepertiga layar) -- pil di baris info + panel melayang.
+  if (!p.length && !c.length && !batal.length) { el.classList.add("hidden"); el.innerHTML = ""; return; }
   el.classList.remove("hidden");
   let html = "";
   if (p.length) {
@@ -1037,16 +1037,6 @@ function jmRenderPeringatan_() {
     html += '<div class="jm-peringatan-blok jm-catatan"><b>' + c.length + ' catatan</b><ul>' + c.map(function (x) {
       return '<li class="jm-catatan-' + jmEsc_(x.jenis || "") + '">' + jmEsc_(x.pesan) + '</li>';
     }).join("") + '</ul></div>';
-  }
-  if (dev.length) {
-    const urutan = { belum: 0, mandek: 1, lewat: 2 };
-    dev.sort(function (x, y) { return (urutan[x.dev.jenis] - urutan[y.dev.jenis]) || (y.dev.hari - x.dev.hari); });
-    html += '<div class="jm-peringatan-blok jm-catatan-deviasi"><b>' + dev.length + ' deviasi rencana vs laporan harian</b>' +
-      ' <span class="jm-catatan-sub">(item yang ditampilkan; laporan bisa tertinggal sampai 4 jam)</span><ul>' +
-      dev.map(function (x) {
-        return '<li class="jm-dev-' + x.dev.jenis + '">' + jmEsc_(jmNamaItem_(x.item)) + ' \u00b7 ' +
-          jmEsc_(x.baris.label + (x.baris.sub ? " " + x.baris.sub : "")) + ': <b>' + jmEsc_(x.dev.teks) + '</b></li>';
-      }).join("") + '</ul></div>';
   }
   if (batal.length) {
     html += '<div class="jm-peringatan-blok jm-catatan-batal"><b>' + batal.length + ' bar milik item batal</b> (tergambar redup dan dicoret). ' +
@@ -1730,10 +1720,18 @@ function jmLencanaLaporan_(b, hariIni) {
   return '<span class="jm-lencana ' + kelas + ' jm-lencana-kecil" title="' + jmEsc_(d.tip) + '">' + jmEsc_(d.teks) + '</span>';
 }
 /** Semua deviasi pada item yang ditampilkan (filter & sembunyi dihormati), untuk panel ringkasan. */
+let JM_DEVIASI_TERAKHIR = [];   // v265: diisi jmRenderInfo_ sesudah matriks tergambar
 function jmDaftarDeviasi_(hariIni) {
   const keluar = [];
   if (!JM_DATA || !JM_DATA.realisasi || !JM_DATA.realisasi.info || !JM_DATA.realisasi.info.aktif) return keluar;
-  jmKelompok_().forEach(function (g) {
+  // jmKelompok_ mengisi JM_SEMBUNYI_TERAKHIR/JM_TAMPIL_TERAKHIR (efek samping untuk
+  // bilah sembunyi). Dipanggil sesudah matriks tergambar -> nilainya disimpan
+  // dan dipulihkan supaya tidak berganda.
+  const s1 = JM_SEMBUNYI_TERAKHIR, s2 = JM_TAMPIL_TERAKHIR;
+  JM_SEMBUNYI_TERAKHIR = []; JM_TAMPIL_TERAKHIR = [];
+  const grup = jmKelompok_();
+  JM_SEMBUNYI_TERAKHIR = s1; JM_TAMPIL_TERAKHIR = s2;
+  grup.forEach(function (g) {
     jmBarisGrup_(g).forEach(function (b) {
       const d = jmDeviasiBaris_(b, hariIni);
       if (d) keluar.push({ item: g.item, baris: b, dev: d });
@@ -2277,6 +2275,7 @@ function jmTanggalPendek_(iso) {
 function jmRenderInfo_(jumlahItem, jumlahBaris) {
   const el = document.getElementById("jm-rentang");
   if (!el || !JM_LIHAT.mulai) return;
+  JM_DEVIASI_TERAKHIR = jumlahItem ? jmDaftarDeviasi_(JM_DATA.hariIni) : [];   // v265
   const a = JM_LIHAT.mulai, z = jmTambahHari_(a, JM_LIHAT.minggu * 7 - 2);
   el.innerHTML = jmTanggalPendek_(jmIso_(a)) + " \u2013 " + jmTanggalPendek_(jmIso_(z)) + " " + z.getFullYear() +
     (jumlahItem || JM_SEMBUNYI_TERAKHIR.length
@@ -2284,8 +2283,88 @@ function jmRenderInfo_(jumlahItem, jumlahBaris) {
         (JM_SEMBUNYI_TERAKHIR.length
           ? ' &#183; <button type="button" class="jm-rentang-sembunyi" onclick="jmBukaPanelSembunyi_(event)" title="Lihat & pulihkan item yang disembunyikan">' +
             JM_SEMBUNYI_TERAKHIR.length + ' disembunyikan</button>'
+          : '') +
+        (JM_DEVIASI_TERAKHIR.length
+          ? ' &#183; <button type="button" class="jm-rentang-deviasi" id="jm-pil-deviasi" onclick="jmBukaPanelDeviasi_(event)" title="Rencana yang menyimpang dari laporan harian -- klik untuk daftarnya">' +
+            JM_DEVIASI_TERAKHIR.length + ' deviasi</button>'
           : '') + '</span>'
       : '');
+  const pd = document.getElementById("jm-panel-deviasi");
+  if (pd && !pd.classList.contains("hidden")) jmIsiPanelDeviasi_(pd);   // panel terbuka ikut segar
+}
+
+/* v265 -- PANEL DEVIASI melayang (menggantikan blok kuning v264 yang memakan
+   sepertiga layar). Dikelompokkan per jenis lalu per item; klik satu baris
+   menggulir matriks ke item itu dan menyorotnya. */
+const JM_JENIS_DEVIASI = [
+  { k: "belum", judul: "belum ada laporan" }, { k: "mandek", judul: "tanpa laporan (mandek)" }, { k: "lewat", judul: "melewati rencana" }
+];
+function jmPanelDeviasi_() {
+  let p = document.getElementById("jm-panel-deviasi");
+  if (p) return p;
+  p = document.createElement("div");
+  p.id = "jm-panel-deviasi"; p.className = "jm-panel-sembunyi jm-panel-deviasi hidden";
+  document.body.appendChild(p);
+  p.addEventListener("click", function (ev) {
+    const b = ev.target.closest && ev.target.closest("[data-lompat]");
+    if (b) jmLompatKeItem_(b.getAttribute("data-lompat"));
+  });
+  document.addEventListener("click", function (ev) {
+    if (p.classList.contains("hidden")) return;
+    if (p.contains(ev.target) || (ev.target.closest && ev.target.closest("#jm-pil-deviasi"))) return;
+    jmTutupPanelDeviasi_();
+  });
+  return p;
+}
+function jmIsiPanelDeviasi_(p) {
+  const semua = JM_DEVIASI_TERAKHIR || [];
+  let html = '<div class="jm-panel-kepala"><b>' + semua.length + ' deviasi rencana vs laporan harian</b>' +
+    '<span class="jm-panel-sub">laporan bisa tertinggal sampai 4 jam</span></div><div class="jm-panel-daftar">';
+  JM_JENIS_DEVIASI.forEach(function (j) {
+    const daftar = semua.filter(function (x) { return x.dev.jenis === j.k; }).sort(function (x, y) { return y.dev.hari - x.dev.hari; });
+    if (!daftar.length) return;
+    html += '<div class="jm-dev-judul jm-dev-' + j.k + '">' + daftar.length + ' ' + jmEsc_(j.judul) + '</div>';
+    const perItem = {}, urut = [];
+    daftar.forEach(function (x) {
+      if (!perItem[x.item.kunci]) { perItem[x.item.kunci] = { item: x.item, baris: [] }; urut.push(x.item.kunci); }
+      perItem[x.item.kunci].baris.push(x);
+    });
+    urut.forEach(function (k) {
+      const it = perItem[k];
+      html += '<div class="jm-dev-item"><div class="jm-dev-nama">' + jmEsc_(jmNamaItem_(it.item)) + '</div>' +
+        it.baris.map(function (x) {
+          return '<button type="button" class="jm-panel-baris jm-dev-baris" data-lompat="' + jmEsc_(k) + '" title="' + jmEsc_(x.dev.tip) + '">' +
+            '<span>' + jmEsc_(x.baris.label + (x.baris.sub ? " " + x.baris.sub : "")) + '</span><b>' + jmEsc_(x.dev.teks) + '</b></button>';
+        }).join("") + '</div>';
+    });
+  });
+  p.innerHTML = html + '</div>';
+}
+function jmBukaPanelDeviasi_(ev) {
+  const p = jmPanelDeviasi_();
+  if (!p.classList.contains("hidden")) { jmTutupPanelDeviasi_(); return; }
+  jmTutupMenuItem_(); jmTutupPanelSembunyi_(); jmTutupPanelPilih_();
+  jmIsiPanelDeviasi_(p);
+  p.classList.remove("hidden");
+  const pil = (ev && ev.currentTarget) || document.getElementById("jm-pil-deviasi");
+  const r = pil ? pil.getBoundingClientRect() : { left: 8, bottom: 8 };
+  const lebar = p.offsetWidth || 360, tinggi = p.offsetHeight || 240;
+  p.style.left = Math.max(8, Math.min(r.left, window.innerWidth - lebar - 8)) + "px";
+  p.style.top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - tinggi - 8)) + "px";
+}
+function jmTutupPanelDeviasi_() {
+  const p = document.getElementById("jm-panel-deviasi");
+  if (p) p.classList.add("hidden");
+}
+/** Gulir matriks ke item dan sorot barisnya sebentar. */
+function jmLompatKeItem_(kunci) {
+  jmTutupPanelDeviasi_();
+  const td = document.querySelector('#jm-matriks td[data-kunci="' + String(kunci).replace(/"/g, '\\"') + '"]');
+  if (!td) return;
+  const tr = td.parentNode;
+  if (td.scrollIntoView) td.scrollIntoView({ block: "center", behavior: "smooth" });
+  tr.classList.add("jm-sorot");
+  setTimeout(function () { tr.classList.remove("jm-sorot"); }, 2200);
 }
 
 // ---------- legenda ----------
@@ -2349,6 +2428,8 @@ window.addEventListener("load", function () {
       .filter(function (p) { return p && !p.classList.contains("hidden"); })[0];
     const mr = document.getElementById("jm-modal-rencana");   // v257: paling atas
     if (mr && !mr.classList.contains("hidden")) { jmTutupRencana_(); return; }
+    const pdv = document.getElementById("jm-panel-deviasi");   // v265
+    if (pdv && !pdv.classList.contains("hidden")) { jmTutupPanelDeviasi_(); return; }
     const m = document.getElementById("jm-modal");
     const adaMelayang = (mi && !mi.classList.contains("hidden")) ||
       (ps && !ps.classList.contains("hidden")) || !!pt || (m && !m.classList.contains("hidden"));
