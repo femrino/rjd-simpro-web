@@ -658,3 +658,11 @@ body.jm-fokus .jm-wrap{ max-width: none; padding-left: 12px; padding-right: 12px
 .jm-r-tahap td.jm-real-hari::after{ content: ""; position: absolute; left: 2px; right: 2px; bottom: 1px; height: 4px; background: var(--navy, #17212F); border-radius: 1px; pointer-events: none; }
 .jm-swatch-real{ height: 4px; width: 18px; background: var(--navy, #17212F); border: 0; border-radius: 1px; vertical-align: middle; }
 .jm-lencana-laporan{ background: #FFF1D6; color: #8A5A00; border: 1px solid #E8C978; }
+
+/* ---------- v264: DEVIASI rencana vs laporan (tahap B) ---------- */
+.jm-lencana-mandek{ background: #F3E1DF; color: #8A2A22; border: 1px solid #E0B0AA; }
+.jm-lencana-lewat{ background: #E6EEF9; color: #1F4E8C; border: 1px solid #B9CCE8; }
+.jm-catatan-sub{ font-weight: 400; color: var(--ink-soft, #5F6B7A); }
+.jm-catatan-deviasi li.jm-dev-belum b{ color: #8A5A00; }
+.jm-catatan-deviasi li.jm-dev-mandek b{ color: #8A2A22; }
+.jm-catatan-deviasi li.jm-dev-lewat b{ color: #1F4E8C; }

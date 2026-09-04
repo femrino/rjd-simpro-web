@@ -1022,7 +1022,8 @@ function jmRenderPeringatan_() {
   const ri = JM_DATA.realisasi && JM_DATA.realisasi.info;
   if (ri && !ri.aktif) c.push({ jenis: "realisasi", pesan: "Realisasi dari laporan harian TIDAK AKTIF: " + (ri.alasan || "tanpa alasan") + "." });
   const batal = jmBarBatal_();
-  if (!p.length && !c.length && !batal.length) { el.classList.add("hidden"); el.innerHTML = ""; return; }
+  const dev = jmDaftarDeviasi_(JM_DATA.hariIni);   // v264
+  if (!p.length && !c.length && !batal.length && !dev.length) { el.classList.add("hidden"); el.innerHTML = ""; return; }
   el.classList.remove("hidden");
   let html = "";
   if (p.length) {
@@ -1036,6 +1037,16 @@ function jmRenderPeringatan_() {
     html += '<div class="jm-peringatan-blok jm-catatan"><b>' + c.length + ' catatan</b><ul>' + c.map(function (x) {
       return '<li class="jm-catatan-' + jmEsc_(x.jenis || "") + '">' + jmEsc_(x.pesan) + '</li>';
     }).join("") + '</ul></div>';
+  }
+  if (dev.length) {
+    const urutan = { belum: 0, mandek: 1, lewat: 2 };
+    dev.sort(function (x, y) { return (urutan[x.dev.jenis] - urutan[y.dev.jenis]) || (y.dev.hari - x.dev.hari); });
+    html += '<div class="jm-peringatan-blok jm-catatan-deviasi"><b>' + dev.length + ' deviasi rencana vs laporan harian</b>' +
+      ' <span class="jm-catatan-sub">(item yang ditampilkan; laporan bisa tertinggal sampai 4 jam)</span><ul>' +
+      dev.map(function (x) {
+        return '<li class="jm-dev-' + x.dev.jenis + '">' + jmEsc_(jmNamaItem_(x.item)) + ' \u00b7 ' +
+          jmEsc_(x.baris.label + (x.baris.sub ? " " + x.baris.sub : "")) + ': <b>' + jmEsc_(x.dev.teks) + '</b></li>';
+      }).join("") + '</ul></div>';
   }
   if (batal.length) {
     html += '<div class="jm-peringatan-blok jm-catatan-batal"><b>' + batal.length + ' bar milik item batal</b> (tergambar redup dan dicoret). ' +
@@ -1663,18 +1674,72 @@ function jmRealisasiBaris_(b) {
   }
   return t;
 }
-/** Lencana "belum ada laporan": tahap punya sumber, rencana sudah lewat mulai, laporan nihil. */
-function jmLencanaLaporan_(b, hariIni) {
-  if (!JM_DATA || !JM_DATA.realisasi || !JM_DATA.realisasi.info || !JM_DATA.realisasi.info.aktif) return "";
-  if (jmTahapSumberDr_().indexOf(b.tahap) === -1) return "";
-  if (b.tahap === "Sewing" && b.bar && b.bar[0] && jmLineSampel_(b.bar[0].line)) return "";   // v263: tim sampel tidak melapor harian
-  if (jmRealisasiBaris_(b)) return "";
-  const mulaiMin = (b.bar || []).reduce(function (m, x) { return (!m || x.mulai < m) ? x.mulai : m; }, "");
-  if (!mulaiMin || mulaiMin >= hariIni) return "";
+/* v264 -- DEVIASI rencana vs laporan (tahap B). Tiga sinyal per baris tahap,
+   semua dalam HARI KERJA (Senin-Sabtu, sama dengan kolom matriks), tanpa persen
+   qty -- output laporan harian bukan qty barang (aturan 1 sinkron-tahap):
+     belum  : rencana sudah lewat mulai, laporan nihil            -> "belum ada laporan · N hari"
+     mandek : pernah ada laporan, rencana masih berjalan, laporan
+              terakhir >= JM_AMBANG_MANDEK_HARI hari kerja lalu   -> "tanpa laporan N hari"
+     lewat  : masih ada laporan sesudah tanggal selesai rencana   -> "melewati rencana +N hari"
+   Tahap tanpa sumber laporan, item bukan aktif, dan line sampel: tidak dinilai. */
+const JM_AMBANG_MANDEK_HARI = 4;
+function jmHariKerja_(iso) { return jmDariIso_(iso).getDay() !== 0; }
+/** hari kerja di [a, b) */
+function jmHariKerjaAntara_(a, b) {
+  if (!a || !b || a >= b) return 0;
+  let d = jmDariIso_(a), n = 0;
+  const akhir = jmDariIso_(b);
+  while (d < akhir) { if (d.getDay() !== 0) n++; d = jmTambahHari_(d, 1); }
+  return n;
+}
+function jmDeviasiBaris_(b, hariIni) {
+  if (!JM_DATA || !JM_DATA.realisasi || !JM_DATA.realisasi.info || !JM_DATA.realisasi.info.aktif) return null;
+  if (jmTahapSumberDr_().indexOf(b.tahap) === -1) return null;
+  if (b.tahap === "Sewing" && b.bar && b.bar[0] && jmLineSampel_(b.bar[0].line)) return null;   // tim sampel tidak melapor harian
   const k = b.keadaan || (b.item && typeof b.item === "object" ? jmKeadaan_(b.item) : "aktif");
-  if (k !== "aktif") return "";
-  return '<span class="jm-lencana jm-lencana-laporan jm-lencana-kecil" title="Rencana sudah lewat mulai (' + jmEsc_(jmTanggalPendek_(mulaiMin)) +
-    ') tetapi belum ada laporan harian untuk item dan tahap ini' + (b.tahap === "Sewing" ? " di line ini" : "") + '">belum ada laporan</span>';
+  if (k !== "aktif") return null;
+  const bars = b.bar || [];
+  if (!bars.length || !hariIni) return null;
+  const mulaiMin = bars.reduce(function (m, x) { return (!m || x.mulai < m) ? x.mulai : m; }, "");
+  const selesaiMax = bars.reduce(function (m, x) { return (!m || x.selesai > m) ? x.selesai : m; }, "");
+  const real = jmRealisasiBaris_(b);
+  if (!real) {
+    if (mulaiMin >= hariIni) return null;
+    const n = jmHariKerjaAntara_(mulaiMin, hariIni);
+    return { jenis: "belum", hari: n, teks: "belum ada laporan" + (n ? " \u00b7 " + n + " hari" : ""),
+      tip: "Rencana mulai " + jmTanggalPendek_(mulaiMin) + ", sudah " + n + " hari kerja tanpa satu pun laporan harian untuk item dan tahap ini" + (b.tahap === "Sewing" ? " di lokasi line ini" : "") };
+  }
+  const tgl = Object.keys(real.hari).sort();
+  const terakhir = tgl[tgl.length - 1];
+  if (terakhir > selesaiMax) {
+    const n = jmHariKerjaAntara_(selesaiMax, terakhir) - (jmHariKerja_(selesaiMax) ? 1 : 0) + (jmHariKerja_(terakhir) ? 1 : 0);
+    return { jenis: "lewat", hari: n, teks: "melewati rencana +" + n + " hari",
+      tip: "Rencana selesai " + jmTanggalPendek_(selesaiMax) + ", tetapi laporan masih masuk sampai " + jmTanggalPendek_(terakhir) };
+  }
+  if (selesaiMax >= hariIni) {
+    const n = jmHariKerjaAntara_(terakhir, hariIni) - (jmHariKerja_(terakhir) ? 1 : 0);
+    if (n >= JM_AMBANG_MANDEK_HARI) return { jenis: "mandek", hari: n, teks: "tanpa laporan " + n + " hari",
+      tip: "Laporan terakhir " + jmTanggalPendek_(terakhir) + ", rencana masih berjalan sampai " + jmTanggalPendek_(selesaiMax) };
+  }
+  return null;
+}
+function jmLencanaLaporan_(b, hariIni) {
+  const d = jmDeviasiBaris_(b, hariIni);
+  if (!d) return "";
+  const kelas = d.jenis === "belum" ? "jm-lencana-laporan" : d.jenis === "mandek" ? "jm-lencana-mandek" : "jm-lencana-lewat";
+  return '<span class="jm-lencana ' + kelas + ' jm-lencana-kecil" title="' + jmEsc_(d.tip) + '">' + jmEsc_(d.teks) + '</span>';
+}
+/** Semua deviasi pada item yang ditampilkan (filter & sembunyi dihormati), untuk panel ringkasan. */
+function jmDaftarDeviasi_(hariIni) {
+  const keluar = [];
+  if (!JM_DATA || !JM_DATA.realisasi || !JM_DATA.realisasi.info || !JM_DATA.realisasi.info.aktif) return keluar;
+  jmKelompok_().forEach(function (g) {
+    jmBarisGrup_(g).forEach(function (b) {
+      const d = jmDeviasiBaris_(b, hariIni);
+      if (d) keluar.push({ item: g.item, baris: b, dev: d });
+    });
+  });
+  return keluar;
 }
 
 function jmRenderMatriks_() {
