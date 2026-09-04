@@ -714,3 +714,26 @@ tr.jm-sorot td{ animation: jm-sorot-kedip 2.2s ease-out; }
   .jm-td-item .jm-lencana-selesai, .jm-td-tahap-item .jm-lencana-selesai{ background:#256B3A; border-color:#256B3A; }
   .jm-td-item .jm-lencana-takdikenal, .jm-td-tahap-item .jm-lencana-takdikenal{ background:#C8362B; border-color:#C8362B; }
 }
+
+/* ---------- v267: pemilih item (tombol + panel cari) ---------- */
+.jm-form select.jm-select-tersembunyi{ display:none; }
+.jm-pilih-item{
+  display:flex; flex-direction:column; align-items:flex-start; gap:2px; width:100%; min-width:260px; text-align:left;
+  font:inherit; font-size:13px; color:var(--ink, #17212F); background:#fff; border:1px solid #D5D9E0; border-radius:8px; padding:7px 10px; cursor:pointer;
+}
+.jm-pilih-item:focus{ outline:none; border-color:var(--ink, #17212F); }
+.jm-pilih-item-kosong{ color:var(--ink-soft, #5F6B7A); }
+.jm-pilih-item-nama{ font-weight:700; }
+.jm-pilih-item-sub{ font-size:11.5px; color:var(--ink-soft, #5F6B7A); }
+.jm-panel-item{ z-index:98; max-width:min(560px, 96vw); }
+.jm-panel-item .jm-panel-kepala{ padding:8px; }
+.jm-cari-item{ width:100%; box-sizing:border-box; font:inherit; font-size:13px; padding:7px 10px; border:1px solid #D5D9E0; border-radius:8px; }
+.jm-cari-item:focus{ outline:none; border-color:var(--ink, #17212F); }
+.jm-panel-item .jm-panel-daftar{ max-height:min(60vh, 460px); }
+.jm-item-klien{ font:700 11px/1.2 'Archivo', sans-serif; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-soft, #5F6B7A); padding:10px 8px 4px; }
+.jm-item-baris{ display:flex; flex-direction:column; align-items:flex-start; gap:1px; width:100%; text-align:left; font:inherit; background:none; border:0; color:inherit; cursor:pointer; padding:7px 8px; }
+.jm-item-baris span{ white-space:normal; overflow:visible; }
+.jm-item-b-nama{ font-weight:600; font-size:13px; }
+.jm-item-b-sub{ font-size:11.5px; color:var(--ink-soft, #5F6B7A); font-family:'IBM Plex Mono', monospace; }
+.jm-item-terpilih{ background:rgba(27,37,64,.08); }
+.jm-item-kosong{ padding:12px 8px; color:var(--ink-soft, #5F6B7A); font-size:12.5px; }

@@ -153,8 +153,22 @@ function jmTampilkanSemua() {
 }
 
 /** v259: nama item = BRAND + artikel + style (identitas item produksi). Kosong -> nomor PO. */
+function jmBagianNama_(it) {
+  const b = String(it.brand || "").trim(), a = String(it.artikel || "").trim(), st = String(it.style || "").trim();
+  // v267: data sering mengulang artikel di dalam style ("Inara" + "Inara Dress",
+  // "Denara" + "Koko Denara Long Sleeve") -> artikel tidak diulang kalau style
+  // sudah memuatnya sebagai kata utuh.
+  const ulang = a && st && new RegExp("(^|\\s)" + a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(\\s|$)", "i").test(st);
+  return { brand: b, artikel: ulang ? "" : a, style: st };
+}
 function jmNamaItem_(it) {
-  return [it.brand, it.artikel, it.style].filter(function (x) { return x !== undefined && x !== null && String(x).trim() !== ""; }).join(" ") || it.po;
+  const p = jmBagianNama_(it);
+  return [p.brand, p.artikel, p.style].filter(String).join(" ") || it.po;
+}
+/** Nama tanpa brand -- untuk daftar yang sudah dikelompokkan per klien. */
+function jmNamaItemPendek_(it) {
+  const p = jmBagianNama_(it);
+  return [p.artikel, p.style].filter(String).join(" ") || it.po;
 }
 function jmLabelItem_(it) {
   return jmNamaItem_(it) + " \u00b7 " + it.po;
@@ -1296,6 +1310,113 @@ function jmPanggil_(action, muatan) {
    tersimpan, data dimuat ulang dari server dan item barunya terpilih di form.
    Warna/kain/harga dilengkapi admin saat proofing seperti biasa. */
 let JM_PILIH_ITEM_NANTI = "";   // kunci item yang harus terpilih di form sesudah muat ulang
+/* v267 -- PEMILIH ITEM: dropdown bawaan (terutama Android) membungkus tiap opsi
+   2-3 baris dan tidak bisa dicari. <select id=jm-in-item> TETAP sumber nilai
+   (form, harness, edit, rencana tidak berubah); yang tampak adalah tombol +
+   panel melayang: kotak cari, kelompok per klien, baris dua tingkat. */
+function jmPasangTombolItem_(selItem) {
+  if (!selItem) return;
+  let b = document.getElementById("jm-in-item-pilih");
+  if (!b) {
+    b = document.createElement("button");
+    b.id = "jm-in-item-pilih"; b.type = "button"; b.className = "jm-pilih-item";
+    b.onclick = function (ev) { jmBukaPanelItem_(ev); };
+    selItem.parentNode.insertBefore(b, selItem);
+    selItem.classList.add("jm-select-tersembunyi");
+  }
+  jmSegarkanTombolItem_();
+}
+function jmSegarkanTombolItem_() {
+  const b = document.getElementById("jm-in-item-pilih"), sel = document.getElementById("jm-in-item");
+  if (!b || !sel) return;
+  const it = sel.value ? ((JM_DATA && (JM_DATA.itemAktif || []).concat(JM_DATA.items || []).filter(function (x) { return x.kunci === sel.value; })[0]) || null) : null;
+  if (!it) { b.innerHTML = '<span class="jm-pilih-item-kosong">-- pilih item --</span>'; b.classList.remove("jm-pilih-item-terisi"); return; }
+  b.innerHTML = '<span class="jm-pilih-item-nama">' + jmEsc_(jmNamaItem_(it)) + (it.jenis === "rencana" ? ' <span class="jm-lencana jm-lencana-rencana">Rencana</span>' : '') + '</span>' +
+    '<span class="jm-pilih-item-sub">' + jmEsc_(it.namaKlien || it.idKlien) + ' \u00b7 ' + jmEsc_(it.po) + (it.qtyPo ? ' \u00b7 ' + it.qtyPo.toLocaleString("id-ID") + ' pcs' : '') + '</span>';
+  b.classList.add("jm-pilih-item-terisi");
+}
+function jmPanelItem_() {
+  let p = document.getElementById("jm-panel-item");
+  if (p) return p;
+  p = document.createElement("div");
+  p.id = "jm-panel-item"; p.className = "jm-panel-sembunyi jm-panel-item hidden";
+  p.innerHTML = '<div class="jm-panel-kepala"><input type="search" id="jm-cari-item" class="jm-cari-item" placeholder="Cari nama, PO, atau klien\u2026" autocomplete="off"></div>' +
+    '<div class="jm-panel-daftar" id="jm-daftar-item"></div>';
+  document.body.appendChild(p);
+  p.querySelector("#jm-cari-item").addEventListener("input", function () { jmIsiPanelItem_(this.value); });
+  p.addEventListener("click", function (ev) {
+    const b = ev.target.closest && ev.target.closest("[data-kunci-item]");
+    if (b) jmPilihItem_(b.getAttribute("data-kunci-item"));
+  });
+  document.addEventListener("click", function (ev) {
+    if (p.classList.contains("hidden")) return;
+    if (p.contains(ev.target) || (ev.target.closest && ev.target.closest("#jm-in-item-pilih"))) return;
+    jmTutupPanelItem_();
+  });
+  return p;
+}
+function jmIsiPanelItem_(cari) {
+  const wadah = document.getElementById("jm-daftar-item");
+  if (!wadah) return;
+  const frasa = String(cari || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const q = frasa.split(" ").filter(String);
+  const sel = document.getElementById("jm-in-item");
+  const terpilih = sel ? sel.value : "";
+  // Dua tahap: FRASA utuh dulu ("inara 2" -> hanya "260624/Inara 2"); kalau tidak
+  // ada yang cocok, baru per kata ("beshe dress"). Per kata saja membuat "2"
+  // cocok dengan angka di semua nomor PO.
+  const semua = ((JM_DATA && JM_DATA.itemAktif) || []).map(function (it) {
+    return { it: it, teks: [jmNamaItem_(it), it.po, it.namaKlien || it.idKlien, it.jenis === "rencana" ? "rencana" : ""].join(" ").toLowerCase() };
+  });
+  let lolos = semua;
+  if (frasa) {
+    lolos = semua.filter(function (x) { return x.teks.indexOf(frasa) !== -1; });
+    if (!lolos.length) lolos = semua.filter(function (x) { return q.every(function (k) { return x.teks.indexOf(k) !== -1; }); });
+  }
+  const perKlien = {}, urut = [];
+  lolos.forEach(function (x) {
+    const it = x.it;
+    const k = it.namaKlien || it.idKlien;
+    if (!perKlien[k]) { perKlien[k] = []; urut.push(k); }
+    perKlien[k].push(it);
+  });
+  urut.sort();
+  if (!urut.length) { wadah.innerHTML = '<div class="jm-item-kosong">Tidak ada item yang cocok.</div>'; return; }
+  wadah.innerHTML = urut.map(function (k) {
+    return '<div class="jm-item-klien">' + jmEsc_(k) + '</div>' + perKlien[k].map(function (it) {
+      return '<button type="button" class="jm-panel-baris jm-item-baris' + (it.kunci === terpilih ? ' jm-item-terpilih' : '') + '" data-kunci-item="' + jmEsc_(it.kunci) + '">' +
+        '<span class="jm-item-b-nama">' + jmEsc_(jmNamaItem_(it)) + (it.jenis === "rencana" ? ' <span class="jm-lencana jm-lencana-rencana">Rencana</span>' : '') + '</span>' +
+        '<span class="jm-item-b-sub">' + jmEsc_(it.po) + (it.qtyPo ? ' \u00b7 ' + it.qtyPo.toLocaleString("id-ID") + ' pcs' : '') + (it.deadline ? ' \u00b7 ' + jmTanggalPendek_(it.deadline) : '') + '</span></button>';
+    }).join("");
+  }).join("");
+}
+function jmBukaPanelItem_(ev) {
+  const p = jmPanelItem_();
+  if (!p.classList.contains("hidden")) { jmTutupPanelItem_(); return; }
+  const cari = p.querySelector("#jm-cari-item");
+  cari.value = "";
+  jmIsiPanelItem_("");
+  p.classList.remove("hidden");
+  const btn = (ev && ev.currentTarget) || document.getElementById("jm-in-item-pilih");
+  const r = btn ? btn.getBoundingClientRect() : { left: 8, bottom: 8, width: 320 };
+  const lebar = Math.min(Math.max(r.width, 320), window.innerWidth - 16);
+  p.style.width = lebar + "px";
+  const tinggi = p.offsetHeight || 300;
+  p.style.left = Math.max(8, Math.min(r.left, window.innerWidth - lebar - 8)) + "px";
+  p.style.top = Math.max(8, Math.min(r.bottom + 4, window.innerHeight - tinggi - 8)) + "px";
+  if (cari.focus) cari.focus();
+}
+function jmTutupPanelItem_() {
+  const p = document.getElementById("jm-panel-item");
+  if (p) p.classList.add("hidden");
+}
+function jmPilihItem_(kunci) {
+  const sel = document.getElementById("jm-in-item");
+  if (!sel) return;
+  sel.value = kunci;
+  jmTutupPanelItem_();
+  jmFormItemBerubah();   // jalur yang sama dengan onchange <select>
+}
 function jmPasangTautanRencana_(selItem) {
   if (!JM_BOLEH_TULIS || !selItem || document.getElementById("jm-tautan-rencana")) return;
   const a = document.createElement("a");
@@ -1906,8 +2027,9 @@ function jmIsiFormPilihan_() {
   selItem.innerHTML = '<option value="">-- pilih item --</option>' +
     Object.keys(perKlien).sort().map(function (k) {
       return '<optgroup label="' + jmEsc_(k) + '">' + perKlien[k].map(function (it) {
-        return '<option value="' + jmEsc_(it.kunci) + '">' + jmEsc_(jmNamaItem_(it)) +
-          ' \u00b7 ' + (it.jenis === "rencana" ? 'Rencana \u00b7 ' : '') + jmEsc_(it.po) + (it.qtyPo ? ' (' + it.qtyPo + ' pcs)' : '') + '</option>';
+        // v267: PO di depan (pembeda di dalam satu klien), nama tanpa brand, qty di belakang.
+        return '<option value="' + jmEsc_(it.kunci) + '">' + (it.jenis === "rencana" ? 'Rencana \u00b7 ' : '') + jmEsc_(it.po) +
+          ' \u00b7 ' + jmEsc_(jmNamaItemPendek_(it)) + (it.qtyPo ? ' \u00b7 ' + it.qtyPo.toLocaleString("id-ID") + ' pcs' : '') + '</option>';
       }).join("") + '</optgroup>';
     }).join("");
   if (nilaiItem) selItem.value = nilaiItem;
@@ -1918,6 +2040,7 @@ function jmIsiFormPilihan_() {
     selItem.value = JM_PILIH_ITEM_NANTI;
     if (selItem.value === JM_PILIH_ITEM_NANTI) { JM_PILIH_ITEM_NANTI = ""; jmFormItemBerubah(); }
   }
+  jmPasangTombolItem_(selItem);   // v267
   jmPasangTautanRencana_(selItem);
 
   const nilaiTahap = selTahap.value;
@@ -1958,6 +2081,7 @@ function jmFormTahapBerubah() {
  * tahap + geser tanggal selesai.
  */
 function jmFormItemBerubah() {
+  jmSegarkanTombolItem_();   // v267: label tombol pemilih ikut nilai <select>
   if (JM_EDIT_ID) return;
   const kunci = (document.getElementById("jm-in-item") || {}).value || "";
   const inMulai = document.getElementById("jm-in-mulai");
@@ -2443,7 +2567,9 @@ window.addEventListener("load", function () {
     const ps = document.getElementById("jm-panel-sembunyi");
     const pt = ["tahap", "klien", "line", "keadaan"].map(function (j) { return document.getElementById("jm-panel-" + j); })
       .filter(function (p) { return p && !p.classList.contains("hidden"); })[0];
-    const mr = document.getElementById("jm-modal-rencana");   // v257: paling atas
+    const pit = document.getElementById("jm-panel-item");   // v267: paling atas
+    if (pit && !pit.classList.contains("hidden")) { jmTutupPanelItem_(); return; }
+    const mr = document.getElementById("jm-modal-rencana");   // v257
     if (mr && !mr.classList.contains("hidden")) { jmTutupRencana_(); return; }
     const pdv = document.getElementById("jm-panel-deviasi");   // v265
     if (pdv && !pdv.classList.contains("hidden")) { jmTutupPanelDeviasi_(); return; }
