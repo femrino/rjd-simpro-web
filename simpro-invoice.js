@@ -637,12 +637,16 @@ function ivRenderDraft() {
       '<span class="iv-draft-nilai">' + rjdEscapeHtml_((d.daftarPengiriman || []).join(", ")) + '</span></div>' +
     // v281: pengiriman ini pernah ditagih di invoice yang DIBATALKAN -> invoice
     // baru adalah PENGGANTI; pembayarannya dipindah otomatis saat disimpan.
+    // v282: tiap calon punya kotak centang (bawaan tercentang) -- gs @318 juga
+    // mencocokkan lewat PO (invoice lama tanpa tautan pengiriman), dan satu PO
+    // bisa punya lebih dari satu invoice batal; admin yang memutuskan.
     ((d.menggantikan || []).length
-      ? '<div class="iv-pengganti-info" id="iv-pengganti-info"><b>Invoice ini menggantikan ' +
-          d.menggantikan.map(function (m) { return rjdEscapeHtml_(m.idInvoice); }).join(", ") + '</b>' +
+      ? '<div class="iv-pengganti-info" id="iv-pengganti-info"><b>Invoice ini menggantikan invoice yang dibatalkan:</b>' +
           d.menggantikan.map(function (m) {
-            return '<div class="iv-sub">' + rjdEscapeHtml_(m.idInvoice) + (m.alasanBatal ? ' -- dibatalkan: ' + rjdEscapeHtml_(m.alasanBatal) : '') +
-              (m.totalDibayar ? ' -- pembayaran ' + ivFormatRupiah_(m.totalDibayar) + ' (' + m.jumlahPelunasan + ' baris) akan dipindah ke sini' : ' -- tanpa pembayaran') + '</div>';
+            return '<label class="iv-pengganti-pilih"><input type="checkbox" class="iv-pengganti-cek" data-id="' + rjdEscapeHtml_(m.idInvoice) + '" checked> <b>' + rjdEscapeHtml_(m.idInvoice) + '</b>' +
+              (m.alasanBatal ? ' -- dibatalkan: ' + rjdEscapeHtml_(m.alasanBatal) : '') +
+              (m.totalDibayar ? ' -- pembayaran ' + ivFormatRupiah_(m.totalDibayar) + ' (' + m.jumlahPelunasan + ' baris) akan dipindah ke sini' : ' -- tanpa pembayaran') +
+              (m.cocok === "po" ? ' <span class="iv-sub">(dicocokkan lewat PO, bukan pengiriman)</span>' : '') + '</label>';
           }).join("") + '</div>'
       : '');
 
@@ -748,7 +752,7 @@ function ivSimpanInvoice() {
     potonganLainLain: Number((document.getElementById("iv-draft-potongan-lain") || {}).value) || 0,
     potonganPajak: Number((document.getElementById("iv-draft-pph") || {}).value) || 0,
     // v281: id invoice batal yang digantikan (gs >= @316 memindahkan pembayarannya)
-    menggantikan: (d.menggantikan || []).map(function (m) { return m.idInvoice; })
+    menggantikan: [].slice.call(document.querySelectorAll("#iv-pengganti-info .iv-pengganti-cek:checked")).map(function (c) { return c.dataset.id; })
   };
 
   fetch(IV_API_URL, {

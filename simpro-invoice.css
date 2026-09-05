@@ -348,6 +348,7 @@ tr.iv-baris-batal td { color: var(--ink-soft); }
 .iv-pengganti-sub { margin-top: 2px; white-space: normal; }
 .iv-pengganti-info { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #FFF4D6; border: 1px solid #E8C978; font-size: 12.5px; }
 .iv-pengganti-info .iv-sub { white-space: normal; margin-top: 3px; }
+.iv-pengganti-pilih { display: block; margin-top: 6px; white-space: normal; cursor: pointer; }   /* v282 */
 .iv-negatif { color: #8f2c22; }
 .iv-modal { position: fixed; inset: 0; background: rgba(23, 33, 47, .45); z-index: 96; display: flex; align-items: center; justify-content: center; padding: 16px; }
 .iv-modal.hidden { display: none; }
