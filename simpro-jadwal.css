@@ -728,7 +728,7 @@ table.jm-beban td.jm-beban-lebih{ color: #8A2A22; font-weight: 700; background: 
 
 /* ---------- v278: mode harian (daftar pekerjaan satu hari) ---------- */
 .jm-harian{ padding: 4px 0 8px; }
-.jm-harian-seksi{ padding: 4px 0 6px; border-left: 4px solid var(--line, #E5E0D6); margin: 6px 0; }
+.jm-harian-seksi{ padding: 4px 0 6px; border-left: 4px solid var(--line, #E5E0D6); margin: 10px 0; }   /* v280: 6 -> 10 px, tiap seksi terasa satu kartu */
 .jm-harian-judul{ display: flex; align-items: baseline; gap: 6px; padding: 4px 10px 2px; font-size: 13px; color: var(--navy, #17212F); }
 .jm-harian-sub{ color: var(--ink-soft, #5F6B7A); }
 .jm-harian-n{ margin-left: auto; font: 700 11px/16px 'Archivo', sans-serif; color: var(--ink-soft, #5F6B7A); background: #F1EDE5; border-radius: 999px; padding: 0 7px; }
@@ -752,9 +752,8 @@ table.jm-beban td.jm-beban-lebih{ color: #8A2A22; font-weight: 700; background: 
 .jm-harian-t-interlining .jm-harian-judul{ background: #A8D5D2; } .jm-harian-t-interlining{ border-left-color: #A8D5D2; }
 .jm-harian-t-sewing .jm-harian-judul{ background: #D4CBEA; }      .jm-harian-t-sewing{ border-left-color: #D4CBEA; }
 .jm-harian-t-finishing .jm-harian-judul{ background: #A99BD0; }   .jm-harian-t-finishing{ border-left-color: #A99BD0; }
-.jm-harian-t-kirim .jm-harian-judul{ background: #5B4A9E; color: #fff; } .jm-harian-t-kirim{ border-left-color: #5B4A9E; }
-.jm-harian-t-kirim .jm-harian-sub, .jm-harian-t-kirim .jm-harian-n{ color: #fff; }
-.jm-harian-t-kirim .jm-harian-n{ background: rgba(255,255,255,.22); }
+/* v280: Pengiriman dipucatkan (#5B4A9E terlalu tegas di daftar) -> nada ungu sedang, huruf gelap, sederajat Finishing */
+.jm-harian-t-kirim .jm-harian-judul{ background: #BFB3E0; } .jm-harian-t-kirim{ border-left-color: #8F7FC4; }
 .jm-harian-t-lain .jm-harian-judul{ background: #E8E4DC; }
 @media (max-width: 640px){
   .jm-harian-baris{ padding: 6px 8px; }
