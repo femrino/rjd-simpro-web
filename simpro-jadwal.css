@@ -430,7 +430,10 @@ body.jm-modal-terbuka{ overflow: hidden; }
   .jm-alat .jm-btn, .jm-sumbu, .jm-btn-laci{ height:36px; box-sizing:border-box; }
   .jm-alat .jm-btn{ display:inline-flex; align-items:center; padding:0 12px; font-size:13px; }
   .jm-nav .jm-btn{ padding:0 10px; }
-  .jm-sumbu button{ height:100%; padding:0 12px; font-size:13px; }
+  /* v278: 3 tombol (Artikel|Tahap|Hari) harus muat sebaris dengan nav (127) + '+' (58) di 390 px.
+     Isi 338 px, EMPAT anggota baris (nav, spasi, sumbu, +) = tiga celah 18 px -> sumbu maks 135 px.
+     Terukur 5 Sep 2026: padding 6 = 136 (lewat 1 px, '+' terlempar); padding 5 = 130. */
+  .jm-sumbu button{ height:100%; padding:0 5px; font-size:12.5px; }
   /* nav, sumbu, dan Filter tingginya beda beberapa px karena padding masing-
      masing; stretch menyamakannya supaya barisnya terlihat satu garis rapi. */
   .jm-nav, .jm-sumbu, .jm-btn-laci{ align-self:stretch; align-items:center; }
@@ -722,6 +725,32 @@ table.jm-beban td.jm-beban-lebih{ color: #8A2A22; font-weight: 700; background: 
 .jm-beban-cad{ color: #8A5A00; margin-left: 1px; }
 .jm-beban-kaki{ font-size: 11.5px; color: var(--ink-soft, #5F6B7A); padding: 8px 6px 2px; }
 @media print { #jm-panel-beban, .jm-rentang-beban { display: none !important; } }
+
+/* ---------- v278: mode harian (daftar pekerjaan satu hari) ---------- */
+.jm-harian{ padding: 4px 0 8px; }
+.jm-harian-seksi{ padding: 4px 0 6px; border-left: 4px solid var(--line, #E5E0D6); margin: 6px 0; }
+.jm-harian-judul{ display: flex; align-items: baseline; gap: 6px; padding: 4px 10px 2px; font-size: 13px; color: var(--navy, #17212F); }
+.jm-harian-sub{ color: var(--ink-soft, #5F6B7A); }
+.jm-harian-n{ margin-left: auto; font: 700 11px/16px 'Archivo', sans-serif; color: var(--ink-soft, #5F6B7A); background: #F1EDE5; border-radius: 999px; padding: 0 7px; }
+.jm-harian-baris{ display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 5px 10px; border-top: 1px solid var(--line, #E5E0D6); }
+.jm-harian-nama{ font: inherit; font-weight: 700; font-size: 13px; color: var(--navy, #17212F); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.jm-harian-meta{ font-size: 12px; color: var(--ink-soft, #5F6B7A); flex: 1 1 240px; min-width: 0; }
+.jm-harian-lencana{ display: inline-flex; gap: 4px; flex: 0 0 auto; }
+.jm-harian-ubah{ margin-left: auto; }
+.jm-harian-baris.jm-k-batal .jm-harian-nama{ text-decoration: line-through; color: var(--ink-soft, #5F6B7A); }
+.jm-harian-baris.jm-k-selesai .jm-harian-nama{ color: var(--ink-soft, #5F6B7A); }
+.jm-lencana-real{ background: #E3F0E6; color: #2F6B3A; }
+/* warna tepi seksi mengikuti warna tahap di matriks (kelas jm-t-*) */
+.jm-harian-seksi.jm-t-sewing{ border-left-color: #B8A7E0; }
+.jm-harian-seksi.jm-t-cutting{ border-left-color: #A9C4E8; }
+.jm-harian-seksi.jm-t-finishing{ border-left-color: #A7C8B9; }
+.jm-harian-seksi.jm-t-kirim{ border-left-color: #6B5FB5; }   /* JM_KELAS_TAHAP: Pengiriman -> 'kirim' */
+@media (max-width: 640px){
+  .jm-harian-baris{ padding: 6px 8px; }
+  .jm-harian-meta{ flex-basis: 100%; }
+  .jm-harian-ubah{ margin-left: 0; }
+}
+@media print { .jm-harian-ubah { display: none !important; } }
 
 /* ---------- v266: bilah alat HP dua baris rapat; lencana jadi titik di HP ---------- */
 .jm-alat-putus{ display:none; }
