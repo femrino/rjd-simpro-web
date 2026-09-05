@@ -169,11 +169,17 @@ function ivRender(){
   const semua = window.IV_DAFTAR || [];
   const r = window.IV_RINGKASAN || {};
   const cari = (document.getElementById("iv-cari").value || "").trim().toLowerCase();
-  const fStatus = document.getElementById("iv-status").value;
+  // v281: opsi "Dibatalkan" disuntik lewat JS (template tidak berubah), seperti kontrol lain.
+  const selStatus = document.getElementById("iv-status");
+  if (selStatus && !selStatus.querySelector('option[value="batal"]')) {
+    const o = document.createElement("option"); o.value = "batal"; o.textContent = "Dibatalkan"; selStatus.appendChild(o);
+  }
+  const fStatus = selStatus.value;
 
   const hasil = semua.filter(function(p){
     if(fStatus === "belum" && p.lunas) return false;
-    if(fStatus === "lunas" && !p.lunas) return false;
+    if(fStatus === "lunas" && (!p.lunas || p.batal)) return false;   // v281: batal bukan lunas
+    if(fStatus === "batal" && !p.batal) return false;
     if(fStatus && fStatus.indexOf("bucket:") === 0 && p.bucket !== fStatus.slice(7)) return false;
     if(!cari) return true;
     return [p.idInvoice, p.idPurchaseOrder, p.namaKlien].join(" ").toLowerCase().indexOf(cari) !== -1;
@@ -208,9 +214,9 @@ function ivRender(){
       '<th class="num">Dibayar</th><th class="num">Sisa</th><th>Tanggal</th><th>Umur</th><th>Status</th>' +
     '</tr></thead><tbody>' +
     hasil.map(function(p){
-      const kelas = p.lunas ? "lunas" : (p.bucket === "61-90" || p.bucket === "90+" ? "bahaya" : "belum");
+      const kelas = p.batal ? "batal" : p.lunas ? "lunas" : (p.bucket === "61-90" || p.bucket === "90+" ? "bahaya" : "belum");
       const idInv = String(p.idInvoice || "").trim();
-      return '<tr>' +
+      return '<tr' + (p.batal ? ' class="iv-baris-batal"' : '') + '>' +
         // Tautan cetak DITARUH DI DALAM sel nomor, bukan jadi kolom ke-10.
         // Tabel ini sudah kehabisan ruang: sembilan kolom, dan tujuh di
         // antaranya nowrap, sehingga kolom Klien yang jadi korban -- nama
@@ -223,7 +229,21 @@ function ivRender(){
             ? '<a class="iv-cetak-link" target="_blank" rel="noopener"' +
               ' href="/p/cetak.html?jenis=invoice&amp;id=' + encodeURIComponent(idInv) + '">' +
               '&#128424; Cetak</a>'
-            : '') + '</td>' +
+            : '') +
+          // v281: KOREKSI TANPA HAPUS. Ubah = kolom input (dibatasi sesudah ada
+          // pembayaran); Batalkan = status + alasan, pengganti dibuat lewat tab
+          // Buat Invoice. Invoice batal tidak punya keduanya. data-id, bukan
+          // interpolasi ke onclick (lihat catatan kartu bucket).
+          (idInv && !p.batal
+            ? ' <a href="#" class="iv-aksi-link" data-id="' + rjdEscapeHtml_(idInv) + '" onclick="ivBukaUbah(this.dataset.id); return false;">Ubah</a>' +
+              ' <a href="#" class="iv-aksi-link iv-aksi-batal" data-id="' + rjdEscapeHtml_(idInv) + '" onclick="ivBukaBatal(this.dataset.id); return false;">Batalkan</a>'
+            : '') +
+          (p.batal
+            ? '<div class="iv-sub iv-batal-info">Dibatalkan' + (p.alasanBatal ? ': ' + rjdEscapeHtml_(p.alasanBatal) : '') +
+              (p.digantiOleh ? ' &#183; diganti oleh <b>' + rjdEscapeHtml_(p.digantiOleh) + '</b>' : ' &#183; belum ada pengganti') + '</div>'
+            : '') +
+          (p.menggantikan ? '<div class="iv-sub iv-pengganti-sub">menggantikan ' + rjdEscapeHtml_(p.menggantikan) + '</div>' : '') +
+          '</td>' +
         '<td class="iv-klien">' + rjdEscapeHtml_(p.namaKlien) + '</td>' +
         '<td class="iv-sub">' + rjdEscapeHtml_(p.idPurchaseOrder || "-") + '</td>' +
         '<td class="num">' + ivFormatRupiah_(p.total) + '</td>' +
@@ -235,6 +255,147 @@ function ivRender(){
       '</tr>';
     }).join("") +
     '</tbody></table></div>';
+}
+
+/* ============================================================
+ * v281 -- KOREKSI INVOICE TANPA HAPUS (gs >= @316)
+ * ============================================================
+ * Invoice adalah dokumen keluar: sudah dipegang klien, bernomor urut, memotong
+ * PPh. Karena itu tidak ada tombol hapus. Tiga jalan koreksi:
+ *   Ubah      : kolom INPUT header. Sebelum ada pembayaran: tanggal + biaya/
+ *               potongan + DPP/PPh/bukti potong. Sesudah ada pembayaran: hanya
+ *               DPP, PPh, bukti potong (angka PPh baru pasti saat klien bayar).
+ *               Klien, PO, pcs, subtotal TIDAK bisa diubah -- itu isi dokumen.
+ *   Batalkan  : status Dibatalkan + alasan (wajib). Pengirimannya bebas ditagih
+ *               lagi lewat tab Buat Invoice; invoice baru itu PENGGANTI, dan
+ *               pembayaran yang sudah masuk dipindah otomatis saat disimpan.
+ *   Koreksi pembayaran (tab Pembayaran): baris pembalik bernilai negatif.
+ * Semua dicatat di sheet Log_Invoice oleh server.
+ * ============================================================ */
+function ivModal_(judul, isiHtml, tombol) {
+  let m = document.getElementById("iv-modal");
+  if (!m) {
+    m = document.createElement("div");
+    m.id = "iv-modal"; m.className = "iv-modal hidden";
+    m.innerHTML = '<div class="iv-modal-kotak"><div class="iv-modal-judul"></div><div class="iv-modal-isi"></div><div class="iv-modal-kaki"></div></div>';
+    document.body.appendChild(m);
+    m.addEventListener("click", function (ev) { if (ev.target === m) ivTutupModal_(); });
+    document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && !m.classList.contains("hidden")) ivTutupModal_(); });
+  }
+  m.querySelector(".iv-modal-judul").textContent = judul;
+  m.querySelector(".iv-modal-isi").innerHTML = isiHtml;
+  const kaki = m.querySelector(".iv-modal-kaki");
+  kaki.innerHTML = "";
+  (tombol || []).forEach(function (t) {
+    const b = document.createElement("button");
+    b.type = "button"; b.id = t.id || ""; b.className = "iv-btn" + (t.utama ? " iv-btn-utama" : "") + (t.bahaya ? " iv-btn-bahaya" : "");
+    b.textContent = t.label; b.onclick = t.klik;
+    kaki.appendChild(b);
+  });
+  m.classList.remove("hidden");
+  return m;
+}
+function ivTutupModal_() { const m = document.getElementById("iv-modal"); if (m) m.classList.add("hidden"); }
+function ivModalPesan_(teks, galat) {
+  let p = document.getElementById("iv-modal-pesan");
+  if (!p) { p = document.createElement("div"); p.id = "iv-modal-pesan"; const isi = document.querySelector("#iv-modal .iv-modal-isi"); if (isi) isi.appendChild(p); }
+  p.className = "iv-modal-pesan" + (galat ? " galat" : "");
+  p.textContent = teks || "";
+}
+function ivInvoiceDariId_(id) {
+  return (window.IV_DAFTAR || []).filter(function (p) { return String(p.idInvoice || "").trim() === String(id || "").trim(); })[0] || null;
+}
+function ivKirimKoreksi_(action, payload) {
+  return fetch(IV_API_URL, { method: "POST", body: JSON.stringify({ idToken: IV_ID_TOKEN, action: action, payload: payload }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) { if (!d || !d.success) throw new Error((d && d.error) || "Gagal."); return d; });
+}
+
+// Kolom yang bisa diubah, urutan tampil di form. kunci = kunci payload gs.
+const IV_KOLOM_UBAH = [
+  { k: "tanggalInvoice", label: "Tanggal invoice", tipe: "date", nominal: true },
+  { k: "biayaTambahan", label: "Biaya tambahan", tipe: "number", nominal: true },
+  { k: "biayaKirim", label: "Biaya kirim", tipe: "number", nominal: true },
+  { k: "biayaLainLain", label: "Biaya lain-lain", tipe: "number", nominal: true },
+  { k: "potonganLainLain", label: "Potongan lain-lain", tipe: "number", nominal: true },
+  { k: "dasarPPh", label: "Dasar PPh (DPP)", tipe: "number", nominal: false },
+  { k: "potonganPajak", label: "Potongan pajak (PPh)", tipe: "number", nominal: false },
+  { k: "statusBuktiPotong", label: "Status bukti potong", tipe: "text", nominal: false }
+];
+function ivNilaiAwal_(p, k) { return k === "tanggalInvoice" ? (p.tanggalInvoiceIso || "") : k === "statusBuktiPotong" ? (p.statusBuktiPotong || "") : (Number(p[k]) || 0); }
+
+function ivBukaUbah(id) {
+  const p = ivInvoiceDariId_(id);
+  if (!p) { alert("Invoice " + id + " tidak ada di daftar. Muat ulang halaman."); return; }
+  if (p.batal) return;
+  const sudahBayar = (Number(p.dibayar) || 0) > 0 || !!p.lunas;
+  const html =
+    '<div class="iv-ub-tetap"><b>' + rjdEscapeHtml_(p.idInvoice) + '</b> &#183; ' + rjdEscapeHtml_(p.namaKlien || "-") + ' &#183; ' + rjdEscapeHtml_(p.idPurchaseOrder || "-") +
+      ' &#183; ' + (p.jumlahPcs || 0) + ' pcs &#183; subtotal ' + ivFormatRupiah_((Number(p.total) || 0) - (Number(p.biayaTambahan) || 0) - (Number(p.biayaKirim) || 0) - (Number(p.biayaLainLain) || 0) + (Number(p.potonganLainLain) || 0)) +
+      '<div class="iv-sub">Klien, PO, jumlah pcs, dan subtotal adalah isi dokumen -- kalau salah, <b>Batalkan</b> lalu buat pengganti dari tab Buat Invoice.</div></div>' +
+    (sudahBayar ? '<div class="iv-ub-catatan">Invoice ini sudah menerima pembayaran ' + ivFormatRupiah_(p.dibayar) + ', jadi tanggal dan biaya/potongan dikunci. Yang masih boleh: DPP, PPh, dan status bukti potong.</div>' : '') +
+    '<div class="iv-ub-grid">' + IV_KOLOM_UBAH.map(function (c) {
+      const kunci = sudahBayar && c.nominal;
+      const v = ivNilaiAwal_(p, c.k);
+      return '<label class="iv-ub-lbl' + (kunci ? ' terkunci' : '') + '"><span>' + c.label + '</span>' +
+        '<input id="iv-ub-' + c.k + '" data-kunci="' + c.k + '" type="' + c.tipe + '"' + (c.tipe === "number" ? ' min="0" step="1"' : '') +
+        ' value="' + rjdEscapeHtml_(String(v)) + '"' + (kunci ? ' disabled' : '') + '></label>';
+    }).join("") + '</div>';
+  ivModal_("Ubah invoice", html, [
+    { label: "Batal", klik: ivTutupModal_ },
+    { id: "iv-ub-simpan", label: "Simpan perubahan", utama: true, klik: function () { ivSimpanUbah_(p); } }
+  ]);
+}
+function ivSimpanUbah_(p) {
+  const perubahan = {};
+  IV_KOLOM_UBAH.forEach(function (c) {
+    const el = document.getElementById("iv-ub-" + c.k);
+    if (!el || el.disabled) return;
+    const baru = c.tipe === "number" ? (Number(el.value) || 0) : String(el.value || "").trim();
+    const lama = ivNilaiAwal_(p, c.k);
+    if (String(baru) !== String(lama)) perubahan[c.k] = baru;
+  });
+  if (!Object.keys(perubahan).length) { ivModalPesan_("Tidak ada yang berubah.", false); return; }
+  const btn = document.getElementById("iv-ub-simpan"); if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
+  ivKirimKoreksi_("ubahInvoice", { idInvoice: p.idInvoice, perubahan: perubahan })
+    .then(function (d) {
+      ivTutupModal_();
+      window.IV_DAFTAR = null; window.IV_SUDAH_SEGAR = false;
+      ivMuat();
+      alert("Tersimpan: " + (d.diubah || []).map(function (x) { return x.kolom + " " + x.lama + " \u2192 " + x.baru; }).join("; ") +
+        (d.status ? "\nStatus sekarang: " + d.status : ""));
+    })
+    .catch(function (e) { ivModalPesan_(e.message || "Gagal menyimpan.", true); if (btn) { btn.disabled = false; btn.textContent = "Simpan perubahan"; } });
+}
+
+function ivBukaBatal(id) {
+  const p = ivInvoiceDariId_(id);
+  if (!p) { alert("Invoice " + id + " tidak ada di daftar. Muat ulang halaman."); return; }
+  if (p.batal) return;
+  const adaBayar = (Number(p.dibayar) || 0) > 0;
+  const html =
+    '<div class="iv-ub-tetap"><b>' + rjdEscapeHtml_(p.idInvoice) + '</b> &#183; ' + rjdEscapeHtml_(p.namaKlien || "-") + ' &#183; ' + ivFormatRupiah_(p.total) + '</div>' +
+    '<p class="iv-sub">Nomor ini tetap ada dengan status <b>Dibatalkan</b> dan tidak dipakai ulang. Pengirimannya bisa ditagih lagi lewat tab <b>Buat Invoice</b>; invoice baru itu menjadi penggantinya.</p>' +
+    (adaBayar ? '<div class="iv-ub-catatan">Pembayaran ' + ivFormatRupiah_(p.dibayar) + ' yang sudah masuk tetap menempel di sini dan <b>dipindah otomatis</b> ke pengganti saat pengganti itu disimpan.</div>' : '') +
+    '<label class="iv-ub-lbl"><span>Alasan pembatalan (wajib)</span><textarea id="iv-bt-alasan" rows="3" placeholder="mis. salah klien / salah jumlah pcs / harga keliru"></textarea></label>';
+  ivModal_("Batalkan invoice", html, [
+    { label: "Kembali", klik: ivTutupModal_ },
+    { id: "iv-bt-simpan", label: "Batalkan invoice ini", bahaya: true, klik: function () { ivSimpanBatal_(p); } }
+  ]);
+}
+function ivSimpanBatal_(p) {
+  const alasan = String((document.getElementById("iv-bt-alasan") || {}).value || "").trim();
+  if (alasan.length < 5) { ivModalPesan_("Tulis alasannya dulu (minimal 5 huruf).", true); return; }
+  const btn = document.getElementById("iv-bt-simpan"); if (btn) { btn.disabled = true; btn.textContent = "Membatalkan..."; }
+  ivKirimKoreksi_("batalkanInvoice", { idInvoice: p.idInvoice, alasan: alasan })
+    .then(function (d) {
+      ivTutupModal_();
+      window.IV_DAFTAR = null; window.IV_SUDAH_SEGAR = false; window.IV_PENGIRIMAN = null;
+      ivMuat();
+      alert(d.sudah ? p.idInvoice + " sudah dibatalkan sebelumnya." :
+        p.idInvoice + " dibatalkan." + (d.totalDibayar ? "\nPembayaran " + ivFormatRupiah_(d.totalDibayar) + " akan dipindah saat pengganti dibuat." : ""));
+    })
+    .catch(function (e) { ivModalPesan_(e.message || "Gagal membatalkan.", true); if (btn) { btn.disabled = false; btn.textContent = "Batalkan invoice ini"; } });
 }
 
 /** Klik kartu bucket aging -> saring tabel ke bucket itu. */
@@ -473,7 +634,17 @@ function ivRenderDraft() {
     '<div><span class="iv-draft-label">Purchase Order</span>' +
       '<span class="iv-draft-nilai">' + rjdEscapeHtml_((d.daftarPurchaseOrder || []).join(", ") || "-") + '</span></div>' +
     '<div><span class="iv-draft-label">Pengiriman ditagih</span>' +
-      '<span class="iv-draft-nilai">' + rjdEscapeHtml_((d.daftarPengiriman || []).join(", ")) + '</span></div>';
+      '<span class="iv-draft-nilai">' + rjdEscapeHtml_((d.daftarPengiriman || []).join(", ")) + '</span></div>' +
+    // v281: pengiriman ini pernah ditagih di invoice yang DIBATALKAN -> invoice
+    // baru adalah PENGGANTI; pembayarannya dipindah otomatis saat disimpan.
+    ((d.menggantikan || []).length
+      ? '<div class="iv-pengganti-info" id="iv-pengganti-info"><b>Invoice ini menggantikan ' +
+          d.menggantikan.map(function (m) { return rjdEscapeHtml_(m.idInvoice); }).join(", ") + '</b>' +
+          d.menggantikan.map(function (m) {
+            return '<div class="iv-sub">' + rjdEscapeHtml_(m.idInvoice) + (m.alasanBatal ? ' -- dibatalkan: ' + rjdEscapeHtml_(m.alasanBatal) : '') +
+              (m.totalDibayar ? ' -- pembayaran ' + ivFormatRupiah_(m.totalDibayar) + ' (' + m.jumlahPelunasan + ' baris) akan dipindah ke sini' : ' -- tanpa pembayaran') + '</div>';
+          }).join("") + '</div>'
+      : '');
 
   document.getElementById("iv-draft-item").innerHTML =
     '<div class="iv-tabelwrap"><table class="iv-tabel iv-draft-tabel"><thead><tr>' +
@@ -575,7 +746,9 @@ function ivSimpanInvoice() {
     biayaKirim: Number((document.getElementById("iv-draft-biaya-kirim") || {}).value) || 0,
     biayaLainLain: Number((document.getElementById("iv-draft-biaya-lain") || {}).value) || 0,
     potonganLainLain: Number((document.getElementById("iv-draft-potongan-lain") || {}).value) || 0,
-    potonganPajak: Number((document.getElementById("iv-draft-pph") || {}).value) || 0
+    potonganPajak: Number((document.getElementById("iv-draft-pph") || {}).value) || 0,
+    // v281: id invoice batal yang digantikan (gs >= @316 memindahkan pembayarannya)
+    menggantikan: (d.menggantikan || []).map(function (m) { return m.idInvoice; })
   };
 
   fetch(IV_API_URL, {
@@ -596,7 +769,12 @@ function ivSimpanInvoice() {
     // textContent, jadi pakai karakter titik-tengah LANGSUNG -- entity HTML
     // (&#183;) di textContent tampil mentah sebagai teks, bukan sebagai titik.
     document.getElementById("iv-sukses-rincian").textContent =
-      h.jumlahBaris + " baris item \u00B7 " + h.jumlahPcs + " pcs \u00B7 " + ivFormatRupiah_(h.subtotal);
+      h.jumlahBaris + " baris item \u00B7 " + h.jumlahPcs + " pcs \u00B7 " + ivFormatRupiah_(h.subtotal) +
+      // v281: pengganti -- sebut yang digantikan & pembayaran yang dipindah, atau galatnya (jujur)
+      (h.pengganti && (h.pengganti.menggantikan || []).length
+        ? " \u00B7 menggantikan " + h.pengganti.menggantikan.join(", ") +
+          (h.pengganti.dipindah ? ", " + h.pengganti.dipindah + " pembayaran (" + ivFormatRupiah_(h.pengganti.totalDipindah) + ") dipindah" : "")
+        : (h.pengganti && h.pengganti.galat ? " \u00B7 PENGGANTI GAGAL DITAUTKAN: " + h.pengganti.galat : ""));
     // Daftar pengiriman & daftar invoice dua-duanya berubah setelah ini --
     // dikosongkan supaya dimuat ulang dari server, bukan menampilkan yang basi.
     window.IV_PENGIRIMAN = null;
@@ -919,13 +1097,19 @@ function ivMuatRiwayat(){
           '<td class="iv-nomor">' + rjdEscapeHtml_(v.idPelunasan || "-") + '</td>' +
           '<td class="iv-tgl">' + rjdEscapeHtml_(v.tanggal || "-") + '</td>' +
           '<td>' + tujuan + '</td>' +
-          '<td class="num">' + formatRupiah(v.jumlah) + '</td>' +
+          '<td class="num' + (v.jumlah < 0 ? ' iv-negatif' : '') + '">' + formatRupiah(v.jumlah) + '</td>' +
           '<td>' + rjdEscapeHtml_(v.metode || "-") +
-          (v.noReferensi ? '<div class="iv-sub">' + rjdEscapeHtml_(v.noReferensi) + '</div>' : '') + '</td>' +
-          '<td>' + (v.bisaDihapus
-            ? '<a href="#" class="iv-hapus-link" onclick="ivHapusPembayaran(\'' +
-                rjdEscapeHtml_(v.idPelunasan).replace(/'/g, "") + '\'); return false;">Hapus</a>'
-            : '') + '</td>' +
+          (v.noReferensi ? '<div class="iv-sub">' + rjdEscapeHtml_(v.noReferensi) + '</div>' : '') +
+          (v.pembalik ? '<div class="iv-sub">' + rjdEscapeHtml_(v.catatan || "pembalik") + '</div>' : '') + '</td>' +
+          // v281: "Hapus" -> "Koreksi" (baris pembalik, bukan deleteRow). Baris
+          // pembalik dan baris yang sudah dikoreksi tidak punya tautan.
+          '<td>' + (v.pembalik
+            ? '<span class="iv-status batal">pembalik</span>'
+            : v.dibalikOleh
+              ? '<span class="iv-sub">dikoreksi: ' + rjdEscapeHtml_(v.dibalikOleh) + '</span>'
+              : (v.bisaDihapus
+                ? '<a href="#" class="iv-hapus-link" data-id="' + rjdEscapeHtml_(v.idPelunasan) + '" onclick="ivHapusPembayaran(this.dataset.id); return false;">Koreksi</a>'
+                : '')) + '</td>' +
         '</tr>';
       }).join("") +
       '</tbody></table></div>';
@@ -939,13 +1123,17 @@ function ivMuatRiwayat(){
  *  menekan, bukan sesudah. */
 function ivHapusPembayaran(id){
   if(!id) return;
-  if(!window.confirm("Hapus catatan pembayaran " + id + "?\n\n" +
+  // v281: KOREKSI = baris pembalik bernilai negatif (gs >= @316). Baris asli
+  // tetap ada sebagai jejak; nama fungsi & aksi dipertahankan untuk kompatibilitas.
+  if(!window.confirm("Koreksi pembayaran " + id + "?\n\n" +
+    "Baris PEMBALIK bernilai negatif akan dicatat; baris aslinya tetap ada sebagai jejak. " +
     "Total Dibayar akan TURUN sebesar jumlah ini, dan status invoice terkait bisa " +
     "berubah dari Lunas kembali jadi belum lunas.\n\nLakukan hanya untuk memperbaiki salah input.")) return;
+  const alasan = window.prompt("Alasan koreksi (dicatat di baris pembalik):", "salah input") || "";
 
   fetch(IV_API_URL, {
     method: "POST",
-    body: JSON.stringify({ idToken: IV_ID_TOKEN, action: "hapusPembayaran", idPelunasan: id })
+    body: JSON.stringify({ idToken: IV_ID_TOKEN, action: "hapusPembayaran", idPelunasan: id, alasan: alasan })
   })
   .then(function(r){ return r.json(); })
   .then(function(d){

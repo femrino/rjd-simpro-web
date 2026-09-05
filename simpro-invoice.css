@@ -57,6 +57,7 @@ body { padding-top: 0; }
 .iv-status.lunas { background: #EAF4EC; color: #2C6B3F; }
 .iv-status.belum { background: var(--cream); color: var(--ink-soft); }
 .iv-status.bahaya { background: #FCF3E3; color: #8A5D1F; }
+.iv-status.batal { background: #EEECE8; color: #6B6B6B; text-decoration: line-through; }   /* v281 */
 
 @media (max-width: 640px) {
   .iv-kartu { flex: 1 1 calc(50% - 6px); }
@@ -334,3 +335,39 @@ body { padding-top: 0; }
 }
 .iv-split-alat { flex-wrap: wrap; align-items: center; }
 .iv-split-alat button { flex: 0 0 auto; }
+
+
+/* ---------- v281: koreksi invoice tanpa hapus ---------- */
+.iv-aksi-link { display: inline-block; margin-top: 5px; margin-left: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+  color: var(--ink-soft); border: 1px solid var(--line, #E5E0D6); border-radius: 999px; padding: 1px 8px; text-decoration: none; }
+.iv-aksi-link:hover { color: var(--ink); border-color: var(--ink); }
+.iv-aksi-link.iv-aksi-batal:hover { color: #8f2c22; border-color: #8f2c22; }
+tr.iv-baris-batal .iv-nomor { text-decoration: line-through; color: var(--ink-soft); }
+tr.iv-baris-batal td { color: var(--ink-soft); }
+.iv-batal-info { margin-top: 4px; color: #8f2c22; white-space: normal; }
+.iv-pengganti-sub { margin-top: 2px; white-space: normal; }
+.iv-pengganti-info { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #FFF4D6; border: 1px solid #E8C978; font-size: 12.5px; }
+.iv-pengganti-info .iv-sub { white-space: normal; margin-top: 3px; }
+.iv-negatif { color: #8f2c22; }
+.iv-modal { position: fixed; inset: 0; background: rgba(23, 33, 47, .45); z-index: 96; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.iv-modal.hidden { display: none; }
+.iv-modal-kotak { background: #fff; border-radius: 14px; width: min(620px, 100%); max-height: 92vh; overflow: auto; box-shadow: 0 18px 50px rgba(0,0,0,.25); }
+.iv-modal-judul { font: 700 17px/1.2 'Archivo', sans-serif; padding: 16px 18px 6px; color: var(--navy, #17212F); }
+.iv-modal-isi { padding: 6px 18px 10px; font-size: 13px; }
+.iv-modal-kaki { display: flex; justify-content: flex-end; gap: 10px; padding: 10px 18px 16px; border-top: 1px solid var(--line, #E5E0D6); }
+.iv-modal-pesan { margin-top: 10px; font-size: 12.5px; color: #2F6B3A; }
+.iv-modal-pesan.galat { color: #8f2c22; }
+.iv-ub-tetap { padding: 8px 10px; border-radius: 8px; background: var(--cream, #F7F3EC); margin-bottom: 8px; }
+.iv-ub-tetap .iv-sub { white-space: normal; margin-top: 4px; }
+.iv-ub-catatan { padding: 8px 10px; border-radius: 8px; background: #FFF4D6; border: 1px solid #E8C978; font-size: 12.5px; margin-bottom: 8px; }
+.iv-ub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.iv-ub-lbl { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink-soft); }
+.iv-ub-lbl input, .iv-ub-lbl textarea { font: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid var(--line, #E5E0D6); border-radius: 8px; color: var(--ink); background: #fff; }
+.iv-ub-lbl.terkunci { opacity: .55; }
+.iv-ub-lbl textarea { grid-column: 1 / -1; resize: vertical; }
+.iv-btn { font: inherit; font-size: 13px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line, #d8d3c8); background: #fff; color: var(--ink); cursor: pointer; }
+.iv-btn-utama { background: var(--ink, #1e2330); color: #fff; border-color: var(--ink, #1e2330); }
+.iv-btn-bahaya { background: #8f2c22; color: #fff; border-color: #8f2c22; }
+.iv-btn:disabled { opacity: .6; cursor: default; }
+@media (max-width: 640px) { .iv-ub-grid { grid-template-columns: 1fr; } .iv-modal-kotak { border-radius: 10px; } }
+@media print { .iv-aksi-link, #iv-modal { display: none !important; } }
