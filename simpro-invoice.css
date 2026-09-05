@@ -372,3 +372,4 @@ tr.iv-baris-batal td { color: var(--ink-soft); }
 .iv-btn:disabled { opacity: .6; cursor: default; }
 @media (max-width: 640px) { .iv-ub-grid { grid-template-columns: 1fr; } .iv-modal-kotak { border-radius: 10px; } }
 @media print { .iv-aksi-link, #iv-modal { display: none !important; } }
+.iv-pph-catatan { display: block; font-size: 11px; color: var(--ink-soft); font-weight: 400; }   /* v283 */

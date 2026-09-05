@@ -627,6 +627,9 @@ function ivRenderDraft() {
     String(hariIni.getDate()).padStart(2, "0");
   const inputTgl = document.getElementById("iv-draft-tanggal");
   if (inputTgl && !inputTgl.value) inputTgl.value = tglDefault;
+  // v283: draf baru = PPh otomatis lagi (angka tangan dari draf sebelumnya tidak terbawa)
+  const pphAwal = document.getElementById("iv-draft-pph");
+  if (pphAwal) { pphAwal.value = ""; delete pphAwal.dataset.auto; }
 
   document.getElementById("iv-draft-kepala").innerHTML =
     '<div><span class="iv-draft-label">Klien</span>' +
@@ -710,10 +713,27 @@ function ivHitungTotal() {
   const biayaKirim = ambil_("iv-draft-biaya-kirim");
   const biayaLain = ambil_("iv-draft-biaya-lain");
   const potonganLain = ambil_("iv-draft-potongan-lain");
-  const pph = ambil_("iv-draft-pph");
-
   const totalTagihan = subtotal + biayaTambahan + biayaKirim + biayaLain - potonganLain;
+
+  // v283: PPh OTOMATIS dari profil klien (gs >= @319: draf membawa pphKlien
+  // {persen, dasar}). Selama kotak PPh belum disentuh tangan (data-auto="1"),
+  // nilainya dihitung ulang setiap total berubah; begitu diketik, otomatis
+  // berhenti dan angka tangan yang berlaku. Kotak yang sedang difokus tidak
+  // pernah ditimpa (oninput inline berjalan sebelum penanda manual terpasang).
+  const pphEl = document.getElementById("iv-draft-pph");
+  const pk = d.pphKlien || {};
+  const dasarPPh = pk.dasar === "subtotal" ? subtotal : totalTagihan;
+  const pphOtomatis = pk.persen > 0 ? Math.round(dasarPPh * pk.persen / 100) : 0;
+  if (pphEl && pk.persen > 0 && pphEl.dataset.auto !== "0" && document.activeElement !== pphEl) {
+    pphEl.value = pphOtomatis; pphEl.dataset.auto = "1";
+  }
+  const pph = ambil_("iv-draft-pph");
   const nilaiTransfer = totalTagihan - pph;
+  const catatanPph = pk.persen > 0
+    ? (pphEl && pphEl.dataset.auto === "1"
+        ? 'PPh ' + pk.persen + '% dari ' + (pk.dasar === "subtotal" ? 'subtotal' : 'total tagihan') + ' \u00B7 otomatis dari profil klien' + (pk.nama ? ' ' + rjdEscapeHtml_(pk.nama) : '')
+        : 'PPh diubah tangan (profil klien: ' + pk.persen + '%)')
+    : '';
 
   document.getElementById("iv-draft-total").innerHTML =
     '<div class="iv-total-baris"><span>Subtotal (' + pcs + ' pcs)</span><span>' + ivFormatRupiah_(subtotal) + '</span></div>' +
@@ -722,8 +742,20 @@ function ivHitungTotal() {
     (biayaLain ? '<div class="iv-total-baris"><span>Biaya lain-lain</span><span>' + ivFormatRupiah_(biayaLain) + '</span></div>' : '') +
     (potonganLain ? '<div class="iv-total-baris"><span>Potongan</span><span>-' + ivFormatRupiah_(potonganLain) + '</span></div>' : '') +
     '<div class="iv-total-baris iv-total-tebal"><span>Total Tagihan</span><span>' + ivFormatRupiah_(totalTagihan) + '</span></div>' +
-    (pph ? '<div class="iv-total-baris"><span>PPh dipotong klien</span><span>-' + ivFormatRupiah_(pph) + '</span></div>' +
+    (pph ? '<div class="iv-total-baris"><span>PPh dipotong klien' + (catatanPph ? ' <small class="iv-pph-catatan" id="iv-pph-catatan">' + catatanPph + '</small>' : '') + '</span><span>-' + ivFormatRupiah_(pph) + '</span></div>' +
       '<div class="iv-total-baris iv-total-tebal"><span>Nilai Transfer</span><span>' + ivFormatRupiah_(nilaiTransfer) + '</span></div>' : '');
+  // penanda manual: terpasang sekali; input oleh tangan mematikan otomatis
+  if (pphEl && !pphEl.dataset.hook) { pphEl.dataset.hook = "1"; pphEl.addEventListener("input", function () { pphEl.dataset.auto = "0"; ivHitungTotal(); }); }
+}
+
+/** v283: basis PPh yang sedang berlaku di draf, mengikuti profil klien (total | subtotal). */
+function ivDasarPPh_() {
+  const d = window.IV_DRAFT; if (!d) return 0;
+  let subtotal = 0;
+  d.items.forEach(function (it) { subtotal += (Number(it.jumlah) || 0) * (Number(it.hargaSatuan) || 0); });
+  const n = function (id) { return Number((document.getElementById(id) || {}).value) || 0; };
+  const total = subtotal + n("iv-draft-biaya-tambahan") + n("iv-draft-biaya-kirim") + n("iv-draft-biaya-lain") - n("iv-draft-potongan-lain");
+  return ((d.pphKlien || {}).dasar === "subtotal") ? subtotal : total;
 }
 
 function ivSimpanInvoice() {
@@ -751,6 +783,8 @@ function ivSimpanInvoice() {
     biayaLainLain: Number((document.getElementById("iv-draft-biaya-lain") || {}).value) || 0,
     potonganLainLain: Number((document.getElementById("iv-draft-potongan-lain") || {}).value) || 0,
     potonganPajak: Number((document.getElementById("iv-draft-pph") || {}).value) || 0,
+    // v283: DPP dicatat bersama PPh (basis dari profil klien; total tagihan kalau profil kosong)
+    dasarPPh: (Number((document.getElementById("iv-draft-pph") || {}).value) || 0) > 0 ? ivDasarPPh_() : "",
     // v281: id invoice batal yang digantikan (gs >= @316 memindahkan pembayarannya)
     menggantikan: [].slice.call(document.querySelectorAll("#iv-pengganti-info .iv-pengganti-cek:checked")).map(function (c) { return c.dataset.id; })
   };
