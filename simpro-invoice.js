@@ -225,10 +225,10 @@ function ivRender(){
         // menempatkannya di dalam kartu dengan alasan yang sama.
         '<td><b class="iv-nomor">' + rjdEscapeHtml_(p.idInvoice) + '</b>' +
           (p.artikel ? '<div class="iv-sub">' + rjdEscapeHtml_(p.artikel) + '</div>' : '') +
+          // v284: "Lihat" membuka dokumen di MODAL (iframe /p/cetak.html); Cetak &
+          // Buka tab baru ada di kaki modal. Tab baru per invoice tidak lagi perlu.
           (idInv
-            ? '<a class="iv-cetak-link" target="_blank" rel="noopener"' +
-              ' href="/p/cetak.html?jenis=invoice&amp;id=' + encodeURIComponent(idInv) + '">' +
-              '&#128424; Cetak</a>'
+            ? '<a href="#" class="iv-cetak-link" data-id="' + rjdEscapeHtml_(idInv) + '" onclick="ivLihatInvoice(this.dataset.id); return false;">&#128196; Lihat</a>'
             : '') +
           // v281: KOREKSI TANPA HAPUS. Ubah = kolom input (dibatasi sesudah ada
           // pembayaran); Batalkan = status + alasan, pengganti dibuat lewat tab
@@ -398,6 +398,56 @@ function ivSimpanBatal_(p) {
     .catch(function (e) { ivModalPesan_(e.message || "Gagal membatalkan.", true); if (btn) { btn.disabled = false; btn.textContent = "Batalkan invoice ini"; } });
 }
 
+/* v284 -- LIHAT INVOICE: dokumen cetak dibenamkan di modal (pola spPratinjauDok_
+   di halaman SPK; kelas .rjd-modal-* dari simpro-global.css). /p/cetak.html tidak
+   mencetak otomatis saat dimuat, jadi aman dibenamkan; Cetak memanggil print()
+   iframe-nya (satu origin). */
+function ivUrlCetak_(id) { return "/p/cetak.html?jenis=invoice&id=" + encodeURIComponent(String(id || "").trim()); }
+function ivLihatInvoice(id) {
+  if (!id) return;
+  ivTutupDok_();
+  const url = ivUrlCetak_(id);
+  const p = ivInvoiceDariId_(id);
+  const ov = document.createElement("div");
+  ov.className = "rjd-modal-overlay"; ov.id = "iv-dok-ov";
+  ov.innerHTML =
+    '<div class="rjd-modal iv-dok">' +
+      '<div class="rjd-modal-head"><div><div class="rjd-modal-title">' + rjdEscapeHtml_(id) + '</div>' +
+        '<div class="rjd-modal-sub">' + rjdEscapeHtml_(p ? [p.namaKlien, p.idPurchaseOrder, ivFormatRupiah_(p.total), p.status].filter(Boolean).join(" \u00B7 ") : "Invoice") + '</div></div>' +
+        '<button class="rjd-modal-close" onclick="ivTutupDok_()" type="button" aria-label="Tutup">&#10005;</button></div>' +
+      '<div class="rjd-modal-body iv-dok-body"><div class="iv-dok-muat" id="iv-dok-muat">Memuat dokumen...</div>' +
+        '<iframe id="iv-dok-frame" title="Invoice ' + rjdEscapeHtml_(id) + '" src="' + rjdEscapeHtml_(url) + '"></iframe></div>' +
+      '<div class="rjd-modal-foot">' +
+        (p && !p.batal ? '<button class="iv-btn" type="button" data-id="' + rjdEscapeHtml_(id) + '" onclick="ivTutupDok_(); ivBukaUbah(this.dataset.id)">Ubah</button>' : '') +
+        '<a class="iv-btn" href="' + rjdEscapeHtml_(url) + '" rel="noopener" target="_blank">Buka tab baru</a>' +
+        '<button class="iv-btn iv-btn-utama" id="iv-dok-cetak" onclick="ivCetakDok_()" type="button">Cetak</button>' +
+      '</div></div>';
+  ov.addEventListener("click", function (e) { if (e.target === ov) ivTutupDok_(); });
+  document.body.appendChild(ov);
+  document.body.style.overflow = "hidden";
+  document.addEventListener("keydown", ivEscDok_);
+  const f = document.getElementById("iv-dok-frame");
+  const lepas = function () { const m = document.getElementById("iv-dok-muat"); if (m) m.remove(); };
+  if (f) {
+    f.addEventListener("load", lepas);
+    try { const d = f.contentDocument; if (d && d.readyState === "complete") lepas(); } catch (e) { /* beda origin */ }
+  }
+}
+function ivEscDok_(e) { if (e.key === "Escape") ivTutupDok_(); }
+function ivTutupDok_() {
+  const ov = document.getElementById("iv-dok-ov");
+  if (!ov) return;
+  ov.remove();
+  document.body.style.overflow = "";
+  document.removeEventListener("keydown", ivEscDok_);
+}
+function ivCetakDok_() {
+  const f = document.getElementById("iv-dok-frame");
+  if (!f || !f.contentWindow) { alert("Dokumen belum selesai dimuat."); return; }
+  try { f.contentWindow.focus(); f.contentWindow.print(); }
+  catch (e) { alert("Tidak bisa mencetak dari sini -- pakai \u201cBuka tab baru\u201d lalu Ctrl+P."); }
+}
+
 /** Klik kartu bucket aging -> saring tabel ke bucket itu. */
 function ivFilterBucket(b){
   document.getElementById("iv-status").value = "bucket:" + b;
@@ -504,9 +554,31 @@ function ivRenderPengiriman() {
     perKlien[k].push(p);
   });
 
+  // v284: di dalam tiap klien, pengiriman dikelompokkan per PO dengan kotak
+  // centang PO (centang/lepas semua pengirimannya sekaligus). Satu invoice
+  // lazimnya satu PO, jadi inilah satuan pilih yang sebenarnya.
   wadah.innerHTML = urutan.map(function (k) {
+    const perPo = {}, urutPo = [];
+    perKlien[k].forEach(function (p) {
+      const po = p.idPurchaseOrder || "(tanpa PO)";
+      if (!perPo[po]) { perPo[po] = []; urutPo.push(po); }
+      perPo[po].push(p);
+    });
     return '<div class="iv-kirim-grup"><div class="iv-kirim-klien">' + rjdEscapeHtml_(k) + '</div>' +
-      perKlien[k].map(function (p) {
+      urutPo.map(function (po) {
+        const daftar = perPo[po];
+        const ids = daftar.map(function (p) { return p.idPengiriman; });
+        const nPilih = ids.filter(function (id) { return !!(window.IV_DIPILIH || {})[id]; }).length;
+        const pcs = daftar.reduce(function (a, p) { return a + (Number(p.jumlah) || 0); }, 0);
+        const artikel = daftar.map(function (p) { return p.artikel; }).filter(Boolean).filter(function (x, i, arr) { return arr.indexOf(x) === i; }).join(", ");
+        return '<div class="iv-kirim-po-grup">' +
+          '<label class="iv-kirim-po' + (nPilih === ids.length ? ' dipilih' : '') + '">' +
+            '<input type="checkbox" class="iv-po-cek" data-ids="' + rjdEscapeHtml_(ids.join(",")) + '"' + (nPilih === ids.length ? ' checked="checked"' : '') +
+              (nPilih && nPilih < ids.length ? ' data-sebagian="1"' : '') + ' onchange="ivTogglePO(this)"/>' +
+            '<div class="iv-kirim-po-isi"><b>PO ' + rjdEscapeHtml_(po) + '</b>' + (artikel ? ' <span class="iv-kirim-sub">' + rjdEscapeHtml_(artikel) + '</span>' : '') +
+              '<div class="iv-kirim-sub">' + ids.length + ' pengiriman &#183; ' + pcs + ' pcs' + (nPilih ? ' &#183; ' + nPilih + ' dipilih' : '') + '</div></div>' +
+          '</label>' +
+          daftar.map(function (p) {
         const dipilih = !!(window.IV_DIPILIH || {})[p.idPengiriman];
         return '<label class="iv-kirim-baris' + (dipilih ? ' dipilih' : '') + '">' +
           // Nilai dinamis lewat data-id, BUKAN diinterpolasi ke dalam atribut
@@ -525,11 +597,36 @@ function ivRenderPengiriman() {
           '</div>' +
           '<div class="iv-kirim-qty">' + (p.jumlah || 0) + ' pcs</div>' +
         '</label>';
+          }).join("") +
+        '</div>';
       }).join("") +
     '</div>';
   }).join("");
+  // kotak PO yang sebagian terpilih: keadaan indeterminate hanya bisa lewat properti
+  Array.prototype.forEach.call(wadah.querySelectorAll('.iv-po-cek[data-sebagian="1"]'), function (c) { c.indeterminate = true; });
 
   ivUpdateTombolLanjut();
+}
+
+/** v284: centang/lepas semua pengiriman satu PO. Aturan satu-klien tetap dijaga sekali untuk seluruh kelompok. */
+function ivTogglePO(el) {
+  const ids = String(el.dataset.ids || "").split(",").filter(Boolean);
+  if (!window.IV_DIPILIH) window.IV_DIPILIH = {};
+  const semua = window.IV_PENGIRIMAN || [];
+  if (el.checked) {
+    const ini = semua.filter(function (p) { return p.idPengiriman === ids[0]; })[0];
+    const terpilih = Object.keys(window.IV_DIPILIH);
+    const klienLain = ini ? semua.filter(function (p) { return terpilih.indexOf(p.idPengiriman) !== -1 && p.idKlien !== ini.idKlien; }) : [];
+    if (klienLain.length) {
+      alert("Satu invoice hanya boleh untuk satu klien.\n\nHapus dulu centang pengiriman klien lain kalau mau menagih " + ((ini && (ini.namaKlien || ini.idKlien)) || "klien ini") + ".");
+      ivRenderPengiriman();
+      return;
+    }
+    ids.forEach(function (id) { window.IV_DIPILIH[id] = true; });
+  } else {
+    ids.forEach(function (id) { delete window.IV_DIPILIH[id]; });
+  }
+  ivRenderPengiriman();
 }
 
 /**

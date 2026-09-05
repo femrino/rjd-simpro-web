@@ -373,3 +373,20 @@ tr.iv-baris-batal td { color: var(--ink-soft); }
 @media (max-width: 640px) { .iv-ub-grid { grid-template-columns: 1fr; } .iv-modal-kotak { border-radius: 10px; } }
 @media print { .iv-aksi-link, #iv-modal { display: none !important; } }
 .iv-pph-catatan { display: block; font-size: 11px; color: var(--ink-soft); font-weight: 400; }   /* v283 */
+
+
+/* ---------- v284: kelompok PO di daftar pengiriman + modal lihat invoice ---------- */
+.iv-kirim-po-grup { margin: 6px 0 10px; }
+.iv-kirim-po { display: flex; align-items: center; gap: 11px; padding: 8px 12px; border: 1px dashed var(--line, #E5E0D6); border-radius: 10px; cursor: pointer; background: #fff; }
+.iv-kirim-po.dipilih { border-style: solid; border-color: var(--ink); background: var(--cream); }
+.iv-kirim-po input { flex-shrink: 0; width: 16px; height: 16px; cursor: pointer; }
+.iv-kirim-po-isi { font-size: 13px; color: var(--ink); }
+.iv-kirim-po-isi .iv-kirim-sub { display: inline; }
+.iv-kirim-po-isi > .iv-kirim-sub { display: block; }
+.iv-kirim-po-grup .iv-kirim-baris { margin-left: 22px; margin-top: 6px; }
+.iv-dok { max-width: 980px; height: 88vh; }
+.iv-dok-body { padding: 0; position: relative; background: var(--cream); }
+.iv-dok-body iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
+.iv-dok-muat { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--ink-soft); background: var(--cream); }
+.iv-dok .rjd-modal-foot .iv-btn { text-decoration: none; }
+@media (max-width: 640px) { .iv-dok { height: 92vh; } .iv-kirim-po-grup .iv-kirim-baris { margin-left: 10px; } }
