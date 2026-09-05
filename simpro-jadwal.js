@@ -1996,7 +1996,8 @@ function jmRenderHarian_(wadah) {
   let html = '<div class="jm-kartu jm-harian" id="jm-harian">';
   urutSeksi.forEach(function (k) {
     const sx = seksi[k];
-    html += '<div class="jm-harian-seksi jm-t-' + (JM_KELAS_TAHAP[sx.tahap] || "lain") + '"><div class="jm-harian-judul"><b>' + jmEsc_(sx.label) + '</b>' +
+    // v279: kelas warna SENDIRI (jm-harian-t-*), bukan jm-t-* milik bar matriks yang membawa latar penuh
+    html += '<div class="jm-harian-seksi jm-harian-t-' + (JM_KELAS_TAHAP[sx.tahap] || "lain") + '"><div class="jm-harian-judul"><b>' + jmEsc_(sx.label) + '</b>' +
       (sx.sub ? ' <span class="jm-harian-sub">' + jmEsc_(sx.sub) + '</span>' : '') + '<span class="jm-harian-n">' + sx.baris.length + '</span></div>';
     sx.baris.forEach(function (r) {
       const it = r.g.item, x = r.x;

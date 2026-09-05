@@ -740,11 +740,22 @@ table.jm-beban td.jm-beban-lebih{ color: #8A2A22; font-weight: 700; background: 
 .jm-harian-baris.jm-k-batal .jm-harian-nama{ text-decoration: line-through; color: var(--ink-soft, #5F6B7A); }
 .jm-harian-baris.jm-k-selesai .jm-harian-nama{ color: var(--ink-soft, #5F6B7A); }
 .jm-lencana-real{ background: #E3F0E6; color: #2F6B3A; }
-/* warna tepi seksi mengikuti warna tahap di matriks (kelas jm-t-*) */
-.jm-harian-seksi.jm-t-sewing{ border-left-color: #B8A7E0; }
-.jm-harian-seksi.jm-t-cutting{ border-left-color: #A9C4E8; }
-.jm-harian-seksi.jm-t-finishing{ border-left-color: #A7C8B9; }
-.jm-harian-seksi.jm-t-kirim{ border-left-color: #6B5FB5; }   /* JM_KELAS_TAHAP: Pengiriman -> 'kirim' */
+/* v279: warna tahap HANYA di judul seksi (latar judul + garis kiri), baris item putih.
+   v278 memakai kelas jm-t-* milik bar matriks -> seluruh seksi terblok warna (HP, 5 Sep 2026).
+   Palet = warna bar matriks (baris 122-130); Pengiriman gelap -> judulnya berhuruf putih. */
+.jm-harian-seksi{ background: #fff; }
+.jm-harian-judul{ border-radius: 0 6px 0 0; }
+.jm-harian-t-pola .jm-harian-judul{ background: #B9D7A8; }        .jm-harian-t-pola{ border-left-color: #B9D7A8; }
+.jm-harian-t-sampel .jm-harian-judul{ background: #F1C0CC; }      .jm-harian-t-sampel{ border-left-color: #F1C0CC; }
+.jm-harian-t-bahan .jm-harian-judul{ background: #E9B97A; }       .jm-harian-t-bahan{ border-left-color: #E9B97A; }
+.jm-harian-t-cutting .jm-harian-judul{ background: #A9BEEE; }     .jm-harian-t-cutting{ border-left-color: #A9BEEE; }
+.jm-harian-t-interlining .jm-harian-judul{ background: #A8D5D2; } .jm-harian-t-interlining{ border-left-color: #A8D5D2; }
+.jm-harian-t-sewing .jm-harian-judul{ background: #D4CBEA; }      .jm-harian-t-sewing{ border-left-color: #D4CBEA; }
+.jm-harian-t-finishing .jm-harian-judul{ background: #A99BD0; }   .jm-harian-t-finishing{ border-left-color: #A99BD0; }
+.jm-harian-t-kirim .jm-harian-judul{ background: #5B4A9E; color: #fff; } .jm-harian-t-kirim{ border-left-color: #5B4A9E; }
+.jm-harian-t-kirim .jm-harian-sub, .jm-harian-t-kirim .jm-harian-n{ color: #fff; }
+.jm-harian-t-kirim .jm-harian-n{ background: rgba(255,255,255,.22); }
+.jm-harian-t-lain .jm-harian-judul{ background: #E8E4DC; }
 @media (max-width: 640px){
   .jm-harian-baris{ padding: 6px 8px; }
   .jm-harian-meta{ flex-basis: 100%; }
