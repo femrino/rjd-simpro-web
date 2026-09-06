@@ -875,3 +875,11 @@ table.jm-beban td.jm-beban-lebih{ color: #8A2A22; font-weight: 700; background: 
   .jm-sumbu{ order:3; }
   .jm-btn-jadwal{ order:4; }
 }
+
+
+/* ---------- v287: antrean gagal (AUDIT Sesi 2) ---------- */
+.jm-antrean-gagal { margin-top: 6px; color: #8f2c22; }
+.jm-antrean-gagal ul { margin: 4px 0 0; padding-left: 18px; }
+.jm-antrean-gagal li { margin: 3px 0; }
+.jm-antrean-label { font-weight: 700; }
+.jm-bar-menunggu { cursor: default; }

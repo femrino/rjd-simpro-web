@@ -971,7 +971,7 @@ function jmAntreanTulis_(q) { try { localStorage.setItem(JM_ANTREAN_KUNCI, JSON.
 function jmAntreanTambah_(action, muatan, label) {
   const q = jmAntreanBaca_();
   const id = "ANTRE:" + Date.now() + Math.floor(Math.random() * 100);
-  q.push({ id: id, action: action, muatan: muatan, label: label, dibuat: Date.now() });
+  q.push({ id: id, action: action, muatan: muatan, label: label, dibuat: Date.now(), status: "antre", percobaan: 0 });   // v287
   jmAntreanTulis_(q);
   // gambar optimistis
   if (action === "simpanJadwalManual" && JM_DATA) {
@@ -988,23 +988,85 @@ function jmAntreanTambah_(action, muatan, label) {
   jmRenderAntrean_();
   return id;
 }
+/* v287 (AUDIT Sesi 2) -- ANTREAN TIDAK PERNAH MENGHILANGKAN PEKERJAAN.
+   Tiap entri: {id, action, muatan, label, dibuat, status: "antre"|"gagal",
+   percobaan, alasan}. Tiga aturan:
+   FE-1  localStorage adalah sumber kebenaran; entri dihapus SATU-SATU by id,
+         tidak pernah menulis snapshot memori (jmAntreanTambah_ bisa menyisipkan
+         entri baru di tengah pengiriman -- dulu tertimpa jmAntreanTulis_([])).
+   FE-2  ditolak server = status "gagal" + alasan, TETAP di daftar (terlihat di
+         atas matriks) dengan Buka di form / Coba lagi / Buang -- bukan dibuang
+         ke pesan di modal yang tertutup.
+   FE-2b jawaban bukan JSON (halaman HTML Google) = gagal seketika, bukan
+         "masih offline" yang dicoba ulang tiap menit selamanya; kegagalan
+         jaringan dihitung (percobaan), 5x -> gagal. */
+const JM_ANTREAN_MAKS_PERCOBAAN = 5;
+function jmAntreanUbah_(id, ubah) {
+  const q = jmAntreanBaca_().map(function (x) { return x.id === id ? Object.assign({}, x, ubah) : x; });
+  jmAntreanTulis_(q); return q;
+}
+function jmAntreanHapus_(id) {
+  const q = jmAntreanBaca_().filter(function (x) { return x.id !== id; });
+  jmAntreanTulis_(q); return q;
+}
+function jmAntreanAntre_() { return jmAntreanBaca_().filter(function (x) { return x.status !== "gagal"; }); }
 function jmRenderAntrean_() {
   const q = jmAntreanBaca_();
   const el = document.getElementById("jm-antrean");
   if (!el) return;
+  const antre = q.filter(function (x) { return x.status !== "gagal"; });
+  const gagal = q.filter(function (x) { return x.status === "gagal"; });
   el.classList.toggle("hidden", !q.length);
-  el.innerHTML = q.length ? '<b>' + q.length + ' perubahan menunggu dikirim</b> \u2014 akan terkirim otomatis saat sambungan kembali. ' +
-    '<button class="jm-btn" onclick="jmKirimAntrean_(true)" type="button">Kirim sekarang</button>' : "";
+  if (!q.length) { el.innerHTML = ""; return; }
+  let html = antre.length
+    ? '<div><b>' + antre.length + ' perubahan menunggu dikirim</b> \u2014 akan terkirim otomatis saat sambungan kembali. ' +
+      '<button class="jm-btn" onclick="jmKirimAntrean_(true)" type="button">Kirim sekarang</button></div>'
+    : '';
+  if (gagal.length) {
+    html += '<div class="jm-antrean-gagal"><b>' + gagal.length + ' perubahan GAGAL terkirim</b> \u2014 tidak tersimpan di sheet; putuskan satu per satu:' +
+      '<ul>' + gagal.map(function (x) {
+        return '<li><span class="jm-antrean-label">' + jmEsc_(x.label || x.action) + '</span> \u2014 ' + jmEsc_(x.alasan || "?") +
+          ' <button class="jm-btn jm-btn-kecil" data-id="' + jmEsc_(x.id) + '" onclick="jmAntreanBukaForm_(this.dataset.id)" type="button">Buka di form</button>' +
+          ' <button class="jm-btn jm-btn-kecil" data-id="' + jmEsc_(x.id) + '" onclick="jmAntreanCobaLagi_(this.dataset.id)" type="button">Coba lagi</button>' +
+          ' <button class="jm-btn jm-btn-kecil" data-id="' + jmEsc_(x.id) + '" onclick="jmAntreanBuang_(this.dataset.id)" type="button">Buang</button></li>';
+      }).join("") + '</ul></div>';
+  }
+  el.innerHTML = html;
 }
+function jmAntreanBuang_(id) {
+  const x = jmAntreanBaca_().filter(function (y) { return y.id === id; })[0];
+  if (x && !window.confirm("Buang perubahan \"" + (x.label || x.action) + "\"? Ia tidak tersimpan di sheet dan tidak bisa dikembalikan.")) return;
+  jmAntreanHapus_(id); jmRenderAntrean_();
+}
+function jmAntreanCobaLagi_(id) {
+  jmAntreanUbah_(id, { status: "antre", percobaan: 0, alasan: "" }); jmRenderAntrean_(); jmKirimAntrean_(true);
+}
+/** Muat isian entri gagal ke form (baris baru), supaya orang memperbaiki lalu menyimpan lagi. Entrinya tetap sampai dibuang. */
+function jmAntreanBukaForm_(id) {
+  const x = jmAntreanBaca_().filter(function (y) { return y.id === id; })[0];
+  if (!x) return;
+  if (x.action !== "simpanJadwalManual" || !x.muatan || !x.muatan.data) {
+    alert("Perubahan ini penghapusan bar " + ((x.muatan || {}).id || "") + " -- ulangi lewat klik bar itu di matriks, lalu buang entri ini."); return;
+  }
+  const d = x.muatan.data;
+  JM_EDIT_ID = d.id || "";
+  const set = function (idEl, v) { const el = document.getElementById(idEl); if (el) el.value = v == null ? "" : v; };
+  set("jm-in-item", d.item); set("jm-in-tahap", d.tahap); set("jm-in-line", d.line || "");
+  if (typeof jmFormTahapBerubah === "function") jmFormTahapBerubah();
+  set("jm-in-sub", d.sub || ""); set("jm-in-mulai", d.mulai); set("jm-in-selesai", d.selesai); set("jm-in-qty", d.qty || ""); set("jm-in-ket", d.keterangan || "");
+  if (typeof jmSegarkanTombolItem_ === "function") jmSegarkanTombolItem_();
+  jmFormModeTampil_(); jmBukaForm();
+  jmFormPesan_("Dari antrean gagal (" + (x.alasan || "?") + "). Perbaiki lalu Simpan; sesudah tersimpan, buang entrinya di daftar atas.", true);
+}
+function JmJawabanTidakTerbaca_(pesan) { this.name = "JmJawabanTidakTerbaca"; this.message = pesan; }
 function jmKirimAntrean_(manual) {
-  const q = jmAntreanBaca_();
-  if (!q.length) { jmRenderAntrean_(); return; }
+  if (!jmAntreanAntre_().length) { jmRenderAntrean_(); return; }
   if (JM_PENGIRIM_ANTREAN) return;
   if (!navigator.onLine && !manual) { jmRenderAntrean_(); return; }
-  let sisa = q.slice();
   const satu = function () {
+    const sisa = jmAntreanAntre_();   // dibaca ULANG dari localStorage tiap langkah (FE-1)
     if (!sisa.length) {
-      JM_PENGIRIM_ANTREAN = null; jmAntreanTulis_([]); jmRenderAntrean_();
+      JM_PENGIRIM_ANTREAN = null; jmRenderAntrean_();
       jmAmbilData_().then(function (d) { JM_DATA = d; jmIsiFilter_(); jmIsiFormPilihan_(); jmRender(); if (typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("jadwal", d); }).catch(function () {});
       return;
     }
@@ -1012,14 +1074,25 @@ function jmKirimAntrean_(manual) {
     fetch(JM_API_URL, { method: "POST", body: JSON.stringify(Object.assign({ idToken: JM_ID_TOKEN, action: item.action }, item.muatan)) })
       .then(function (r) { return r.text(); })
       .then(function (teks) {
-        let res; try { res = JSON.parse(teks); } catch (e) { throw new TypeError("jawaban tidak terbaca"); }
-        // Ditolak server (validasi/bagian) = bukan soal sambungan -> buang dari antrean, beri tahu.
-        if (!res || !res.success) { jmFormPesan_("Antrean \"" + item.label + "\" ditolak server: " + ((res && res.error) || "?"), true); }
-        sisa.shift(); jmAntreanTulis_(sisa); satu();
+        let res; try { res = JSON.parse(teks); } catch (e) { throw new JmJawabanTidakTerbaca_("jawaban server tidak terbaca (halaman HTML? deployment/sesi Google)"); }
+        if (!res || !res.success) {
+          // FE-2: ditolak server = GAGAL yang terlihat, bukan dibuang
+          jmAntreanUbah_(item.id, { status: "gagal", alasan: (res && res.error) || "ditolak server tanpa pesan" });
+        } else {
+          jmAntreanHapus_(item.id);
+        }
+        jmRenderAntrean_(); satu();
       })
-      .catch(function () {
-        // masih tanpa sambungan -> berhenti, coba lagi nanti
-        JM_PENGIRIM_ANTREAN = null; jmAntreanTulis_(sisa); jmRenderAntrean_();
+      .catch(function (e) {
+        if (e && e.name === "JmJawabanTidakTerbaca") {
+          // FE-2b: bukan soal sambungan -> gagal seketika, lanjut ke entri berikutnya
+          jmAntreanUbah_(item.id, { status: "gagal", alasan: e.message }); jmRenderAntrean_(); satu(); return;
+        }
+        // jaringan: hitung percobaan; 5x saat "online" = ada yang salah, bukan sinyal
+        const n = (Number(item.percobaan) || 0) + 1;
+        if (n >= JM_ANTREAN_MAKS_PERCOBAAN) jmAntreanUbah_(item.id, { status: "gagal", percobaan: n, alasan: n + " kali gagal terkirim saat sambungan tampak ada" });
+        else jmAntreanUbah_(item.id, { percobaan: n });
+        JM_PENGIRIM_ANTREAN = null; jmRenderAntrean_();
       });
   };
   JM_PENGIRIM_ANTREAN = true; satu();
@@ -1828,7 +1901,10 @@ function jmSelBaris_(b, kolom, hariIni, deadline) {
       (x.qty ? " \u00b7 " + x.qty + " pcs" : "") + (x.keterangan ? "\n" + x.keterangan : "");
     html += '<td class="' + kelas + ' jm-bar jm-t-' + (JM_KELAS_TAHAP[b.tahap] || "lain") + tepi + (x.menunggu ? " jm-bar-menunggu" : "") +
       (b.keadaan && b.keadaan !== "aktif" ? " jm-bar-" + b.keadaan : "") +
-      '" data-id="' + jmEsc_(x.id || "") + '" title="' + jmEsc_(tip + tipReal) + (x.id ? "\n(klik untuk mengubah)" : "") + '"></td>';
+      // v287 (FE-9): bar yang masih di antrean tidak punya data-id -- klik tidak membuka
+      // form edit yang berujung "baris tidak ditemukan" untuk bar yang barusan dibuat sendiri.
+      (x.menunggu ? '" data-antre="' + jmEsc_(x.id || "") + '" title="' + jmEsc_(tip + tipReal) + '\nMenunggu terkirim, belum bisa diubah"></td>'
+                  : '" data-id="' + jmEsc_(x.id || "") + '" title="' + jmEsc_(tip + tipReal) + (x.id ? "\n(klik untuk mengubah)" : "") + '"></td>');
   });
   return html;
 }
