@@ -1874,7 +1874,10 @@ function jmSelBaris_(b, kolom, hariIni, deadline) {
       // (v262) menyamarkan hari kosong sebagai kerja berkelanjutan -- dibuang.
       if (real.hari[k.iso] !== undefined) {
         kelas += " jm-real-hari";
-        tipReal = "\nLaporan " + jmTanggalPendek_(k.iso) + (real.hari[k.iso] ? ": " + real.hari[k.iso].toLocaleString("id-ID") + " pcs" : "") +
+        // v288 (AUDIT BE-3a): angka ini = jumlah Total Output SEMUA proses divisi
+        // (satu baris DailyReport = satu operator x satu proses x satu hari), bukan
+        // baju jadi -- artikel 18 proses jahit tampil ~18x. Jangan disebut "pcs".
+        tipReal = "\nLaporan " + jmTanggalPendek_(k.iso) + (real.hari[k.iso] ? ": " + real.hari[k.iso].toLocaleString("id-ID") + " output laporan" : "") +
           (real.lokasi && real.lokasi.length ? " \u00b7 " + real.lokasi.join(", ") : "");
       }
     }
@@ -2086,7 +2089,7 @@ function jmRenderHarian_(wadah) {
           (x.qty ? ' \u00b7 ' + Number(x.qty).toLocaleString("id-ID") + ' pcs' : '') + (hariKe(x) ? ' \u00b7 ' + jmEsc_(hariKe(x)) : '') +
           (x.keterangan ? ' \u00b7 <i>' + jmEsc_(x.keterangan) + '</i>' : '') + '</span>' +
         '<span class="jm-harian-lencana">' + jmLencanaLaporan_(r.b, hariIni) +
-          (lap !== null ? '<span class="jm-lencana jm-lencana-real jm-lencana-kecil" title="Laporan harian tanggal ini">laporan' + (lap ? ' ' + lap.toLocaleString("id-ID") + ' pcs' : '') + '</span>' : '') + '</span>' +
+          (lap !== null ? '<span class="jm-lencana jm-lencana-real jm-lencana-kecil" title="Laporan harian tanggal ini (jumlah output semua proses, bukan baju jadi)">laporan' + (lap ? ' ' + lap.toLocaleString("id-ID") + ' output' : '') + '</span>' : '') + '</span>' +
         (JM_BOLEH_TULIS && x.id ? '<button type="button" class="jm-btn jm-btn-kecil jm-harian-ubah" onclick="jmEdit(' + JSON.stringify(x.id).replace(/"/g, "&quot;") + ')">Ubah</button>' : '') +
         '</div>';
     });
@@ -2805,8 +2808,12 @@ function jmBebanLine_() {
   const sew = (JM_DATA.bar || []).filter(function (b) {
     return b.tahap === "Sewing" && b.line && b.mulai && b.selesai && jmKeadaan_(itemPeta[b.item] || {}) !== "batal";
   });
-  const nBar = {};
-  sew.forEach(function (b) { nBar[b.item] = (nBar[b.item] || 0) + 1; });
+  // v288 (AUDIT FE-3): cadangan qty = SISA qty PO (qtyPo - jumlah qty bar Sewing
+  // yang sudah terisi, rumus jmSisaQtySewing_ yang dipakai form) dibagi rata ke
+  // bar yang qty-nya kosong. Dulu qtyPo / SEMUA bar: PO 1.000, Line 1 diisi 800,
+  // Line 2 kosong -> Line 2 dapat 500, total beban 1.300 untuk PO 1.000.
+  const nKosong = {};
+  sew.forEach(function (b) { if (!(Number(b.qty) || 0)) nKosong[b.item] = (nKosong[b.item] || 0) + 1; });
   const minggu = [];
   const senin = jmSenin_(JM_LIHAT.mulai);
   for (let m = 0; m < JM_LIHAT.minggu; m++) minggu.push(jmIso_(jmTambahHari_(senin, 7 * m)));
@@ -2814,7 +2821,7 @@ function jmBebanLine_() {
   const per = {};   // idLine -> minggu -> {pcs, cad, rinci:[]}
   sew.forEach(function (b) {
     let qty = Number(b.qty) || 0, cad = false;
-    if (!qty) { const it = itemPeta[b.item]; if (it && Number(it.qtyPo) > 0) { qty = Number(it.qtyPo) / nBar[b.item]; cad = true; } }
+    if (!qty) { const sisa = jmSisaQtySewing_(b.item); if (sisa > 0 && nKosong[b.item]) { qty = sisa / nKosong[b.item]; cad = true; } }
     const total = hk(b.mulai, b.selesai);
     if (!qty || !total) return;
     minggu.forEach(function (mg) {
