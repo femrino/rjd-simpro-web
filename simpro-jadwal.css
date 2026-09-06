@@ -340,7 +340,7 @@ th.jm-hari-ini { background: #FBE7B3; }
 .jm-modal-kaki-ket{ font-size: 12px; color: var(--ink-soft, #5F6B7A); margin-right: auto; }
 .jm-panel-sembunyi.jm-panel-pilih{ z-index: 99; }   /* dua kelas: .jm-panel-sembunyi{z-index:70} ditulis SESUDAH baris ini; di atas modal filter (96) */
 .jm-btn-laci{ display: inline-flex; align-items: center; order: 1; }
-.jm-btn-legenda{ order: 2; }
+/* NISAN v291 (AUDIT FE-17): .jm-btn-legenda dihapus -- tombolnya dicabut v269; order:2 juga bentrok .jm-btn-fokus */
 .jm-sumbu{ order: 3; }
 .jm-btn-jadwal{ order: 4; }
 /* v251: Fokus di kelompok tombol tampilan (Filter, Keterangan, Fokus), SEBELUM
@@ -450,13 +450,11 @@ body.jm-modal-terbuka{ overflow: hidden; }
      "disembunyikan" jadi tidak bisa diklik (jalan38 G). */
   .jm-rentang{ white-space:normal; line-height:1.3; }
   .jm-rentang .jm-rentang-sub{ display:inline; margin-top:0; }   /* v266: satu baris teks, boleh membungkus */
-  .jm-alat .jm-btn.jm-btn-legenda{ display:none; }   /* v266: "Ket." pindah ke laci (tiga kelas, lihat .jm-btn-fokus) */
   .jm-btn-jadwal{ order:4; }                           /* v266: "+" ikut baris 1 di kanan sumbu */
   /* DUA kelas: aturan global .jm-alat-putus{display:none} ditulis SESUDAH blok ini
      dan menang kalau spesifisitasnya sama (terbukti di fixture jalan31, 4 Sep 2026). */
   .jm-alat .jm-alat-putus{ display:block; flex-basis:100%; height:0; order:6; }
   .jm-btn-laci{ order:11; }                            /* v266: Filter di baris 2, kanan rentang */
-  .jm-laci .jm-laci-legenda{ display:inline-flex; }   /* dua kelas, alasan sama; v268: di modal, sekolom penuh */
   /* v251: mode fokus tidak ditawarkan di HP -- header cuma 68 px dari 800, dan
      toolbar HP sudah penuh (dua baris, jalan40 H2). */
   .jm-alat .jm-btn.jm-btn-fokus{ display:none; }   /* v252: TIGA kelas -- harus menang atas .jm-alat .jm-btn{display:inline-flex} yang datang belakangan */
@@ -634,7 +632,6 @@ td[data-kunci]:hover .jm-item-nama-kecil{ text-decoration: underline dotted; tex
   border: 0; background: none; cursor: pointer; padding: 2px 7px; border-radius: 6px;
 }
 .jm-sembunyi-chip:hover{ background: #FCF3E3; }
-@media print { #jm-panel-sembunyi, #jm-menu-item { display: none !important; } }
 
 /* v249 -- JEDA: sel kosong di antara dua ruas pada baris yang sama. Garis
    putus-putus di tengah sel; warna sel (hari ini, deadline) tetap di bawahnya
@@ -644,7 +641,6 @@ td[data-kunci]:hover .jm-item-nama-kecil{ text-decoration: underline dotted; tex
   background-size: 100% 2px; background-repeat: no-repeat; background-position: center;
 }
 
-@media print { #jm-modal { display: none !important; } }
 
 /* v251 -- MODE FOKUS: header situs & latar dekoratif disembunyikan. Padding
    atas #jm-wrap ditulis inline di template (v241), jadi butuh !important. */
@@ -654,9 +650,7 @@ body.jm-fokus #jm-wrap{ padding-top: 8px !important; }
    di layar 1920 itu menyisakan 240 px kosong di kiri-kanan -- kebalikan dari
    maksud mode ini. */
 body.jm-fokus .jm-wrap{ max-width: none; padding-left: 12px; padding-right: 12px; }
-@media print { .jm-btn-fokus { display: none !important; } }
 
-@media print { #jm-panel-tahap, #jm-panel-klien, #jm-panel-line { display: none !important; } }
 
 /* ---------- v256: KEADAAN ITEM (rencana / batal / selesai / tak dikenal) ---------- */
 /* Bar: rupa ikut nasib item. Hanya opacity + gambar, warna tahap tetap. */
@@ -680,7 +674,6 @@ body.jm-fokus .jm-wrap{ max-width: none; padding-left: 12px; padding-right: 12px
 .jm-peringatan-blok + .jm-peringatan-blok{ margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,.12); }
 .jm-catatan li.jm-catatan-kunci-belum-pindah{ font-weight: 600; }
 .jm-btn-kecil{ padding: 2px 10px; font-size: 12px; height: auto; margin-left: 6px; vertical-align: middle; }
-@media print { .jm-catatan-batal button { display: none !important; } }
 
 /* ---------- v257: item rencana = request cepat dari form jadwal ---------- */
 .jm-tautan-rencana{ font-size: 12px; color: var(--thread, #C2410C); text-decoration: none; align-self: flex-start; margin-top: 2px; }
@@ -709,10 +702,7 @@ body.jm-fokus .jm-wrap{ max-width: none; padding-left: 12px; padding-right: 12px
 /* ---------- v264: DEVIASI rencana vs laporan (tahap B) ---------- */
 .jm-lencana-mandek{ background: #F3E1DF; color: #8A2A22; border: 1px solid #E0B0AA; }
 .jm-lencana-lewat{ background: #E6EEF9; color: #1F4E8C; border: 1px solid #B9CCE8; }
-.jm-catatan-sub{ font-weight: 400; color: var(--ink-soft, #5F6B7A); }
-.jm-catatan-deviasi li.jm-dev-belum b{ color: #8A5A00; }
-.jm-catatan-deviasi li.jm-dev-mandek b{ color: #8A2A22; }
-.jm-catatan-deviasi li.jm-dev-lewat b{ color: #1F4E8C; }
+/* NISAN v291 (AUDIT FE-17): .jm-catatan-sub & .jm-catatan-deviasi dihapus -- blok deviasi kuning dicabut v265 (kini pil + panel). */
 
 /* ---------- v265: pil + panel deviasi ---------- */
 .jm-rentang-deviasi{
@@ -746,7 +736,6 @@ body.jm-fokus .jm-wrap{ max-width: none; padding-left: 12px; padding-right: 12px
 .jm-dev-item.jm-dev-lewat  .jm-dev-baris b{ color: #1F4E8C; }
 tr.jm-sorot td{ animation: jm-sorot-kedip 2.2s ease-out; }
 @keyframes jm-sorot-kedip{ 0%{ background-color: #FFE8A3; } 70%{ background-color: #FFF4D6; } 100%{ background-color: transparent; } }
-@media print { #jm-panel-deviasi, .jm-rentang-deviasi { display: none !important; } }
 
 /* ---------- v276: pil + panel beban line ---------- */
 .jm-rentang-beban{
@@ -772,7 +761,6 @@ table.jm-beban td.jm-beban-kosong{ color: #B8B2A8; }
 table.jm-beban td.jm-beban-lebih{ color: #8A2A22; font-weight: 700; background: #F8E7E5; }
 .jm-beban-cad{ color: #8A5A00; margin-left: 1px; }
 .jm-beban-kaki{ font-size: 11.5px; color: var(--ink-soft, #5F6B7A); padding: 8px 6px 2px; }
-@media print { #jm-panel-beban, .jm-rentang-beban { display: none !important; } }
 
 /* ---------- v278: mode harian (daftar pekerjaan satu hari) ---------- */
 .jm-harian{ padding: 4px 0 8px; }
@@ -808,11 +796,9 @@ table.jm-beban td.jm-beban-lebih{ color: #8A2A22; font-weight: 700; background: 
   .jm-harian-meta{ flex-basis: 100%; }
   .jm-harian-ubah{ margin-left: 0; }
 }
-@media print { .jm-harian-ubah { display: none !important; } }
 
 /* ---------- v266: bilah alat HP dua baris rapat; lencana jadi titik di HP ---------- */
 .jm-alat-putus{ display:none; }
-.jm-laci-legenda{ display:none; }
 @media (max-width: 640px){
   /* Lencana di kolom kiri (144 px) terpotong sebagai teks; jadi TITIK berwarna.
      Teks tetap ada di DOM (font-size 0) -> tooltip & panel deviasi memuatnya. */
@@ -883,3 +869,18 @@ table.jm-beban td.jm-beban-lebih{ color: #8A2A22; font-weight: 700; background: 
 .jm-antrean-gagal li { margin: 3px 0; }
 .jm-antrean-label { font-weight: 700; }
 .jm-bar-menunggu { cursor: default; }
+
+/* v291 (AUDIT FE-17): SATU aturan cetak untuk semua lapisan interaktif -- dulu tersebar di
+   tujuh tempat dan #jm-panel-keadaan, #jm-panel-item, #jm-modal-filter, #jm-modal-rencana,
+   .jm-penanda terlewat. Menambah panel/modal baru = tambah di sini. */
+@media print {
+  #jm-panel-sembunyi, #jm-menu-item, #jm-modal, #jm-modal-filter, #jm-modal-rencana,
+  #jm-panel-tahap, #jm-panel-klien, #jm-panel-line, #jm-panel-keadaan, #jm-panel-item,
+  #jm-panel-deviasi, #jm-panel-beban, #jm-panel-bar, .jm-rentang-deviasi, .jm-rentang-beban,
+  .jm-btn-fokus, .jm-catatan-batal button, .jm-harian-ubah, .jm-penanda { display: none !important; }
+}
+
+/* v291 (AUDIT FE-15): panel rincian bar (peran baca-saja / layar sentuh) */
+.jm-panel-bar{ min-width: 260px; max-width: min(420px, 92vw); }
+.jm-panel-bar .jm-panel-kepala{ display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.jm-panel-bar .jm-panel-baris{ font-size: 12.5px; padding: 3px 0; white-space: pre-line; }

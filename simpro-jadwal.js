@@ -185,8 +185,9 @@ function jmLabelItem_(it) {
    itu jadi lima baris chip dan memakan layar -- kebalikan dari maksud fitur.
    Penanda tetap SELALU terlihat (pil di baris info yang memang selalu dibaca),
    tapi daftarnya baru muncul saat diminta, dan tidak menggeser matriks.
-   NISAN: #jm-sembunyi-bar tidak lagi dibuat; kalau tersisa dari render lama
-   pada sesi yang sama, dibuang di sini. */
+   NISAN: #jm-sembunyi-bar tidak lagi dibuat sejak v247; pembersih sisanya
+   dicabut v291 (AUDIT FE-17) -- getElementById tiap render untuk elemen yang
+   tidak pernah ada. */
 function jmPanelSembunyi_() {
   let p = document.getElementById("jm-panel-sembunyi");
   if (!p) {
@@ -197,8 +198,6 @@ function jmPanelSembunyi_() {
   return p;
 }
 function jmRenderSembunyi_() {
-  const sisa = document.getElementById("jm-sembunyi-bar");
-  if (sisa && sisa.parentNode) sisa.parentNode.removeChild(sisa);
   const p = document.getElementById("jm-panel-sembunyi");
   if (!p || p.classList.contains("hidden")) return;      // panel tertutup: cukup pil di baris info
   if (!JM_SEMBUNYI_TERAKHIR.length) { jmTutupPanelSembunyi_(); return; }
@@ -242,7 +241,7 @@ function jmBukaMenuItem_(kunci, ev) {
   }
   const it = (JM_DATA && (JM_DATA.itemAktif || []).concat(JM_DATA.items || []).filter(function (x) { return x.kunci === kunci; })[0]) || null;
   // v253: info lengkap ada DI SINI, karena baris mode tahap kini hanya memuat nama.
-  const rinci = it ? [it.namaKlien || it.idKlien, (it.jenis === "rencana" ? "Rencana \u00b7 " : "") + it.po, it.qtyPo ? it.qtyPo.toLocaleString("id-ID") + " pcs" : "",
+  const rinci = it ? [it.namaKlien || it.idKlien, (it.jenis === "rencana" ? "Rencana \u00b7 " : "") + it.po, it.qtyPo ? Number(it.qtyPo).toLocaleString("id-ID") + " pcs" : "",
     it.deadline ? "deadline " + jmTanggalPendek_(it.deadline) : ""].filter(String).join(" \u00b7 ") : "";
   m.innerHTML = '<div class="jm-menu-judul"><b>' + jmEsc_(it ? jmNamaItem_(it) : kunci) + '</b>' +
     (rinci ? '<br>' + jmEsc_(rinci) : '') + '</div>' +
@@ -318,13 +317,7 @@ function jmToggleLaci(paksa) {
   const btn = document.getElementById("jm-btn-laci");
   if (btn) btn.classList.toggle("jm-sumbu-aktif", JM_LACI_BUKA);
 }
-function jmToggleLegenda() {
-  const l = document.getElementById("jm-legenda");
-  if (l) l.classList.toggle("jm-legenda-buka");
-  const b = document.getElementById("jm-btn-legenda");
-  if (b && l) b.classList.toggle("jm-sumbu-aktif", l.classList.contains("jm-legenda-buka"));
-  jmPasTinggi_();
-}
+// NISAN v291 (AUDIT FE-17): jmToggleLegenda() dihapus -- tombolnya dicabut v269 (legenda di modal Filter).
 
 /* v250 -- MEMAKSIMALKAN LAYAR UNTUK MATRIKS
    Diukur 3 Sep 2026 di 1440x900: 312 px (35% layar) habis sebelum matriks --
@@ -594,7 +587,8 @@ function jmTutupPanelPilih_() {
     if (p) p.classList.add("hidden");
   });
 }
-function jmTutupPanelTahap_() { jmTutupPanelPilih_(); }   // nama lama (v254) masih dipakai harness
+/** @deprecated sejak v255 (6 Sep 2026 ditandai, AUDIT FE-17): nama lama v254, hanya dipanggil harness -- kode produksi memakai jmTutupPanelPilih_. */
+function jmTutupPanelTahap_() { jmTutupPanelPilih_(); }
 
 function jmRenderLaci_() {
   const alat = document.querySelector(".jm-alat");
@@ -741,7 +735,7 @@ function jmEsc_(s) {
   return (typeof rjdEscapeHtml_ === "function")
     ? rjdEscapeHtml_(s)
     : String(s === null || s === undefined ? "" : s)
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");   // v291 (AUDIT FE-16): ' ikut, samakan dengan rjdEscapeHtml_
 }
 
 function jmIso_(d) {
@@ -1205,7 +1199,7 @@ function jmRenderPeringatan_() {
   if (p.length) {
     html += '<div class="jm-peringatan-blok"><b>' + p.length + ' baris di sheet tidak bisa digambar</b> -- perbaiki di "SD Jadwal Produksi":' +
       '<ul>' + p.map(function (x) {
-        return '<li>Baris ' + x.baris + (x.item ? ' <span class="jm-mono">' + jmEsc_(x.item) + '</span>' : '') +
+        return '<li>Baris ' + jmEsc_(x.baris) + (x.item ? ' <span class="jm-mono">' + jmEsc_(x.item) + '</span>' : '') +
           (x.tahap ? ' (' + jmEsc_(x.tahap) + ')' : '') + ': ' + jmEsc_(x.pesan) + '</li>';
       }).join("") + '</ul></div>';
   }
@@ -1395,6 +1389,10 @@ function jmGrupTerbuka_(g, hariIni) {
 
 /** Baris-baris matriks untuk satu grup: satu per tahap; Sewing satu per line. */
 function jmBarisGrup_(g) {
+  // v291 (AUDIT FE-13): grup dibuat baru tiap render (jmKelompok_), jadi hasil per grup
+  // boleh di-cache di objeknya: dulu dipanggil 3x per grup (jmGrupTerbuka_, matriks,
+  // jmDaftarDeviasi_) dan tiap panggilan mengulang penyaringan + jmKeadaan_.
+  if (g.__baris) return g.__baris;
   const urutan = JM_DATA.tahap || Object.keys(JM_KELAS_TAHAP);
   const baris = [];
   urutan.forEach(function (tahap) {
@@ -1423,6 +1421,7 @@ function jmBarisGrup_(g) {
     }
   });
   baris.forEach(function (b) { b.keadaan = jmKeadaan_(g.item); b.kunci = g.item.kunci; });   // v256 rupa; v262 realisasi
+  g.__baris = baris;
   return baris;
 }
 
@@ -1442,7 +1441,8 @@ function jmKeadaanLolos_(it) {
 }
 function jmKelasKeadaan_(it) {
   const k = jmKeadaan_(it);
-  return k === "aktif" ? "" : " jm-k-" + k;
+  // v291 (AUDIT FE-16): nilai masuk atribut class -- hanya kelas yang dikenal (whitelist di klien).
+  return k === "aktif" ? "" : " jm-k-" + (JM_LABEL_KEADAAN.hasOwnProperty(k) ? k : "takdikenal");
 }
 const JM_LABEL_KEADAAN = { rencana: "Rencana", batal: "Batal", selesai: "Selesai", takdikenal: "Item tidak dikenal" };
 function jmLencanaKeadaan_(it, kecil) {
@@ -1504,7 +1504,7 @@ function jmSegarkanTombolItem_() {
   const it = sel.value ? ((JM_DATA && (JM_DATA.itemAktif || []).concat(JM_DATA.items || []).filter(function (x) { return x.kunci === sel.value; })[0]) || null) : null;
   if (!it) { b.innerHTML = '<span class="jm-pilih-item-kosong">-- pilih item --</span>'; b.classList.remove("jm-pilih-item-terisi"); return; }
   b.innerHTML = '<span class="jm-pilih-item-nama">' + jmEsc_(jmNamaItem_(it)) + (it.jenis === "rencana" ? ' <span class="jm-lencana jm-lencana-rencana">Rencana</span>' : '') + '</span>' +
-    '<span class="jm-pilih-item-sub">' + jmEsc_(it.namaKlien || it.idKlien) + ' \u00b7 ' + jmEsc_(it.po) + (it.qtyPo ? ' \u00b7 ' + it.qtyPo.toLocaleString("id-ID") + ' pcs' : '') + '</span>';
+    '<span class="jm-pilih-item-sub">' + jmEsc_(it.namaKlien || it.idKlien) + ' \u00b7 ' + jmEsc_(it.po) + (it.qtyPo ? ' \u00b7 ' + Number(it.qtyPo).toLocaleString("id-ID") + ' pcs' : '') + '</span>';
   b.classList.add("jm-pilih-item-terisi");
 }
 function jmPanelItem_() {
@@ -1558,7 +1558,7 @@ function jmIsiPanelItem_(cari) {
     return '<div class="jm-item-klien">' + jmEsc_(k) + '</div>' + perKlien[k].map(function (it) {
       return '<button type="button" class="jm-panel-baris jm-item-baris' + (it.kunci === terpilih ? ' jm-item-terpilih' : '') + '" data-kunci-item="' + jmEsc_(it.kunci) + '">' +
         '<span class="jm-item-b-nama">' + jmEsc_(jmNamaItem_(it)) + (it.jenis === "rencana" ? ' <span class="jm-lencana jm-lencana-rencana">Rencana</span>' : '') + '</span>' +
-        '<span class="jm-item-b-sub">' + jmEsc_(it.po) + (it.qtyPo ? ' \u00b7 ' + it.qtyPo.toLocaleString("id-ID") + ' pcs' : '') + (it.deadline ? ' \u00b7 ' + jmTanggalPendek_(it.deadline) : '') + '</span></button>';
+        '<span class="jm-item-b-sub">' + jmEsc_(it.po) + (it.qtyPo ? ' \u00b7 ' + Number(it.qtyPo).toLocaleString("id-ID") + ' pcs' : '') + (it.deadline ? ' \u00b7 ' + jmTanggalPendek_(it.deadline) : '') + '</span></button>';
     }).join("");
   }).join("");
 }
@@ -1843,28 +1843,40 @@ function jmGulirAwal_(kolom) {
 function jmPerbaruiPenanda_() {
   const gulir = document.querySelector("#jm-matriks .jm-gulir");
   if (!gulir) return;
-  const batasKiri = gulir.scrollLeft + jmLebarSticky_(gulir);
-  const batasKanan = gulir.scrollLeft + gulir.clientWidth;
-  Array.prototype.forEach.call(gulir.querySelectorAll("tr.jm-r-tahap"), function (tr) {
-    const label = tr.querySelector("td.jm-sticky");
-    if (!label) return;
-    let lama = label.querySelector(".jm-penanda");
-    const sel = tr.querySelectorAll("td.jm-bar");
-    let adaTerlihat = false, kiri = 0, kanan = 0;
-    Array.prototype.forEach.call(sel, function (td) {
-      const a = td.offsetLeft, z = a + td.offsetWidth;
-      if (z > batasKiri && a < batasKanan) adaTerlihat = true;
-      else if (z <= batasKiri) kiri++; else kanan++;
+  // v291 (AUDIT FE-14): offsetLeft sel TIDAK berubah saat menggulir -- hanya scrollLeft.
+  // Dulu ~900 pembacaan offsetLeft/offsetWidth (layout sinkron) + hapus/buat <span>
+  // per baris TIAP FRAME gulir. Kini batas tiap baris dibaca sekali per render
+  // (cache di gulir.__baris, dibuang saat resize), penanda dibuat sekali lalu
+  // hanya textContent + hidden yang diubah.
+  if (!gulir.__baris) {
+    gulir.__lebarSticky = jmLebarSticky_(gulir);
+    gulir.__baris = Array.prototype.map.call(gulir.querySelectorAll("tr.jm-r-tahap"), function (tr) {
+      const label = tr.querySelector("td.jm-sticky");
+      return { label: label, sel: Array.prototype.map.call(tr.querySelectorAll("td.jm-bar"), function (td) { return [td.offsetLeft, td.offsetLeft + td.offsetWidth]; }) };
     });
-    if (lama) lama.remove();
-    if (!sel.length || adaTerlihat) return;
-    const p = document.createElement("span");
-    p.className = "jm-penanda";
+  }
+  const batasKiri = gulir.scrollLeft + gulir.__lebarSticky;
+  const batasKanan = gulir.scrollLeft + gulir.clientWidth;
+  gulir.__baris.forEach(function (r) {
+    if (!r.label) return;
+    let adaTerlihat = false, kiri = 0, kanan = 0;
+    r.sel.forEach(function (az) {
+      if (az[1] > batasKiri && az[0] < batasKanan) adaTerlihat = true;
+      else if (az[1] <= batasKiri) kiri++; else kanan++;
+    });
+    let p = r.label.querySelector(".jm-penanda");
+    // style.display, bukan atribut hidden: aturan display .jm-penanda di CSS mengalahkan [hidden]
+    if (!r.sel.length || adaTerlihat) { if (p) p.style.display = "none"; return; }
+    if (!p) { p = document.createElement("span"); p.className = "jm-penanda"; r.label.appendChild(p); }
+    p.style.display = "";
     p.textContent = kiri ? "\u25C0" : "\u25B6";
     p.title = kiri ? "Jadwal baris ini ada di sebelah kiri" : "Jadwal baris ini ada di sebelah kanan";
-    label.appendChild(p);
   });
 }
+if (typeof window !== "undefined") window.addEventListener("resize", function () {
+  const gulir = document.querySelector("#jm-matriks .jm-gulir");
+  if (gulir) { gulir.__baris = null; jmPerbaruiPenanda_(); }   // v291 (AUDIT FE-14): lebar sel berubah -> ukur ulang
+});
 
 /** Lapisan 3: klik label kolom kiri -> gulir ke bar PERTAMA baris itu. */
 function jmKlikLabel_(tr) {
@@ -1936,7 +1948,7 @@ function jmSelBaris_(b, kolom, hariIni, deadline) {
         // v288 (AUDIT BE-3a): angka ini = jumlah Total Output SEMUA proses divisi
         // (satu baris DailyReport = satu operator x satu proses x satu hari), bukan
         // baju jadi -- artikel 18 proses jahit tampil ~18x. Jangan disebut "pcs".
-        tipReal = "\nLaporan " + jmTanggalPendek_(k.iso) + (real.hari[k.iso] ? ": " + real.hari[k.iso].toLocaleString("id-ID") + " output laporan" : "") +
+        tipReal = "\nLaporan " + jmTanggalPendek_(k.iso) + (real.hari[k.iso] ? ": " + Number(real.hari[k.iso]).toLocaleString("id-ID") + " output laporan" : "") +
           (real.lokasi && real.lokasi.length ? " \u00b7 " + real.lokasi.join(", ") : "");
       }
     }
@@ -2018,12 +2030,26 @@ function jmHariKerja_(iso) { return jmDariIso_(iso).getDay() !== 0; }
 /** hari kerja di [a, b) */
 function jmHariKerjaAntara_(a, b) {
   if (!a || !b || a >= b) return 0;
-  let d = jmDariIso_(a), n = 0;
-  const akhir = jmDariIso_(b);
-  while (d < akhir) { if (d.getDay() !== 0) n++; d = jmTambahHari_(d, 1); }
-  return n;
+  // v291 (AUDIT FE-13): rumus tertutup, bukan iterasi hari demi hari. Hari kerja
+  // Senin-Sabtu dalam [a, b) = jumlah hari - jumlah Minggu di dalamnya.
+  // k = jarak dari a ke Minggu pertama (0 kalau a sendiri Minggu).
+  const da = jmDariIso_(a), db = jmDariIso_(b);
+  const D = Math.round((db - da) / 86400000);
+  if (D <= 0) return 0;
+  const k = (7 - da.getDay()) % 7;
+  const minggu = D > k ? Math.floor((D - k - 1) / 7) + 1 : 0;
+  return D - minggu;
 }
 function jmDeviasiBaris_(b, hariIni) {
+  // v291 (AUDIT FE-13): dihitung 3-4x per baris per render (jmGrupTerbuka_, filter mode
+  // tahap, lencana, daftar deviasi). Objek baris dibuat ulang tiap render (jmBarisGrup_
+  // di-cache per grup di bawah), jadi memo di objeknya sah selama satu render.
+  if (b && b.__devHari === hariIni && b.__dev !== undefined) return b.__dev;
+  const d = jmDeviasiBarisHitung_(b, hariIni);
+  if (b) { b.__dev = d; b.__devHari = hariIni; }
+  return d;
+}
+function jmDeviasiBarisHitung_(b, hariIni) {
   if (!JM_DATA || !JM_DATA.realisasi || !JM_DATA.realisasi.info || !JM_DATA.realisasi.info.aktif) return null;
   if (jmTahapSumberDr_().indexOf(b.tahap) === -1) return null;
   if (b.tahap === "Sewing" && b.bar && b.bar[0] && jmLineSampel_(b.bar[0].line)) return null;   // tim sampel tidak melapor harian
@@ -2062,16 +2088,20 @@ function jmLencanaLaporan_(b, hariIni) {
 }
 /** Semua deviasi pada item yang ditampilkan (filter & sembunyi dihormati), untuk panel ringkasan. */
 let JM_DEVIASI_TERAKHIR = [];   // v265: diisi jmRenderInfo_ sesudah matriks tergambar
-function jmDaftarDeviasi_(hariIni) {
+let JM_GRUP_TERAKHIR = null;    // v291 (AUDIT FE-13): grup artikel dari render terakhir, dioper ke jmDaftarDeviasi_ (bukan dihitung ulang)
+function jmDaftarDeviasi_(hariIni, grupSiap) {
   const keluar = [];
   if (!JM_DATA || !JM_DATA.realisasi || !JM_DATA.realisasi.info || !JM_DATA.realisasi.info.aktif) return keluar;
-  // jmKelompok_ mengisi JM_SEMBUNYI_TERAKHIR/JM_TAMPIL_TERAKHIR (efek samping untuk
-  // bilah sembunyi). Dipanggil sesudah matriks tergambar -> nilainya disimpan
-  // dan dipulihkan supaya tidak berganda.
-  const s1 = JM_SEMBUNYI_TERAKHIR, s2 = JM_TAMPIL_TERAKHIR;
-  JM_SEMBUNYI_TERAKHIR = []; JM_TAMPIL_TERAKHIR = [];
-  const grup = jmKelompok_();
-  JM_SEMBUNYI_TERAKHIR = s1; JM_TAMPIL_TERAKHIR = s2;
+  let grup = grupSiap;
+  if (!grup) {
+    // jmKelompok_ mengisi JM_SEMBUNYI_TERAKHIR/JM_TAMPIL_TERAKHIR (efek samping untuk
+    // bilah sembunyi). Dipanggil sesudah matriks tergambar -> nilainya disimpan
+    // dan dipulihkan supaya tidak berganda. (Mode tahap: grup matriks bentuknya lain.)
+    const s1 = JM_SEMBUNYI_TERAKHIR, s2 = JM_TAMPIL_TERAKHIR;
+    JM_SEMBUNYI_TERAKHIR = []; JM_TAMPIL_TERAKHIR = [];
+    grup = jmKelompok_();
+    JM_SEMBUNYI_TERAKHIR = s1; JM_TAMPIL_TERAKHIR = s2;
+  }
   grup.forEach(function (g) {
     jmBarisGrup_(g).forEach(function (b) {
       const d = jmDeviasiBaris_(b, hariIni);
@@ -2095,6 +2125,7 @@ function jmRenderHarian_(wadah) {
   const judul = JM_NAMA_HARI[tgl.getDay()] + " " + jmTanggalPendek_(hari) + " " + tgl.getFullYear() +
     (hari === hariIni ? " (hari ini)" : "");
   const grup = jmKelompok_();
+  JM_GRUP_TERAKHIR = grup;   // v291 (AUDIT FE-13)
   const seksi = {}, urutSeksi = [];
   let jumlahItem = 0, jumlahKerja = 0;
   grup.forEach(function (g) {
@@ -2141,14 +2172,14 @@ function jmRenderHarian_(wadah) {
       const it = r.g.item, x = r.x;
       const lap = real(r.b);
       const kunciJs = JSON.stringify(it.kunci).replace(/"/g, "&quot;");
-      html += '<div class="jm-harian-baris' + (r.b.keadaan && r.b.keadaan !== "aktif" ? ' jm-k-' + r.b.keadaan : '') + '" data-id="' + jmEsc_(x.id || "") + '">' +
+      html += '<div class="jm-harian-baris' + (r.b.keadaan && r.b.keadaan !== "aktif" ? ' jm-k-' + (JM_LABEL_KEADAAN.hasOwnProperty(r.b.keadaan) ? r.b.keadaan : "takdikenal") : '') + '" data-id="' + jmEsc_(x.id || "") + '">' +
         '<button type="button" class="jm-harian-nama" onclick="jmBukaMenuItem_(' + kunciJs + ', event)" title="' + jmEsc_(it.namaKlien || it.idKlien || "") + ' \u00b7 ' + jmEsc_(it.po || "") + '">' +
           jmEsc_(jmNamaItem_(it)) + jmLencanaKeadaan_(it, true) + '</button>' +
         '<span class="jm-harian-meta">' + jmEsc_((it.namaKlien || it.idKlien || "") + " \u00b7 " + jmTanggalPendek_(x.mulai) + "\u2013" + jmTanggalPendek_(x.selesai)) +
           (x.qty ? ' \u00b7 ' + Number(x.qty).toLocaleString("id-ID") + ' pcs' : '') + (hariKe(x) ? ' \u00b7 ' + jmEsc_(hariKe(x)) : '') +
           (x.keterangan ? ' \u00b7 <i>' + jmEsc_(x.keterangan) + '</i>' : '') + '</span>' +
         '<span class="jm-harian-lencana">' + jmLencanaLaporan_(r.b, hariIni) +
-          (lap !== null ? '<span class="jm-lencana jm-lencana-real jm-lencana-kecil" title="Laporan harian tanggal ini (jumlah output semua proses, bukan baju jadi)">laporan' + (lap ? ' ' + lap.toLocaleString("id-ID") + ' output' : '') + '</span>' : '') + '</span>' +
+          (lap !== null ? '<span class="jm-lencana jm-lencana-real jm-lencana-kecil" title="Laporan harian tanggal ini (jumlah output semua proses, bukan baju jadi)">laporan' + (lap ? ' ' + Number(lap).toLocaleString("id-ID") + ' output' : '') + '</span>' : '') + '</span>' +
         (JM_BOLEH_TULIS && x.id ? '<button type="button" class="jm-btn jm-btn-kecil jm-harian-ubah" onclick="jmEdit(' + JSON.stringify(x.id).replace(/"/g, "&quot;") + ')">Ubah</button>' : '') +
         '</div>';
     });
@@ -2173,6 +2204,7 @@ function jmRenderMatriks_() {
   const kolom = jmKolom_();
   const modeTahap = JM_LIHAT.mode === "tahap";
   const grup = modeTahap ? jmKelompokTahap_() : jmKelompok_();
+  JM_GRUP_TERAKHIR = modeTahap ? null : grup;   // v291 (AUDIT FE-13)
   const hariIni = JM_DATA.hariIni;
 
   if (!grup.length) {
@@ -2265,7 +2297,7 @@ function jmRenderMatriks_() {
         // di baris -- hanya nama + deadline; rinciannya di menu klik.)
         '<div class="jm-item-meta"><span class="jm-klien">' + jmEsc_(it.namaKlien || it.idKlien) + '</span>' +
           '<span class="jm-mono">' + jmEsc_(it.po) + '</span>' +
-          (it.qtyPo ? '<span class="jm-qty">&#183; ' + it.qtyPo.toLocaleString("id-ID") + ' pcs</span>' : '') +
+          (it.qtyPo ? '<span class="jm-qty">&#183; ' + Number(it.qtyPo).toLocaleString("id-ID") + ' pcs</span>' : '') +
           (it.deadline ? '<span class="jm-dl' + (deadlineLewat ? ' jm-dl-lewat' : '') + '">&#183; ' +
             jmTanggalPendek_(it.deadline) + '</span>' : '') +
         '</div>' +
@@ -2316,7 +2348,7 @@ function jmIsiFormPilihan_() {
       return '<optgroup label="' + jmEsc_(k) + '">' + perKlien[k].map(function (it) {
         // v267: PO di depan (pembeda di dalam satu klien), nama tanpa brand, qty di belakang.
         return '<option value="' + jmEsc_(it.kunci) + '">' + (it.jenis === "rencana" ? 'Rencana \u00b7 ' : '') + jmEsc_(it.po) +
-          ' \u00b7 ' + jmEsc_(jmNamaItemPendek_(it)) + (it.qtyPo ? ' \u00b7 ' + it.qtyPo.toLocaleString("id-ID") + ' pcs' : '') + '</option>';
+          ' \u00b7 ' + jmEsc_(jmNamaItemPendek_(it)) + (it.qtyPo ? ' \u00b7 ' + Number(it.qtyPo).toLocaleString("id-ID") + ' pcs' : '') + '</option>';
       }).join("") + '</optgroup>';
     }).join("");
   if (nilaiItem) selItem.value = nilaiItem;
@@ -2830,7 +2862,7 @@ function jmTanggalPendek_(iso) {
 function jmRenderInfo_(jumlahItem, jumlahBaris, judul, satuan) {
   const el = document.getElementById("jm-rentang");
   if (!el || !JM_LIHAT.mulai) return;
-  JM_DEVIASI_TERAKHIR = jumlahItem ? jmDaftarDeviasi_(JM_DATA.hariIni) : [];   // v265
+  JM_DEVIASI_TERAKHIR = jumlahItem ? jmDaftarDeviasi_(JM_DATA.hariIni, JM_GRUP_TERAKHIR) : [];   // v265; v291: grup dioper
   const a = JM_LIHAT.mulai, z = jmTambahHari_(a, JM_LIHAT.minggu * 7 - 2);
   // v278: mode harian mengirim judulnya sendiri (nama hari + tanggal) dan satuan "pekerjaan"
   el.innerHTML = (judul || (jmTanggalPendek_(jmIso_(a)) + " \u2013 " + jmTanggalPendek_(jmIso_(z)) + " " + z.getFullYear())) +
@@ -2974,6 +3006,54 @@ function jmTutupPanelBeban_() {
   if (p) p.classList.add("hidden");
 }
 
+/* v291 (AUDIT FE-15) -- PANEL RINCIAN BAR untuk peran baca-saya / layar sentuh.
+   Isinya = apa yang selama ini hanya ada di title= sel (rentang, qty, keterangan,
+   laporan harian, jeda) + identitas item. Kerangka panel yang sama dengan
+   panel beban; tertutup oleh klik di luar / Escape. */
+function jmPanelBar_() {
+  let p = document.getElementById("jm-panel-bar");
+  if (p) return p;
+  p = document.createElement("div");
+  p.id = "jm-panel-bar"; p.className = "jm-panel-sembunyi jm-panel-bar hidden";
+  document.body.appendChild(p);
+  document.addEventListener("click", function (ev) {
+    if (p.classList.contains("hidden")) return;
+    if (p.contains(ev.target) || (ev.target.closest && ev.target.closest("td.jm-bar"))) return;
+    jmTutupPanelBar_();
+  });
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") jmTutupPanelBar_(); });
+  return p;
+}
+function jmBukaPanelBar_(id, td, ev) {
+  const b = jmBarDariId_(id);
+  if (!b) return;
+  const p = jmPanelBar_();
+  const it = (JM_DATA.items || []).concat(JM_DATA.itemAktif || []).filter(function (x) { return x && x.kunci === b.item; })[0];
+  const judul = (it ? jmNamaItem_(it) : b.item) + " \u00b7 " + b.tahap + (b.namaLine ? " " + b.namaLine : "") + (b.sub ? " " + b.sub : "");
+  const baris = [
+    jmTanggalPendek_(b.mulai) + " \u2013 " + jmTanggalPendek_(b.selesai) + " (" + jmHariKerjaAntara_(b.mulai, jmIso_(jmTambahHari_(jmDariIso_(b.selesai), 1))) + " hari kerja)",
+    it ? (it.namaKlien || it.idKlien || "") + " \u00b7 " + it.po + (it.qtyPo ? " \u00b7 " + Number(it.qtyPo).toLocaleString("id-ID") + " pcs" : "") + (it.deadline ? " \u00b7 deadline " + jmTanggalPendek_(it.deadline) : "") : "",
+    b.qty ? "Qty rencana " + Number(b.qty).toLocaleString("id-ID") + " pcs" : "",
+    b.keterangan ? "Keterangan: " + b.keterangan : ""
+  ].filter(Boolean);
+  const tip = td && td.getAttribute ? String(td.getAttribute("title") || "") : "";
+  // baris pertama title = nama baris + rentang (sudah di atas); "(klik untuk mengubah)" tidak berlaku untuk peran baca-saja
+  const tambahan = tip.split("\n").filter(function (t) { return t && t.indexOf(b.tahap) !== 0 && t.indexOf("klik untuk mengubah") === -1; });
+  p.innerHTML = '<div class="jm-panel-kepala"><b>' + jmEsc_(judul) + '</b>' +
+    '<button type="button" class="jm-btn jm-btn-kecil jm-panel-tutup" onclick="jmTutupPanelBar_()" aria-label="Tutup">\u00d7</button></div>' +
+    '<div class="jm-panel-daftar">' + baris.concat(tambahan).map(function (t) { return '<div class="jm-panel-baris">' + jmEsc_(t) + '</div>'; }).join("") + '</div>';
+  p.classList.remove("hidden");
+  const r = td && td.getBoundingClientRect ? td.getBoundingClientRect() : { left: 8, bottom: 8 };
+  const lebar = p.offsetWidth || 300, tinggi = p.offsetHeight || 160;
+  p.style.left = Math.max(8, Math.min(r.left, window.innerWidth - lebar - 8)) + "px";
+  p.style.top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - tinggi - 8)) + "px";
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+}
+function jmTutupPanelBar_() {
+  const p = document.getElementById("jm-panel-bar");
+  if (p) p.classList.add("hidden");
+}
+
 /* v265 -- PANEL DEVIASI melayang (menggantikan blok kuning v264 yang memakan
    sepertiga layar). Dikelompokkan per jenis lalu per item; klik satu baris
    menggulir matriks ke item itu dan menyorotnya. */
@@ -3081,7 +3161,12 @@ window.addEventListener("load", function () {
     const sel = ev.target.closest && ev.target.closest("td[data-kunci]");
     if (sel) { jmBukaMenuItem_(sel.getAttribute("data-kunci"), ev); return; }
     const td = ev.target.closest && ev.target.closest("td.jm-bar[data-id]");
-    if (td && td.getAttribute("data-id")) jmEdit(td.getAttribute("data-id"));
+    if (td && td.getAttribute("data-id")) {
+      // v291 (AUDIT FE-15): peran baca-saja (dan perangkat sentuh, yang tidak punya
+      // title=) tetap bisa melihat isi bar: panel rincian, bukan form edit.
+      if (JM_BOLEH_TULIS) jmEdit(td.getAttribute("data-id"));
+      else jmBukaPanelBar_(td.getAttribute("data-id"), td, ev);
+    }
   });
   // v246: menu tertutup oleh klik di luar / Escape; chip di bilah memulihkan satu item.
   document.addEventListener("click", function (ev) {
