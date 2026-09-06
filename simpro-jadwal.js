@@ -42,6 +42,9 @@ let JM_DATA = null;
 let JM_BOLEH_TULIS = false;   // v215: diisi dari getPeranSaya
 let JM_EDIT_ID = "";          // v215: ID bar yang sedang diedit ("" = tambah baru)
 let JM_JANJI_DATA = null;     // v226: permintaan data yang dimulai SEBELUM gerbang peran selesai
+let JM_SUDAH_GULIR_AWAL = false;   // v289 (AUDIT FE-7): gulir ke "hari ini" hanya sekali per muat data / navigasi
+let JM_GULIR_TERAKHIR = null;      // v289 (AUDIT FE-7): scrollLeft matriks sebelum innerHTML diganti
+let JM_GEN_DATA = 0;               // v289 (AUDIT FE-11): generasi permintaan data; jawaban yang lebih tua dibuang
 let JM_DARI_SNAPSHOT = false; // v226: tampilan saat ini berasal dari snapshot lokal
 const JM_ANTREAN_KUNCI = "jm_antrean";   // v226: kotak keluar (localStorage)
 let JM_PENGIRIM_ANTREAN = null;
@@ -921,6 +924,7 @@ function jmAmbilData_() {
 
 function jmTerapkanData_(data) {
   JM_DATA = data;
+  JM_SUDAH_GULIR_AWAL = false;   // v289 (AUDIT FE-7): data baru dari server = gulir awal lagi
   // Jendela default: seminggu ke belakang dari hari ini, supaya bar yang
   // sedang berjalan kelihatan awalnya.
   if (!JM_LIHAT.mulai) JM_LIHAT.mulai = jmSenin_(jmTambahHari_(jmDariIso_(data.hariIni), -7));
@@ -937,11 +941,25 @@ function jmStatusData_(teks) {
   jmPasTinggiNanti_();   // v252: bilah ini yang membuat sisa 61 px (lihat jmPasangPengamatTinggi_)
 }
 
+/**
+ * v289 (AUDIT FE-11): semua pembacaan yang MENGGAMBAR lewat sini. Tanpa penanda
+ * generasi, Muat ulang yang lambat (penjaga fetch mengulang 2x, 5+ dtk) bisa
+ * resolve SESUDAH flush antrean 60 dtk yang cepat -> jmTerapkanData_(data lama)
+ * menghapus perubahan yang barusan terkirim dari layar dan snapshot ditulis basi.
+ * Jawaban yang generasinya sudah lewat dibuang (resolve null).
+ */
+function jmMuatData_(pakai) {
+  const gen = ++JM_GEN_DATA;
+  return jmAmbilData_().then(function (d) { if (gen !== JM_GEN_DATA) return null; pakai(d); return d; });
+}
+
 function jmMuat() {
   const janji = JM_JANJI_DATA || jmAmbilData_();
   JM_JANJI_DATA = null;
+  const gen = ++JM_GEN_DATA;   // v289 (AUDIT FE-11)
   janji
     .then(function (data) {
+      if (gen !== JM_GEN_DATA) return;   // v289: sudah ada jawaban yang lebih baru
       jmShow("jm-isi");
       JM_DARI_SNAPSHOT = false;
       jmTerapkanData_(data);
@@ -1067,7 +1085,8 @@ function jmKirimAntrean_(manual) {
     const sisa = jmAntreanAntre_();   // dibaca ULANG dari localStorage tiap langkah (FE-1)
     if (!sisa.length) {
       JM_PENGIRIM_ANTREAN = null; jmRenderAntrean_();
-      jmAmbilData_().then(function (d) { JM_DATA = d; jmIsiFilter_(); jmIsiFormPilihan_(); jmRender(); if (typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("jadwal", d); }).catch(function () {});
+      // v289 (AUDIT FE-11): lewat generasi. Sengaja TIDAK lewat jmTerapkanData_ supaya posisi gulir bertahan (FE-7).
+      jmMuatData_(function (d) { JM_DATA = d; jmIsiFilter_(); jmIsiFormPilihan_(); jmRender(); if (typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("jadwal", d); }).catch(function () {});
       return;
     }
     const item = sisa[0];
@@ -1127,11 +1146,13 @@ function jmGeser(n) {
   } else {
     JM_LIHAT.mulai = jmTambahHari_(JM_LIHAT.mulai, n * 7);
   }
+  JM_SUDAH_GULIR_AWAL = false;   // v289 (AUDIT FE-7): navigasi = posisi gulir dihitung ulang
   jmSimpanLihat_(); jmRender();
 }
 function jmKeHariIni() {
   JM_LIHAT.mulai = jmSenin_(jmTambahHari_(jmDariIso_(JM_DATA.hariIni), -7));
   JM_LIHAT.hari = JM_DATA.hariIni;   // v278
+  JM_SUDAH_GULIR_AWAL = false;   // v289 (AUDIT FE-7)
   jmSimpanLihat_(); jmRender();
 }
 /** v278: tanggal yang dilihat mode harian (ISO); bawaan hari ini. */
@@ -1173,8 +1194,12 @@ function jmRenderPeringatan_() {
   const ri = JM_DATA.realisasi && JM_DATA.realisasi.info;
   if (ri && !ri.aktif) c.push({ jenis: "realisasi", pesan: "Realisasi dari laporan harian TIDAK AKTIF: " + (ri.alasan || "tanpa alasan") + "." });
   const batal = jmBarBatal_();
+  // v289 (AUDIT FE-10): bar tanpa satu pun hari kerja tidak punya sel untuk digambar
+  // dan tidak masuk peringatan server -- header berkas menjanjikan "yang tidak bisa
+  // digambar tampil sebagai peringatan", ini menepatinya.
+  const minggu = (JM_DATA.bar || []).filter(function (b) { return !jmAdaHariKerja_(b.mulai, b.selesai); });
   // v265: deviasi tidak lagi di sini (memakan sepertiga layar) -- pil di baris info + panel melayang.
-  if (!p.length && !c.length && !batal.length) { el.classList.add("hidden"); el.innerHTML = ""; return; }
+  if (!p.length && !c.length && !batal.length && !minggu.length) { el.classList.add("hidden"); el.innerHTML = ""; return; }
   el.classList.remove("hidden");
   let html = "";
   if (p.length) {
@@ -1188,6 +1213,15 @@ function jmRenderPeringatan_() {
     html += '<div class="jm-peringatan-blok jm-catatan"><b>' + c.length + ' catatan</b><ul>' + c.map(function (x) {
       return '<li class="jm-catatan-' + jmEsc_(x.jenis || "") + '">' + jmEsc_(x.pesan) + '</li>';
     }).join("") + '</ul></div>';
+  }
+  if (minggu.length) {
+    html += '<div class="jm-peringatan-blok jm-catatan-minggu"><b>' + minggu.length + ' bar hanya jatuh pada hari Minggu</b> -- tidak punya kolom untuk digambar:' +
+      '<ul>' + minggu.map(function (b) {
+        const it = (JM_DATA.items || []).concat(JM_DATA.itemAktif || []).filter(function (x) { return x && x.kunci === b.item; })[0];
+        return '<li>' + jmEsc_(it ? jmNamaItem_(it) : b.item) + ' \u00b7 ' + jmEsc_(b.tahap) + (b.namaLine ? ' ' + jmEsc_(b.namaLine) : '') +
+          ' \u00b7 ' + jmEsc_(jmTanggalPendek_(b.mulai)) +
+          (JM_BOLEH_TULIS && b.id ? ' <button type="button" class="jm-btn jm-btn-kecil" onclick="jmEdit(' + JSON.stringify(b.id).replace(/"/g, "&quot;") + ')">Ubah</button>' : '') + '</li>';
+      }).join("") + '</ul></div>';
   }
   if (batal.length) {
     html += '<div class="jm-peringatan-blok jm-catatan-batal"><b>' + batal.length + ' bar milik item batal</b> (tergambar redup dan dicoret). ' +
@@ -1764,6 +1798,23 @@ function jmGulirKeKolom_(i, mulus) {
   else gulir.scrollLeft = target;
 }
 
+/**
+ * v289 (AUDIT FE-10): apakah rentang ISO [mulai, selesai] memuat setidaknya satu
+ * hari kerja (Senin-Sabtu). Matriks hanya membangun kolom Senin-Sabtu dan mode
+ * harian melompati Minggu, jadi bar yang seluruhnya di hari Minggu tidak bisa
+ * digambar DAN tidak bisa dicapai dari mana pun. Rentang >= 2 hari selalu
+ * memuat hari kerja; tanggal tidak valid dibiarkan untuk pemeriksaan lain.
+ */
+function jmAdaHariKerja_(mulai, selesai) {
+  if (!mulai || !selesai || mulai !== selesai) return true;
+  const d = jmDariIso_(mulai);
+  return !d || isNaN(d.getTime()) || d.getDay() !== 0;
+}
+function jmPeringatanHariKerja_(data) {
+  if (jmAdaHariKerja_(data.mulai, data.selesai)) return [];
+  return ["Tanggal " + jmTanggalPendek_(data.mulai) + " jatuh pada hari Minggu: matriks tidak punya kolomnya, jadi bar ini tidak akan tergambar."];
+}
+
 /** Index kolom untuk sebuah tanggal ISO; -1 kalau di luar jendela. */
 function jmIndexKolom_(iso, kolom) {
   for (let i = 0; i < kolom.length; i++) if (kolom[i].iso === iso) return i;
@@ -1844,9 +1895,17 @@ function jmPasangGulir_(kolom) {
     const td = ev.target.closest && ev.target.closest("td.jm-sticky");
     if (!td) return;
     const tr = td.parentNode;
-    if (tr && tr.classList.contains("jm-r-tahap")) jmKlikLabel_(tr);
+    // v289 (AUDIT FE-8): di mode Per tahap sel kiri baris item membawa data-kunci
+    // (menu sembunyikan/fokus, listener #jm-matriks). Sejak v253 sel itu juga
+    // baris jm-r-tahap, jadi satu klik = menu terbuka + matriks bergulir menjauh.
+    if (tr && tr.classList.contains("jm-r-tahap") && !td.hasAttribute("data-kunci")) jmKlikLabel_(tr);
   });
-  jmGulirAwal_(kolom);
+  // v289 (AUDIT FE-7): gulir awal ("hari ini") hanya sekali sesudah muat data /
+  // navigasi (jmTerapkanData_, jmGeser, jmKeHariIni, jmGulirKeBar_ mereset
+  // penandanya); render lain memulihkan posisi yang disimpan jmRenderMatriks_.
+  // Tanpa posisi tersimpan (baru pindah dari mode harian) -> gulir awal juga.
+  if (!JM_SUDAH_GULIR_AWAL || JM_GULIR_TERAKHIR == null) { jmGulirAwal_(kolom); JM_SUDAH_GULIR_AWAL = true; }
+  else gulir.scrollLeft = JM_GULIR_TERAKHIR;
   jmPerbaruiPenanda_();
   jmPasTinggi_();               // v250
   jmPasangPengamatTinggi_();    // v252: sekali; idempoten
@@ -2101,6 +2160,12 @@ function jmRenderHarian_(wadah) {
 
 function jmRenderMatriks_() {
   const wadah = document.getElementById("jm-matriks");
+  // v289 (AUDIT FE-7): posisi gulir DISIMPAN sebelum innerHTML diganti, dipulihkan
+  // di jmPasangGulir_. Dulu tiap render (centang filter, sembunyikan item, ganti
+  // mode, flush antrean 60 dtk) melompat balik ke "hari ini" -- persis yang
+  // dilarang komentar v235: gulir yang bergerak sendiri membuat orang kehilangan tempat.
+  const gulirLama = wadah.querySelector(".jm-gulir");
+  JM_GULIR_TERAKHIR = gulirLama ? gulirLama.scrollLeft : null;
   JM_SEMBUNYI_TERAKHIR = []; JM_TAMPIL_TERAKHIR = [];   // v246: diisi ulang oleh pengelompokan
   if (!JM_DATA.sheetAda) { wadah.innerHTML = ""; jmRenderInfo_(0, 0); return; }
 
@@ -2259,8 +2324,17 @@ function jmIsiFormPilihan_() {
   // langsung terpilih di sini (bukan dipilih dari respons -- daftar item yang
   // sah hanya datang dari server).
   if (JM_PILIH_ITEM_NANTI) {
-    selItem.value = JM_PILIH_ITEM_NANTI;
-    if (selItem.value === JM_PILIH_ITEM_NANTI) { JM_PILIH_ITEM_NANTI = ""; jmFormItemBerubah(); }
+    // v289 (AUDIT FE-12): SEKALI PAKAI. Dulu kunci yang belum ada di <option>
+    // membuat select.value jadi "" dan variabelnya tidak pernah dibersihkan --
+    // tiap penyegaran sesudahnya menghapus pilihan item pengguna sampai tab ditutup.
+    const nanti = JM_PILIH_ITEM_NANTI;
+    JM_PILIH_ITEM_NANTI = "";
+    selItem.value = nanti;
+    if (selItem.value === nanti) jmFormItemBerubah();
+    else {
+      selItem.value = nilaiItem;   // pulihkan pilihan pengguna
+      jmFormPesan_("Item rencana belum muncul di daftar -- klik Muat ulang.", true);
+    }
   }
   jmPasangTombolItem_(selItem);   // v267
   jmPasangTautanRencana_(selItem);
@@ -2548,7 +2622,7 @@ function jmFormSimpan() {
   if (!data.mulai || !data.selesai) { jmFormPesan_("Isi tanggal mulai dan selesai.", true); return; }
   if (data.selesai < data.mulai) { jmFormPesan_("Tanggal selesai lebih awal dari mulai.", true); return; }
   // v273: dependensi antar tahap -- peringatan yang bisa dilewati dengan klik kedua.
-  const dep = jmPeringatanDependensi_(data).concat(jmPeringatanQty_(data));   // v274: + qty Sewing kosong
+  const dep = jmPeringatanDependensi_(data).concat(jmPeringatanQty_(data), jmPeringatanHariKerja_(data));   // v274: + qty Sewing kosong; v289: + hari Minggu
   const tandaDep = JSON.stringify(data);
   if (dep.length && JM_DEP_DIABAIKAN !== tandaDep) {
     jmFormPesan_(dep.join(" ") + " Klik \u201cTetap simpan\u201d untuk melanjutkan.", false, true);
@@ -2665,7 +2739,7 @@ function jmKirim_(action, muatan, saatBerhasil, periksa, label) {
         jmFormPesan_("Tersimpan di server, tapi tampilan gagal diperbarui. Memuat ulang...", false);
         JM_EDIT_ID = "";
         jmFormModeTampil_();
-        jmAmbilData_().then(jmTerapkanData_).catch(function () {});
+        jmMuatData_(jmTerapkanData_).catch(function () {});   // v289 (AUDIT FE-11)
       }
     })
     .catch(function (e) {
@@ -2689,10 +2763,12 @@ function jmKirim_(action, muatan, saatBerhasil, periksa, label) {
       // tidak perlu tahu mekanismenya -- cukup tahu hasil akhirnya benar.
       jmFormPesan_("Menyimpan... memastikan ke sheet.");
       if (window.console && console.info) console.info("[jadwal] jawaban simpan tidak terbaca (" + sebab + "); memastikan lewat baca ulang.");
+      const genPeriksa = ++JM_GEN_DATA;   // v289 (AUDIT FE-11)
       jmAmbilData_()
         .then(function (data) {
           jmFormSibuk_(false);
-          jmTerapkanData_(data);
+          // jawaban yang lebih baru sudah digambar -> jangan ditimpa; periksa memakai yang terbaru
+          if (genPeriksa === JM_GEN_DATA) jmTerapkanData_(data); else data = JM_DATA || data;
           const hasil = periksa(data);
           if (hasil) {
             JM_EDIT_ID = "";
@@ -2733,6 +2809,7 @@ function jmGulirKeBar_(bar) {
   const awal = kolom[0].iso, akhir = kolom[kolom.length - 1].iso;
   if (bar.mulai >= awal && bar.mulai <= akhir) return;
   JM_LIHAT.mulai = jmSenin_(jmTambahHari_(jmDariIso_(bar.mulai), -7));
+  JM_SUDAH_GULIR_AWAL = false;   // v289 (AUDIT FE-7): jendela pindah ke bar baru -> gulir awal
   jmSimpanLihat_();
   jmRender();
 }
@@ -2877,7 +2954,7 @@ function jmIsiPanelBeban_(p) {
     }).join("") + '</tr>';
   });
   html += '</tbody></table></div><div class="jm-beban-kaki">' + (d.lebih ? d.lebih + ' minggu-line melebihi kapasitas. ' : '') +
-    '* qty dari qty PO dibagi jumlah bar Sewing item (Qty Rencana kosong). Line tanpa kapasitas ditampilkan tanpa pembanding.</div>';
+    '* qty cadangan = sisa qty PO (dikurangi bar Sewing yang sudah ber-qty) dibagi rata ke bar yang Qty Rencana-nya kosong. Line tanpa kapasitas ditampilkan tanpa pembanding.</div>';
   p.innerHTML = html;
 }
 function jmBukaPanelBeban_(ev) {
