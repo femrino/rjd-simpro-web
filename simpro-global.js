@@ -3315,13 +3315,30 @@ function rjdTerapkanPeranKeMenu() {
 
 // v228: pembersih snapshot kedaluwarsa. Dijalankan sekali per pemuatan halaman,
 // sesudah muatan utama supaya tidak menunda gambar pertama.
-document.addEventListener("DOMContentLoaded", function () {
+/* v292 (loader): berkas ini kini dipasang simpro-loader.js secara dinamis (async=false),
+   jadi bisa selesai dimuat SESUDAH DOMContentLoaded lewat -- listener yang didaftarkan
+   sesudah itu tidak pernah jalan. Pembantu ini menjalankan fn segera kalau DOM sudah
+   siap, atau menunggu kalau belum. Dipakai untuk kedua langkah di bawah. */
+function rjdSaatDomSiap_(fn) {
+  if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", fn); return; }
+  // DOM sudah siap. Kalau dipasang loader: tunggu SEMUA skrip halaman selesai
+  // (event simpro:siap dari simpro-loader.js) -- setara DOMContentLoaded lama yang
+  // datang sesudah semua <script> parser. Tanpa loader dan DOM sudah siap (harness
+  // memuat berkas ini sesudah halaman jadi): perilaku lama = tidak dijalankan;
+  // menjalankannya seketika membaca objek yang belum ada (63 harness merah, 6 Sep 2026).
+  if (window.SIMPRO_VERSI) {
+    if (window.SIMPRO_VERSI.siap) fn();
+    else document.addEventListener("simpro:siap", fn);
+  }
+}
+
+rjdSaatDomSiap_(function () {
   setTimeout(function () {
     try { rjdSnapshotBersihkan_(14); } catch (e) { /* jangan sampai menjatuhkan halaman */ }
   }, 3000);
 });
 
-document.addEventListener("DOMContentLoaded", function () {
+rjdSaatDomSiap_(function () {
   // Dijalankan SEGERA. Versi pertama menundanya 1200ms dengan alasan menunggu
   // header tersisip, tapi itu justru bikin menu penuh sempat terlihat sekejap
   // sebelum berubah. Sekarang penyembunyian awal ditangani CSS
