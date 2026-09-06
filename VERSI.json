@@ -1,0 +1,135 @@
+{
+  "web": "v293",
+  "catatan": "Dibaca simpro-loader.js dari cabang main (jsDelivr @main, cache-buster per menit). 'web' = tag yang dimuat semua halaman; diubah rilis-web.sh sesudah tag terpush, lalu cache jsDelivr di-purge. 'halaman' = berkas per rute; salinan cadangannya ada di simpro-loader.js (HALAMAN_CADANGAN) -- kalau menambah halaman, ubah keduanya.",
+  "halaman": {
+    "_global": {
+      "css": [
+        "simpro-global.css"
+      ],
+      "js": [
+        "simpro-global.js"
+      ]
+    },
+    "/": {
+      "css": [
+        "simpro-home.css"
+      ],
+      "js": []
+    },
+    "/p/tracking.html": {
+      "css": [
+        "simpro-tracking.css"
+      ],
+      "js": [
+        "simpro-tracking.js"
+      ]
+    },
+    "/p/dashboard.html": {
+      "css": [
+        "simpro-dashboard.css"
+      ],
+      "js": [
+        "simpro-dashboard.js"
+      ]
+    },
+    "/p/order.html": {
+      "css": [
+        "simpro-order.css"
+      ],
+      "js": [
+        "simpro-order.js"
+      ]
+    },
+    "/p/order-list.html": {
+      "css": [
+        "simpro-orderlist.css"
+      ],
+      "js": [
+        "simpro-orderlist.js"
+      ]
+    },
+    "/p/pengiriman.html": {
+      "css": [
+        "simpro-pengiriman.css"
+      ],
+      "js": [
+        "simpro-pengiriman.js"
+      ]
+    },
+    "/p/invoice.html": {
+      "css": [
+        "simpro-invoice.css"
+      ],
+      "js": [
+        "simpro-invoice.js"
+      ]
+    },
+    "/p/cetak.html": {
+      "css": [
+        "simpro-cetak.css"
+      ],
+      "js": [
+        "simpro-cetak.js"
+      ]
+    },
+    "/p/laporan-omset.html": {
+      "css": [
+        "simpro-omset.css"
+      ],
+      "js": [
+        "simpro-omset.js"
+      ]
+    },
+    "/p/kalkulator-harga.html": {
+      "css": [
+        "simpro-kalkulator.css"
+      ],
+      "js": [
+        "simpro-kalkulator.js"
+      ]
+    },
+    "/p/sop.html": {
+      "css": [
+        "simpro-sop.css"
+      ],
+      "js": [
+        "simpro-sop.js"
+      ]
+    },
+    "/p/jadwal.html": {
+      "css": [
+        "simpro-jadwal.css"
+      ],
+      "js": [
+        "simpro-jadwal.js"
+      ]
+    },
+    "/p/kas.html": {
+      "css": [
+        "simpro-kas.css"
+      ],
+      "js": [
+        "simpro-kas.js"
+      ]
+    },
+    "/p/upah.html": {
+      "css": [
+        "simpro-upah.css"
+      ],
+      "js": [
+        "simpro-upah.js"
+      ]
+    },
+    "/p/produksi.html": {
+      "css": [
+        "simpro-spk.css",
+        "simpro-qc.css",
+        "simpro-sop.css"
+      ],
+      "js": [
+        "simpro-sop.js",
+        "simpro-spk.js"
+      ]
+    }
+  }
+}
