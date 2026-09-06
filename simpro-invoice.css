@@ -390,3 +390,10 @@ tr.iv-baris-batal td { color: var(--ink-soft); }
 .iv-dok-muat { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--ink-soft); background: var(--cream); }
 .iv-dok .rjd-modal-foot .iv-btn { text-decoration: none; }
 @media (max-width: 640px) { .iv-dok { height: 92vh; } .iv-kirim-po-grup .iv-kirim-baris { margin-left: 10px; } }
+
+/* ---------- v285: bukti potong & artikel di tujuan pembayaran ---------- */
+.iv-aksi-bukti { color: #2F6B3A; border-color: #A7C8B9; }
+.iv-aksi-bukti:hover { color: #1f4d29; border-color: #2F6B3A; }
+.iv-tujuan-artikel { display: block; color: var(--ink); font-weight: 600; white-space: normal; }
+.iv-kirim-isi .iv-kirim-sub + .iv-tujuan-artikel { margin-top: 2px; }
+.iv-kirim-id { display: block; }

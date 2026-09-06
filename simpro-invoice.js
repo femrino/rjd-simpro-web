@@ -238,6 +238,15 @@ function ivRender(){
             ? ' <a href="#" class="iv-aksi-link" data-id="' + rjdEscapeHtml_(idInv) + '" onclick="ivBukaUbah(this.dataset.id); return false;">Ubah</a>' +
               ' <a href="#" class="iv-aksi-link iv-aksi-batal" data-id="' + rjdEscapeHtml_(idInv) + '" onclick="ivBukaBatal(this.dataset.id); return false;">Batalkan</a>'
             : '') +
+          // v285: bukti potong PPh -- tautan Drive kalau sudah ada, tombol unggah kalau belum
+          // (hanya invoice yang PPh-nya terisi atau klien pemotong; invoice batal tidak).
+          (idInv && !p.batal
+            ? (p.buktiPotongUrl
+                ? ' <a class="iv-aksi-link iv-aksi-bukti" target="_blank" rel="noopener" href="' + rjdEscapeHtml_(p.buktiPotongUrl) + '" title="Buka berkas bukti potong di Drive">&#128206; Bukti potong</a>'
+                : ((Number(p.potonganPajak) || 0) > 0
+                    ? ' <a href="#" class="iv-aksi-link iv-aksi-bukti" data-id="' + rjdEscapeHtml_(idInv) + '" onclick="ivUnggahBuktiPotong(this.dataset.id); return false;" title="Unggah PDF/JPG bukti potong PPh">+ Bukti potong</a>'
+                    : ''))
+            : '') +
           (p.batal
             ? '<div class="iv-sub iv-batal-info">Dibatalkan' + (p.alasanBatal ? ': ' + rjdEscapeHtml_(p.alasanBatal) : '') +
               (p.digantiOleh ? ' &#183; diganti oleh <b>' + rjdEscapeHtml_(p.digantiOleh) + '</b>' : ' &#183; belum ada pengganti') + '</div>'
@@ -396,6 +405,43 @@ function ivSimpanBatal_(p) {
         p.idInvoice + " dibatalkan." + (d.totalDibayar ? "\nPembayaran " + ivFormatRupiah_(d.totalDibayar) + " akan dipindah saat pengganti dibuat." : ""));
     })
     .catch(function (e) { ivModalPesan_(e.message || "Gagal membatalkan.", true); if (btn) { btn.disabled = false; btn.textContent = "Batalkan invoice ini"; } });
+}
+
+/* v285 -- UNGGAH BUKTI POTONG PPh (gs >= @320). Berkas PDF/JPG dibaca jadi
+   base64 (ofBacaFileSebagaiBase64_, simpro-global.js, maks 8 MB), dikirim ke
+   unggahBuktiPotong, disimpan server ke Drive; tautannya tampil di baris
+   sebagai "Bukti potong". Dokumen tidak lagi tercecer di WhatsApp/email. */
+function ivUnggahBuktiPotong(id) {
+  if (!id) return;
+  let inp = document.getElementById("iv-bukti-file");
+  if (!inp) {
+    inp = document.createElement("input");
+    inp.type = "file"; inp.id = "iv-bukti-file"; inp.accept = ".pdf,application/pdf,image/jpeg,image/png"; inp.hidden = true;
+    document.body.appendChild(inp);
+    inp.addEventListener("change", function () {
+      const file = inp.files && inp.files[0];
+      const untuk = inp.dataset.id;
+      inp.value = "";
+      if (!file || !untuk) return;
+      ivKirimBuktiPotong_(untuk, file);
+    });
+  }
+  inp.dataset.id = id;
+  inp.click();
+}
+function ivKirimBuktiPotong_(id, file) {
+  if (typeof ofBacaFileSebagaiBase64_ !== "function") { alert("Pembaca berkas tidak tersedia -- muat ulang halaman."); return; }
+  const mime = file.type || (/\.pdf$/i.test(file.name) ? "application/pdf" : "");
+  if (!/^(application\/pdf|image\/jpeg|image\/png)$/.test(mime)) { alert("Berkas harus PDF, JPG, atau PNG."); return; }
+  ofBacaFileSebagaiBase64_(file)
+    .then(function (b) { return ivKirimKoreksi_("unggahBuktiPotong", { idInvoice: id, base64: b.base64, namaFile: b.namaFile, mimeType: mime }); })
+    .then(function (d) {
+      window.IV_DAFTAR = null; window.IV_SUDAH_SEGAR = false;
+      ivMuat();
+      alert("Bukti potong " + id + " tersimpan" + (d.diganti ? " (menggantikan berkas sebelumnya)" : "") + ".\n" + (d.namaFile || "") +
+        (d.statusBuktiPotong ? "\nStatus bukti potong: " + d.statusBuktiPotong : ""));
+    })
+    .catch(function (e) { alert(e && e.message ? e.message : "Gagal mengunggah bukti potong."); });
 }
 
 /* v284 -- LIHAT INVOICE: dokumen cetak dibenamkan di modal (pola spPratinjauDok_
@@ -1028,9 +1074,11 @@ function ivRenderTujuan(){
 
   let baris;
   if(mode === "invoice"){
+    // v285: pencarian & tampilan memuat PO dan ARTIKEL -- bukti transfer klien
+    // menyebut artikel/PO, bukan nomor invoice (gs >= @320 mengirim artikel).
     const daftar = (window.IV_TUJUAN.invoice || []).filter(function(v){
       if(!cari) return true;
-      return (v.id + " " + v.idPurchaseOrder + " " + v.namaKlien).toLowerCase().indexOf(cari) !== -1;
+      return (v.id + " " + v.idPurchaseOrder + " " + v.namaKlien + " " + (v.artikel || "")).toLowerCase().indexOf(cari) !== -1;
     });
     if(!daftar.length){
       wadah.innerHTML = '<p class="iv-buat-info">' +
@@ -1046,6 +1094,9 @@ function ivRenderTujuan(){
           '<span class="iv-kirim-id">' + rjdEscapeHtml_(v.id) + '</span>' +
           '<span class="iv-kirim-sub">' + rjdEscapeHtml_(v.namaKlien) + ' &#183; ' +
             rjdEscapeHtml_(v.tanggal) + '</span>' +
+          '<span class="iv-kirim-sub iv-tujuan-artikel">' + rjdEscapeHtml_(v.idPurchaseOrder || "-") +
+            (v.artikel ? ' &#183; ' + rjdEscapeHtml_(v.artikel) : '') + (v.jumlahPcs ? ' &#183; ' + v.jumlahPcs + ' pcs' : '') +
+            (v.totalTagihan ? ' &#183; tagihan ' + formatRupiah(v.totalTagihan) : '') + '</span>' +
         '</span>' +
         '<span class="iv-kirim-qty">' + formatRupiah(v.sisa) +
           '<span class="iv-bayar-ket">sisa</span></span>' +
@@ -1458,7 +1509,7 @@ function ivRenderSplit(){
 
   const barisInvoice = (window.IV_TUJUAN.invoice || [])
     .filter(klienCocok)
-    .filter(function(v){ return cocok(v.id + " " + v.idPurchaseOrder + " " + v.namaKlien); })
+    .filter(function(v){ return cocok(v.id + " " + v.idPurchaseOrder + " " + v.namaKlien + " " + (v.artikel || "")); })
     .map(function(v){
       const kunci = "INV:" + v.id;
       const nilai = alokasi[kunci] || "";
@@ -1467,6 +1518,8 @@ function ivRenderSplit(){
           '<span class="iv-kirim-id">' + rjdEscapeHtml_(v.id) + '</span>' +
           '<span class="iv-kirim-sub">' + rjdEscapeHtml_(v.namaKlien) + ' &#183; ' +
             rjdEscapeHtml_(v.tanggal) + ' &#183; sisa ' + formatRupiah(v.sisa) + '</span>' +
+          '<span class="iv-kirim-sub iv-tujuan-artikel">' + rjdEscapeHtml_(v.idPurchaseOrder || "-") +   // v285
+            (v.artikel ? ' &#183; ' + rjdEscapeHtml_(v.artikel) : '') + '</span>' +
         '</div>' +
         '<input class="iv-split-input" type="number" min="0" placeholder="0" value="' + nilai + '"' +
           ' oninput="ivSetAlokasi(\'' + kunci + '\', this.value)"/>' +
