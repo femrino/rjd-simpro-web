@@ -652,17 +652,22 @@ function jpRenderPeringatan(){
 
 function jpRenderBeban(){
   var beban = JP_DATA.beban || {};
+  var luar = JP_DATA.bebanLuarHorizon || {};   // v290 (AUDIT BE-8, butuh gs >= @324)
   var html = "";
   Object.keys(beban).forEach(function(divisi){
     var minggu = beban[divisi];
+    var lh = luar[divisi];
     html += '<div class="jp-divisi">' +
       '<div class="jp-divisi-nama">' + divisi + '</div>' +
       '<div class="jp-minggu-row">' +
         minggu.map(function(m){
           var kelas = m.status === "kelebihan" ? "jp-lebih" : (m.status === "padat" ? "jp-padat" : "jp-lega");
           var tinggi = Math.min(100, m.utilisasi);
+          // v290 (AUDIT BE-8): penyebut = hari kerja x slot paralel (kapasitasHari dari gs >= @324);
+          // payload lama tanpa kapasitasHari tetap memakai hariKerjaTersedia.
+          var penyebut = (m.kapasitasHari > 0) ? (m.kapasitasHari + ' hari-slot (' + m.hariKerjaTersedia + ' hk × ' + m.maksParalel + ' paralel)') : (m.hariKerjaTersedia + ' hari kerja');
           return '<div class="jp-minggu" title="Minggu ' + m.mingguKe + ' (' + m.mulai + ')&#10;' +
-                 m.hariKerjaTerpakai + ' dari ' + m.hariKerjaTersedia + ' hari kerja&#10;' +
+                 m.hariKerjaTerpakai + ' dari ' + penyebut + '&#10;' +
                  m.jumlahOrder + ' order">' +
             '<div class="jp-bar-wrap"><div class="jp-bar ' + kelas + '" style="height:' + tinggi + '%"></div></div>' +
             '<div class="jp-minggu-pct">' + m.utilisasi + '%</div>' +
@@ -670,8 +675,17 @@ function jpRenderBeban(){
           '</div>';
         }).join("") +
       '</div>' +
+      // v290 (AUDIT BE-8): beban yang selesai sesudah horizon dulu hilang tanpa jejak.
+      (lh && lh.hariKerja > 0 ? '<div class="jp-luar-horizon">+ ' + lh.hariKerja + ' hari kerja sesudah minggu ' + (lh.sesudahMinggu || minggu.length) +
+        ' (' + lh.jumlahOrder + ' order' + (lh.order && lh.order.length ? ': ' + lh.order.map(function(o){ return o.po; }).join(', ') : '') + ')</div>' : '') +
     '</div>';
   });
+  // v290 (AUDIT BE-8b): PO yang laporan selesainya melebihi qty -- dulu dihaluskan jadi "selesai".
+  var kelebihan = JP_DATA.kelebihan || [];
+  if(kelebihan.length){
+    html += '<div class="jp-kelebihan"><b>' + kelebihan.length + ' PO × divisi dengan laporan selesai MELEBIHI qty</b> (baris hantu / perbaikan dicatat sebagai output baru?): ' +
+      kelebihan.map(function(k){ return k.idPurchaseOrder + ' ' + k.divisi + ' +' + k.kelebihan + ' pcs'; }).join('; ') + '</div>';
+  }
   document.getElementById("jp-beban").innerHTML = html ||
     '<p class="jp-loading">Belum ada data beban.</p>';
 }
