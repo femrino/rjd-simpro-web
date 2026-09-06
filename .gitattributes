@@ -1,0 +1,4 @@
+# AUDIT PROC-4 (6 Sep 2026): akhiran baris ditetapkan LF di index & working tree,
+# supaya git status tidak pernah berisik CRLF/LF -- protokol .gs bersandar pada
+# "git status HARUS bersih" sebagai penjaga.
+* text=auto eol=lf
