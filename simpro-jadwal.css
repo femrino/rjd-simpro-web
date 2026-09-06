@@ -110,6 +110,9 @@
 /* sel bar bisa diklik hanya kalau boleh menulis */
 body.jm-bisa-tulis td.jm-bar[data-id]:not([data-id=""]) { cursor: pointer; }
 body.jm-bisa-tulis td.jm-bar[data-id]:not([data-id=""]):hover { box-shadow: inset 0 0 0 2px var(--navy, #17212F); }
+/* v286: hover juga menimpa box-shadow, jadi garis deadline hilang saat kursor
+   lewat. Spesifisitas dinaikkan satu kelas supaya menang atas aturan di atas. */
+body.jm-bisa-tulis td.jm-bar.jm-deadline[data-id]:not([data-id=""]):hover { box-shadow: inset -3px 0 0 #C8362B, inset 0 0 0 2px var(--navy, #17212F); }
 
 /* ---------- legenda ---------- */
 .jm-legenda { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 4px 12px; font-size: 12px; color: var(--ink-soft, #5F6B7A); }
@@ -166,7 +169,41 @@ body.jm-bisa-tulis td.jm-bar[data-id]:not([data-id=""]):hover { box-shadow: inse
 th.jm-hari-ini { background: #FBE7B3; }
 .jm-deadline { box-shadow: inset -3px 0 0 #C8362B; }
 .jm-bar { box-shadow: inset 0 0 0 1px rgba(255,255,255,.35); }
-.jm-bar.jm-hari-ini { background-image: linear-gradient(rgba(255,244,214,.25), rgba(255,244,214,.25)); }
+/* v286: box-shadow TIDAK menumpuk antar aturan. .jm-deadline dan .jm-bar
+   spesifisitasnya sama (0,1,0) dan .jm-bar ditulis lebih bawah, jadi garis
+   deadline terhapus persis di sel yang ADA barnya -- satu-satunya keadaan yang
+   penting: tahap masih jalan di tanggal kirim. Terukur di halaman produksi
+   6 Sep 2026: 8 dari 113 sel deadline kehilangan garisnya. Digabung dalam satu
+   aturan, merah di depan supaya tetap terlihat di atas garis putih bar. */
+.jm-bar.jm-deadline { box-shadow: inset -3px 0 0 #C8362B, inset 0 0 0 1px rgba(255,255,255,.35); }
+/* v286: bar RENCANA memasang box-shadow-nya sendiri (v264, ditulis jauh lebih
+   bawah), jadi ia menang atas aturan di atas dan garis deadline hilang lagi.
+   Terukur 6 Sep 2026: 1 dari 8 sel deadline berbar -- bar Pengiriman rencana
+   yang jatuh tepat di tanggal kirim, justru kasus yang paling perlu terlihat.
+   Tiga kelas (0,3,0) supaya menang tanpa bergantung pada urutan. */
+.jm-bar.jm-bar-rencana.jm-deadline { box-shadow: inset -3px 0 0 #C8362B, inset 0 0 0 1.5px rgba(23,33,47,.35); }
+/* v286: sorotan hari ini tidak boleh menelan warna tahap. `background` pada
+   .jm-hari-ini adalah SHORTHAND, jadi ia mereset background-color DAN
+   background-image; spesifisitasnya sama dengan .jm-t-* dan ditulis 38 baris
+   lebih bawah, jadi menang. Terukur: bar Sewing di kolom hari ini
+   rgb(255,244,214) -- identik dengan sel kosong, jadi kolom yang paling sering
+   dilihat orang justru tidak menunjukkan tahap apa pun. Warna tahap
+   dikembalikan di sini khusus untuk BAR (0,2,0). Sengaja background-color,
+   bukan shorthand, supaya lapisan hari ini di bawahnya dan pola keadaan bar
+   v264 (rencana/batal/selesai/takdikenal -- spesifisitas sama tapi ditulis
+   lebih bawah, jadi menang) semuanya tetap utuh. */
+.jm-bar.jm-t-pola        { background-color: #B9D7A8; }
+.jm-bar.jm-t-sampel      { background-color: #F1C0CC; }
+.jm-bar.jm-t-bahan       { background-color: #E9B97A; }
+.jm-bar.jm-t-cutting     { background-color: #A9BEEE; }
+.jm-bar.jm-t-interlining { background-color: #A8D5D2; }
+.jm-bar.jm-t-sewing      { background-color: #D4CBEA; }
+.jm-bar.jm-t-finishing   { background-color: #A99BD0; }
+.jm-bar.jm-t-kirim       { background-color: #5B4A9E; }
+.jm-bar.jm-t-lain        { background-color: #CFCFCF; }
+/* v286: lapisan hari ini dinaikkan dari krem 25% (praktis tak terlihat di atas
+   bar berwarna) jadi amber 30%. */
+.jm-bar.jm-hari-ini { background-image: linear-gradient(rgba(255,196,60,.30), rgba(255,196,60,.30)); }
 .jm-bar-awal { border-top-left-radius: 5px; border-bottom-left-radius: 5px; }
 .jm-bar-akhir { border-top-right-radius: 5px; border-bottom-right-radius: 5px; }
 
@@ -695,7 +732,18 @@ body.jm-fokus .jm-wrap{ max-width: none; padding-left: 12px; padding-right: 12px
 .jm-dev-nama{ font-weight: 700; font-size: 12.5px; color: var(--navy, #17212F); padding: 2px 6px; }
 .jm-dev-baris{ width: 100%; text-align: left; font: inherit; font-size: 12.5px; background: none; border: 0; color: inherit; cursor: pointer; padding-left: 16px; }
 .jm-dev-baris b{ flex: 0 0 auto; margin-left: 8px; white-space: nowrap; }
-.jm-dev-belum .jm-dev-baris b, .jm-dev-judul.jm-dev-belum ~ .jm-dev-item .jm-dev-baris b{ color: #8A5A00; }
+/* v286: aturan lama memakai kombinator saudara umum `~`, yang mencocokkan SEMUA
+   saudara sesudahnya -- bukan hanya sampai judul berikutnya. Strukturnya datar
+   (judul dan item bersaudara di satu .jm-panel-daftar), jadi begitu ada satu
+   blok "belum ada laporan", angka deviasi mandek (merah) dan lewat (biru) ikut
+   jadi amber, dan panel yang seluruh gunanya membedakan tiga jenis masalah
+   berhenti membedakan apa pun. Bagian pertama (.jm-dev-belum .jm-dev-baris)
+   juga tidak pernah cocok sama sekali: kelas jenis dulu hanya ada di div judul.
+   Sekarang jmIsiPanelDeviasi_ memberi kelas jenis pada itemnya sendiri, jadi
+   tiga aturan langsung sudah cukup dan tidak ada yang bocor antar blok. */
+.jm-dev-item.jm-dev-belum  .jm-dev-baris b{ color: #8A5A00; }
+.jm-dev-item.jm-dev-mandek .jm-dev-baris b{ color: #8A2A22; }
+.jm-dev-item.jm-dev-lewat  .jm-dev-baris b{ color: #1F4E8C; }
 tr.jm-sorot td{ animation: jm-sorot-kedip 2.2s ease-out; }
 @keyframes jm-sorot-kedip{ 0%{ background-color: #FFE8A3; } 70%{ background-color: #FFF4D6; } 100%{ background-color: transparent; } }
 @media print { #jm-panel-deviasi, .jm-rentang-deviasi { display: none !important; } }

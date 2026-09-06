@@ -2852,7 +2852,9 @@ function jmIsiPanelDeviasi_(p) {
     });
     urut.forEach(function (k) {
       const it = perItem[k];
-      html += '<div class="jm-dev-item"><div class="jm-dev-nama">' + jmEsc_(jmNamaItem_(it.item)) + '</div>' +
+      // v286: kelas jenis dipasang pada ITEM, bukan hanya judul -- lihat nisan
+      // di simpro-jadwal.css pada .jm-dev-item.jm-dev-*. j.k = belum|mandek|lewat.
+      html += '<div class="jm-dev-item jm-dev-' + j.k + '"><div class="jm-dev-nama">' + jmEsc_(jmNamaItem_(it.item)) + '</div>' +
         it.baris.map(function (x) {
           return '<button type="button" class="jm-panel-baris jm-dev-baris" data-lompat="' + jmEsc_(k) + '" title="' + jmEsc_(x.dev.tip) + '">' +
             '<span>' + jmEsc_(x.baris.label + (x.baris.sub ? " " + x.baris.sub : "")) + '</span><b>' + jmEsc_(x.dev.teks) + '</b></button>';
