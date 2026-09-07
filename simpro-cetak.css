@@ -556,3 +556,9 @@ body:has(nav) { padding-top: 0; }
 @media (max-width: 640px) {
   .ck-lc-ringkasan, .ck-lc-ringkasan-kecil { grid-template-columns: repeat(2, 1fr); }
 }
+/* v300: rantai setor -> QC di Rekap Kerja Line */
+.ck-rl-kartu.perhatian { border-color: var(--gold, #C8964A); background: #FFF6E5; }
+.ck-rl-kartu.perhatian .ck-rl-angka { color: #8F5A16; }
+.ck-rl-rantai { min-width: 150px; }
+.ck-rl-ket.beres { color: #2B6E45; }
+.ck-rl-diline b { color: var(--ink, #172134); }

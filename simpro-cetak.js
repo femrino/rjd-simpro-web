@@ -1404,6 +1404,18 @@ function ckSPKLineHtml_(line, ringkasan){
  *
  * Nol data harga, sama seperti SPK -- dokumen lantai produksi.
  */
+/* v300 (8 Sep 2026): sel "Setor · QC" di Rekap Kerja Line -- rantai setor -> QC per PO
+   untuk line ini (gs >= @332). null = payload lama / tidak terbaca -> "-". Angka negatif
+   (QC atas nama line yang tidak menyetor) tidak disembunyikan. */
+function ckRantaiSelHtml_(r){
+  if(!r) return '<span class="ck-rl-sub">-</span>';
+  const belum = r.belumQC > 0 ? '<div class="ck-rl-ket mepet">belum QC ' + r.belumQC + '</div>'
+    : (r.belumQC < 0 ? '<div class="ck-rl-ket telat">QC melebihi setoran ' + Math.abs(r.belumQC) + '</div>' : '<div class="ck-rl-ket beres">QC tuntas</div>');
+  return '<div class="ck-rl-item">setor <b>' + r.setor + '</b>' + (r.setorMenunggu ? ' <span class="wr">+' + r.setorMenunggu + ' menunggu</span>' : '') + (r.kembali ? ' <span class="wr">' + r.kembali + ' dikembalikan</span>' : '') + '</div>' +
+    '<div class="ck-rl-item">QC <b>' + r.diperiksa + '</b> &#183; lolos <b>' + r.lolos + '</b>' + (r.afkir ? ' &#183; afkir ' + r.afkir : '') + (r.ditahan ? ' &#183; ditahan ' + r.ditahan : '') + '</div>' +
+    (r.setor || r.diperiksa ? belum : '');
+}
+
 function ckRenderRekapLine(d){
   const line = d.line || {};
 
@@ -1416,6 +1428,11 @@ function ckRenderRekapLine(d){
       '<div class="ck-rl-kartu' + (d.jumlahTerlambat ? ' bahaya' : '') + '">' +
         '<div class="ck-rl-angka">' + d.jumlahTerlambat + '</div>' +
         '<div class="ck-rl-lbl">lewat deadline</div></div>' +
+      // v300 (gs >= @332): rantai setor -> QC. Payload lama / tidak terbaca -> kartu "-".
+      (d.totalRantai
+        ? '<div class="ck-rl-kartu"><div class="ck-rl-angka">' + d.totalRantai.diLine + '</div><div class="ck-rl-lbl">pcs masih di line</div></div>' +
+          '<div class="ck-rl-kartu' + (d.totalRantai.belumQC > 0 ? ' perhatian' : '') + '"><div class="ck-rl-angka">' + d.totalRantai.belumQC + '</div><div class="ck-rl-lbl">pcs belum di-QC</div></div>'
+        : '<div class="ck-rl-kartu"><div class="ck-rl-angka">-</div><div class="ck-rl-lbl">setor / QC tidak terbaca</div></div>') +
     '</div>';
 
   let isi;
@@ -1424,7 +1441,7 @@ function ckRenderRekapLine(d){
   } else {
     isi = '<table class="ck-rl-tabel"><thead><tr>' +
         '<th>Purchase Order</th><th>Artikel &#183; Warna</th>' +
-        '<th class="num">Jatah</th><th>Deadline</th>' +
+        '<th class="num">Jatah</th><th>Setor &#183; QC</th><th>Deadline</th>' +
       '</tr></thead><tbody>' +
       d.daftar.map(function(p){
         // Sisa hari dihitung backend; ditampilkan sebagai kata karena "H-3"
@@ -1446,7 +1463,9 @@ function ckRenderRekapLine(d){
                 ' <b>' + it.qty + '</b></div>';
             }).join("") + '</td>' +
           '<td class="num"><b>' + p.qtyLine + '</b>' +
-            (p.qtyPO ? '<div class="ck-rl-sub">dari ' + p.qtyPO + ' pcs PO</div>' : '') + '</td>' +
+            (p.qtyPO ? '<div class="ck-rl-sub">dari ' + p.qtyPO + ' pcs PO</div>' : '') +
+            (p.rantai ? '<div class="ck-rl-sub ck-rl-diline">masih di line <b>' + p.rantai.diLine + '</b></div>' : '') + '</td>' +
+          '<td class="ck-rl-rantai">' + ckRantaiSelHtml_(p.rantai) + '</td>' +
           '<td>' + rjdEscapeHtml_(p.deadline || "-") +
             (ket ? '<div class="ck-rl-ket ' + kelas + '">' + ket + '</div>' : '') + '</td>' +
         '</tr>';
