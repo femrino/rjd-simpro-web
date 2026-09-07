@@ -2009,6 +2009,16 @@ function jmRealisasiBaris_(b) {
     const lineBaris = (b.bar && b.bar[0] && b.bar[0].line) || "";
     const info = lineBaris ? jmLineInfo_(lineBaris) : null;
     const lk = info ? jmNormLokasi_(info.lokasi) : "";
+    // v295 (butuh gs >= @327): PER LINE lewat nama operator (SD Master Operator "ID Line").
+    // Server membuat entri untuk SETIAP line di lokasi yang melapor (kosong = {}), jadi
+    // "ada kuncinya tapi kosong" = line ini memang tidak melapor -> tanpa garis, BUKAN
+    // jatuh ke hari lokasi (itu yang membuat Sewing Sampel meniru Sewing Payak).
+    // Tanpa kunci = payload lama / line tidak dikenal server -> jalur lokasi di bawah.
+    if (lineBaris && t.perLine && Object.prototype.hasOwnProperty.call(t.perLine, lineBaris)) {
+      const hariLine = t.perLine[lineBaris];
+      if (!hariLine || !Object.keys(hariLine).length) return null;
+      return { hari: hariLine, lokasi: [lk || lineBaris], perLine: true };
+    }
     if (lk && t.perLokasi) {
       const hari = t.perLokasi[lk];
       if (!hari || !Object.keys(hari).length) return null;
@@ -2064,7 +2074,7 @@ function jmDeviasiBarisHitung_(b, hariIni) {
     if (mulaiMin >= hariIni) return null;
     const n = jmHariKerjaAntara_(mulaiMin, hariIni);
     return { jenis: "belum", hari: n, teks: "belum ada laporan" + (n ? " \u00b7 " + n + " hari" : ""),
-      tip: "Rencana mulai " + jmTanggalPendek_(mulaiMin) + ", sudah " + n + " hari kerja tanpa satu pun laporan harian untuk item dan tahap ini" + (b.tahap === "Sewing" ? " di lokasi line ini" : "") };
+      tip: "Rencana mulai " + jmTanggalPendek_(mulaiMin) + ", sudah " + n + " hari kerja tanpa satu pun laporan harian untuk item dan tahap ini" + (b.tahap === "Sewing" ? " untuk line ini" : "") };
   }
   const tgl = Object.keys(real.hari).sort();
   const terakhir = tgl[tgl.length - 1];
