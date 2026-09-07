@@ -2552,6 +2552,10 @@ function jmEdit(id) {
   if (!b) { jmFormPesan_("Baris ini tidak punya ID -- muat ulang halaman, ID akan diberikan otomatis.", true); return; }
   JM_EDIT_ID = id;
   document.getElementById("jm-in-item").value = b.item;
+  // v294 (7 Sep 2026): label tombol pemilih item (v267) HARUS disegarkan di sini. Dulu hanya
+  // jmFormItemBerubah (saat form ditutup) yang menyegarkannya, jadi klik bar menampilkan item
+  // dari klik SEBELUMNYA: klik pertama "-- pilih item --", klik bar item lain masih nama lama.
+  jmSegarkanTombolItem_();
   document.getElementById("jm-in-tahap").value = b.tahap;
   document.getElementById("jm-in-line").value = b.line || "";
   jmFormTahapBerubah();                                         // isi daftar jenis dulu
@@ -2604,6 +2608,7 @@ function jmFormLanjutkan() {
   if (!b) return;
   JM_EDIT_ID = "";
   document.getElementById("jm-in-item").value = b.item;
+  jmSegarkanTombolItem_();   // v294: sama seperti jmEdit
   document.getElementById("jm-in-tahap").value = b.tahap;
   document.getElementById("jm-in-line").value = b.line || "";
   jmFormTahapBerubah();
