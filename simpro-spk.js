@@ -3231,6 +3231,16 @@ function spTampilSetoranTerkonfirmasi_() {
     });
     let ringkas = "";
     const t = hasil[1];
+    // v297 (gs >= @329): status QC per setoran dari getTersediaQC.perSetoran
+    const perSetoran = {};
+    if (po && t && t.success) (t.baris || []).forEach(function (b) { (b.perSetoran || []).forEach(function (x) { perSetoran[x.idSetoran] = x; }); });
+    const statusQC_ = function (k) {
+      const x = perSetoran[String(k.idSetoran || "").replace(/-KOR$/, "")];
+      if (!x) return "";
+      if (x.tersedia <= 0) return '<span class="sp-konf-qc selesai">QC selesai ' + x.sudahDiperiksa + '/' + x.setor + '</span>';
+      if (x.sudahDiperiksa > 0) return '<span class="sp-konf-qc sebagian">QC ' + x.sudahDiperiksa + '/' + x.setor + ' &#183; sisa ' + x.tersedia + '</span>';
+      return '<span class="sp-konf-qc belum">belum di-QC</span>';
+    };
     if (po && t && t.success) {
       const belum = (t.baris || []).filter(function (b) { return b.tersedia > 0; });
       const pcs = belum.reduce(function (a, b) { return a + b.tersedia; }, 0);
@@ -3256,7 +3266,7 @@ function spTampilSetoranTerkonfirmasi_() {
         '<div class="sp-riw-artikel">' + rjdEscapeHtml_(k.artikel) + ' &#183; <b>' + rjdEscapeHtml_(k.warna || "-") + '</b> &#8592; ' + rjdEscapeHtml_(k.namaLine || "-") + '</div>' +
         '<div class="sp-riw-sizes">' + Object.keys(k.sizeQty || {}).map(function (sz) {
           return '<span class="sp-konf-size">' + rjdEscapeHtml_(sz) + ' <b>' + k.sizeQty[sz] + '</b></span>'; }).join("") + '</div>' +
-        '<div class="sp-riw-status-row"><span class="sp-riw-status' + (k.status === "Ada Selisih" ? ' selisih' : '') + '">' + rjdEscapeHtml_(k.status) + '</span></div>' +
+        '<div class="sp-riw-status-row"><span class="sp-riw-status' + (k.status === "Ada Selisih" ? ' selisih' : '') + '">' + rjdEscapeHtml_(k.status) + '</span>' + statusQC_(k) + '</div>' +
         (k.catatan ? '<div class="sp-riw-catatan">' + rjdEscapeHtml_(k.catatan) + '</div>' : '') +
       '</div>';
     }).join("");
@@ -7037,6 +7047,8 @@ function qcMuatTersedia_() {
   .then(function (r) { return r.json(); })
   .then(function (d) {
     if (!d.error) QC_TERSEDIA = d.baris || [];
+    qcRenderSetoran_();   // v297
+    qcPilihSetoranLine_();
     qcTampilTersedia_();
     qcIsiOtomatis_();   // v296
   })
@@ -7063,13 +7075,102 @@ function qcNamaLine_(idLine) {
   const l = ((QC_MASTER && QC_MASTER.daftarLine) || []).filter(function (x) { return x.idLine === idLine; })[0];
   return l ? l.namaLine : idLine;
 }
+/* ============================================================
+ * v297 (7 Sep 2026) -- QC FINISHING PER SETORAN (butuh gs >= @329)
+ * ============================================================
+ * Sesi kedua opsi 1. Sesudah warna dipilih, form menawarkan SETORAN mana yang sedang
+ * diperiksa (getTersediaQC.perSetoran: setoran jadi-baju terkonfirmasi warna itu yang
+ * masih punya sisa). Memilih setoran = line ikut penyetornya, Qty Diperiksa & size
+ * diisi dari SISA SETORAN ITU (bukan sisa warna), dan idSetoran ikut payload -- server
+ * menegakkan tersedia per setoran, line = penyetor, lolos per size <= isi setoran.
+ * Setoran tertua yang masih bersisa dipilih otomatis (FIFO); "(tanpa setoran)" = alur
+ * v296 per warna, untuk setoran lama yang sebagian sudah di-QC tanpa ID.
+ */
+let QC_SETORAN_DIPILIH = "";   // idSetoran yang dipilih di form ("" = tanpa setoran)
+function qcSetoranTerpilih_() {
+  const t = qcCariTersedia_();
+  if (!t || !QC_SETORAN_DIPILIH || !t.perSetoran) return null;
+  return t.perSetoran.filter(function (x) { return x.idSetoran === QC_SETORAN_DIPILIH; })[0] || null;
+}
+function qcTanggalPendek_(iso) {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return iso || "";
+  const B = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+  return Number(iso.slice(8, 10)) + " " + B[Number(iso.slice(5, 7)) - 1];
+}
+function qcRenderSetoran_() {
+  const selWarna = document.getElementById("qc-warna");
+  const fieldWarna = selWarna ? selWarna.closest(".qc-field") : null;
+  if (!fieldWarna) return;
+  let field = document.getElementById("qc-setoran-field");
+  if (!field) {
+    field = document.createElement("div");
+    field.id = "qc-setoran-field"; field.className = "qc-field qc-setoran-field hidden";
+    field.innerHTML = '<label for="qc-setoran">Setoran yang diperiksa</label>' +
+      '<select id="qc-setoran" onchange="qcPilihSetoran_()"></select>' +
+      '<div class="qc-hint" id="qc-setoran-hint"></div>';
+    fieldWarna.insertAdjacentElement("afterend", field);
+  }
+  const sel = document.getElementById("qc-setoran"), hint = document.getElementById("qc-setoran-hint");
+  const tahap = window.QC_TAHAP_DIPILIH || QC_TAHAP_DIPILIH;
+  const t = (tahap === "Finishing" && QC_MODE_SESI === "baru" && QC_WARNA_DIPILIH && QC_TERSEDIA) ? qcCariTersedia_() : null;
+  // Diukur live 7 Sep 2026 (lihatTersediaQC 260804/Inara): semua QC lama tanpa ID Setoran, jadi tiap
+  // setoran lama TAMPAK utuh (sisa 128) padahal warnanya tersisa 1. Warna yang habis tidak menawarkan
+  // setoran sama sekali; yang masih bersisa dibatasi sisa warna (qcTersediaTerpilih_).
+  const daftar = (t && t.perSetoran && t.tersedia > 0) ? t.perSetoran.filter(function (x) { return x.tersedia > 0; }) : [];
+  if (!daftar.length) {
+    field.classList.add("hidden");
+    if (QC_SETORAN_DIPILIH) { QC_SETORAN_DIPILIH = ""; }
+    sel.innerHTML = "";
+    return;
+  }
+  field.classList.remove("hidden");
+  // pilihan lama dipertahankan kalau masih ada; kalau tidak, setoran tertua yang bersisa (FIFO)
+  const masihAda = daftar.some(function (x) { return x.idSetoran === QC_SETORAN_DIPILIH; });
+  if (!masihAda && sel.dataset.tanpa !== "1") QC_SETORAN_DIPILIH = daftar[0].idSetoran;
+  else if (!masihAda) QC_SETORAN_DIPILIH = "";
+  sel.innerHTML = daftar.map(function (x) {
+    return '<option value="' + rjdEscapeHtml_(x.idSetoran) + '">' + rjdEscapeHtml_(x.idSetoran) + ' &#183; ' +
+      rjdEscapeHtml_(qcNamaLine_(x.idLine) || "(tanpa line)") + (x.tanggal ? ' &#183; ' + rjdEscapeHtml_(qcTanggalPendek_(x.tanggal)) : '') +
+      ' &#183; sisa ' + x.tersedia + (x.tersedia !== x.setor ? ' dari ' + x.setor : '') + ' pcs</option>';
+  }).join("") + '<option value="">(tanpa setoran tertentu -- hitung per warna)</option>';
+  sel.value = QC_SETORAN_DIPILIH;
+  const lain = (t.diperiksaTanpaSetoran > 0) ? ' &#183; ' + t.diperiksaTanpaSetoran + ' pcs sudah diperiksa tanpa setoran (sesi lama) &#8212; sisa warna ' + t.tersedia + ' pcs yang jadi batas' : '';
+  hint.innerHTML = daftar.length + ' setoran belum selesai diperiksa' + lain + '.';
+}
+function qcPilihSetoran_() {
+  const sel = document.getElementById("qc-setoran");
+  QC_SETORAN_DIPILIH = sel ? sel.value : "";
+  if (sel) sel.dataset.tanpa = QC_SETORAN_DIPILIH ? "" : "1";
+  const st = qcSetoranTerpilih_();
+  const selLine = document.getElementById("qc-line");
+  if (st && selLine && st.idLine && selLine.querySelector('option[value="' + st.idLine.replace(/"/g, '&quot;') + '"]')) selLine.value = st.idLine;
+  // nilai otomatis lama dilepas supaya diisi ulang dari setoran ini
+  const periksa = document.getElementById("qc-periksa");
+  if (periksa && periksa.dataset.auto === "1") periksa.value = "";
+  document.querySelectorAll(".qc-size-qty").forEach(function (inp) { if (inp.dataset.auto === "1") inp.value = ""; });
+  qcTampilTersedia_();
+  qcIsiOtomatis_();
+}
 function qcGantiLine_() {
+  // line diganti tangan ke line yang bukan penyetor -> setoran dilepas (alur per warna)
+  const st = qcSetoranTerpilih_();
+  const line = (document.getElementById("qc-line") || {}).value || "";
+  if (st && st.idLine && line !== st.idLine) {
+    QC_SETORAN_DIPILIH = "";
+    const sel = document.getElementById("qc-setoran");
+    if (sel) { sel.value = ""; sel.dataset.tanpa = "1"; }
+  }
   qcTampilTersedia_();
   qcIsiOtomatis_();
 }
 function qcTersediaTerpilih_() {
   const t = qcCariTersedia_();
   if (!t) return null;
+  const st = qcSetoranTerpilih_();
+  if (st) {   // v297; sisa setoran dibatasi sisa WARNA (QC lama tanpa ID sudah memakai sebagian setoran)
+    const dibatasi = st.tersedia > t.tersedia;
+    return { n: Math.min(st.tersedia, t.tersedia), line: st.idLine, perSize: dibatasi ? null : (st.perSize || null), setoran: st, dibatasi: dibatasi };
+  }
   const line = (document.getElementById("qc-line") || {}).value || "";
   // size per warna hanya dipakai kalau tersedia line = tersedia warna (satu-satunya line yang masih
   // punya sisa); kalau line lain juga menyetor, rincian per size line ini tidak diketahui -> kosong.
@@ -7224,8 +7325,15 @@ function qcTampilTersedia_() {
   let teks = 'Tersedia untuk QC: <b>' + t.tersedia + ' pcs</b>' +
     ' <span style="color:var(--ink-soft)">(terkonfirmasi ' + t.terkonfirmasi +
     ' &#8722; diperiksa ' + t.sudahDiperiksa + ')</span>';
+  const st = qcSetoranTerpilih_();   // v297
+  if (st) {
+    teks += '<br/><span class="qc-tersedia-line qc-tersedia-setoran">Setoran <b>' + rjdEscapeHtml_(st.idSetoran) + '</b> (' +
+      rjdEscapeHtml_(qcNamaLine_(st.idLine) || "tanpa line") + (st.tanggal ? ', ' + rjdEscapeHtml_(qcTanggalPendek_(st.tanggal)) : '') +
+      '): sisa <b>' + st.tersedia + ' pcs</b> dari ' + st.setor + (st.sudahDiperiksa ? ' (sudah diperiksa ' + st.sudahDiperiksa + ')' : '') +
+      (st.tersedia > t.tersedia ? ' &#8212; <span style="color:#8F5A16">dibatasi sisa warna <b>' + t.tersedia + ' pcs</b>: ' + t.diperiksaTanpaSetoran + ' pcs diperiksa di sesi lama tanpa ID setoran</span>' : '') + '</span>';
+  }
   // v296: per line (gs >= @328). Line dipilih -> angka line itu; belum -> daftar line yang menyetor.
-  if (t.perLine && Object.keys(t.perLine).length) {
+  if (!st && t.perLine && Object.keys(t.perLine).length) {
     const line = (document.getElementById("qc-line") || {}).value || "";
     if (line) {
       const l = t.perLine[line];
@@ -7490,7 +7598,17 @@ function qcPilihWarna() {
   const v = document.getElementById("qc-warna").value;
   QC_WARNA_DIPILIH = (v === "" || !QC_RINCIAN_PO) ? null : QC_RINCIAN_PO.baris[Number(v)];
   qcRenderSizeLolos_();
+  QC_SETORAN_DIPILIH = "";   // v297: ganti warna = pilih ulang setoran (FIFO)
+  const selSet = document.getElementById("qc-setoran"); if (selSet) selSet.dataset.tanpa = "";
+  qcRenderSetoran_();
+  qcPilihSetoranLine_();
   qcIsiOtomatis_();   // v296: ganti warna = isi ulang nilai otomatis (yang diketik tangan tidak disentuh)
+}
+/** v297: line ikut penyetor setoran yang terpilih (tanpa mengosongkan isian lain). */
+function qcPilihSetoranLine_() {
+  const st = qcSetoranTerpilih_();
+  const selLine = document.getElementById("qc-line");
+  if (st && selLine && st.idLine && selLine.querySelector('option[value="' + st.idLine.replace(/"/g, '&quot;') + '"]')) selLine.value = st.idLine;
 }
 
 /**
@@ -7580,6 +7698,8 @@ function qcGantiPO() {
   QC_PO_TERPILIH = null;
   QC_RINCIAN_PO = null;
   QC_WARNA_DIPILIH = null;
+  QC_SETORAN_DIPILIH = "";   // v297
+  qcRenderSetoran_();
   const selWarna = document.getElementById("qc-warna");
   if (selWarna) selWarna.innerHTML = '<option value="">-- Pilih PO lewat kartu di atas --</option>';
   qcRenderSizeLolos_();
@@ -7696,6 +7816,7 @@ function qcSetModeSesi_(mode) {
 function qcPilihTahap(tahap) {
   QC_TAHAP_DIPILIH = tahap;
   setTimeout(qcTampilTersedia_, 0);   // v121: hint hanya utk Finishing
+  setTimeout(qcRenderSetoran_, 0);    // v297: pemilih setoran hanya utk Finishing
   // v182: ganti tahap = keranjang yang relevan ikut ganti; mode kembali normal.
   if (QC_MODE_SESI !== "baru") qcSetModeSesi_("baru"); else setTimeout(qcTampilDitahan_, 0);
   document.querySelectorAll(".qc-tahap-btn").forEach(function (b) {
@@ -8186,6 +8307,12 @@ function qcSubmitInspeksi() {
     // tapi checker menerima pesan mentah dari server, bukan peringatan ramah
     // yang menyebut apa yang harus dilakukan.
     const qd = Number((document.getElementById("qc-periksa") || {}).value) || 0;
+    const st = qcSetoranTerpilih_();   // v297
+    if (st && qd > st.tersedia && !(t && st.tersedia > t.tersedia)) {
+      alert("Qty diperiksa (" + qd + ") melebihi sisa setoran " + st.idSetoran + " yang belum diperiksa (" +
+        st.tersedia + " dari " + st.setor + " pcs). Pilih setoran lain, atau '(tanpa setoran tertentu)' kalau sisanya memang gabungan.");
+      return;
+    }
     if (t && qd > t.tersedia) {
       alert("Qty diperiksa (" + qd + ") melebihi yang tersedia untuk QC (" + t.tersedia +
         " pcs)." + (t.menunggu > 0
@@ -8275,6 +8402,7 @@ function qcSubmitInspeksi() {
         artikel: QC_WARNA_DIPILIH.artikel || "",
         style: QC_WARNA_DIPILIH.style || "",
         warna: QC_WARNA_DIPILIH.warna || "",
+        idSetoran: QC_TAHAP_DIPILIH === "Finishing" ? (QC_SETORAN_DIPILIH || "") : "",   // v297, gs >= @329
         qtyDiperiksa: qtyDiperiksa,
         qtyLolos: qtyLolos,
         qtyDiperbaiki: qtyDiperbaiki,
@@ -8343,6 +8471,8 @@ function qcSubmitInspeksi() {
       }
       el.classList.remove("hidden");
       qcResetForm_();
+      QC_SETORAN_DIPILIH = "";
+      qcMuatTersedia_();   // v297: angka per setoran/warna segar untuk sesi berikutnya (snapshot tidak boleh tampil sesudah tulis)
       // Operator baru yang barusan diketik ikut masuk daftar autocomplete
       // tanpa perlu refresh halaman -- kecil, tapi lumayan buat checker yang
       // input banyak PO berturut-turut dengan operator yang sama.

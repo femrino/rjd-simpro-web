@@ -1852,3 +1852,8 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 .sp-konf-terkonfirmasi-judul small { font-weight: 400; color: var(--ink-soft); }
 .sp-konf-belumqc { padding: 8px 10px; background: var(--cream); border-radius: 8px; }
 .sp-riw-status.selisih { color: #8F5A16; }
+/* v297: status QC per setoran pada kartu setoran terkonfirmasi */
+.sp-konf-qc { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+.sp-konf-qc.belum { background: #FDECEC; color: #A63D3D; }
+.sp-konf-qc.sebagian { background: #FFF3DC; color: #8F5A16; }
+.sp-konf-qc.selesai { background: #E5F5EA; color: #2B6E45; }
