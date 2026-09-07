@@ -251,3 +251,10 @@ tr.sp-recut-target > td:first-child { box-shadow: inset 3px 0 0 #C9972B; }
 .qc-legenda .qc-legenda-catatan { grid-column: 1 / -1; margin-top: 4px; font-style: italic; }
 .qc-field textarea.qc-wajib { border-color: var(--thread, #B23B2E); }
 @media (max-width: 480px) { .qc-legenda dl { grid-template-columns: 1fr; } .qc-legenda dd { margin-bottom: 4px; } }
+
+/* v296 (7 Sep 2026): rincian cacat terlipat selama bersih; tombol pelipat; tersedia per line */
+.qc-terlipat { display: none; }
+.qc-cacat-toggle { display: inline-block; margin: 4px 0 14px; padding: 8px 12px; border: 1px dashed var(--line); border-radius: 8px;
+  background: transparent; color: var(--ink-soft); font: inherit; font-size: 12.5px; cursor: pointer; }
+.qc-cacat-toggle:hover, .qc-cacat-toggle.terbuka { color: var(--ink); border-style: solid; }
+.qc-tersedia-line { display: inline-block; margin-top: 4px; }

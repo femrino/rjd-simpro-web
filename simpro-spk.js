@@ -3144,6 +3144,7 @@ function spMuatKonfMode_(jenis) {
 function spKonfSemua_() {
   window.SP_KONF_SEMUA = true;
   spRenderKonfirmasi();
+  spTampilSetoranTerkonfirmasi_();   // v296: blok terkonfirmasi ikut melepas saringan PO
 }
 
 function spSwitchKonf(jenis) {
@@ -3175,9 +3176,92 @@ function spMuatKonfirmasi() {
     }
     window.SP_KONF = d.daftar || [];
     spRenderKonfirmasi();
+    spTampilSetoranTerkonfirmasi_();   // v296
   })
   .catch(function () {
     wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
+    spTampilSetoranTerkonfirmasi_();
+  });
+}
+
+/* ============================================================
+ * v296 (7 Sep 2026) -- SETORAN TERKONFIRMASI di Finishing > Konfirmasi Setoran
+ * ============================================================
+ * Dulu panel ini hanya menampilkan yang MENUNGGU: begitu dikonfirmasi, barisnya
+ * lenyap dari layar orang finishing, dan jejaknya cuma ada di Sewing > Setoran
+ * (blok Setoran Tercatat) atau tab Riwayat. Yang menerima tidak punya bukti apa
+ * yang baru ia terima, dan tidak tahu mana yang belum di-QC.
+ * Blok ini: daftar setoran jadi-baju berstatus Diterima / Ada Selisih (termasuk
+ * baris koreksi -KOR) untuk PO aktif (atau 40 terakhir lintas PO), ditambah
+ * ringkasan "belum di-QC Finishing" dari getTersediaQC. Rute yang dipakai sudah
+ * ada semua (getRiwayatSetoran, getTersediaQC); tidak ada rute baru.
+ * Diukur 7 Sep (diagnosaSetoranVsQC): 15 dari 36 warna terkonfirmasi belum/
+ * baru sebagian di-QC, 242 pcs -- angka yang selama ini tidak terlihat di sini.
+ */
+function spTampilSetoranTerkonfirmasi_() {
+  const daftar = document.getElementById("sp-konf-daftar");
+  if (!daftar) return;
+  let w = document.getElementById("sp-konf-terkonfirmasi");
+  if (!w) {
+    w = document.createElement("div");
+    w.id = "sp-konf-terkonfirmasi"; w.className = "sp-konf-terkonfirmasi";
+    daftar.insertAdjacentElement("afterend", w);
+  }
+  if ((window.SP_KONF_JENIS || "potongan") !== "setoran") { w.innerHTML = ""; return; }
+  const po = (!window.SP_KONF_SEMUA && window.SP_PO_AKTIF) ? window.SP_PO_AKTIF : "";
+  const judul = '<div class="sp-konf-terkonfirmasi-judul">Setoran terkonfirmasi' +
+    (po ? ' untuk <b>' + rjdEscapeHtml_(po) + '</b>' : ' <small>(semua PO, 40 terakhir)</small>') + '</div>';
+  w.innerHTML = judul + spMuatHtml_("Memuat setoran terkonfirmasi...");
+  const minta = [
+    fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getRiwayatSetoran", opsi: { idPurchaseOrder: po, batas: po ? 80 : 40 } }) })
+      .then(function (r) { return r.json(); })
+  ];
+  if (po) {
+    minta.push(fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getTersediaQC", idPurchaseOrder: po }) })
+      .then(function (r) { return r.json(); }).catch(function () { return null; }));
+  }
+  Promise.all(minta).then(function (hasil) {
+    const d = hasil[0];
+    if (!d || !d.success) {
+      w.innerHTML = judul + '<p class="sp-pesan sp-galat">' + rjdEscapeHtml_((d && d.error) || "Gagal memuat setoran terkonfirmasi.") + '</p>';
+      return;
+    }
+    const baris = (d.daftar || []).filter(function (k) {
+      return k.jenisSetoran !== "Dikembalikan" && (k.status === "Diterima" || k.status === "Ada Selisih");
+    });
+    let ringkas = "";
+    const t = hasil[1];
+    if (po && t && t.success) {
+      const belum = (t.baris || []).filter(function (b) { return b.tersedia > 0; });
+      const pcs = belum.reduce(function (a, b) { return a + b.tersedia; }, 0);
+      ringkas = belum.length
+        ? '<p class="sp-info sp-konf-belumqc">Belum di-QC Finishing: <b>' + pcs + ' pcs</b> di ' + belum.length + ' warna (' +
+          belum.map(function (b) { return rjdEscapeHtml_(b.warna || "-") + ' ' + b.tersedia; }).join(", ") + ') &#183; lanjut ke <b>QC Finishing</b>.</p>'
+        : (baris.length ? '<p class="sp-info sp-konf-belumqc">Semua setoran terkonfirmasi PO ini sudah di-QC.</p>' : "");
+    } else if (po && t && t.error) {
+      ringkas = '<p class="sp-info sp-konf-belumqc">Angka belum di-QC tidak terbaca: ' + rjdEscapeHtml_(t.error) + '</p>';
+    }
+    if (!baris.length) {
+      w.innerHTML = judul + ringkas + '<p class="sp-info">Belum ada setoran terkonfirmasi' + (po ? ' untuk PO ini' : '') + '.</p>';
+      return;
+    }
+    w.innerHTML = judul + ringkas + baris.map(function (k) {
+      return '<div class="sp-riw-kartu sp-konf-kartu-terkonfirmasi">' +
+        '<div class="sp-riw-head"><div>' +
+          '<div class="sp-riw-id">' + rjdEscapeHtml_(k.idSetoran) + '</div>' +
+          '<div class="sp-riw-sub">' + rjdEscapeHtml_(k.idPurchaseOrder) + ' &#183; ' + rjdEscapeHtml_(k.tanggal || "-") +
+            (k.disetorkanOleh ? ' &#183; ' + rjdEscapeHtml_(k.disetorkanOleh) : '') +
+            (k.diterimaOleh ? ' &#8594; ' + rjdEscapeHtml_(k.diterimaOleh) : '') + '</div></div>' +
+          '<div class="sp-riw-qty">' + k.total + '<span>pcs</span></div></div>' +
+        '<div class="sp-riw-artikel">' + rjdEscapeHtml_(k.artikel) + ' &#183; <b>' + rjdEscapeHtml_(k.warna || "-") + '</b> &#8592; ' + rjdEscapeHtml_(k.namaLine || "-") + '</div>' +
+        '<div class="sp-riw-sizes">' + Object.keys(k.sizeQty || {}).map(function (sz) {
+          return '<span class="sp-konf-size">' + rjdEscapeHtml_(sz) + ' <b>' + k.sizeQty[sz] + '</b></span>'; }).join("") + '</div>' +
+        '<div class="sp-riw-status-row"><span class="sp-riw-status' + (k.status === "Ada Selisih" ? ' selisih' : '') + '">' + rjdEscapeHtml_(k.status) + '</span></div>' +
+        (k.catatan ? '<div class="sp-riw-catatan">' + rjdEscapeHtml_(k.catatan) + '</div>' : '') +
+      '</div>';
+    }).join("");
+  }).catch(function () {
+    w.innerHTML = judul + '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
   });
 }
 
@@ -6954,8 +7038,96 @@ function qcMuatTersedia_() {
   .then(function (d) {
     if (!d.error) QC_TERSEDIA = d.baris || [];
     qcTampilTersedia_();
+    qcIsiOtomatis_();   // v296
   })
   .catch(function () { qcTampilTersedia_(); });
+}
+
+/* ============================================================
+ * v296 (7 Sep 2026) -- FORM QC FINISHING BERANGKAT DARI SETORAN
+ * ============================================================
+ * Sesi pertama opsi 1 (QC dari setoran), tanpa mengubah alur simpan:
+ *   1. tersedia PER LINE (getTersediaQC.perLine, gs >= @328) ditampilkan di bawah
+ *      Qty Diperiksa; memilih line memperbarui angkanya. Diukur: 10 dari 36 warna
+ *      disetor >1 line, jadi angka per warna saja tidak bisa menegur line yang salah.
+ *   2. Qty Diperiksa dan rincian per size DIISI OTOMATIS dari sisa setoran (perSize:
+ *      setor - lolos). Qty Lolos SENGAJA dibiarkan kosong: kalau ikut diisi sama
+ *      dengan diperiksa, form mendorong "100 diperiksa 100 lolos" -- persis bias
+ *      yang v180 lawan. Checker menyatakan sendiri berapa yang lolos.
+ *      Nilai otomatis ditandai data-auto; begitu diketik tangan, tidak ditimpa lagi.
+ *   3. isian cacat (diperbaiki, ditahan, jenis cacat, keputusan, kotak cacat) TERLIPAT
+ *      selama tidak ada yang tidak lolos -- 58 dari 58 sesi QC 3 bulan terakhir
+ *      bersih; membuka otomatis begitu lolos < diperiksa atau ada yang diketik.
+ */
+function qcNamaLine_(idLine) {
+  const l = ((QC_MASTER && QC_MASTER.daftarLine) || []).filter(function (x) { return x.idLine === idLine; })[0];
+  return l ? l.namaLine : idLine;
+}
+function qcGantiLine_() {
+  qcTampilTersedia_();
+  qcIsiOtomatis_();
+}
+function qcTersediaTerpilih_() {
+  const t = qcCariTersedia_();
+  if (!t) return null;
+  const line = (document.getElementById("qc-line") || {}).value || "";
+  // size per warna hanya dipakai kalau tersedia line = tersedia warna (satu-satunya line yang masih
+  // punya sisa); kalau line lain juga menyetor, rincian per size line ini tidak diketahui -> kosong.
+  if (line && t.perLine && t.perLine[line]) return { n: t.perLine[line].tersedia, line: line, perSize: (t.perLine[line].tersedia === t.tersedia) ? (t.perSize || null) : null };
+  if (line && t.perLine) return { n: 0, line: line, perSize: null };   // line ini tidak pernah menyetor warna ini
+  return { n: t.tersedia, line: "", perSize: t.perSize || null };
+}
+function qcIsiOtomatis_() {
+  if ((window.QC_TAHAP_DIPILIH || QC_TAHAP_DIPILIH) !== "Finishing" || QC_MODE_SESI !== "baru") return;
+  if (!QC_WARNA_DIPILIH || !QC_TERSEDIA) return;
+  const s = qcTersediaTerpilih_();
+  const periksa = document.getElementById("qc-periksa"), lolos = document.getElementById("qc-lolos");
+  if (!periksa || !lolos) return;
+  const bolehIsi = function (el) { return el.value === "" || el.dataset.auto === "1"; };
+  if (!s || !(s.n > 0)) {
+    if (bolehIsi(periksa)) { periksa.value = ""; periksa.dataset.auto = ""; }
+    lolos.placeholder = "";
+    document.querySelectorAll(".qc-size-qty").forEach(function (inp) { if (bolehIsi(inp)) { inp.value = ""; inp.dataset.auto = ""; } });
+    qcRecalc();
+    return;
+  }
+  if (bolehIsi(periksa)) { periksa.value = s.n; periksa.dataset.auto = "1"; }
+  lolos.placeholder = "berapa yang lolos dari " + periksa.value;
+  // rincian size hanya dari sisa per size WARNA -- kalau tersedia line lebih kecil dari
+  // warna (line lain juga menyetor), size tidak ditebak: dikosongkan, checker mengisi.
+  const perSize = s.perSize;
+  document.querySelectorAll(".qc-size-qty").forEach(function (inp) {
+    if (!bolehIsi(inp)) return;
+    const z = perSize ? perSize[inp.dataset.size] : null;
+    inp.value = (z && z.sisa > 0) ? z.sisa : "";
+    inp.dataset.auto = "1";
+  });
+  qcRecalc();
+}
+let QC_CACAT_TERBUKA = false;
+let QC_CACAT_TUTUP_MANUAL = false;   // ditutup tangan saat masih ada cacat -> jangan dibuka lagi otomatis sampai bersih
+function qcElemenCacat_() {
+  const el = [];
+  ["qc-perbaiki", "qc-ditahan", "qc-detail-rows", "qc-keputusan-override"].forEach(function (id) {
+    const e = document.getElementById(id); const f = e ? e.closest(".qc-field") : null; if (f) el.push(f);
+  });
+  const kotak = document.querySelector(".qc-cacat-box"); if (kotak) el.push(kotak);
+  const rinci = document.getElementById("qc-cacat-rinci"); if (rinci) el.push(rinci);
+  return el;
+}
+function qcLipatCacat_(buka) {
+  QC_CACAT_TERBUKA = !!buka;
+  qcElemenCacat_().forEach(function (e) { e.classList.toggle("qc-terlipat", !buka); });
+  let t = document.getElementById("qc-cacat-toggle");
+  if (!t) {
+    const acuan = document.getElementById("qc-perbaiki"); const field = acuan ? acuan.closest(".qc-field") : null;
+    if (!field) return;
+    t = document.createElement("button"); t.id = "qc-cacat-toggle"; t.type = "button"; t.className = "qc-cacat-toggle";
+    t.onclick = function () { QC_CACAT_TUTUP_MANUAL = QC_CACAT_TERBUKA; qcLipatCacat_(!QC_CACAT_TERBUKA); };
+    field.insertAdjacentElement("beforebegin", t);
+  }
+  t.innerHTML = buka ? "Sembunyikan rincian cacat &#9652;" : "Ada yang cacat, diperbaiki, atau ditahan? Rincikan &#9662;";
+  t.classList.toggle("terbuka", !!buka);
 }
 
 function qcMuatDitahan_() {
@@ -7003,7 +7175,11 @@ function qcTampilDitahan_() {
   const k = qcCariDitahan_();
   if (!k || !(k.terbuka > 0) || QC_MODE_SESI === "penyelesaian") {
     b.classList.add("hidden");
-    if (QC_MODE_SESI !== "penyelesaian") qcSetModeSesi_("baru");
+    // NISAN v296 (7 Sep 2026): di sini dulu `if (QC_MODE_SESI !== "penyelesaian") qcSetModeSesi_("baru");`.
+    // QC_MODE_SESI hanya punya dua nilai, jadi cabang itu selalu berjalan saat mode sudah "baru",
+    // dan qcSetModeSesi_ menutup dengan memanggil qcTampilDitahan_ lagi -> rekursi tanpa henti
+    // ("Maximum call stack size exceeded") setiap ganti tahap/warna tanpa keranjang. Tidak pernah
+    // terlihat karena terjadi di setTimeout dan efek sampingnya idempoten; ditangkap harness jalan71.
     return;
   }
   b.classList.remove("hidden");
@@ -7048,6 +7224,19 @@ function qcTampilTersedia_() {
   let teks = 'Tersedia untuk QC: <b>' + t.tersedia + ' pcs</b>' +
     ' <span style="color:var(--ink-soft)">(terkonfirmasi ' + t.terkonfirmasi +
     ' &#8722; diperiksa ' + t.sudahDiperiksa + ')</span>';
+  // v296: per line (gs >= @328). Line dipilih -> angka line itu; belum -> daftar line yang menyetor.
+  if (t.perLine && Object.keys(t.perLine).length) {
+    const line = (document.getElementById("qc-line") || {}).value || "";
+    if (line) {
+      const l = t.perLine[line];
+      teks += '<br/><span class="qc-tersedia-line">' + (l
+        ? 'Line <b>' + rjdEscapeHtml_(qcNamaLine_(line)) + '</b>: tersedia <b>' + l.tersedia + ' pcs</b> (setor ' + l.terkonfirmasi + ' &#8722; diperiksa ' + l.sudahDiperiksa + ')'
+        : 'Line <b>' + rjdEscapeHtml_(qcNamaLine_(line)) + '</b> tidak pernah menyetor warna ini &#8212; periksa pilihan line.') + '</span>';
+    } else {
+      teks += '<br/><span class="qc-tersedia-line">per line: ' + Object.keys(t.perLine).map(function (id) {
+        return rjdEscapeHtml_(qcNamaLine_(id) || "(tanpa line)") + ' <b>' + t.perLine[id].tersedia + '</b>'; }).join(' &#183; ') + '</span>';
+    }
+  }
   if (t.menunggu > 0) {
     teks += '<br/><span style="color:#8F5A16">&#9888; ' + t.menunggu +
       ' pcs setoran menunggu konfirmasi &#8212; konfirmasi di <b>Finishing &#8250; Konfirmasi Setoran</b> dulu.</span>';
@@ -7301,6 +7490,7 @@ function qcPilihWarna() {
   const v = document.getElementById("qc-warna").value;
   QC_WARNA_DIPILIH = (v === "" || !QC_RINCIAN_PO) ? null : QC_RINCIAN_PO.baris[Number(v)];
   qcRenderSizeLolos_();
+  qcIsiOtomatis_();   // v296: ganti warna = isi ulang nilai otomatis (yang diketik tangan tidak disentuh)
 }
 
 /**
@@ -7330,7 +7520,7 @@ function qcRenderSizeLolos_() {
     sizes.map(function (sz) {
       return '<div class="qc-size-sel"><label>' + rjdEscapeHtml_(sz) + '</label>' +
         '<input class="qc-size-qty" type="number" min="0" data-size="' + rjdEscapeHtml_(sz) + '"' +
-        ' oninput="qcHitungTotalSize_()" placeholder="0"/>' +
+        ' oninput="this.dataset.auto=\'\';qcHitungTotalSize_()" placeholder="0"/>' +
         '<div class="qc-size-order">order ' + QC_WARNA_DIPILIH.sizeQty[sz] + '</div></div>';
     }).join("") + '</div>';
   qcHitungTotalSize_();
@@ -7374,6 +7564,10 @@ function qcKumpulkanLolosPerSize_() {
 function qcIsiDropdownLine_() {
   const sel = document.getElementById("qc-line");
   if (!sel || !QC_MASTER) return;
+  sel.onchange = qcGantiLine_;   // v296: tersedia per line & isi otomatis ikut line
+  const periksa = document.getElementById("qc-periksa");
+  if (periksa && !periksa.dataset.pasangAuto) { periksa.dataset.pasangAuto = "1"; periksa.addEventListener("input", function () { periksa.dataset.auto = ""; }); }
+  qcLipatCacat_(false);
   const daftar = QC_MASTER.daftarLine || [];
   sel.innerHTML = '<option value="">-- Pilih line --</option>' +
     daftar.map(function (l) {
@@ -7473,6 +7667,7 @@ function qcSetModeSesi_(mode) {
   sembunyi_("qc-ditahan", py);
   sembunyi_("qc-detail-rows", py);
   sembunyi_("qc-keputusan-override", py);
+  const tgl = document.getElementById("qc-cacat-toggle"); if (tgl) tgl.classList.toggle("hidden", py);   // v296
   const kotakCacat = document.querySelector(".qc-cacat-box");
   if (kotakCacat) kotakCacat.classList.toggle("hidden", py);
 
@@ -7549,6 +7744,13 @@ function qcRecalc() {
   const t = Math.max(Number((document.getElementById("qc-ditahan") || {}).value) || 0, 0);
   const afkir = Math.max(p - l - t, 0);
   const ditemukan = afkir + b + t;
+  // v296: ada yang tidak lolos / diperbaiki / ditahan -> rincian cacat dibuka sendiri
+  // lolos KOSONG belum berarti afkir (angka afkir turunan = diperiksa - 0): baru dianggap ada cacat
+  // kalau lolos sudah diketik dan lebih kecil dari diperiksa, atau diperbaiki/ditahan diisi.
+  const lolosTerisi = String((document.getElementById("qc-lolos") || {}).value || "") !== "";
+  const adaCacat = b > 0 || t > 0 || (lolosTerisi && p > 0 && l < p);
+  if (!adaCacat) QC_CACAT_TUTUP_MANUAL = false;
+  if (!QC_CACAT_TERBUKA && adaCacat && !QC_CACAT_TUTUP_MANUAL) qcLipatCacat_(true);
 
   const box = document.getElementById("qc-cacat-angka");
   box.textContent = ditemukan;

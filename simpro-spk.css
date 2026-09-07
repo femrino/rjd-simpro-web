@@ -1845,3 +1845,10 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
    kelas .naik dipasang JS saat bilah sedang tampil. */
 .sp-keatas.naik { bottom: 84px; }
 @media print { .sp-pintasan, .sp-keatas { display: none; } }
+
+/* v296 (7 Sep 2026): setoran terkonfirmasi di Finishing > Konfirmasi Setoran */
+.sp-konf-terkonfirmasi { margin-top: 22px; }
+.sp-konf-terkonfirmasi-judul { font-size: 13.5px; font-weight: 700; color: var(--ink); margin: 0 0 10px; }
+.sp-konf-terkonfirmasi-judul small { font-weight: 400; color: var(--ink-soft); }
+.sp-konf-belumqc { padding: 8px 10px; background: var(--cream); border-radius: 8px; }
+.sp-riw-status.selisih { color: #8F5A16; }
