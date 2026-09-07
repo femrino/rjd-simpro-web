@@ -1868,3 +1868,15 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 .sp-belumqc-qty { font-weight: 700; font-size: 15px; white-space: nowrap; }
 .sp-belumqc-qty span { font-size: 11px; font-weight: 400; margin-left: 3px; color: var(--ink-soft); }
 .sp-belumqc-btn { white-space: nowrap; }
+/* v299: rantai keluar -> setor -> QC per line di kartu SPK & Rekap */
+.sp-spk-rantai { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; font-size: 11.5px; color: var(--ink-soft); }
+.sp-spk-rantai-item b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.sp-spk-rantai-item.perlu b { color: #A63D3D; }
+.sp-spk-rantai-item.beres b { color: #2B6E45; }
+.sp-spk-rantai-item.negatif b { color: #A63D3D; text-decoration: underline dotted; }
+.sp-spk-rantai-item.tunggu b, .sp-spk-rantai-item.afkir b { color: #8F5A16; }
+.sp-spk-rantai-muat { font-style: italic; }
+.sp-spk-rantai-galat { color: #A63D3D; }
+.sp-spk-rantai-warna { display: flex; flex-wrap: wrap; gap: 3px 12px; margin-top: 3px; font-size: 11px; color: var(--ink-soft); }
+.sp-spk-rantai-warna b.perlu { color: #A63D3D; }
+.sp-spk-rantai-warna b.negatif { color: #A63D3D; text-decoration: underline dotted; }

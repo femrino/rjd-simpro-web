@@ -483,7 +483,7 @@ function spRenderDaftarSPK_() {
         '</div>'
       : '';
 
-    return '<div class="sp-spk-kartu">' +
+    return '<div class="sp-spk-kartu" data-line="' + rjdEscapeHtml_(l.idLine) + '">' +
       '<div class="sp-spk-atas">' +
         '<div class="sp-spk-nama">' + rjdEscapeHtml_(l.namaLine) +
           (l.targetSelesai
@@ -492,6 +492,7 @@ function spRenderDaftarSPK_() {
         '</div>' +
         '<div class="sp-spk-qty">' + l.qty + '<span>pcs</span></div>' +
       '</div>' +
+      spRantaiLineHtml_(l.idLine) +   // v299
       '<div class="sp-spk-aksi">' +
         tombol_("sp-spk-btn utama", batch.length > 1 ? "SPK gabungan" : "Cetak SPK",
           urlGabung, "SPK " + l.namaLine, "seluruh jatah line di PO ini") +
@@ -500,6 +501,59 @@ function spRenderDaftarSPK_() {
       '</div>' + chip +
     '</div>';
   }).join("");
+}
+
+/* ============================================================
+ * v299 (7 Sep 2026) -- RANTAI PER LINE di kartu SPK & Rekap Line (butuh gs >= @331)
+ * ============================================================
+ * Sesi keempat opsi 1: hubungan SPK per line <-> setoran <-> QC akhirnya terbaca di satu
+ * tempat. Tiap kartu line memuat keluar (potongan diserahkan) -> di line (belum disetor)
+ * -> setor jadi-baju (+ menunggu konfirmasi) -> QC diperiksa / lolos / afkir / ditahan ->
+ * belum di-QC, dari rute getRantaiLinePO. Angka negatif TIDAK disembunyikan: "belum QC -2"
+ * berarti QC dicatat atas nama line yang tidak menyetor -- itu yang harus dilihat, bukan 0.
+ */
+window.SP_RANTAI = null;   // { idPurchaseOrder, perLine: {idLine: baris}, total, error }
+function spMuatRantaiLine_(idPO) {
+  if (!idPO) return;
+  window.SP_RANTAI = { idPurchaseOrder: idPO, memuat: true, perLine: {} };
+  fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getRantaiLinePO", idPurchaseOrder: idPO }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!window.SP_RANTAI || window.SP_RANTAI.idPurchaseOrder !== idPO) return;   // PO sudah berganti
+      const perLine = {};
+      if (d && d.success) (d.daftar || []).forEach(function (l) { perLine[l.idLine] = l; });
+      window.SP_RANTAI = { idPurchaseOrder: idPO, perLine: perLine, total: d && d.success ? d.total : null,
+        error: (d && d.success) ? "" : ((d && d.error) || "Gagal memuat rantai per line.") };
+      spRenderDaftarSPK_();
+    })
+    .catch(function () {
+      if (!window.SP_RANTAI || window.SP_RANTAI.idPurchaseOrder !== idPO) return;
+      window.SP_RANTAI = { idPurchaseOrder: idPO, perLine: {}, total: null, error: "Gagal menghubungi server." };
+      spRenderDaftarSPK_();
+    });
+}
+function spRantaiLineHtml_(idLine) {
+  const R = window.SP_RANTAI;
+  if (!R || R.idPurchaseOrder !== window.SP_SPK_PO) return '<div class="sp-spk-rantai sp-spk-rantai-muat">Rantai keluar &#8594; setor &#8594; QC belum dimuat.</div>';
+  if (R.memuat) return '<div class="sp-spk-rantai sp-spk-rantai-muat">Memuat rantai keluar &#8594; setor &#8594; QC...</div>';
+  if (R.error) return '<div class="sp-spk-rantai sp-spk-rantai-galat">Rantai per line tidak terbaca: ' + rjdEscapeHtml_(R.error) + '</div>';
+  const l = R.perLine[idLine];
+  if (!l) return '<div class="sp-spk-rantai sp-spk-rantai-muat">Belum ada setoran maupun QC dari line ini.</div>';
+  const angka_ = function (label, n, kelas) { return '<span class="sp-spk-rantai-item' + (kelas ? ' ' + kelas : '') + '">' + label + ' <b>' + n + '</b></span>'; };
+  const belumKelas = l.belumQC > 0 ? "perlu" : (l.belumQC < 0 ? "negatif" : "beres");
+  const diLineKelas = l.diLine < 0 ? "negatif" : "";
+  let html = '<div class="sp-spk-rantai">' +
+    angka_("keluar", l.keluar) + (l.kembali ? angka_("kembali", l.kembali) : "") + angka_("di line", l.diLine, diLineKelas) +
+    angka_("setor", l.setor) + (l.setorMenunggu ? angka_("menunggu", l.setorMenunggu, "tunggu") : "") +
+    angka_("QC", l.diperiksa) + angka_("lolos", l.lolos) + (l.afkir ? angka_("afkir", l.afkir, "afkir") : "") + (l.ditahan ? angka_("ditahan", l.ditahan, "tunggu") : "") +
+    angka_("belum QC", l.belumQC, belumKelas) + '</div>';
+  if ((l.warna || []).length > 1 || (l.warna || []).some(function (w) { return w.belumQC !== 0; })) {
+    html += '<div class="sp-spk-rantai-warna">' + l.warna.map(function (w) {
+      return '<span>' + rjdEscapeHtml_(w.warna || "-") + ': setor ' + w.setor + ' &#183; QC ' + w.diperiksa + ' &#183; lolos ' + w.lolos +
+        (w.belumQC ? ' &#183; <b class="' + (w.belumQC > 0 ? 'perlu' : 'negatif') + '">belum ' + w.belumQC + '</b>' : '') + '</span>';
+    }).join("") + '</div>';
+  }
+  return html;
 }
 
 /**
@@ -617,6 +671,7 @@ function spRenderForm() {
     window.SP_SPK_PO = po.idPurchaseOrder;
     window.SP_SPK_LINE = po.perLine;
     rk.innerHTML = spDaftarSPKRangkaHtml_(po.perLine.length);
+    spMuatRantaiLine_(po.idPurchaseOrder);   // v299: keluar -> setor -> QC per line (gs >= @331)
     spRenderDaftarSPK_();
     rk.classList.remove("hidden");
   } else {
