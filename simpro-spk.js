@@ -8372,7 +8372,22 @@ function qcTampilkanError_(pesan) {
 }
 
 function qcResetForm_() {
-  qcGantiPO();
+  // v301 (8 Sep 2026) -- BUG DIPERBAIKI: qcGantiPO() warisan qc.html (yang punya pemilih PO
+  // sendiri) mengosongkan QC_PO_TERPILIH & QC_RINCIAN_PO. Di halaman produksi pemilih itu
+  // tersembunyi (PO dari kartu bersama), jadi sesudah simpan dropdown warna berbunyi "Pilih PO
+  // lewat kartu di atas" dan checker harus memilih PO ulang untuk sesi kedua (laporan layar
+  // Femri 8 Sep). Di rumah baru: PO, item, dan warna TETAP, hanya isian sesi yang dikosongkan;
+  // qcMuatTersedia_ sesudahnya memilih setoran berikutnya (FIFO) dan mengisi angkanya.
+  if (window.SP_PO_AKTIF && QC_PO_TERPILIH && QC_RINCIAN_PO) {
+    QC_SETORAN_DIPILIH = "";
+    qcRenderSizeLolos_();   // input size dibuat ulang kosong (data-auto ikut hilang)
+    const periksa = document.getElementById("qc-periksa"); if (periksa) periksa.dataset.auto = "";
+    const lolos = document.getElementById("qc-lolos"); if (lolos) lolos.placeholder = "";
+    QC_CACAT_TUTUP_MANUAL = false;
+    qcLipatCacat_(false);
+  } else {
+    qcGantiPO();
+  }
   document.getElementById("qc-operator").value = "";
   document.getElementById("qc-periksa").value = "";
   document.getElementById("qc-lolos").value = "";
