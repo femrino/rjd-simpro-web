@@ -1857,3 +1857,14 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 .sp-konf-qc.belum { background: #FDECEC; color: #A63D3D; }
 .sp-konf-qc.sebagian { background: #FFF3DC; color: #8F5A16; }
 .sp-konf-qc.selesai { background: #E5F5EA; color: #2B6E45; }
+/* v298: belum di-QC Finishing lintas PO (Konfirmasi Setoran, mode semua PO) */
+.sp-belumqc { margin: 10px 0 14px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.sp-belumqc-judul { padding: 8px 12px; background: var(--cream); font-size: 12.5px; }
+.sp-belumqc-baris { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 13px; }
+.sp-belumqc-item { flex: 1; min-width: 0; }
+.sp-belumqc-sub { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.sp-belumqc-setoran { font-size: 11.5px; background: var(--cream); border-radius: 6px; padding: 2px 7px; }
+.sp-belumqc-catatan { font-size: 11.5px; color: #8F5A16; }
+.sp-belumqc-qty { font-weight: 700; font-size: 15px; white-space: nowrap; }
+.sp-belumqc-qty span { font-size: 11px; font-weight: 400; margin-left: 3px; color: var(--ink-soft); }
+.sp-belumqc-btn { white-space: nowrap; }

@@ -1735,7 +1735,7 @@ function spSwitchTab(tab) {
   if (tab === "qc") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("input"); qcKunciTahap_("Finishing"); return; }
   if (tab === "qcpot") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("input"); qcKunciTahap_("Potong"); return; }
   if (tab === "qcjahit") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("input"); qcKunciTahap_("Jahit"); return; }
-  if (tab === "qcring") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("ringkasan"); return; }
+  if (tab === "qcring") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("ringkasan"); qcMuatRiwayatPO_(); return; }   // v298: sesi QC PO aktif
   if (tab === "approval") { spMuatApproval_(); return; }
   if (tab === "sop") { spMuatSOP_(); return; }
   if (tab === "orderan") { spRenderOrderan_(); return; }
@@ -3219,6 +3219,10 @@ function spTampilSetoranTerkonfirmasi_() {
   if (po) {
     minta.push(fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getTersediaQC", idPurchaseOrder: po }) })
       .then(function (r) { return r.json(); }).catch(function () { return null; }));
+  } else {
+    // v298 (gs >= @330): tanpa PO aktif / "semua PO" -> daftar belum di-QC LINTAS PO
+    minta.push(fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getSetoranBelumQC" }) })
+      .then(function (r) { return r.json(); }).catch(function () { return null; }));
   }
   Promise.all(minta).then(function (hasil) {
     const d = hasil[0];
@@ -3250,6 +3254,8 @@ function spTampilSetoranTerkonfirmasi_() {
         : (baris.length ? '<p class="sp-info sp-konf-belumqc">Semua setoran terkonfirmasi PO ini sudah di-QC.</p>' : "");
     } else if (po && t && t.error) {
       ringkas = '<p class="sp-info sp-konf-belumqc">Angka belum di-QC tidak terbaca: ' + rjdEscapeHtml_(t.error) + '</p>';
+    } else if (!po) {
+      ringkas = spBlokBelumQCLintasPO_(t);   // v298
     }
     if (!baris.length) {
       w.innerHTML = judul + ringkas + '<p class="sp-info">Belum ada setoran terkonfirmasi' + (po ? ' untuk PO ini' : '') + '.</p>';
@@ -3273,6 +3279,42 @@ function spTampilSetoranTerkonfirmasi_() {
   }).catch(function () {
     w.innerHTML = judul + '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
   });
+}
+
+/* ============================================================
+ * v298 (7 Sep 2026) -- BELUM DI-QC FINISHING, LINTAS PO (butuh gs >= @330)
+ * ============================================================
+ * Sesi ketiga opsi 1. Semua tampilan Finishing berangkat dari PO aktif, jadi setoran
+ * yang terkonfirmasi lalu tidak pernah di-QC (diukur 7 Sep: 15 warna, 242 pcs, 7 di
+ * antaranya satu line yang sama) tidak muncul di layar mana pun. Blok ini tampil saat
+ * tidak ada PO aktif atau "Tampilkan semua PO": satu baris per PO x warna, urut setoran
+ * tertua, dengan tombol yang memilih PO-nya dan membuka form QC Finishing.
+ */
+function spBlokBelumQCLintasPO_(d) {
+  if (!d) return '<p class="sp-info sp-konf-belumqc">Daftar belum di-QC lintas PO tidak terbaca (gagal menghubungi server).</p>';
+  if (!d.success) return '<p class="sp-info sp-konf-belumqc">Daftar belum di-QC lintas PO tidak terbaca: ' + rjdEscapeHtml_(d.error || "?") + '</p>';
+  const daftar = d.daftar || [];
+  if (!daftar.length) return '<p class="sp-info sp-konf-belumqc">Semua setoran terkonfirmasi (semua PO) sudah di-QC Finishing.</p>';
+  const tot = d.total || {};
+  const namaLine_ = function (id) { return (typeof qcNamaLine_ === "function" && QC_MASTER) ? qcNamaLine_(id) : id; };
+  return '<div class="sp-belumqc"><div class="sp-belumqc-judul">Belum di-QC Finishing &#8212; semua PO: <b>' + (tot.pcs || 0) + ' pcs</b> di ' + (tot.warna || daftar.length) + ' warna, ' + (tot.po || "?") + ' PO</div>' +
+    daftar.map(function (b) {
+      const setoran = (b.setoran || []).map(function (x) {
+        return '<span class="sp-belumqc-setoran">' + rjdEscapeHtml_(x.idSetoran) + ' &#183; ' + rjdEscapeHtml_(namaLine_(x.idLine) || "-") + (x.tanggal ? ' &#183; ' + rjdEscapeHtml_(x.tanggal) : '') + ' &#183; sisa <b>' + x.tersedia + '</b></span>';
+      }).join("");
+      const catatan = (b.diperiksaTanpaSetoran > 0 ? '<span class="sp-belumqc-catatan">' + b.diperiksaTanpaSetoran + ' pcs diperiksa tanpa ID setoran (sesi lama)</span>' : '') +
+        (b.menunggu > 0 ? '<span class="sp-belumqc-catatan">' + b.menunggu + ' pcs masih menunggu konfirmasi</span>' : '');
+      return '<div class="sp-belumqc-baris" data-po="' + rjdEscapeHtml_(b.idPurchaseOrder) + '">' +
+        '<div class="sp-belumqc-item"><b>' + rjdEscapeHtml_(b.idPurchaseOrder) + '</b> &#183; ' + rjdEscapeHtml_(b.artikel || "-") + ' &#183; <b>' + rjdEscapeHtml_(b.warna || "-") + '</b>' +
+          '<div class="sp-belumqc-sub">' + setoran + catatan + '</div></div>' +
+        '<div class="sp-belumqc-qty">' + b.tersedia + '<span>pcs</span></div>' +
+        '<button class="sp-btn-kecil sp-belumqc-btn" type="button" onclick="spKeQCFinishing_(' + JSON.stringify(String(b.idPurchaseOrder)).replace(/"/g, "&quot;") + ')">QC &#8594;</button>' +
+      '</div>';
+    }).join("") + '</div>';
+}
+function spKeQCFinishing_(idPO) {
+  spPilihPO(idPO);
+  spSwitchTab("qc");
 }
 
 /** Isi dropdown filter line di tab konfirmasi (dari daftar line aktif). */
@@ -8518,6 +8560,39 @@ function qcMuatRingkasan() {
     .catch(function () {
       wadah.innerHTML = '<p style="font-size:12.5px;color:var(--thread)">Gagal menghubungi server.</p>';
     });
+}
+
+/* v298: SESI QC PO AKTIF di tab Ringkasan -- rute getRiwayatInspeksiPO (sudah ada sejak v103,
+ * belum pernah dipanggil halaman ini). Kolom Setoran = ID setoran yang diperiksa (gs >= @329);
+ * sesi lama tanpa ID tampil "-". */
+function qcMuatRiwayatPO_() {
+  const isi = document.getElementById("qc-ringkasan-isi");
+  if (!isi) return;
+  let w = document.getElementById("qc-riwayat-po");
+  if (!w) {
+    w = document.createElement("div"); w.id = "qc-riwayat-po"; w.className = "qc-riwayat-po";
+    isi.insertAdjacentElement("afterend", w);
+  }
+  const po = window.SP_PO_AKTIF || "";
+  const judul = '<div class="qc-subjudul">Sesi QC ' + (po ? 'PO <b>' + rjdEscapeHtml_(po) + '</b>' : 'per PO') + '</div>';
+  if (!po) { w.innerHTML = judul + '<div class="qc-kosong">Pilih PO di kartu atas untuk melihat sesi QC-nya.</div>'; return; }
+  w.innerHTML = judul + '<div class="qc-kosong">Memuat sesi QC...</div>';
+  fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getRiwayatInspeksiPO", idPurchaseOrder: po }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (window.SP_PO_AKTIF !== po) return;   // PO sudah berganti saat jawaban tiba
+      if (!d || !d.success) { w.innerHTML = judul + '<div class="qc-kosong">' + rjdEscapeHtml_((d && d.error) || "Gagal memuat sesi QC.") + '</div>'; return; }
+      const riw = d.riwayat || [];
+      if (!riw.length) { w.innerHTML = judul + '<div class="qc-kosong">Belum ada sesi QC untuk PO ini.</div>'; return; }
+      w.innerHTML = judul + '<div class="qc-riwayat-gulir"><table class="qc-riwayat-tabel"><thead><tr><th>Tanggal</th><th>Tahap</th><th>Line</th><th>Warna</th><th>Setoran</th><th>Diperiksa</th><th>Lolos</th><th>Cacat</th><th>Keputusan</th></tr></thead><tbody>' +
+        riw.map(function (x) {
+          const namaLine = (typeof qcNamaLine_ === "function" && QC_MASTER) ? qcNamaLine_(x.idLine || "") : (x.idLine || "");
+          return '<tr class="' + (x.qtyDiperiksa > 0 ? '' : 'qc-riwayat-penyelesaian') + '"><td>' + rjdEscapeHtml_(x.tanggal || "") + '</td><td>' + rjdEscapeHtml_(x.tahap || "") + '</td><td>' + rjdEscapeHtml_(namaLine || "-") + '</td>' +
+            '<td>' + rjdEscapeHtml_(x.warna || "-") + '</td><td class="qc-riwayat-setoran">' + (x.idSetoran ? rjdEscapeHtml_(x.idSetoran) : '<span class="qc-riwayat-tanpa">-</span>') + '</td>' +
+            '<td>' + x.qtyDiperiksa + '</td><td>' + x.qtyLolos + '</td><td>' + x.qtyCacat + (x.qtyDitahan ? ' <small>(ditahan ' + x.qtyDitahan + ')</small>' : '') + '</td><td>' + rjdEscapeHtml_(x.keputusan || "") + '</td></tr>';
+        }).join("") + '</tbody></table></div>';
+    })
+    .catch(function () { if (window.SP_PO_AKTIF === po) w.innerHTML = judul + '<div class="qc-kosong">Gagal menghubungi server.</div>'; });
 }
 
 function qcKelasBar_(rate) {

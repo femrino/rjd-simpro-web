@@ -262,3 +262,12 @@ tr.sp-recut-target > td:first-child { box-shadow: inset 3px 0 0 #C9972B; }
 .qc-setoran-field select { width: 100%; }
 .qc-setoran-field .qc-hint { margin-top: 4px; }
 .qc-tersedia-setoran { color: var(--ink); }
+/* v298: sesi QC PO aktif di tab Ringkasan */
+.qc-riwayat-po { margin-top: 18px; }
+.qc-riwayat-gulir { overflow-x: auto; }
+.qc-riwayat-tabel { width: 100%; font-size: 12.5px; border-collapse: collapse; white-space: nowrap; }
+.qc-riwayat-tabel th, .qc-riwayat-tabel td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--line); }
+.qc-riwayat-tabel th { font-size: 11.5px; color: var(--ink-soft); font-weight: 600; }
+.qc-riwayat-setoran { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; }
+.qc-riwayat-tanpa { color: var(--ink-soft); }
+.qc-riwayat-penyelesaian td { color: var(--ink-soft); font-style: italic; }
