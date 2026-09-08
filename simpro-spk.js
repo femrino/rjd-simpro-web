@@ -8665,6 +8665,15 @@ function qcSubmitInspeksi() {
         el.textContent = (d.duplikat ? "Sudah tersimpan sebelumnya (" : "Tersimpan (") + d.idQC + ") -- " + d.keputusan + ", defect rate " + d.defectRate + "%." +
           (d.duplikat ? " Permintaan ulang tidak dicatat dua kali." : "");
       }
+      // v311 (AUDIT-QC Sesi QC-4 Q-3, gs >= @348): pagar LUNAK Jahit/Potong. Sesi TERSIMPAN, tapi
+      // qty diperiksa melebihi potongan yang diterima line / hasil potong warna ini. Ditempel di teks
+      // sukses DAN dialertkan -- angka ini masuk progres tahap yang dilihat klien, jadi tidak boleh
+      // lewat tanpa dibaca checker.
+      if (d.peringatan && d.peringatan.length) {
+        el.innerHTML = el.innerHTML +
+          ' <b class="qc-kor-gagal">PERIKSA LAGI: ' + rjdEscapeHtml_(d.peringatan.join(" ")) + '</b>';
+        alert("Tersimpan, tapi periksa lagi:\n" + d.peringatan.join("\n"));
+      }
       // v196: jenis cacat baru masuk master -> muncul di dropdown berikutnya.
       // Dikabarkan supaya checker tahu tidak perlu mengetik ulang lain kali,
       // dan supaya salah ketik ketahuan saat itu juga, bukan sebulan kemudian.
