@@ -86,6 +86,38 @@ function ivMulai(){
    snapshot berarti memperlihatkan keadaan SEBELUM perubahan yang baru saja
    dibuat orang. Itu bukan lambat, itu salah. */
 var IV_SUDAH_SEGAR = false;
+/* v305 (8 Sep 2026, AUDIT-KEUANGAN K2 KP-2) -- KUNCI IDEMPOTEN per pengisian form pembayaran (gs >= @338).
+ * Dibuat saat Simpan pertama ditekan, dikirim di payload (kunciKirim), dan BARU diganti sesudah server
+ * menjawab sukses. Jaringan putus sesudah server menulis ("Failed to fetch" khas Apps Script) -> staf
+ * menekan Simpan lagi -> server mengenali kuncinya di Catatan ("#kirim:...") dan menjawab baris yang
+ * sudah ada (sudahTercatat:true), bukan menulis pembayaran kedua. Satu kunci dipakai tunggal & split. */
+var IV_KUNCI_KIRIM = "";
+function ivKunciKirim_(){
+  if(!IV_KUNCI_KIRIM){
+    IV_KUNCI_KIRIM = (window.crypto && typeof crypto.randomUUID === "function")
+      ? crypto.randomUUID()
+      : "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  }
+  return IV_KUNCI_KIRIM;
+}
+/** v305: "jawaban tidak sampai" != "permintaan gagal" (simpro-global.js v219). */
+function ivGalatJaringan_(e){
+  return (e instanceof TypeError) || /Failed to fetch|NetworkError|Load failed/i.test(String(e && e.message || e));
+}
+/* v305 (KP-8): kotak No. Referensi untuk pembayaran TUNGGAL. Markup form ada di template Blogger (tidak
+ * ditempel tiap rilis), jadi kotaknya disuntik dari sini, sesudah kolom Jumlah. Tanpa kolom ini tiap
+ * pembayaran tunggal lahir tanpa penyambung ke rekening koran (pelunasan.js). */
+function ivPasangKotakRef_(){
+  if(document.getElementById("iv-bayar-ref")) return;
+  const jumlah = document.getElementById("iv-bayar-jumlah");
+  const wadah = jumlah && jumlah.parentNode;
+  if(!wadah || !wadah.parentNode) return;
+  const div = document.createElement("div");
+  div.className = "iv-biaya-field";
+  div.innerHTML = '<label for="iv-bayar-ref">No. referensi transfer</label>' +
+    '<input id="iv-bayar-ref" type="text" placeholder="mis. TRF-2609-017 / no. mutasi bank" maxlength="60">';
+  wadah.parentNode.insertBefore(div, wadah.nextSibling);
+}
 var IV_SNAP_WAKTU = null;   // v243: jam snapshot yang sedang TAMPIL; null = yang tampil data segar
 
 function ivMuat(){
@@ -538,6 +570,7 @@ function ivSwitchTab(tab) {
   document.getElementById("iv-panel-buat").classList.toggle("hidden", tab !== "buat");
   document.getElementById("iv-panel-bayar").classList.toggle("hidden", tab !== "bayar");
   if (tab === "buat" && !window.IV_PENGIRIMAN) ivMuatPengiriman();
+  if (tab === "bayar") ivPasangKotakRef_();   // v305 (KP-8): tab dibuka = kotak ref ada, apa pun keadaan IV_TUJUAN
   if (tab === "bayar" && !window.IV_TUJUAN) ivMuatPembayaran();
 }
 
@@ -963,8 +996,20 @@ function ivSimpanInvoice() {
     window.IV_DRAFT = null;
     window.IV_DAFTAR = null;
   })
-  .catch(function () {
-    alert("Gagal menghubungi server.");
+  .catch(function (e) {
+    // v305 (KP-4): jawaban tidak sampai -> invoice MUNGKIN sudah terbit. Kembali ke langkah pilih
+    // dengan daftar pengiriman SEGAR: pengiriman yang sudah ditagih hilang dari daftar, jadi tidak
+    // bisa ditagih dua kali; kalau masih ada, memang belum tersimpan.
+    if (ivGalatJaringan_(e)) {
+      alert("Jawaban server tidak sampai -- invoice ini MUNGKIN sudah tersimpan.\n\n" +
+        "Daftar pengiriman dimuat ulang. Kalau pengirimannya sudah hilang dari daftar, invoicenya sudah terbit: periksa di tab Daftar.");
+      window.IV_PENGIRIMAN = null;
+      window.IV_DAFTAR = null;
+      const draf = document.getElementById("iv-langkah-draft"); if (draf) draf.classList.add("hidden");
+      ivBuatLagi();
+      return;
+    }
+    alert((e && e.message) || "Gagal menghubungi server.");
     btn.disabled = false;
     btn.textContent = "Simpan Invoice";
   });
@@ -1015,6 +1060,7 @@ window.onload = function(){
  * ============================================================ */
 
 function ivMuatPembayaran(){
+  ivPasangKotakRef_();   // v305 (KP-8)
   const wadah = document.getElementById("iv-bayar-tujuan");
   if(wadah) wadah.innerHTML = '<p class="iv-buat-info">Memuat daftar tagihan...</p>';
   fetch(IV_API_URL, {
@@ -1067,6 +1113,7 @@ function ivGantiTujuanBayar(mode){
 }
 
 function ivRenderTujuan(){
+  ivPasangKotakRef_();   // v305 (KP-8): tab bisa dibuka tanpa memuat ulang dari server
   const wadah = document.getElementById("iv-bayar-tujuan");
   if(!wadah || !window.IV_TUJUAN) return;
   const mode = window.IV_MODE_BAYAR || "invoice";
@@ -1205,7 +1252,9 @@ function ivSimpanPembayaran(){
     jumlahDibayar: jumlah,
     tanggalBayar: tanggal,
     metodeBayar: document.getElementById("iv-bayar-metode").value || "",
-    catatan: document.getElementById("iv-bayar-catatan").value || ""
+    noReferensi: ((document.getElementById("iv-bayar-ref") || {}).value || "").trim(),   // v305 (KP-8)
+    catatan: document.getElementById("iv-bayar-catatan").value || "",
+    kunciKirim: ivKunciKirim_()   // v305 (KP-2), gs >= @338
   };
   if(mode === "invoice") payload.idInvoice = pilih; else payload.idPurchaseOrder = pilih;
 
@@ -1225,7 +1274,8 @@ function ivSimpanPembayaran(){
       return;
     }
     const h = d.data || {};
-    let pesan = "Tersimpan sebagai " + h.idPelunasan + ".";
+    IV_KUNCI_KIRIM = "";   // v305: form berikutnya = kunci baru
+    let pesan = (h.sudahTercatat ? "Sudah tercatat sebelumnya sebagai " : "Tersimpan sebagai ") + h.idPelunasan + ".";
     if(h.statusInvoice) pesan += " Status invoice sekarang: " + h.statusInvoice +
       " (sisa " + formatRupiah(h.sisaInvoice || 0) + ").";
     if(h.saldoUangMuka !== undefined) pesan += " Uang muka order: " + formatRupiah(h.uangMukaTotal || 0) +
@@ -1239,6 +1289,7 @@ function ivSimpanPembayaran(){
 
     document.getElementById("iv-bayar-jumlah").value = "";
     document.getElementById("iv-bayar-catatan").value = "";
+    const refEl = document.getElementById("iv-bayar-ref"); if(refEl) refEl.value = "";
     window.IV_PILIH_BAYAR = null;
     // Daftar tujuan & daftar piutang sama-sama dimuat ulang: angka sisa di
     // keduanya baru saja berubah, dan daftar yang basi di layar keuangan lebih
@@ -1248,9 +1299,22 @@ function ivSimpanPembayaran(){
     ivMuatPembayaran();
     ivMuat();
   })
-  .catch(function(){
+  .catch(function(e){
+    // v305 (AUDIT-KEUANGAN K2 KP-4): JAWABAN TIDAK SAMPAI != PERMINTAAN GAGAL. "Failed to fetch"
+    // dari Apps Script hampir selalu berarti servernya SUDAH menulis. Dulu: tombol hidup lagi,
+    // tulisan "gagal", formulir masih terisi -- undangan mencatat uang dua kali. Kini tombol tetap
+    // hidup, tapi kunci kirimnya SAMA: Simpan lagi = server menjawab baris yang sudah ada (gs @338),
+    // dan daftar dimuat ulang supaya barisnya terlihat dulu.
     btn.disabled = false;
-    status.innerHTML = '<span class="iv-bayar-galat">Gagal menghubungi server.</span>';
+    if(ivGalatJaringan_(e)){
+      status.innerHTML = '<span class="iv-bayar-warn">Jawaban server tidak sampai &#8212; pembayarannya MUNGKIN sudah tercatat. ' +
+        'Riwayat di bawah dimuat ulang: periksa dulu apakah barisnya sudah ada. Kalau belum, tekan Simpan lagi &#8212; ' +
+        'permintaan ulang dengan formulir yang sama tidak dicatat dua kali.</span>';
+      window.IV_TUJUAN = null;
+      ivMuatPembayaran();
+      return;
+    }
+    status.innerHTML = '<span class="iv-bayar-galat">' + rjdEscapeHtml_((e && e.message) || "Gagal menyimpan pembayaran.") + '</span>';
   });
 }
 
@@ -1620,8 +1684,9 @@ function ivSimpanSplit(){
         totalTransfer: total,
         alokasi: daftar,
         // Hanya bernilai true kalau pengguna menyetujui konfirmasi di atas.
-        // Backend menolak alokasi lintas klien tanpa bendera ini.
-        izinkanLintasKlien: izinkanLintasKlien
+        // Backend menolak alokasi lintas klien tanpa bendera ini (ditegakkan gs @338, KU-6).
+        izinkanLintasKlien: izinkanLintasKlien,
+        kunciKirim: ivKunciKirim_()   // v305 (KP-2), gs >= @338
       }
     })
   })
@@ -1634,6 +1699,7 @@ function ivSimpanSplit(){
       return;
     }
     const h = d.data || {};
+    IV_KUNCI_KIRIM = "";   // v305: form berikutnya = kunci baru
     // Hasil per tujuan ditampilkan SATU-SATU, bukan diringkas jadi "tersimpan".
     // Inilah momen staf bisa memastikan alokasinya jatuh seperti yang dimaksud;
     // sesudah layar ini tertutup, memeriksanya berarti membuka SD Pelunasan.
@@ -1649,7 +1715,7 @@ function ivSimpanSplit(){
       return '<div class="iv-bayar-warn">' + rjdEscapeHtml_(w) + '</div>';
     }).join("");
     status.innerHTML = '<span class="iv-bayar-ok">' + h.jumlahBaris +
-      ' baris tersimpan, total ' + formatRupiah(h.totalDicatat) +
+      (h.sudahTercatat ? ' baris SUDAH tercatat sebelumnya (' + rjdEscapeHtml_((h.idPelunasan || []).join(", ")) + '), tidak ditulis ulang; total ' : ' baris tersimpan, total ') + formatRupiah(h.totalDicatat) +
       (h.noReferensi ? ' (ref ' + rjdEscapeHtml_(h.noReferensi) + ')' : '') + '.</span>' +
       rincian + warn;
 
@@ -1662,9 +1728,17 @@ function ivSimpanSplit(){
     ivMuatPembayaran();
     ivMuat();
   })
-  .catch(function(){
+  .catch(function(e){
+    // v305 (KP-4): lihat catatan di ivSimpanPembayaran -- kunci kirim tetap, alokasi tetap.
     btn.disabled = false;
-    status.innerHTML = '<span class="iv-bayar-galat">Gagal menghubungi server.</span>';
+    if(ivGalatJaringan_(e)){
+      status.innerHTML = '<span class="iv-bayar-warn">Jawaban server tidak sampai &#8212; pembayarannya MUNGKIN sudah tercatat. ' +
+        'Daftar dimuat ulang: periksa riwayat dulu. Kalau belum ada, tekan Simpan lagi &#8212; alokasi yang sama tidak dicatat dua kali.</span>';
+      window.IV_TUJUAN = null;
+      ivMuatPembayaran();
+      return;
+    }
+    status.innerHTML = '<span class="iv-bayar-galat">' + rjdEscapeHtml_((e && e.message) || "Gagal menyimpan pembayaran.") + '</span>';
   });
 }
 
