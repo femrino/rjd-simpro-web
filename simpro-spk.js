@@ -3294,7 +3294,7 @@ function spTampilSetoranTerkonfirmasi_() {
     const perSetoran = {};
     if (po && t && t.success) (t.baris || []).forEach(function (b) { (b.perSetoran || []).forEach(function (x) { perSetoran[x.idSetoran] = x; }); });
     const statusQC_ = function (k) {
-      const x = perSetoran[String(k.idSetoran || "").replace(/-KOR$/, "")];
+      const x = perSetoran[String(k.idSetoran || "").replace(/-KOR\d*$/, "")];   // v302: -KOR2/-KOR3 pemulihan PD-1 ikut induk
       if (!x) return "";
       if (x.tersedia <= 0) return '<span class="sp-konf-qc selesai">QC selesai ' + x.sudahDiperiksa + '/' + x.setor + '</span>';
       if (x.sudahDiperiksa > 0) return '<span class="sp-konf-qc sebagian">QC ' + x.sudahDiperiksa + '/' + x.setor + ' &#183; sisa ' + x.tersedia + '</span>';
@@ -3693,10 +3693,18 @@ function spKonfirmasiSelisih(i) {
     alert("Isi dulu catatan kenapa jumlahnya berbeda.\n\nStatus \"ada selisih\" tanpa keterangan tidak menolong siapa pun saat ditelusuri nanti.");
     return;
   }
+  // v302: nol semua harus ditegaskan -- server (gs >= @333) menolak diterima 0 total tanpa nolSemua.
+  const totalDiterima = Object.keys(sizeQtyDiterima).reduce(function (a, sz) { return a + sizeQtyDiterima[sz]; }, 0);
+  let nolSemua = false;
+  if (totalDiterima === 0) {
+    if (!confirm("Semua size diisi 0 -- artinya TIDAK ADA satu pun yang diterima dari setoran ini.\n\nBenar begitu? Kalau sebagian diterima, batalkan dan isi jumlahnya per size.")) return;
+    nolSemua = true;
+  }
   spKirimKonfirmasi_({
     idDistribusi: k.idDistribusi || k.idSetoran,
     cocok: false,
     sizeQtyDiterima: sizeQtyDiterima,
+    nolSemua: nolSemua,
     catatan: catatan.trim()
   });
 }
@@ -3726,7 +3734,12 @@ function spKirimKonfirmasi_(payload) {
         payload: {
           idSetoran: payload.idDistribusi,
           sesuai: !!payload.cocok,
-          diterima: payload.diterima,
+          // v302 (8 Sep 2026, AUDIT-PRODUKSI PD-1) -- BUG DIPERBAIKI: sejak commit pertama field ini
+          // membaca payload.diterima yang tidak pernah ada (spKonfirmasiSelisih mengumpulkan
+          // sizeQtyDiterima), jadi server menerima undefined dan mencatat SEMUA size diterima 0:
+          // baris -KOR menarik seluruh setoran. Sejak gs @333 server menolak rincian kosong.
+          diterima: payload.sizeQtyDiterima || {},
+          nolSemua: payload.nolSemua === true,
           catatan: payload.catatan,
           diterimaOleh: payload.diterimaOleh
         }
