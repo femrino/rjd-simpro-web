@@ -857,7 +857,7 @@ function spSimpan() {
     // Muat ulang supaya kolom sisa & ringkasan line ikut ter-update -- kalau
     // tidak, layar menampilkan sisa yang sudah basi dan pembagian berikutnya
     // dihitung dari angka salah.
-    window.SP_PO = null;
+    spSesudahTulis_("distribusi");   // v312 (P7 PF-1)
     spMuatDistribusi();
   })
   .catch(function () {
@@ -1787,9 +1787,12 @@ function spSwitchTab(tab) {
   // IKUT dikunci -- kalau cuma Potong & Jahit yang terkunci, pintu Finishing
   // masih menampilkan pemilih tahap dan orang bisa mencatat Potong dari sana,
   // menghidupkan lagi kebingungan yang justru mau ditutup.
-  if (tab === "qc") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("input"); qcKunciTahap_("Finishing"); return; }
-  if (tab === "qcpot") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("input"); qcKunciTahap_("Potong"); return; }
-  if (tab === "qcjahit") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("input"); qcKunciTahap_("Jahit"); return; }
+  // v312 (P7 PF-1): sesudah spSesudahTulis_ membuang cache, tab QC WAJIB memuat ulang -- kalau tidak,
+  // qcSinkronPOAktif_ pulang lebih awal (PO & rincian masih sama) dan layar menampilkan "tersedia 0"
+  // untuk setoran yang barusan dikonfirmasi di tab sebelah.
+  if (tab === "qc") { spMuatQC_(); qcSinkronPOAktif_(); qcSegarkanBilaBasi_(); qcModeSub_("input"); qcKunciTahap_("Finishing"); return; }
+  if (tab === "qcpot") { spMuatQC_(); qcSinkronPOAktif_(); qcSegarkanBilaBasi_(); qcModeSub_("input"); qcKunciTahap_("Potong"); return; }
+  if (tab === "qcjahit") { spMuatQC_(); qcSinkronPOAktif_(); qcSegarkanBilaBasi_(); qcModeSub_("input"); qcKunciTahap_("Jahit"); return; }
   if (tab === "qcring") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("ringkasan"); qcMuatRiwayatPO_(); return; }   // v298: sesi QC PO aktif
   if (tab === "approval") { spMuatApproval_(); return; }
   if (tab === "sop") { spMuatSOP_(); return; }
@@ -2002,8 +2005,15 @@ function spSimpanCutting() {
       // KEDUANYA dikosongkan: catatan potong baru mengubah "sisa yang boleh
       // dibagi" di tab sebelah. Kalau tidak direset, tab Loading masih
       // memakai angka lama dan pembagian berikutnya dihitung dari dasar salah.
-      window.SP_CUT = null;
-      window.SP_PO = null;
+      spSesudahTulis_("cutting");   // v312 (P7 PF-1)
+      // v312 (P7 PF-2): kotak "Kain dipakai" & "Catatan" DIKOSONGKAN. Backend menulis kain sekali per
+      // penyimpanan (baris pertama), jadi kotak yang tetap berisi 45 membuat penyimpanan warna
+      // berikutnya membawa 45 m lagi -- "Kain terpakai" dan HPP jadi 90 m padahal 75. Catatan
+      // "Re-cut QC-..." yang tertinggal juga mencap potongan biasa berikutnya sebagai re-cut.
+      ["sp-cut-kain", "sp-cut-catatan"].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.value = "";
+      });
       // v183: satu jejak untuk satu penyimpanan. Kalau pending tidak dihapus,
       // potongan biasa berikutnya ikut tercap re-cut QC yang sama.
       window.SP_RECUT_PENDING = null;
@@ -2283,8 +2293,8 @@ function spRenderRiwayatKeluar_() {
           return '<div class="sp-keluar-baris">' +
             '<span>' + rjdEscapeHtml_(x.warna || "-") +
               ' <small>' + rjdEscapeHtml_(per) + '</small></span>' +
-            '<button class="sp-btn-kecil" onclick="spBatalKeluar_(\'' +
-              rjdEscapeHtml_(x.idKeluar) + '\')" type="button">Batalkan</button>' +
+            '<button class="sp-btn-kecil" data-id="' + spEsc_(x.idKeluar) +
+              '" onclick="spBatalKeluar_(this.dataset.id)" type="button">Batalkan</button>' +
           '</div>';
         }).join("") +
       '</div>';
@@ -2381,7 +2391,7 @@ function spSimpanKeluar_() {
     // PO aktif dimuat ulang: sisa di tab Bagi ke Line ikut berubah, dan
     // membiarkan angka lama di layar adalah cara termudah membuat orang
     // membagi barang yang sudah tidak ada.
-    window.SP_PO = null;
+    spSesudahTulis_("keluar");   // v312 (P7 PF-1)
     spMuatKeluar_();
   })
   .catch(function (e) {
@@ -2402,7 +2412,7 @@ function spBatalKeluar_(idKeluar) {
   .then(function (r) { return r.json(); })
   .then(function (d) {
     if (!d || !d.success) { alert((d && d.error) || "Gagal membatalkan."); return; }
-    window.SP_PO = null;
+    spSesudahTulis_("keluar");   // v312 (P7 PF-1)
     spMuatKeluar_();
   })
   .catch(function (e) { alert(String(e)); });
@@ -3637,7 +3647,7 @@ function spKonfirmasiMassal_() {
         h.gagal.map(function (g) { return "\u2022 " + g.id + ": " + g.error; }).join("\n");
     }
     alert(pesan);
-    window.SP_PO = null;   // alokasi bisa berubah -> cache Bagi ke Line dibuang
+    spSesudahTulis_("konfirmasi");   // v312 (P7 PF-1): alokasi & tersedia QC ikut berubah
     spMuatKonfirmasi();
   })
   .catch(function () { alert("Gagal menghubungi server."); spKonfTombolMassal_(); });
@@ -3754,7 +3764,7 @@ function spKirimKonfirmasi_(payload) {
     }
     // Konfirmasi mengubah alokasi (kalau ada koreksi), jadi cache tab Bagi ke
     // Line dikosongkan -- kalau tidak, sisa di sana memakai angka sebelum koreksi.
-    window.SP_PO = null;
+    spSesudahTulis_("konfirmasi");   // v312 (P7 PF-1)
     if (window.SP_KONF_PILIH) delete window.SP_KONF_PILIH[payload.idDistribusi];   // v198
     spMuatKonfirmasi();
   })
@@ -4017,8 +4027,8 @@ function spRenderTercatat_(jenis) {
             : terkunci
               ? '<span class="sp-riw-kunci">sudah dikonfirmasi</span>'
               : boleh
-                ? '<button class="sp-btn-kecil" type="button" onclick="spBatalTercatat_(\'' +
-                  jenis + '\', ' + i + ')">Batalkan</button>'
+                ? '<button class="sp-btn-kecil" type="button" data-jenis="' + spEsc_(jenis) + '" data-i="' + i +
+                  '" onclick="spBatalTercatat_(this.dataset.jenis, Number(this.dataset.i))">Batalkan</button>'
                 : '<span class="sp-riw-kunci">bukan bagianmu</span>') +
         '</td>' +
       '</tr>';
@@ -4223,8 +4233,7 @@ function spBatalkanCatatan(i) {
     if (!h || !h.success) { alert((h && h.error) || "Gagal membatalkan."); return; }
     // Pembatalan mengubah angka di tab lain -- cache dikosongkan supaya sisa &
     // total tidak menampilkan angka sebelum pembatalan.
-    window.SP_PO = null;
-    window.SP_CUT = null;
+    spSesudahTulis_("qc");   // v312 (P7 PF-1): pembatalan menyentuh semua turunan
     spMuatRiwayat();
   })
   .catch(function () { alert("Gagal menghubungi server."); });
@@ -4476,6 +4485,7 @@ function spSimpanSetoran() {
         kotak.innerHTML = '<div class="sp-sukses-isi"><b>' + totalKirim + ' pcs</b> sudah tersimpan (jawaban server hilang di jalan, diperiksa ulang).</div>';
       }
       kotak.classList.remove("hidden");
+      spSesudahTulis_("setoran");   // v312 (P7 PF-1): tersedia QC & rantai line ikut berubah
       spMuatSetoran();
     }
   });
@@ -4634,9 +4644,8 @@ function spThumbMarker_(url) {
   //
   // Tautan ke Drive tetap disediakan di dalam pratinjau, untuk yang memang
   // perlu mengunduh atau melihat ukuran asli.
-  return '<button class="sp-thumb" onclick="spBukaPratinjau_(\'' +
-      spEsc_(besar).replace(/'/g, "&#39;") + '\',\'' +
-      spEsc_(url).replace(/'/g, "&#39;") + '\')" ' +
+  return '<button class="sp-thumb" data-besar="' + spEsc_(besar) + '" data-url="' + spEsc_(url) +
+      '" onclick="spBukaPratinjau_(this.dataset.besar, this.dataset.url)" ' +
       'title="Lihat gambar layout" type="button">' +
     '<img alt="layout" loading="lazy" onerror="spThumbGagal_(this)" src="' + spEsc_(src) + '"/>' +
   '</button>';
@@ -4787,10 +4796,10 @@ function spRenderMarker_() {
             '<td class="sp-td-aksi" data-label="">' +
               (m.warisan
                 ? '<span class="sp-sub">kelola dari PO asalnya</span>'
-                : '<button class="sp-btn-kecil" onclick="spRevisiMarker(\'' + m.idMarker + '\')" ' +
-                  'type="button">Revisi</button> ' +
-                  '<button class="sp-btn-kecil" onclick="spBatalMarker(\'' + m.idMarker + '\')" ' +
-                  'type="button">Batal</button>') + '</td></tr>';
+                : '<button class="sp-btn-kecil" data-id="' + spEsc_(m.idMarker) +
+                  '" onclick="spRevisiMarker(this.dataset.id)" type="button">Revisi</button> ' +
+                  '<button class="sp-btn-kecil" data-id="' + spEsc_(m.idMarker) +
+                  '" onclick="spBatalMarker(this.dataset.id)" type="button">Batal</button>') + '</td></tr>';
         }).join("") +
       '</tbody></table></div>'
     : '<p class="sp-info">Belum ada marker untuk PO ini.</p>';
@@ -6179,7 +6188,8 @@ function spRenderSetLengkap_() {
           ') &#8212; periksa warna/marker gelaran atau catatan hasil potongnya.</p>'
         : '') +
       (totalBelum > 0
-        ? '<button class="sp-btn-kecil" onclick="spKeCutting(\'' + spEsc_(w.warna) + '\')" ' +
+        ? '<button class="sp-btn-kecil" data-warna="' + spEsc_(w.warna) +
+          '" onclick="spKeCutting(this.dataset.warna)" ' +
           'type="button">Catat ' + totalBelum + ' pcs sebagai Hasil Cutting</button>'
         : (sudah > 0
           ? '<p class="sp-info">Semua set lengkap sudah tercatat di Hasil Cutting.</p>'
@@ -6925,10 +6935,47 @@ function spSimpanSisaKain(btn) {
 }
 
 /** Escape HTML sederhana -- dipakai di seluruh render tab Marker & Gelaran. */
+/**
+ * v312 (AUDIT-PRODUKSI Sesi P7 PF-1): SATU titik invalidasi sesudah setiap penulisan.
+ * Aturan lama "snapshot tidak boleh tampil sesudah tulis" dipegang per form, jadi bocor lintas tab:
+ * orang finishing mengonfirmasi 60 pcs setoran lalu pindah ke tab QC dan masih membaca "tersedia 0",
+ * bahkan pra-cek FE MEMBLOKIR angka yang sebenarnya sudah sah di server. Yang dikosongkan sengaja
+ * hanya cache di memori -- pemuatnya menembak lagi saat tab dibuka.
+ * @param {string} apa - "setoran" | "konfirmasi" | "cutting" | "distribusi" | "keluar" | "qc" | "gelaran" | "marker"
+ */
+function qcSegarkanBilaBasi_() {
+  // v312 (P7 PF-1): dipanggil saat tab QC dibuka. Hanya menembak kalau cache-nya memang sudah dibuang
+  // (null), jadi berpindah tab bolak-balik tidak menambah permintaan.
+  try {
+    if (!window.QC_RINCIAN_PO) return;
+    if (window.QC_TERSEDIA === null && typeof qcMuatTersedia_ === "function") qcMuatTersedia_();
+    if (window.QC_DITAHAN === null && typeof qcMuatDitahan_ === "function") qcMuatDitahan_();
+  } catch (e) { /* pemuat punya penanganan sendiri */ }
+}
+
+function spSesudahTulis_(apa) {
+  const a = String(apa || "");
+  window.SP_PO = null;
+  window.SP_RANTAI = null;
+  window.SP_SETOR = null;
+  window.SP_KELUAR = null;
+  if (/setoran|konfirmasi|qc/.test(a)) {
+    window.QC_TERSEDIA = null;
+    window.QC_DITAHAN = null;
+    window.QC_RINGKASAN_DIMUAT = false;
+  }
+  if (/cutting|gelaran|qc|marker/.test(a)) window.SP_CUT = null;
+}
+
 function spEsc_(v) {
+  // v312 (AUDIT-PRODUKSI Sesi P7 PF-4): apostrof IKUT. Nilai ini masuk ke atribut HTML yang isinya
+  // string JavaScript (onclick="f('...')"); tanpa &#39; sebuah warna bernama "Navy 'Dark'" memutus
+  // string itu -- tombolnya mati diam-diam -- dan nama yang disusun jahat menjalankan kode di sesi
+  // siapa pun yang membuka tab itu. Enam pemakaian terakhir dipindah ke data-* di rilis yang sama,
+  // jadi ini lapis kedua, bukan satu-satunya.
   return String(v === null || v === undefined ? "" : v)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 /* ============================================================
@@ -8694,6 +8741,7 @@ function qcSubmitInspeksi() {
       el.classList.remove("hidden");
       qcResetForm_();
       QC_SETORAN_DIPILIH = "";
+      spSesudahTulis_("qc");   // v312 (P7 PF-1): SP_PO/SP_RANTAI/SP_CUT ikut basi sesudah sesi QC
       qcMuatTersedia_();   // v297: angka per setoran/warna segar untuk sesi berikutnya (snapshot tidak boleh tampil sesudah tulis)
       // v310 (AUDIT-QC Sesi QC-3 Q-7): keranjang ditahan & ringkasan juga BASI sesudah sesi ini.
       // Dulu hanya jalur penyelesaian yang memanggil qcMuatDitahan_, jadi checker yang mencatat
@@ -8932,9 +8980,14 @@ function spMuatApproval_() {
 function spRenderApproval_() {
   const panel = document.getElementById("sp-panel-approval");
   if (!panel) return;
+  // v312 (AUDIT-PRODUKSI Sesi P7 PF-6): menekan Kirim/Revisi/ACC merender ulang panel ini, dan dulu
+  // kotak catatan lahir kosong -- poin revisi yang sudah diketik panjang hilang, lalu "Revisi wajib
+  // catatan" menolak; orang akhirnya memilih ACC supaya tersimpan. Nilainya dibawa lewat render.
+  const catatanLama = (document.getElementById("aps-catatan") || {}).value || "";
   const jenisBtn = ["Kirim", "Revisi", "ACC"].map(function (j) {
     const aktif = j === APS_JENIS;
-    return '<button type="button" class="sp-btn-kecil" onclick="apsPilihJenis_(\'' + j + '\')" ' +
+    return '<button type="button" class="sp-btn-kecil" data-jenis="' + spEsc_(j) +
+      '" onclick="apsPilihJenis_(this.dataset.jenis)" ' +
       'style="flex:1;padding:12px 0;' + (aktif
         ? 'background:var(--navy);color:var(--cream);border-color:var(--navy);'
         : '') + '">' + j + '</button>';
@@ -8954,7 +9007,8 @@ function spRenderApproval_() {
     '<div class="sp-lbl">Jenis kejadian</div>' +
     '<div style="display:flex;gap:8px">' + jenisBtn + '</div>' +
     '<div class="sp-grid3" style="margin-top:12px"><label style="grid-column:1/-1">Catatan' +
-      '<input id="aps-catatan" placeholder="wajib diisi untuk Revisi &#8212; poin revisinya apa" type="text"/></label></div>' +
+      '<input id="aps-catatan" placeholder="wajib diisi untuk Revisi &#8212; poin revisinya apa" type="text" value="' +
+      rjdEscapeHtml_(catatanLama) + '"/></label></div>' +
     '<button class="sp-simpan-btn" id="aps-simpan" onclick="apsSimpan_()" style="width:100%;margin-top:14px" type="button">Simpan Kejadian</button>' +
     '</div>';
 
