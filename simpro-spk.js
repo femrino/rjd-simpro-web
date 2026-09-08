@@ -1973,56 +1973,43 @@ function spSimpanCutting() {
   if (!barisKirim.length) { alert("Belum ada qty yang diisi."); return; }
 
   const btn = document.getElementById("sp-cut-simpan-btn");
-  btn.disabled = true;
-  btn.textContent = "Menyimpan...";
-
-  fetch(SP_API_URL, {
-    method: "POST",
-    body: JSON.stringify({
-      idToken: SP_ID_TOKEN, action: "simpanHasilCutting",
-      payload: {
-        idPurchaseOrder: po.idPurchaseOrder,
-        tanggalPotong: (document.getElementById("sp-cut-tanggal") || {}).value || "",
-        dipotongOleh: (document.getElementById("sp-cut-oleh") || {}).value || "",
-        lokasi: (document.getElementById("sp-cut-lokasi") || {}).value || "",
-        kainDipakai: (document.getElementById("sp-cut-kain") || {}).value || "",
-        satuanKain: (document.getElementById("sp-cut-satuan") || {}).value || "meter",
-        catatan: (document.getElementById("sp-cut-catatan") || {}).value || "",
-        // v183: jejak re-cut ikut hanya kalau sesi ini memang lahir dari
-        // tombol "Buat re-cut" -- potong biasa tidak membawa apa-apa.
-        recutDariQC: (window.SP_RECUT_PENDING && window.SP_RECUT_PENDING.idQC) || "",
-        baris: barisKirim
-      }
-    })
-  })
-  .then(function (r) { return r.json(); })
-  .then(function (h) {
-    btn.disabled = false;
-    btn.textContent = "Simpan Hasil Potong";
-    if (!h || !h.success) {
-      alert((h && h.error) || "Gagal menyimpan hasil potong.");
-      return;
+  const totalKirim = barisKirim.reduce(function (a, b) { return a + Object.keys(b.sizeQty).reduce(function (x, k) { return x + b.sizeQty[k]; }, 0); }, 0);
+  const sebelum = Number(po.totalPotong) || 0;   // v304 (PL-6): pembanding periksa()
+  spKirim_("simpanHasilCutting", {
+    idPurchaseOrder: po.idPurchaseOrder,
+    tanggalPotong: (document.getElementById("sp-cut-tanggal") || {}).value || "",
+    dipotongOleh: (document.getElementById("sp-cut-oleh") || {}).value || "",
+    lokasi: (document.getElementById("sp-cut-lokasi") || {}).value || "",
+    kainDipakai: (document.getElementById("sp-cut-kain") || {}).value || "",
+    satuanKain: (document.getElementById("sp-cut-satuan") || {}).value || "meter",
+    catatan: (document.getElementById("sp-cut-catatan") || {}).value || "",
+    // v183: jejak re-cut ikut hanya kalau sesi ini memang lahir dari
+    // tombol "Buat re-cut" -- potong biasa tidak membawa apa-apa.
+    recutDariQC: (window.SP_RECUT_PENDING && window.SP_RECUT_PENDING.idQC) || "",
+    baris: barisKirim
+  }, {
+    btn: btn,
+    periksa: function () {
+      return spPeriksaNaik_("getPOUntukCutting", { idPurchaseOrder: po.idPurchaseOrder },
+        function (d) { return d.totalPotong; }, sebelum, totalKirim);
+    },
+    sukses: function (h) {
+      const kotak = document.getElementById("sp-cut-sukses");
+      kotak.innerHTML = h
+        ? '<div class="sp-sukses-isi"><b>' + h.totalQty + ' pcs</b> tersimpan (' + h.jumlahBaris + ' baris warna). Total potong PO ini sekarang <b>' + h.totalPotongKumulatif + ' pcs</b>.</div>'
+        : '<div class="sp-sukses-isi"><b>' + totalKirim + ' pcs</b> sudah tersimpan (jawaban server hilang di jalan, diperiksa ulang).</div>';
+      kotak.classList.remove("hidden");
+      // KEDUANYA dikosongkan: catatan potong baru mengubah "sisa yang boleh
+      // dibagi" di tab sebelah. Kalau tidak direset, tab Loading masih
+      // memakai angka lama dan pembagian berikutnya dihitung dari dasar salah.
+      window.SP_CUT = null;
+      window.SP_PO = null;
+      // v183: satu jejak untuk satu penyimpanan. Kalau pending tidak dihapus,
+      // potongan biasa berikutnya ikut tercap re-cut QC yang sama.
+      window.SP_RECUT_PENDING = null;
+      spTerapkanRecutPending_();
+      spMuatCutting();
     }
-    const kotak = document.getElementById("sp-cut-sukses");
-    kotak.innerHTML = '<div class="sp-sukses-isi"><b>' + h.totalQty +
-      ' pcs</b> tersimpan (' + h.jumlahBaris + ' baris warna). Total potong PO ini sekarang <b>' +
-      h.totalPotongKumulatif + ' pcs</b>.</div>';
-    kotak.classList.remove("hidden");
-    // KEDUANYA dikosongkan: catatan potong baru mengubah "sisa yang boleh
-    // dibagi" di tab sebelah. Kalau tidak direset, tab Loading masih
-    // memakai angka lama dan pembagian berikutnya dihitung dari dasar salah.
-    window.SP_CUT = null;
-    window.SP_PO = null;
-    // v183: satu jejak untuk satu penyimpanan. Kalau pending tidak dihapus,
-    // potongan biasa berikutnya ikut tercap re-cut QC yang sama.
-    window.SP_RECUT_PENDING = null;
-    spTerapkanRecutPending_();
-    spMuatCutting();
-  })
-  .catch(function () {
-    btn.disabled = false;
-    btn.textContent = "Simpan Hasil Potong";
-    alert("Gagal menghubungi server.");
   });
 }
 
@@ -3728,6 +3715,14 @@ function spKirimKonfirmasi_(payload) {
   // Bentuk payload berbeda antara dua rute: distribusi memakai
   // {idDistribusi, cocok}, setoran memakai {idSetoran, sesuai}. Diterjemahkan
   // di sini supaya sisa kode UI tidak perlu tahu bedanya.
+  // v304 (PL-6): klik ganda "Terima sesuai" dulu mengirim dua permintaan (server menolak yang kedua
+  // dengan "sudah berstatus", dan operator mengira ada yang salah). Semua tombol kartu dimatikan
+  // sampai jawaban tiba.
+  if (window.SP_KONF_SIBUK) return;
+  window.SP_KONF_SIBUK = true;
+  const tombolKonf = Array.from(document.querySelectorAll("#sp-konf-daftar .sp-konf-btn"));
+  tombolKonf.forEach(function (b) { b.disabled = true; });
+  const lepasSibuk_ = function () { window.SP_KONF_SIBUK = false; tombolKonf.forEach(function (b) { b.disabled = false; }); };
   const badan = setoran
     ? {
         idToken: SP_ID_TOKEN, action: "konfirmasiTerimaSetoran",
@@ -3752,6 +3747,7 @@ function spKirimKonfirmasi_(payload) {
   })
   .then(function (r) { return r.json(); })
   .then(function (h) {
+    lepasSibuk_();
     if (!h || !h.success) {
       alert((h && h.error) || "Gagal menyimpan konfirmasi.");
       return;
@@ -3762,7 +3758,7 @@ function spKirimKonfirmasi_(payload) {
     if (window.SP_KONF_PILIH) delete window.SP_KONF_PILIH[payload.idDistribusi];   // v198
     spMuatKonfirmasi();
   })
-  .catch(function () { alert("Gagal menghubungi server."); });
+  .catch(function () { lepasSibuk_(); alert("Gagal menghubungi server."); });
 }
 
 /* ============================================================
@@ -4450,41 +4446,38 @@ function spSimpanSetoran() {
   if (!barisKirim.length) { alert("Belum ada qty yang diisi."); return; }
 
   const btn = document.getElementById("sp-setor-simpan-btn");
-  btn.disabled = true;
-  btn.textContent = "Menyimpan...";
-
-  fetch(SP_API_URL, {
-    method: "POST",
-    body: JSON.stringify({
-      idToken: SP_ID_TOKEN, action: "simpanSetoranHasil",
-      payload: {
-        idPurchaseOrder: po.idPurchaseOrder,
-        idLine: po.idLine,
-        jenisSetoran: spJenisSetoranKembali_() ? "Dikembalikan" : "Jadi Baju",
-        tanggalSetor: (document.getElementById("sp-setor-tanggal") || {}).value || "",
-        disetorkanOleh: (document.getElementById("sp-setor-dari") || {}).value || "",
-        diterimaOleh: (document.getElementById("sp-setor-penerima") || {}).value || "",
-        catatan: (document.getElementById("sp-setor-catatan") || {}).value || "",
-        baris: barisKirim
+  const kembali = spJenisSetoranKembali_();
+  const totalKirim = barisKirim.reduce(function (a, b) { return a + Object.keys(b.sizeQty).reduce(function (x, k) { return x + b.sizeQty[k]; }, 0); }, 0);
+  // v304 (PL-6): kumulatif sebelum kirim -- pembanding periksa() kalau jawaban hilang di jalan
+  const sebelum = kembali ? (Number(po.totalDikembalikan) || 0) : (Number(po.totalSudahSetor) || 0);
+  spKirim_("simpanSetoranHasil", {
+    idPurchaseOrder: po.idPurchaseOrder,
+    idLine: po.idLine,
+    jenisSetoran: kembali ? "Dikembalikan" : "Jadi Baju",
+    tanggalSetor: (document.getElementById("sp-setor-tanggal") || {}).value || "",
+    disetorkanOleh: (document.getElementById("sp-setor-dari") || {}).value || "",
+    diterimaOleh: (document.getElementById("sp-setor-penerima") || {}).value || "",
+    catatan: (document.getElementById("sp-setor-catatan") || {}).value || "",
+    baris: barisKirim
+  }, {
+    btn: btn,
+    periksa: function () {
+      return spPeriksaNaik_("getLineUntukSetoran", { idPurchaseOrder: po.idPurchaseOrder, idLine: po.idLine },
+        function (d) { return kembali ? d.totalDikembalikan : d.totalSudahSetor; }, sebelum, totalKirim);
+    },
+    sukses: function (h) {
+      const kotak = document.getElementById("sp-setor-sukses");
+      if (h) {
+        kotak.innerHTML = '<div class="sp-sukses-isi"><b>' + h.totalQty +
+          ' pcs</b> disetor oleh <b>' + rjdEscapeHtml_(h.namaLine) + '</b>. ' +
+          'Sisa di tangan line: <b>' + h.sisaDiTangan + ' pcs</b>.' +
+          (h.kembar ? ' <i>(sudah tersimpan sebelumnya -- tidak dicatat dua kali)</i>' : '') + '</div>';
+      } else {
+        kotak.innerHTML = '<div class="sp-sukses-isi"><b>' + totalKirim + ' pcs</b> sudah tersimpan (jawaban server hilang di jalan, diperiksa ulang).</div>';
       }
-    })
-  })
-  .then(function (r) { return r.json(); })
-  .then(function (h) {
-    btn.disabled = false;
-    btn.textContent = "Simpan Setoran";
-    if (!h || !h.success) { alert((h && h.error) || "Gagal menyimpan setoran."); return; }
-    const kotak = document.getElementById("sp-setor-sukses");
-    kotak.innerHTML = '<div class="sp-sukses-isi"><b>' + h.totalQty +
-      ' pcs</b> disetor oleh <b>' + rjdEscapeHtml_(h.namaLine) + '</b>. ' +
-      'Sisa di tangan line: <b>' + h.sisaDiTangan + ' pcs</b>.</div>';
-    kotak.classList.remove("hidden");
-    spMuatSetoran();
-  })
-  .catch(function () {
-    btn.disabled = false;
-    btn.textContent = "Simpan Setoran";
-    alert("Gagal menghubungi server.");
+      kotak.classList.remove("hidden");
+      spMuatSetoran();
+    }
   });
 }
 
@@ -6098,18 +6091,22 @@ function spRenderDaftarGelaran_() {
 function spBatalGelaran(idGelaran) {
   // Konfirmasi menyebut akibatnya, bukan cuma "yakin?" — membatalkan gelaran
   // mengubah set lengkap dan rekap kain sekaligus.
-  if (!confirm("Batalkan gelaran " + idGelaran + "?\n\n" +
-      "Barisnya TIDAK dihapus, cuma ditandai batal. Set lengkap dan rekap kain " +
-      "ikut menyesuaikan.")) return;
+  // v304 (PL-4): alasan wajib -- server (gs >= @337) menolak tanpa alasan dan mencatat siapa/kapan.
+  const alasan = prompt("Batalkan gelaran " + idGelaran + "?\n\n" +
+    "Barisnya TIDAK dihapus, cuma ditandai batal. Set lengkap dan rekap kain ikut menyesuaikan.\n\n" +
+    "Tulis alasannya (wajib):");
+  if (alasan === null) return;
+  if (!String(alasan).trim()) { alert("Alasan pembatalan wajib diisi."); return; }
 
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "batalkanGelaran",
-      payload: { idGelaran: idGelaran } })
+      payload: { idGelaran: idGelaran, alasan: String(alasan).trim() } })
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal membatalkan.");
+    if (d.peringatan) alert(d.peringatan);
     spMuatGelaran();
   })
   .catch(function (e) { alert(e.message || e); });
@@ -6723,6 +6720,66 @@ function spSimpanRoll(btn) {
  *
  * Dipakai: const pulih = spTombolSibuk_(btn, "Menyimpan...");  ... pulih();
  */
+/* ============================================================
+ * v304 (8 Sep 2026, AUDIT-PRODUKSI PL-6) -- SATU PEMBUNGKUS KIRIM UNTUK RUTE TULIS
+ * ============================================================
+ * Masalah lama di 12 jalur simpan: sesudah "Failed to fetch" tombol dinyalakan lagi dengan
+ * isian tetap di layar, padahal Google kadang menjawab 200 tanpa header CORS SESUDAH server
+ * menulis (simpro-global.js v219). Klik kedua = baris kedua. Pembungkus ini:
+ *   1. membaca jawaban sebagai teks lalu JSON.parse -- jawaban HTML (login habis) jadi pesan
+ *      yang terbaca, bukan "Unexpected token <";
+ *   2. pada TypeError (jaringan/CORS) memanggil opsi.periksa() -> Promise<bool> "sudah masuk?"
+ *      SEBELUM tombol dinyalakan: kalau sudah, beri tahu dan lanjutkan seperti sukses; kalau
+ *      belum, baru tawarkan simpan lagi; kalau pemeriksaan gagal, larang simpan lagi.
+ * Pengaman sejati tetap di server (anti-kembar @335-@337); ini jaring kedua di layar.
+ * opsi = { btn, sukses(res|null), periksa(): Promise<bool>, teksSibuk }
+ */
+function spKirim_(action, payload, opsi) {
+  opsi = opsi || {};
+  const pulih = spTombolSibuk_(opsi.btn, opsi.teksSibuk || "Menyimpan...");
+  return fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: action, payload: payload }) })
+    .then(function (r) { return r.text(); })
+    .then(function (teks) {
+      let res;
+      try { res = JSON.parse(teks); }
+      catch (e) {
+        throw new Error("Jawaban server bukan data (" + String(teks || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 60) + "). Login ulang atau coba lagi.");
+      }
+      pulih();
+      if (!res || !res.success) { alert((res && res.error) || "Ditolak server."); return null; }
+      return opsi.sukses ? opsi.sukses(res) : res;
+    })
+    .catch(function (e) {
+      if (!(e instanceof TypeError) || typeof opsi.periksa !== "function") {
+        pulih(); alert((e && e.message) || "Gagal menghubungi server."); return null;
+      }
+      if (opsi.btn) opsi.btn.textContent = "Jawaban tidak sampai, memeriksa...";
+      return opsi.periksa().then(function (sudah) {
+        pulih();
+        if (sudah) {
+          alert("Jawaban server hilang di jalan, tapi datanya SUDAH TERSIMPAN. Tidak perlu simpan lagi.");
+          return opsi.sukses ? opsi.sukses(null) : null;
+        }
+        alert("Tidak sampai ke server. Angka masih di layar -- coba simpan lagi.");
+        return null;
+      }, function () {
+        pulih();
+        alert("Jawaban tidak sampai dan pemeriksaan gagal. JANGAN simpan lagi sebelum melihat daftar yang sudah tercatat.");
+        return null;
+      });
+    });
+}
+/** v304: bandingkan angka kumulatif sebelum/sesudah lewat rute baca -- "sudah masuk?" untuk periksa(). */
+function spPeriksaNaik_(action, badan, ambil, sebelum, tambah) {
+  return fetch(SP_API_URL, { method: "POST", body: JSON.stringify(Object.assign({ idToken: SP_ID_TOKEN, action: action }, badan)) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || !d.success) throw new Error((d && d.error) || "gagal");
+      const sesudah = Number(ambil(d)) || 0;
+      return sesudah >= (Number(sebelum) || 0) + (Number(tambah) || 0);
+    });
+}
+
 function spTombolSibuk_(el, teks) {
   if (!el || el.tagName !== "BUTTON") return function () {};
   const teksAsli = el.textContent;
