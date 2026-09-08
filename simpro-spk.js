@@ -6170,6 +6170,14 @@ function spRenderSetLengkap_() {
         ? '<p class="sp-info">' + w.totalTertahan + ' potongan menunggu pasangan kain lain. ' +
           'Belum bisa dihitung sebagai baju sampai semua komponennya lengkap.</p>'
         : '') +
+      // v306 (AUDIT-PRODUKSI PK-6, gs >= @340): Hasil Cutting yang MELEBIHI set lengkap gelaran dulu
+      // dibungkam Math.max(0, ...) di server -> "semua sudah dicatat" padahal pool distribusi memuat
+      // pcs yang kainnya tidak pernah digelar. Kini dilaporkan per size, tidak diblokir.
+      (w.totalLebihDariGelaran > 0
+        ? '<p class="sp-info sp-set-lebih">Hasil Cutting mencatat <b>' + w.totalLebihDariGelaran + ' pcs LEBIH</b> dari yang digelar (' +
+          Object.keys(w.lebihDariGelaran || {}).map(function (sz) { return spEsc_(sz) + ' ' + w.lebihDariGelaran[sz]; }).join(', ') +
+          ') &#8212; periksa warna/marker gelaran atau catatan hasil potongnya.</p>'
+        : '') +
       (totalBelum > 0
         ? '<button class="sp-btn-kecil" onclick="spKeCutting(\'' + spEsc_(w.warna) + '\')" ' +
           'type="button">Catat ' + totalBelum + ' pcs sebagai Hasil Cutting</button>'
@@ -6321,7 +6329,7 @@ function spRenderRekapKain_() {
         ' kombinasi lain</a> yang belum dipakai.</p>'
       : '') +
     '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
-      '<th>Kain</th><th>Warna</th><th>Diterima</th><th>Terpakai</th><th>Re-cut</th>' +
+      '<th>Kain</th><th>Warna</th><th>Diterima</th><th>Terpakai</th><th>Re-cut</th><th>Panel klien</th>' +
       '<th>Sisa hitung</th><th>Sisa ukur</th><th>Selisih</th></tr></thead><tbody>' +
       dipakai.map(function (k) {
         const kelas = k.tanda ? ("sp-kain-" + k.tanda) : "";
@@ -6351,6 +6359,11 @@ function spRenderRekapKain_() {
           '<td data-label="Terpakai">' + k.terpakai + '</td>' +
           '<td data-label="Re-cut">' + (k.terpakaiRecut
             ? (k.terpakaiRecut + ' m' + (k.qtyRecut ? ' <small>(' + k.qtyRecut + ' pcs)</small>' : ''))
+            : '&#8212;') + '</td>' +
+          // v306 (PK-2, gs >= @340): kain yang dibawa klien sebagai panel -- dulu tidak ada di neraca,
+          // tampil sebagai "selisih -6,5 m PERHATIKAN" tanpa penjelasan.
+          '<td data-label="Panel klien">' + (k.terpakaiPanelKlien
+            ? (k.terpakaiPanelKlien + ' m' + (k.qtyPanelKlien ? ' <small>(' + k.qtyPanelKlien + ' pcs)</small>' : ''))
             : '&#8212;') + '</td>' +
           '<td data-label="Sisa hitung">' + k.sisaHitung + '</td>' +
           // v207: kotak ukur manual HANYA untuk kain yang rollnya belum
@@ -6393,6 +6406,7 @@ function spRenderRekapKain_() {
               '<td data-label="Diterima">' + pk.diterima + ' m</td>' +
               '<td data-label="Terpakai">' + pk.terpakai + '</td>' +
               '<td data-label="Re-cut"></td>' +
+              '<td data-label="Panel klien"></td>' +
               '<td data-label="Sisa hitung">' + pk.sisaHitung + '</td>' +
               '<td data-label="Sisa ukur"></td><td data-label="Selisih"></td></tr>';
           }).join("");

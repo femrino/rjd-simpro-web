@@ -593,7 +593,10 @@ function ckRenderLaporanCutting(d){
       r.selisihPotong < 0 ? 'kurang' : '') +
     kartu("Kain diterima", ckAngka_(r.totalDiterima) + ' <small>m</small>', (r.jumlahGelaran || 0) + ' gelaran') +
     kartu("Kain terpakai", ckAngka_(r.totalTerpakai) + ' <small>m</small>',
-      r.meterPerPcs === null ? '' : ('rata-rata ' + ckAngka_(r.meterPerPcs, 3) + ' m/pcs')) +
+      (r.meterPerPcs === null ? '' : ('rata-rata ' + ckAngka_(r.meterPerPcs, 3) + ' m/pcs')) +
+      // v306 (PK-5, gs >= @340): total termasuk re-cut & panel klien, supaya diterima - terpakai = sisa hitung tanpa "lubang"
+      (r.totalTerpakaiSemua && r.totalTerpakaiSemua !== r.totalTerpakai
+        ? (r.meterPerPcs === null ? '' : ' &#183; ') + ckAngka_(r.totalTerpakaiSemua) + ' m termasuk re-cut & panel klien' : '')) +
     kartu("Sisa hitung", ckAngka_(r.totalSisaHitung) + ' <small>m</small>',
       r.totalSisaUkur === null ? 'belum diukur' : ('terukur ' + ckAngka_(r.totalSisaUkur) + ' m')) +
     '</div>';
@@ -635,7 +638,7 @@ function ckRenderLaporanCutting(d){
           return '<tr class="ck-lc-kode"><td></td><td>' + (pk.kode ? '<span class="ck-lc-tag">' + rjdEscapeHtml_(pk.kode) + '</span>' : '<i>tanpa kode</i>') +
             (pk.jumlahRoll ? ' <small>' + pk.jumlahRoll + ' roll</small>' : '') + '</td>' +
             '<td class="num">' + ckAngka_(pk.diterima) + '</td><td class="num">' + ckAngka_(pk.terpakai) + '</td>' +
-            '<td></td><td class="num">' + ckAngka_(pk.sisaHitung) + '</td><td></td><td></td><td></td></tr>';
+            '<td></td><td></td><td class="num">' + ckAngka_(pk.sisaHitung) + '</td><td></td><td></td><td></td></tr>';
         }).join("")
       : '';
     const satuKode = (k.perKode || []).length === 1 && k.perKode[0].kode ? k.perKode[0].kode : '';
@@ -647,6 +650,8 @@ function ckRenderLaporanCutting(d){
         (k.jumlahRoll ? '<div class="ck-lc-kecil">' + k.jumlahRoll + ' roll</div>' : '') + '</td>' +
       '<td class="num">' + ckAngka_(k.terpakai) + (k.hanyaPerkiraan ? '<div class="ck-lc-kecil">perkiraan</div>' : '') + '</td>' +
       '<td class="num">' + (k.terpakaiRecut ? ckAngka_(k.terpakaiRecut) + '<div class="ck-lc-kecil">' + k.qtyRecut + ' pcs</div>' : '&#8212;') + '</td>' +
+      // v306 (PK-2, gs >= @340): panel klien = kain tanpa baju yang dibawa klien; kolom sendiri, bukan disatukan ke re-cut
+      '<td class="num">' + (k.terpakaiPanelKlien ? ckAngka_(k.terpakaiPanelKlien) + '<div class="ck-lc-kecil">' + k.qtyPanelKlien + ' pcs</div>' : '&#8212;') + '</td>' +
       '<td class="num">' + ckAngka_(k.sisaHitung) + '</td>' +
       '<td class="num">' + (k.sisaTerukur === null || k.sisaTerukur === undefined ? '&#8212;'
         : ckAngka_(k.sisaTerukur) + (k.sisaDariRoll ? '<div class="ck-lc-kecil">' + (k.rollLengkap ? k.rollDiukur + ' roll' : k.rollDiukur + '/' + k.jumlahRoll + ' roll, belum lengkap') + '</div>' : '')) + '</td>' +
@@ -658,10 +663,10 @@ function ckRenderLaporanCutting(d){
   const konsumsi = '<div class="ck-lc-blok"><h2>2. Konsumsi kain</h2>' +
     (kainRows
       ? '<div class="ck-lc-wrap"><table class="ck-dok-tabel ck-lc-tabel"><thead><tr>' +
-        '<th>Kain</th><th>Warna</th><th class="num">Diterima (m)</th><th class="num">Terpakai (m)</th><th class="num">Re-cut (m)</th>' +
+        '<th>Kain</th><th>Warna</th><th class="num">Diterima (m)</th><th class="num">Terpakai (m)</th><th class="num">Re-cut (m)</th><th class="num">Panel klien (m)</th>' +
         '<th class="num">Sisa hitung</th><th class="num">Sisa ukur</th><th class="num">Selisih</th><th class="num">m/pcs</th></tr></thead>' +
         '<tbody>' + kainRows + '</tbody></table></div>' +
-        '<p class="ck-lc-catatan">Sisa hitung = diterima &#8722; terpakai. Selisih = sisa ukur &#8722; sisa hitung' +
+        '<p class="ck-lc-catatan">Sisa hitung = diterima &#8722; terpakai &#8722; re-cut &#8722; panel klien. Selisih = sisa ukur &#8722; sisa hitung' +
           (r.ambang && r.ambang.wajar ? '; wajar sampai ' + r.ambang.wajar + '%, di atas ' + r.ambang.periksa + '% perlu diperiksa' : '') +
           '. m/pcs = kain gelaran normal &#247; pcs set lengkap warna itu (re-cut tidak dihitung).</p>'
       : '<p class="ck-lc-kosong">Belum ada data kain.</p>') + '</div>';
