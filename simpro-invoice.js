@@ -235,6 +235,11 @@ function ivRender(){
   document.getElementById("iv-ringkas").innerHTML =
     '<div class="iv-kartu iv-kartu-utama"><div class="iv-kartu-angka">' + ivFormatRupiah_(r.totalPiutang || 0) + '</div>' +
       '<div class="iv-kartu-label">total piutang &#183; ' + (r.jumlahBelumLunas || 0) + ' invoice</div></div>' +
+    // v309 (K5 KT-2 web): kelebihan bayar dijumlahkan server TERPISAH dari piutang; kartu hanya tampil kalau ada.
+    ((r.totalKelebihanBayar || 0) > 0
+      ? '<div class="iv-kartu iv-kartu-lebih" title="Dibayar melebihi nilai transfer -- kewajiban RJD ke klien"><div class="iv-kartu-angka">' + ivFormatRupiah_(r.totalKelebihanBayar) + '</div>' +
+        '<div class="iv-kartu-label">kelebihan bayar &#183; ' + (r.jumlahKelebihanBayar || 0) + ' invoice</div></div>'
+      : '') +
     ["0-30", "31-60", "61-90", "90+"].map(function(b){
       const bahaya = (b === "61-90" || b === "90+") && bucket[b] > 0;
       // data-bucket, bukan interpolasi ke atribut onclick -- lihat catatan di
@@ -302,10 +307,20 @@ function ivRender(){
         '<td class="iv-sub">' + rjdEscapeHtml_(p.idPurchaseOrder || "-") + '</td>' +
         '<td class="num">' + ivFormatRupiah_(p.total) + '</td>' +
         '<td class="num">' + ivFormatRupiah_(p.dibayar) + '</td>' +
-        '<td class="num ' + (p.sisa > 0 ? "kurang" : "") + '">' + (p.sisa > 0 ? ivFormatRupiah_(p.sisa) : "-") + '</td>' +
+        // v309 (AUDIT-KEUANGAN K5 KT-2 web, gs >= @343): kelebihan bayar = kewajiban RJD ke klien, TERPISAH dari
+        // piutang. Dulu tampil "-" persis seperti invoice yang pas lunas.
+        '<td class="num ' + (p.sisa > 0 ? "kurang" : (p.kelebihanBayar > 0 ? "iv-lebih" : "")) + '">' +
+          (p.sisa > 0 ? ivFormatRupiah_(p.sisa)
+            : (p.kelebihanBayar > 0 ? '<span class="iv-lebih-ket" title="Dibayar melebihi nilai transfer -- kewajiban RJD ke klien">lebih ' + ivFormatRupiah_(p.kelebihanBayar) + '</span>' : "-")) + '</td>' +
         '<td class="iv-tgl">' + rjdEscapeHtml_(p.tanggalInvoice || "-") + '</td>' +
         '<td class="iv-tgl">' + (p.lunas ? '-' : (p.umurHari + ' hari')) + '</td>' +
-        '<td><span class="iv-status ' + kelas + '">' + rjdEscapeHtml_(p.status) + '</span></td>' +
+        '<td><span class="iv-status ' + kelas + '">' + rjdEscapeHtml_(p.status) + '</span>' +
+          // v309 (K5 KT-1 web): `lunas`/warna dari ANGKA pelunasan, teks dari sheet. Kalau keduanya bertentangan
+          // (sheet "Lunas" tapi angka belum, atau sebaliknya) itu status turunan yang basi -- sebut, jangan sembunyikan.
+          (!p.batal && p.statusTurunan && ((p.lunas && p.statusTurunan !== "Lunas") || (!p.lunas && p.statusTurunan === "Lunas"))
+            ? '<div class="iv-sub iv-status-beda" title="Status di sheet tidak sama dengan hitungan dari SD Pelunasan">angka: ' + (p.lunas ? "lunas" : "belum lunas") + '</div>'
+            : '') +
+        '</td>' +
       '</tr>';
     }).join("") +
     '</tbody></table></div>';
@@ -1035,8 +1050,12 @@ function ivSimpanInvoice() {
         : (h.pengganti && h.pengganti.galat ? " \u00B7 PENGGANTI GAGAL DITAUTKAN: " + h.pengganti.galat : "")) +
       // v307 (KI-1, gs >= @344): pemindahan yang MELEBIHI nilai invoice baru tidak ditolak server, tapi
       // wajib terbaca di sini -- kelebihannya kewajiban RJD ke klien.
-      (h.pengganti && (h.pengganti.peringatan || []).length ? " \u00B7 PERHATIAN: " + h.pengganti.peringatan.join(" ") : "");
+      (h.pengganti && (h.pengganti.peringatan || []).length ? " \u00B7 PERHATIAN: " + h.pengganti.peringatan.join(" ") : "") +
+      // v309 (AUDIT-KEUANGAN K9 KH-1, gs >= @345): DPP & tarif PPh diputuskan SERVER dari profil klien. Kalau ia
+      // mengganti angka halaman atau tarifnya tak cocok profil, itu bukan galat -- tapi wajib terbaca di sini.
+      ((h.peringatan || []).length ? " \u00B7 PPh: " + h.peringatan.join(" ") : "");
     if (h.pengganti && (h.pengganti.peringatan || []).length) alert("PERHATIAN pengganti " + h.idInvoice + ":\n" + h.pengganti.peringatan.join("\n"));
+    if ((h.peringatan || []).length) alert("PERHATIAN PPh " + h.idInvoice + ":\n" + h.peringatan.join("\n"));
     // Daftar pengiriman & daftar invoice dua-duanya berubah setelah ini --
     // dikosongkan supaya dimuat ulang dari server, bukan menampilkan yang basi.
     window.IV_PENGIRIMAN = null;
