@@ -352,15 +352,24 @@ function ksRekonSimpan() {
   const isi = inputs.filter(function (i) { const v = String(i.value).trim(); return v !== "" && String(Number(v.replace(/[^0-9-]/g, "")) || 0) !== String(i.getAttribute("data-awal") || ""); });
   if (!isi.length) { window.alert("Tidak ada saldo baru/berubah untuk disimpan."); return; }
   const pesan = document.getElementById("ks-rekon-pesan"); pesan.classList.remove("hidden"); pesan.textContent = "Menyimpan...";
+  ksTombolRekon_(true);   // v308 (KF-6): klik ganda = baris rekonsiliasi kembar
   let rantai = Promise.resolve();
   isi.forEach(function (i) {
     rantai = rantai.then(function () { return ksKirim_("rekonsiliasiKas", { data: { bulan: KS_BULAN, akun: i.getAttribute("data-akun"), saldoBank: Number(String(i.value).replace(/[^0-9-]/g, "")) || 0 } }); });
   });
-  rantai.then(function () { ksMuat(KS_BULAN); }).catch(function (e) { pesan.textContent = e.message; pesan.classList.add("ks-form-galat"); });
+  rantai.then(function () { ksMuat(KS_BULAN); }).catch(function (e) { pesan.textContent = e.message; pesan.classList.add("ks-form-galat"); ksTombolRekon_(false); });
+}
+/** v308 (KF-6): matikan/hidupkan tombol rekonsiliasi & tutup bulan selama permintaan berjalan. */
+function ksTombolRekon_(sibuk) {
+  Array.prototype.forEach.call(document.querySelectorAll("#ks-rekon button"), function (b) {
+    if (sibuk) { b.dataset.sebelumSibuk = b.disabled ? "1" : "0"; b.disabled = true; }
+    else if (b.dataset.sebelumSibuk !== undefined) { b.disabled = b.dataset.sebelumSibuk === "1"; delete b.dataset.sebelumSibuk; }   // tombol Tutup yang memang mati tetap mati
+  });
 }
 function ksTutupBulan() {
   if (!window.confirm("Tutup " + ksNamaBulan(KS_BULAN) + "? Setelah ditutup, transaksi bertanggal di bulan ini tidak bisa ditambah; koreksi dicatat di bulan berjalan.")) return;
-  ksKirim_("tutupBulanKas", { bulan: KS_BULAN }).then(function () { ksMuat(KS_BULAN); }).catch(function (e) { window.alert(e.message); });
+  ksTombolRekon_(true);   // v308 (KF-6)
+  ksKirim_("tutupBulanKas", { bulan: KS_BULAN }).then(function () { ksMuat(KS_BULAN); }).catch(function (e) { window.alert(e.message); ksTombolRekon_(false); });
 }
 
 function ksRenderPeringatan_() {

@@ -59,6 +59,7 @@ function ivHandleGoogleLogin(response){
 function ivLogout(){
   IV_ID_TOKEN = null;
   try{ localStorage.removeItem("db_session"); }catch(e){}
+  if(typeof rjdSnapshotBersihkan_ === "function") rjdSnapshotBersihkan_(0);   // v308 (KF-6): snapshot piutang tidak bertahan sesudah logout
   if(typeof google !== "undefined" && google.accounts) google.accounts.id.disableAutoSelect();
   ["iv-nav-logout", "iv-nav-refresh"].forEach(function(id){
     const el = document.getElementById(id);
@@ -68,13 +69,19 @@ function ivLogout(){
 }
 
 function ivMulai(){
-  ivShow("iv-loading");
-  ["iv-nav-logout", "iv-nav-refresh"].forEach(function(id){
-    const el = document.getElementById(id);
-    if(el) el.classList.remove("hidden");
-  });
-  window.IV_DAFTAR = null;
-  ivMuat();
+  // v308 (AUDIT-KEUANGAN K8 KF-5): satpam halaman dipanggil seperti 11 halaman lain -- tanpa ini menu tidak
+  // pernah dipasang pada login pertama (rjdTerapkanPeranKeMenu menunggu satpam yang tidak datang) dan
+  // staf produksi melihat pesan penolakan mentah, bukan layar "Akses ditolak".
+  const jalan = function(){
+    ivShow("iv-loading");
+    ["iv-nav-logout", "iv-nav-refresh"].forEach(function(id){
+      const el = document.getElementById(id);
+      if(el) el.classList.remove("hidden");
+    });
+    window.IV_DAFTAR = null;
+    ivMuat();
+  };
+  if(typeof rjdJagaHalaman === "function") rjdJagaHalaman(IV_ID_TOKEN, IV_API_URL, jalan); else jalan();
 }
 
 /* v228 -- SNAPSHOT LOKAL (Tipe B)
@@ -86,6 +93,11 @@ function ivMulai(){
    snapshot berarti memperlihatkan keadaan SEBELUM perubahan yang baru saja
    dibuat orang. Itu bukan lambat, itu salah. */
 var IV_SUDAH_SEGAR = false;
+/* v308 (AUDIT-KEUANGAN K8 KF-2): jaring kedua -- sekali halaman pernah menerima data segar, snapshot
+   TIDAK PERNAH boleh tampil lagi di sesi ini, apa pun yang terjadi pada IV_SUDAH_SEGAR. Dulu tiga jalur
+   (ubah, batal, bukti potong) mematikan bendera itu dan invoice yang baru dibatalkan muncul kembali
+   sebagai aktif dari localStorage. */
+var IV_PERNAH_SEGAR = false;
 /* v305 (8 Sep 2026, AUDIT-KEUANGAN K2 KP-2) -- KUNCI IDEMPOTEN per pengisian form pembayaran (gs >= @338).
  * Dibuat saat Simpan pertama ditekan, dikirim di payload (kunciKirim), dan BARU diganti sesudah server
  * menjawab sukses. Jaringan putus sesudah server menulis ("Failed to fetch" khas Apps Script) -> staf
@@ -122,7 +134,7 @@ var IV_SNAP_WAKTU = null;   // v243: jam snapshot yang sedang TAMPIL; null = yan
 
 function ivMuat(){
   if(window.IV_DAFTAR && IV_SUDAH_SEGAR){ ivRender(); return; }
-  if(!IV_SUDAH_SEGAR && typeof rjdSnapshotBaca_ === "function"){
+  if(!IV_SUDAH_SEGAR && !IV_PERNAH_SEGAR && typeof rjdSnapshotBaca_ === "function"){   // v308 (KF-2)
     const snap = rjdSnapshotBaca_("invoice_daftar", 3 * 24 * 60);
     if(snap && snap.data && Array.isArray(snap.data.daftar)){
       window.IV_DAFTAR = snap.data.daftar;
@@ -149,6 +161,7 @@ function ivMuat(){
     window.IV_DAFTAR = d.daftar || [];
     window.IV_RINGKASAN = d.ringkasan || {};
     IV_SUDAH_SEGAR = true;
+    IV_PERNAH_SEGAR = true;   // v308 (KF-2)
     IV_SNAP_WAKTU = null;
     if(typeof rjdSnapshotSimpan_ === "function")
       rjdSnapshotSimpan_("invoice_daftar", { daftar: window.IV_DAFTAR, ringkasan: window.IV_RINGKASAN });
@@ -346,10 +359,29 @@ function ivModalPesan_(teks, galat) {
 function ivInvoiceDariId_(id) {
   return (window.IV_DAFTAR || []).filter(function (p) { return String(p.idInvoice || "").trim() === String(id || "").trim(); })[0] || null;
 }
+/* v308 (AUDIT-KEUANGAN K8 KF-3): SATU pengirim tulis untuk halaman invoice (padanan jmKirim_ / ksKirim_).
+   Jawaban dibaca sebagai TEKS lalu di-parse: jawaban HTML Google (sesi habis, "Sign in") terbaca apa
+   adanya, bukan "Unexpected token <". TypeError (jaringan putus / Apps Script tanpa header CORS) diteruskan
+   supaya pemanggil membedakan "tidak sampai" dari "ditolak" -- dan membaca ulang keadaan sebenarnya. */
+function ivKirimTulis_(badan) {
+  return fetch(IV_API_URL, { method: "POST", body: JSON.stringify(Object.assign({ idToken: IV_ID_TOKEN }, badan || {})) })
+    .then(function (r) { return r.text(); })
+    .then(function (teks) {
+      let d;
+      try { d = JSON.parse(teks); }
+      catch (e) { throw new Error("Jawaban server bukan data (" + String(teks).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) + "). Muat ulang halaman / masuk lagi."); }
+      if (!d || !d.success) throw new Error((d && d.error) || "Permintaan ditolak server.");
+      return d;
+    });
+}
 function ivKirimKoreksi_(action, payload) {
-  return fetch(IV_API_URL, { method: "POST", body: JSON.stringify({ idToken: IV_ID_TOKEN, action: action, payload: payload }) })
-    .then(function (r) { return r.json(); })
-    .then(function (d) { if (!d || !d.success) throw new Error((d && d.error) || "Gagal."); return d; });
+  return ivKirimTulis_({ action: action, payload: payload });
+}
+/** v308 (KF-3): sesudah TypeError pada rute tulis -- jawaban tidak sampai != gagal. Daftar dibaca ulang. */
+function ivSesudahPutus_(apa) {
+  window.IV_DAFTAR = null; window.IV_PENGIRIMAN = null; window.IV_TUJUAN = null;
+  ivMuat();
+  return "Jawaban server tidak sampai \u2014 " + apa + " MUNGKIN sudah tersimpan. Daftar dimuat ulang; periksa dulu sebelum mengulang.";
 }
 
 // Kolom yang bisa diubah, urutan tampil di form. kunci = kunci payload gs.
@@ -401,12 +433,15 @@ function ivSimpanUbah_(p) {
   ivKirimKoreksi_("ubahInvoice", { idInvoice: p.idInvoice, perubahan: perubahan })
     .then(function (d) {
       ivTutupModal_();
-      window.IV_DAFTAR = null; window.IV_SUDAH_SEGAR = false;
+      window.IV_DAFTAR = null;   // v308 (KF-2): IV_SUDAH_SEGAR TIDAK dimatikan -- itu membuka lagi snapshot 3 hari
       ivMuat();
       alert("Tersimpan: " + (d.diubah || []).map(function (x) { return x.kolom + " " + x.lama + " \u2192 " + x.baru; }).join("; ") +
         (d.status ? "\nStatus sekarang: " + d.status : ""));
     })
-    .catch(function (e) { ivModalPesan_(e.message || "Gagal menyimpan.", true); if (btn) { btn.disabled = false; btn.textContent = "Simpan perubahan"; } });
+    .catch(function (e) {
+      if (ivGalatJaringan_(e)) { ivTutupModal_(); alert(ivSesudahPutus_("perubahan " + p.idInvoice)); return; }   // v308 (KF-3)
+      ivModalPesan_(e.message || "Gagal menyimpan.", true); if (btn) { btn.disabled = false; btn.textContent = "Simpan perubahan"; }
+    });
 }
 
 function ivBukaBatal(id) {
@@ -431,12 +466,15 @@ function ivSimpanBatal_(p) {
   ivKirimKoreksi_("batalkanInvoice", { idInvoice: p.idInvoice, alasan: alasan })
     .then(function (d) {
       ivTutupModal_();
-      window.IV_DAFTAR = null; window.IV_SUDAH_SEGAR = false; window.IV_PENGIRIMAN = null;
+      window.IV_DAFTAR = null; window.IV_PENGIRIMAN = null;   // v308 (KF-2): bendera snapshot tidak dimatikan
       ivMuat();
       alert(d.sudah ? p.idInvoice + " sudah dibatalkan sebelumnya." :
         p.idInvoice + " dibatalkan." + (d.totalDibayar ? "\nPembayaran " + ivFormatRupiah_(d.totalDibayar) + " akan dipindah saat pengganti dibuat." : ""));
     })
-    .catch(function (e) { ivModalPesan_(e.message || "Gagal membatalkan.", true); if (btn) { btn.disabled = false; btn.textContent = "Batalkan invoice ini"; } });
+    .catch(function (e) {
+      if (ivGalatJaringan_(e)) { ivTutupModal_(); alert(ivSesudahPutus_("pembatalan " + p.idInvoice)); return; }   // v308 (KF-3): server idempoten (sudah:true)
+      ivModalPesan_(e.message || "Gagal membatalkan.", true); if (btn) { btn.disabled = false; btn.textContent = "Batalkan invoice ini"; }
+    });
 }
 
 /* v285 -- UNGGAH BUKTI POTONG PPh (gs >= @320). Berkas PDF/JPG dibaca jadi
@@ -468,12 +506,15 @@ function ivKirimBuktiPotong_(id, file) {
   ofBacaFileSebagaiBase64_(file)
     .then(function (b) { return ivKirimKoreksi_("unggahBuktiPotong", { idInvoice: id, base64: b.base64, namaFile: b.namaFile, mimeType: mime }); })
     .then(function (d) {
-      window.IV_DAFTAR = null; window.IV_SUDAH_SEGAR = false;
+      window.IV_DAFTAR = null;   // v308 (KF-2): IV_SUDAH_SEGAR TIDAK dimatikan -- itu membuka lagi snapshot 3 hari
       ivMuat();
       alert("Bukti potong " + id + " tersimpan" + (d.diganti ? " (menggantikan berkas sebelumnya)" : "") + ".\n" + (d.namaFile || "") +
         (d.statusBuktiPotong ? "\nStatus bukti potong: " + d.statusBuktiPotong : ""));
     })
-    .catch(function (e) { alert(e && e.message ? e.message : "Gagal mengunggah bukti potong."); });
+    .catch(function (e) {
+      if (ivGalatJaringan_(e)) { alert(ivSesudahPutus_("bukti potong " + id)); return; }   // v308 (KF-3)
+      alert(e && e.message ? e.message : "Gagal mengunggah bukti potong.");
+    });
 }
 
 /* v284 -- LIHAT INVOICE: dokumen cetak dibenamkan di modal (pola spPratinjauDok_
@@ -1302,7 +1343,7 @@ function ivSimpanPembayaran(){
     // keduanya baru saja berubah, dan daftar yang basi di layar keuangan lebih
     // berbahaya daripada layar yang berkedip sebentar.
     window.IV_TUJUAN = null;
-    window.IV_DATA = null;
+    window.IV_DAFTAR = null;   // v308 (AUDIT-KEUANGAN K8 KF-1): dulu IV_DATA -- variabel hantu (ditulis 3x, tidak pernah dibaca); daftar piutang tidak pernah dimuat ulang sesudah bayar
     ivMuatPembayaran();
     ivMuat();
   })
@@ -1388,19 +1429,18 @@ function ivHapusPembayaran(id){
     "berubah dari Lunas kembali jadi belum lunas.\n\nLakukan hanya untuk memperbaiki salah input.")) return;
   const alasan = window.prompt("Alasan koreksi (dicatat di baris pembalik):", "salah input") || "";
 
-  fetch(IV_API_URL, {
-    method: "POST",
-    body: JSON.stringify({ idToken: IV_ID_TOKEN, action: "hapusPembayaran", idPelunasan: id, alasan: alasan })
-  })
-  .then(function(r){ return r.json(); })
+  ivKirimTulis_({ action: "hapusPembayaran", idPelunasan: id, alasan: alasan })   // v308 (KF-3)
   .then(function(d){
-    if(!d || !d.success){ window.alert((d && d.error) || "Gagal menghapus."); return; }
     window.IV_TUJUAN = null;
-    window.IV_DATA = null;
+    window.IV_DAFTAR = null;   // v308 (AUDIT-KEUANGAN K8 KF-1): dulu IV_DATA -- variabel hantu (ditulis 3x, tidak pernah dibaca); daftar piutang tidak pernah dimuat ulang sesudah bayar
     ivMuatPembayaran();
     ivMuat();
   })
-  .catch(function(){ window.alert("Gagal menghubungi server."); });
+  .catch(function(e){
+    // v308 (KF-3): koreksiPembayaran_ idempoten & terkunci di server -- kalau jawaban tidak sampai, cukup baca ulang.
+    if (ivGalatJaringan_(e)) { window.IV_TUJUAN = null; ivMuatPembayaran(); window.alert(ivSesudahPutus_("koreksi " + id)); return; }
+    window.alert((e && e.message) || "Gagal menghapus.");
+  });
 }
 
 /* ============================================================
@@ -1431,7 +1471,7 @@ function ivHapusPembayaran(id){
  *  piutang -- supaya "kenapa invoice ini yang dibayar duluan" selalu punya
  *  jawaban yang sama di seluruh sistem. Hasilnya tetap bisa diubah tangan. */
 function ivSplitOtomatis(){
-  const total = Number(document.getElementById("iv-split-total").value) || 0;
+  const total = Math.round(Number(document.getElementById("iv-split-total").value) || 0);   // v308 (KF-4)
   const status = document.getElementById("iv-split-status");
   if(total <= 0){ status.textContent = "Isi total transfer dulu."; return; }
 
@@ -1519,7 +1559,9 @@ function ivSplitKosongkan(){
 }
 
 function ivSetAlokasi(kunci, nilai){
-  const n = Number(nilai) || 0;
+  // v308 (AUDIT-KEUANGAN K8 KF-4): rupiah dibulatkan -- 12500000.5 dari tempel/roda mouse membuat sisa -0,5,
+  // tampil "Kelebihan alokasi Rp 0" dan tombol mati permanen karena `sisa === 0` pada pecahan.
+  const n = Math.round(Number(nilai) || 0);
   if(!window.IV_ALOKASI) window.IV_ALOKASI = {};
   if(n > 0) window.IV_ALOKASI[kunci] = n; else delete window.IV_ALOKASI[kunci];
   ivHitungSisaSplit();
@@ -1529,7 +1571,7 @@ function ivSetAlokasi(kunci, nilai){
  *  karena menggambar ulang saat orang sedang mengetik akan merebut fokus dari
  *  kolom yang sedang diisi -- angka jadi terpotong di tengah pengetikan. */
 function ivHitungSisaSplit(){
-  const total = Number(document.getElementById("iv-split-total").value) || 0;
+  const total = Math.round(Number(document.getElementById("iv-split-total").value) || 0);   // v308 (KF-4)
   const alokasi = window.IV_ALOKASI || {};
   let dipakai = 0;
   Object.keys(alokasi).forEach(function(k){ dipakai += Number(alokasi[k]) || 0; });
@@ -1562,9 +1604,16 @@ function ivHitungSisaSplit(){
     : "Alokasi harus pas dulu";
 }
 
+/** v308 (KF-6): escape untuk literal string JS di dalam atribut HTML (onclick/oninput) -- sisa terakhir pola
+ *  yang di tempat lain sudah diganti data-*. ID dibuat generator, tapi pola ini dua kali jadi sebab bug di berkas ini. */
+function ivAttr_(v){
+  return String(v == null ? "" : v).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 function ivRenderSplit(){
   const wadah = document.getElementById("iv-split-daftar");
   if(!wadah) return;
+  const totalEl = document.getElementById("iv-split-total");
+  if(totalEl && !totalEl.step) totalEl.step = "1";   // v308 (KF-4): markup total ada di template, step dipasang dari sini
   if(!window.IV_TUJUAN){ wadah.innerHTML = '<p class="iv-buat-info">Memuat...</p>'; return; }
 
   ivIsiPilihanKlienSplit();
@@ -1592,10 +1641,10 @@ function ivRenderSplit(){
           '<span class="iv-kirim-sub iv-tujuan-artikel">' + rjdEscapeHtml_(v.idPurchaseOrder || "-") +   // v285
             (v.artikel ? ' &#183; ' + rjdEscapeHtml_(v.artikel) : '') + '</span>' +
         '</div>' +
-        '<input class="iv-split-input" type="number" min="0" placeholder="0" value="' + nilai + '"' +
-          ' oninput="ivSetAlokasi(\'' + kunci + '\', this.value)"/>' +
+        '<input class="iv-split-input" type="number" min="0" step="1" placeholder="0" value="' + nilai + '"' +
+          ' oninput="ivSetAlokasi(\'' + ivAttr_(kunci) + '\', this.value)"/>' +
         '<button class="iv-split-penuh" type="button" title="Isi sebesar sisa tagihan"' +
-          ' onclick="ivIsiPenuh(\'' + kunci + '\', ' + v.sisa + ')">Sisa</button>' +
+          ' onclick="ivIsiPenuh(\'' + ivAttr_(kunci) + '\', ' + (Number(v.sisa) || 0) + ')">Sisa</button>' +
       '</div>';
     }).join("");
 
@@ -1613,10 +1662,10 @@ function ivRenderSplit(){
             (v.kurangDP > 0 ? ' &#183; kurang DP ' + formatRupiah(v.kurangDP) : ' &#183; DP lengkap') +
           '</span>' +
         '</div>' +
-        '<input class="iv-split-input" type="number" min="0" placeholder="0" value="' + nilai + '"' +
-          ' oninput="ivSetAlokasi(\'' + kunci + '\', this.value)"/>' +
+        '<input class="iv-split-input" type="number" min="0" step="1" placeholder="0" value="' + nilai + '"' +
+          ' oninput="ivSetAlokasi(\'' + ivAttr_(kunci) + '\', this.value)"/>' +
         '<button class="iv-split-penuh" type="button" title="Isi sebesar kekurangan DP"' +
-          ' onclick="ivIsiPenuh(\'' + kunci + '\', ' + (v.kurangDP || 0) + ')">DP</button>' +
+          ' onclick="ivIsiPenuh(\'' + ivAttr_(kunci) + '\', ' + (Number(v.kurangDP) || 0) + ')">DP</button>' +
       '</div>';
     }).join("");
 
@@ -1638,7 +1687,7 @@ function ivIsiPenuh(kunci, nilai){
 function ivSimpanSplit(){
   const status = document.getElementById("iv-split-status");
   const btn = document.getElementById("iv-split-simpan");
-  const total = Number(document.getElementById("iv-split-total").value) || 0;
+  const total = Math.round(Number(document.getElementById("iv-split-total").value) || 0);   // v308 (KF-4)
   const tanggal = document.getElementById("iv-split-tanggal").value;
   const alokasi = window.IV_ALOKASI || {};
 
@@ -1731,7 +1780,7 @@ function ivSimpanSplit(){
     document.getElementById("iv-split-ref").value = "";
     document.getElementById("iv-split-catatan").value = "";
     window.IV_TUJUAN = null;
-    window.IV_DATA = null;
+    window.IV_DAFTAR = null;   // v308 (AUDIT-KEUANGAN K8 KF-1): dulu IV_DATA -- variabel hantu (ditulis 3x, tidak pernah dibaca); daftar piutang tidak pernah dimuat ulang sesudah bayar
     ivMuatPembayaran();
     ivMuat();
   })

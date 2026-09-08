@@ -295,7 +295,7 @@ function upRender_() {
                   '<table class="up-tabel-rinci"><tbody>' +
                   o.rincian.map(function (x) {
                     return '<tr>' +
-                      '<td>' + upEsc_([x.divisi, x.proses].filter(String).join(" &#183; ")) +
+                      '<td>' + [x.divisi, x.proses].filter(String).map(upEsc_).join(" &#183; ") +   // v308 (KF-6): escape per bagian, entity titik tengah tidak ikut ter-escape
                         '<div class="up-sub">' +
                         upEsc_([x.brand, x.artikel, x.style].filter(String).join(" / ")) +
                         '</div></td>' +
