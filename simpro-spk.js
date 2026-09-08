@@ -7197,6 +7197,19 @@ function qcNamaLine_(idLine) {
  * v296 per warna, untuk setoran lama yang sebagian sudah di-QC tanpa ID.
  */
 let QC_SETORAN_DIPILIH = "";   // idSetoran yang dipilih di form ("" = tanpa setoran)
+/* v303 (8 Sep 2026, AUDIT-QC QC-1 / Q-1) -- KUNCI IDEMPOTEN per pengisian form (gs >= @336).
+ * Dibuat saat form mulai diisi, dikirim di payload, dan BARU diganti sesudah server menjawab
+ * sukses. Jaringan putus sesudah server menulis -> checker menekan Simpan lagi -> server mengenali
+ * kuncinya dan menjawab sesi yang sudah ada (duplikat:true), bukan menulis baris kedua. */
+let QC_ID_PERMINTAAN = "";
+function qcIdPermintaan_() {
+  if (!QC_ID_PERMINTAAN) {
+    QC_ID_PERMINTAAN = (window.crypto && typeof crypto.randomUUID === "function")
+      ? crypto.randomUUID()
+      : "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  }
+  return QC_ID_PERMINTAAN;
+}
 function qcSetoranTerpilih_() {
   const t = qcCariTersedia_();
   if (!t || !QC_SETORAN_DIPILIH || !t.perSetoran) return null;
@@ -8187,6 +8200,7 @@ function qcSubmitPenyelesaian_() {
       action: "submitInspeksiQC",
       payload: {
         jenisSesi: "penyelesaian",
+        idPermintaan: qcIdPermintaan_(),   // v303, gs >= @336
         idPurchaseOrder: idPO,
         tahap: QC_TAHAP_DIPILIH,
         idLine: idLine,
@@ -8211,9 +8225,9 @@ function qcSubmitPenyelesaian_() {
         return;
       }
       const el = document.getElementById("qc-submit-sukses");
-      el.textContent = "Keranjang ditutup " + (qtyLolos + qtyAfkir) + " pcs (" + d.idQC + ") -- " +
+      el.textContent = (d.duplikat ? "Sudah tersimpan sebelumnya: keranjang ditutup " : "Keranjang ditutup ") + (qtyLolos + qtyAfkir) + " pcs (" + d.idQC + ") -- " +
         qtyLolos + " lolos, " + qtyAfkir + " afkir" +
-        (d.sisaTerbuka > 0 ? ". Sisa ditahan: " + d.sisaTerbuka + " pcs." : ". Keranjang habis.");
+        (d.duplikat ? ". Permintaan ulang tidak dicatat dua kali." : (d.sisaTerbuka > 0 ? ". Sisa ditahan: " + d.sisaTerbuka + " pcs." : ". Keranjang habis."));
       el.classList.remove("hidden");
       qcSetModeSesi_("baru");
       qcResetForm_();
@@ -8385,6 +8399,7 @@ function qcTampilkanError_(pesan) {
 }
 
 function qcResetForm_() {
+  QC_ID_PERMINTAAN = "";   // v303: sesi berikutnya = kunci baru; kunci lama bertahan selama form yang sama dikirim ulang
   // v301 (8 Sep 2026) -- BUG DIPERBAIKI: qcGantiPO() warisan qc.html (yang punya pemilih PO
   // sendiri) mengosongkan QC_PO_TERPILIH & QC_RINCIAN_PO. Di halaman produksi pemilih itu
   // tersembunyi (PO dari kartu bersama), jadi sesudah simpan dropdown warna berbunyi "Pilih PO
@@ -8528,6 +8543,7 @@ function qcSubmitInspeksi() {
         style: QC_WARNA_DIPILIH.style || "",
         warna: QC_WARNA_DIPILIH.warna || "",
         idSetoran: QC_TAHAP_DIPILIH === "Finishing" ? (QC_SETORAN_DIPILIH || "") : "",   // v297, gs >= @329
+        idPermintaan: qcIdPermintaan_(),   // v303, gs >= @336
         qtyDiperiksa: qtyDiperiksa,
         qtyLolos: qtyLolos,
         qtyDiperbaiki: qtyDiperbaiki,
@@ -8575,7 +8591,8 @@ function qcSubmitInspeksi() {
           ", defect rate " + d.defectRate + "%." + infoKor + " <b>" + afkirPotong + " pcs afkir potong perlu diganti.</b>" +
           '<button class="qc-recut-btn" onclick="qcKeRecut_()" type="button">Buat re-cut ' + afkirPotong + ' pcs &#8594;</button>';
       } else {
-        el.textContent = "Tersimpan (" + d.idQC + ") -- " + d.keputusan + ", defect rate " + d.defectRate + "%.";
+        el.textContent = (d.duplikat ? "Sudah tersimpan sebelumnya (" : "Tersimpan (") + d.idQC + ") -- " + d.keputusan + ", defect rate " + d.defectRate + "%." +
+          (d.duplikat ? " Permintaan ulang tidak dicatat dua kali." : "");
       }
       // v196: jenis cacat baru masuk master -> muncul di dropdown berikutnya.
       // Dikabarkan supaya checker tahu tidak perlu mengetik ulang lain kali,
