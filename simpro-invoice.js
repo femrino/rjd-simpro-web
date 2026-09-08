@@ -822,10 +822,13 @@ function ivRenderDraft() {
     ((d.menggantikan || []).length
       ? '<div class="iv-pengganti-info" id="iv-pengganti-info"><b>Invoice ini menggantikan invoice yang dibatalkan:</b>' +
           d.menggantikan.map(function (m) {
-            return '<label class="iv-pengganti-pilih"><input type="checkbox" class="iv-pengganti-cek" data-id="' + rjdEscapeHtml_(m.idInvoice) + '" checked> <b>' + rjdEscapeHtml_(m.idInvoice) + '</b>' +
+            // v307 (AUDIT-KEUANGAN K6 KI-1, gs >= @344): kandidat "cocok lewat PO" hanyalah TEBAKAN
+            // (invoice batal mana pun ber-PO sama) -- tidak pernah dicentang otomatis; admin yang memutuskan.
+            // Yang cocok lewat pengiriman (pasti) tetap tercentang.
+            return '<label class="iv-pengganti-pilih"><input type="checkbox" class="iv-pengganti-cek" data-id="' + rjdEscapeHtml_(m.idInvoice) + '"' + (m.cocok === "po" ? '' : ' checked') + '> <b>' + rjdEscapeHtml_(m.idInvoice) + '</b>' +
               (m.alasanBatal ? ' -- dibatalkan: ' + rjdEscapeHtml_(m.alasanBatal) : '') +
               (m.totalDibayar ? ' -- pembayaran ' + ivFormatRupiah_(m.totalDibayar) + ' (' + m.jumlahPelunasan + ' baris) akan dipindah ke sini' : ' -- tanpa pembayaran') +
-              (m.cocok === "po" ? ' <span class="iv-sub">(dicocokkan lewat PO, bukan pengiriman)</span>' : '') + '</label>';
+              (m.cocok === "po" ? ' <span class="iv-sub">(dicocokkan lewat PO, bukan pengiriman &#8212; centang hanya kalau yakin ini penggantinya)</span>' : '') + '</label>';
           }).join("") + '</div>'
       : '');
 
@@ -988,7 +991,11 @@ function ivSimpanInvoice() {
       (h.pengganti && (h.pengganti.menggantikan || []).length
         ? " \u00B7 menggantikan " + h.pengganti.menggantikan.join(", ") +
           (h.pengganti.dipindah ? ", " + h.pengganti.dipindah + " pembayaran (" + ivFormatRupiah_(h.pengganti.totalDipindah) + ") dipindah" : "")
-        : (h.pengganti && h.pengganti.galat ? " \u00B7 PENGGANTI GAGAL DITAUTKAN: " + h.pengganti.galat : ""));
+        : (h.pengganti && h.pengganti.galat ? " \u00B7 PENGGANTI GAGAL DITAUTKAN: " + h.pengganti.galat : "")) +
+      // v307 (KI-1, gs >= @344): pemindahan yang MELEBIHI nilai invoice baru tidak ditolak server, tapi
+      // wajib terbaca di sini -- kelebihannya kewajiban RJD ke klien.
+      (h.pengganti && (h.pengganti.peringatan || []).length ? " \u00B7 PERHATIAN: " + h.pengganti.peringatan.join(" ") : "");
+    if (h.pengganti && (h.pengganti.peringatan || []).length) alert("PERHATIAN pengganti " + h.idInvoice + ":\n" + h.pengganti.peringatan.join("\n"));
     // Daftar pengiriman & daftar invoice dua-duanya berubah setelah ini --
     // dikosongkan supaya dimuat ulang dari server, bukan menampilkan yang basi.
     window.IV_PENGIRIMAN = null;
