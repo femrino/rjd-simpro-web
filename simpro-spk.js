@@ -8686,6 +8686,13 @@ function qcSubmitInspeksi() {
       qcResetForm_();
       QC_SETORAN_DIPILIH = "";
       qcMuatTersedia_();   // v297: angka per setoran/warna segar untuk sesi berikutnya (snapshot tidak boleh tampil sesudah tulis)
+      // v310 (AUDIT-QC Sesi QC-3 Q-7): keranjang ditahan & ringkasan juga BASI sesudah sesi ini.
+      // Dulu hanya jalur penyelesaian yang memanggil qcMuatDitahan_, jadi checker yang mencatat
+      // "ditahan 5" tidak melihat spanduk keranjangnya sama sekali (sejak v301 warna tetap terpilih,
+      // tidak ada pemicu ganti warna yang memuat ulang) lalu menyimpulkan keranjangnya kosong.
+      // Tab Ringkasan pun menampilkan angka SEBELUM sesi barusan sampai halaman dimuat ulang.
+      qcMuatDitahan_();
+      QC_RINGKASAN_DIMUAT = false;
       // Operator baru yang barusan diketik ikut masuk daftar autocomplete
       // tanpa perlu refresh halaman -- kecil, tapi lumayan buat checker yang
       // input banyak PO berturut-turut dengan operator yang sama.
