@@ -563,11 +563,30 @@ function spRantaiLineHtml_(idLine) {
   const angka_ = function (label, n, kelas) { return '<span class="sp-spk-rantai-item' + (kelas ? ' ' + kelas : '') + '">' + label + ' <b>' + n + '</b></span>'; };
   const belumKelas = l.belumQC > 0 ? "perlu" : (l.belumQC < 0 ? "negatif" : "beres");
   const diLineKelas = l.diLine < 0 ? "negatif" : "";
+  // @359 (PR-9): "keluar" adalah kata BRUTO, dan sejak @350 angkanya NETO. Sampai v314 baris ini
+  // mencetak "keluar 130 - kembali 90 - di line 0 - setor 130": empat angka berdampingan yang TIDAK
+  // BISA DIJUMLAHKAN pembacanya (130 - 90 - 130 = -90, bukan 0), karena `kembali` sudah termuat di
+  // dalam `keluar`. Diukur 10 Sep 2026 di PO 260804/Inara: 3 dari 6 line tampil begitu; tiga sisanya
+  // "konsisten" hanya karena pengembaliannya nol.
+  //
+  // Yang diganti KATANYA, bukan bilangannya: "jatah" menyebut apa yang benar-benar jadi tanggungan
+  // line sekarang, dan itu memang neto. Angka brutonya tidak hilang -- ia pindah ke keterangan
+  // terpisah di bawah, tempat ia bisa berdiri sebagai sejarah tanpa ikut dijumlah.
   let html = '<div class="sp-spk-rantai">' +
-    angka_("keluar", l.keluar) + (l.kembali ? angka_("kembali", l.kembali) : "") + angka_("di line", l.diLine, diLineKelas) +
+    angka_("jatah", l.keluar) + angka_("di line", l.diLine, diLineKelas) +
     angka_("setor", l.setor) + (l.setorMenunggu ? angka_("menunggu", l.setorMenunggu, "tunggu") : "") +
     angka_("QC", l.diperiksa) + angka_("lolos", l.lolos) + (l.afkir ? angka_("afkir", l.afkir, "afkir") : "") + (l.ditahan ? angka_("ditahan", l.ditahan, "tunggu") : "") +
     angka_("belum QC", l.belumQC, belumKelas) + '</div>';
+  // @359: sejarahnya dicetak TERPISAH dan hanya kalau memang ada pengembalian -- baris ini yang
+  // menjawab "kok jatahnya 130, bukankah SPK-nya 220?". `keluarBruto`/`kembaliDist` datang dari
+  // LEDGER YANG SAMA dengan `keluar`, jadi ketiganya selalu rekonsiliasi (bruto - kembali = jatah).
+  // Kalau gs masih < @359 field-nya tidak ada, dan baris ini cukup tidak muncul.
+  const bruto = Number(l.keluarBruto || 0), kembaliDist = Number(l.kembaliDist || 0);
+  if (kembaliDist > 0 && bruto > 0) {
+    html += '<div class="sp-spk-rantai-asal">pernah diserahkan <b>' + bruto + '</b> pcs' +
+      ' &#183; dikembalikan <b>' + kembaliDist + '</b> pcs' +
+      ' &#183; jatah sekarang <b>' + (bruto - kembaliDist) + '</b> pcs</div>';
+  }
   if ((l.warna || []).length > 1 || (l.warna || []).some(function (w) { return w.belumQC !== 0; })) {
     html += '<div class="sp-spk-rantai-warna">' + l.warna.map(function (w) {
       return '<span>' + rjdEscapeHtml_(w.warna || "-") + ': setor ' + w.setor + ' &#183; QC ' + w.diperiksa + ' &#183; lolos ' + w.lolos +
@@ -4364,16 +4383,26 @@ function spRenderFormSetoran() {
     '<div class="sp-ringkas-judul">' + rjdEscapeHtml_(po.namaLine) +
       ' <span class="sp-setor-jenis">' + rjdEscapeHtml_(po.jenisLine) + '</span></div>' +
     '<div class="sp-ringkas-list">' +
-      '<div class="sp-ringkas-item"><span>Diterima line ini</span><b>' + po.totalDipegang + ' pcs</b></div>' +
+      // @359 (PR-9): "Diterima line ini" adalah kata BRUTO untuk angka NETO. Sampai v314 kartu ini
+      // mencetak empat angka yang tidak menjumlah: diterima 130, disetor 130, dikembalikan 90,
+      // masih di tangan 0. Sekarang tiga angka yang MENJUMLAH (jatah - disetor = sisa), dan
+      // sejarahnya diberi barisnya sendiri di bawah.
+      '<div class="sp-ringkas-item"><span>Jatah line ini sekarang</span><b>' + po.totalDipegang + ' pcs</b></div>' +
       '<div class="sp-ringkas-item"><span>Sudah disetor</span><b>' + po.totalSudahSetor + ' pcs</b></div>' +
-      // Baris pengembalian hanya muncul kalau memang ada -- kalau selalu
-      // ditampilkan dengan nilai 0, ringkasan jadi penuh angka yang tidak
-      // berarti apa-apa untuk mayoritas line.
-      (po.totalDikembalikan
-        ? '<div class="sp-ringkas-item"><span>Dikembalikan (belum dijahit)</span><b>' +
-          po.totalDikembalikan + ' pcs</b></div>'
-        : '') +
       '<div class="sp-ringkas-item"><span>Masih di tangan line</span><b>' + wip + ' pcs</b></div>' +
+      // Baris sejarah hanya muncul kalau memang ada pengembalian -- kalau selalu ditampilkan
+      // dengan nilai 0, ringkasan jadi penuh angka yang tidak berarti apa-apa untuk mayoritas
+      // line. `totalPernahDiserahkan` dikirim server sejak @359; kalau gs masih lama, baris ini
+      // tidak muncul dan kartunya tetap benar (cuma tanpa sejarah).
+      (po.totalPernahDiserahkan && po.totalDikembalikanDistribusi
+        ? '<div class="sp-ringkas-item sp-ringkas-asal"><span>Pernah diserahkan</span><b>' +
+          po.totalPernahDiserahkan + ' pcs</b></div>' +
+          '<div class="sp-ringkas-item sp-ringkas-asal"><span>Dikembalikan (belum dijahit)</span><b>' +
+          po.totalDikembalikanDistribusi + ' pcs</b></div>'
+        : (po.totalDikembalikan
+            ? '<div class="sp-ringkas-item sp-ringkas-asal"><span>Dikembalikan (belum dijahit)</span><b>' +
+              po.totalDikembalikan + ' pcs</b></div>'
+            : '')) +
       // v119: basis setoran = serah-terima TERKONFIRMASI. Yang masih Menunggu
       // ditampilkan sebagai peringatan, bukan disembunyikan -- supaya line
       // tahu kenapa angkanya "kurang" dan ke mana harus mengonfirmasi.

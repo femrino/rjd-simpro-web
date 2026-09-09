@@ -1637,6 +1637,17 @@ body.sp-siap #sp-subtabs { visibility: visible; }
 .sp-batch-chip-kembali b { background: transparent; color: var(--ink-soft); padding: 1px 2px; }
 .sp-batch-chip-kembali:hover { border-color: var(--garis, #d8d2c6); }
 
+/* @359 (PR-9): baris SEJARAH pada kartu line & ringkasan setoran. Sengaja lebih redup dan
+   terpisah dari deret angka utama: ia menjelaskan angka utama, dan tidak boleh ikut dijumlah
+   dengan mata. Inilah satu-satunya tempat angka BRUTO (mis. 220 pcs milik Pak Ali) muncul di
+   layar sejak alokasi jadi neto di @350. */
+.sp-spk-rantai-asal {
+  margin-top: 4px; font-size: 11px; color: var(--ink-soft);
+  border-left: 2px solid var(--garis, #d8d2c6); padding-left: 8px;
+}
+.sp-spk-rantai-asal b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.sp-ringkas-asal { opacity: 0.78; }
+
 .sp-dok { max-width: 980px; height: 88vh; }
 .sp-dok-body { padding: 0; position: relative; background: var(--cream); }
 .sp-dok-body iframe { width: 100%; height: 100%; border: 0; display: block; background: var(--white); }
