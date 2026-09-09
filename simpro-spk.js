@@ -3996,6 +3996,14 @@ function spRenderTercatat_(jenis) {
       // spBolehBatalRiwayat_ tidak memeriksanya (ia soal BAGIAN, bukan status).
       const terkunci = jenis === "distribusi" &&
         (k.status === "Diterima" || k.status === "Ada Selisih");
+      // @356 (PR-5): baris PEMBALIK adalah cermin otomatis dari pengembalian di SD Setoran Hasil,
+      // bukan input serah-terima. Membatalkannya membuat alokasi line melompat balik ke BRUTO
+      // sementara setoran pengembaliannya tetap hidup -- hitung-ganda @350 terbuka lagi.
+      // Backend menolaknya sejak @356; menampilkan tombolnya tetap salah, karena orang menekan,
+      // gagal, lalu berhenti percaya pada layarnya (alasan yang sama dengan `bolehBatal` di bawah).
+      // `pembalikDari` dihitung SERVER (idSetoranDariPembalik_) supaya penandanya hanya punya satu
+      // definisi; jangan menyalin regexnya ke sini.
+      const pembalik = jenis === "distribusi" && !!k.pembalikDari;
       const boleh = (typeof spBolehBatalRiwayat_ === "function")
         ? spBolehBatalRiwayat_(jenis, k) : true;
       const sz = spTercatatSize_(k);
@@ -4024,9 +4032,11 @@ function spRenderTercatat_(jenis) {
         '<td data-label="" class="sp-td-aksi">' +
           (dibatalkan
             ? '<span class="sp-riw-kunci">sudah dibatalkan</span>'
-            : terkunci
-              ? '<span class="sp-riw-kunci">sudah dikonfirmasi</span>'
-              : boleh
+            : pembalik
+              ? '<span class="sp-riw-kunci">cermin pengembalian &#8212; batalkan setorannya</span>'
+              : terkunci
+                ? '<span class="sp-riw-kunci">sudah dikonfirmasi</span>'
+                : boleh
                 ? '<button class="sp-btn-kecil" type="button" data-jenis="' + spEsc_(jenis) + '" data-i="' + i +
                   '" onclick="spBatalTercatat_(this.dataset.jenis, Number(this.dataset.i))">Batalkan</button>'
                 : '<span class="sp-riw-kunci">bukan bagianmu</span>') +
@@ -4083,6 +4093,10 @@ function spRenderRiwayat() {
     // begitu pihak kedua membenarkan, catatan itu bukan lagi input sepihak.
     const terkunci = jenis === "distribusi" &&
       (k.status === "Diterima" || k.status === "Ada Selisih");
+    // @356 (PR-5): sama dengan "Pembagian Tercatat" -- baris pembalik tidak boleh ditawarkan
+    // untuk dibatalkan. Dua layar, satu aturan; sampai @355 KEDUANYA hanya mengunci
+    // "Diterima"/"Ada Selisih", jadi menambal satu saja menyisakan tombol hidup di satunya.
+    const pembalik = jenis === "distribusi" && !!k.pembalikDari;
     // Membatalkan catatan bagian lain akan ditolak backend. Menampilkan
     // tombolnya tetap salah: orang menekan, gagal, lalu berhenti percaya pada
     // layarnya. Yang MELIHAT riwayat tetap semua bagian -- itu justru yang
@@ -4130,7 +4144,11 @@ function spRenderRiwayat() {
           rjdEscapeHtml_(k.status || "-") + '</span>' +
         (dibatalkan
           ? ''
-          : (terkunci
+          : (pembalik
+            ? '<span class="sp-riw-kunci">cermin otomatis pengembalian ' +
+              rjdEscapeHtml_(String(k.pembalikDari)) +
+              ' &#8212; batalkan setoran itu, bukan baris ini</span>'
+            : (terkunci
               ? '<span class="sp-riw-kunci">sudah dikonfirmasi, tidak bisa dibatalkan</span>'
               : (bolehBatal
                   ? '<button class="sp-riw-btn" data-i="' + i + '" onclick="spBatalkanCatatan(this.dataset.i)" type="button">Batalkan</button>'
@@ -4138,7 +4156,7 @@ function spRenderRiwayat() {
                     (jenis === "setoran" && k.namaLine
                       ? 'hanya bisa dibatalkan ' + rjdEscapeHtml_(k.namaLine)
                       : 'hanya bisa dibatalkan bagian ' +
-                        rjdEscapeHtml_(SP_RIW_BAGIAN[jenis] || "-")) + '</span>'))) +
+                        rjdEscapeHtml_(SP_RIW_BAGIAN[jenis] || "-")) + '</span>')))) +
       '</div>' +
       (k.catatan ? '<div class="sp-riw-catatan">' + rjdEscapeHtml_(k.catatan) + '</div>' : '') +
       // v186: SPK untuk serahan INI saja. Batch = prefix ID Distribusi sebelum "-".
