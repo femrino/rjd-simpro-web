@@ -467,18 +467,39 @@ function spRenderDaftarSPK_() {
       "&line=" + encodeURIComponent(l.idLine);
     const urlRekap = "/p/cetak.html?jenis=rekapline&line=" + encodeURIComponent(l.idLine);
     const batch = l.batch || [];
-    // Chip serahan hanya kalau LEBIH DARI SATU: pada satu serahan, SPK
-    // gabungan dan SPK serahan isinya identik -- dua tombol, satu dokumen.
-    const chip = batch.length > 1
+    // @358 (PR-7): PENGEMBALIAN bukan serahan. Sejak @350 sebagian batch adalah baris pembalik
+    // (turunan setoran pengembalian), dan sampai v313 strip ini menyebut semuanya "serahan" lalu
+    // mencetak angkanya dengan tanda minus -- kartu Pak Ali berbunyi "3 serahan: 220, -70, -20"
+    // padahal yang terjadi SATU serahan 220 pcs dan DUA pengembalian 90 pcs. Server mengirim
+    // `jenis` sejak @358; di sini ia dipakai untuk tiga hal: label yang jujur, penomoran yang
+    // hanya menghitung serahan, dan chip pengembalian TANPA tautan cetak.
+    const serahan = batch.filter(function (b) { return b.jenis !== "pengembalian"; });
+    const kembali = batch.filter(function (b) { return b.jenis === "pengembalian"; });
+    // Chip muncul kalau ada lebih dari satu serahan ATAU ada pengembalian. Pada satu serahan tanpa
+    // pengembalian, SPK gabungan dan SPK serahan isinya identik -- dua tombol, satu dokumen.
+    const chip = (serahan.length > 1 || kembali.length)
       ? '<div class="sp-spk-batch">' +
-          '<span class="sp-spk-batch-lbl">' + batch.length + ' serahan</span>' +
-          batch.map(function (b, n) {
+          '<span class="sp-spk-batch-lbl">' + serahan.length + ' serahan' +
+            (kembali.length ? ' &#183; ' + kembali.length + ' pengembalian' : '') + '</span>' +
+          batch.map(function (b) {
+            const qty = (b.qtyMutlak !== undefined && b.qtyMutlak !== null) ? b.qtyMutlak : Math.abs(b.qty || 0);
+            if (b.jenis === "pengembalian") {
+              // SENGAJA bukan tombol: batch pembalik tidak punya SPK, dan sampai v313 tombolnya
+              // ada lalu gagal dengan "<line> tidak punya jatah qty untuk PO ..." -- keterangan
+              // palsu tentang keadaan produksi. Angkanya POSITIF dengan kata "kembali", bukan
+              // minus tanpa keterangan: tanda minus saja menuntut pembacanya hafal @350.
+              return '<span class="sp-batch-chip sp-batch-chip-kembali" title="Pengembalian potongan ' +
+                'dari line -- bukan serah-terima, jadi tidak ada SPK untuknya."><b>&#8592;</b>' +
+                rjdEscapeHtml_(b.tanggalSerah || "-") +
+                '<span>kembali ' + qty + ' pcs</span></span>';
+            }
+            const n = serahan.map(function (x) { return x.idBatch; }).indexOf(b.idBatch) + 1;
             return tombol_("sp-batch-chip",
-              '<b>' + (n + 1) + '</b>' + rjdEscapeHtml_(b.tanggalSerah || "-") +
-                '<span>' + b.qty + ' pcs</span>',
+              '<b>' + n + '</b>' + rjdEscapeHtml_(b.tanggalSerah || "-") +
+                '<span>' + qty + ' pcs</span>',
               urlGabung + "&batch=" + encodeURIComponent(b.idBatch),
-              "SPK " + l.namaLine + " \u00b7 serahan " + (n + 1),
-              (b.tanggalSerah || "-") + " \u00b7 " + b.qty + " pcs");
+              "SPK " + l.namaLine + " \u00b7 serahan " + n,
+              (b.tanggalSerah || "-") + " \u00b7 " + qty + " pcs");
           }).join("") +
         '</div>'
       : '';
@@ -494,7 +515,7 @@ function spRenderDaftarSPK_() {
       '</div>' +
       spRantaiLineHtml_(l.idLine) +   // v299
       '<div class="sp-spk-aksi">' +
-        tombol_("sp-spk-btn utama", batch.length > 1 ? "SPK gabungan" : "Cetak SPK",
+        tombol_("sp-spk-btn utama", serahan.length > 1 ? "SPK gabungan" : "Cetak SPK",
           urlGabung, "SPK " + l.namaLine, "seluruh jatah line di PO ini") +
         tombol_("sp-spk-btn", "Rekap Line", urlRekap,
           "Rekap Line " + l.namaLine, "semua PO yang dipegang line ini") +
@@ -4160,7 +4181,12 @@ function spRenderRiwayat() {
       '</div>' +
       (k.catatan ? '<div class="sp-riw-catatan">' + rjdEscapeHtml_(k.catatan) + '</div>' : '') +
       // v186: SPK untuk serahan INI saja. Batch = prefix ID Distribusi sebelum "-".
-      (jenis === "distribusi" && !dibatalkan && id
+      // @358 (PR-8): baris PEMBALIK tidak punya SPK. Sampai v313 tombol ini tetap dipasang dan
+      // gagal dengan "<line> tidak punya jatah qty untuk PO ..." -- dan di kartu Riwayat ia LEBIH
+      // menyesatkan daripada di chip, karena `totalQty` di sini tersimpan POSITIF sehingga barisnya
+      // terbaca "70 pcs" seperti serahan biasa. Backend menolaknya sejak @358; tombolnya tetap
+      // tidak boleh ada, dengan alasan yang sama seperti tombol Batalkan (PR-5).
+      (jenis === "distribusi" && !dibatalkan && !k.pembalikDari && id
         ? '<div class="sp-riw-cetak">' +
             spTombolDok_("sp-tautan sp-tautan-btn", "Cetak SPK serahan ini",
               "/p/cetak.html?jenis=spk&id=" + encodeURIComponent(k.idPurchaseOrder) +

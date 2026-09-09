@@ -1627,6 +1627,15 @@ body.sp-siap #sp-subtabs { visibility: visible; }
 }
 .sp-batch-chip span { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .sp-batch-chip:hover { border-color: var(--ink); }
+/* @358 (PR-7): chip PENGEMBALIAN. Sengaja dibedakan bukan cuma lewat kata: kalau bentuknya sama
+   persis dengan chip serahan, mata membaca strip itu sebagai deret serah-terima dan angkanya
+   ikut dijumlah. Tidak bisa diklik karena batch pembalik memang tidak punya SPK. */
+.sp-batch-chip-kembali {
+  cursor: default; background: transparent; border-style: dashed;
+  border-color: var(--garis, #d8d2c6); color: var(--ink-soft);
+}
+.sp-batch-chip-kembali b { background: transparent; color: var(--ink-soft); padding: 1px 2px; }
+.sp-batch-chip-kembali:hover { border-color: var(--garis, #d8d2c6); }
 
 .sp-dok { max-width: 980px; height: 88vh; }
 .sp-dok-body { padding: 0; position: relative; background: var(--cream); }
