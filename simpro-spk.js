@@ -5168,6 +5168,31 @@ function spDaftarItemPO_() {
 function spRenderFormMarker_(asal) {
   const sizes = spSizePO_();
   const a = asal || {};
+  // @364: INGAT pilihan Item sebelum innerHTML ditimpa.
+  //
+  // Bug yang diperbaiki: `terpilih` dihitung `a.artikel === it.artikel && a.style === it.style`,
+  // dan pada render marker BARU `a = {}` -- jadi `undefined === "Abelia"` bernilai false untuk
+  // SETIAP opsi, tidak ada satu pun yang ber-selected, dan browser jatuh ke item PERTAMA.
+  // Jalur sukses menyimpan memanggil spMuatMarker() -> spRenderMarker_ -> spRenderFormMarker_(null),
+  // sehingga di PO multi-item dropdown Item KEMBALI KE ITEM #1 SESUDAH SETIAP SIMPAN.
+  //
+  // Akibatnya bukan cuma label: kalau yang sedang dikerjakan item ke-2 dan sekali saja lupa
+  // memilih ulang, markernya masuk style yang SALAH -- dan dropdown marker di form Gelaran
+  // menyaring per style, jadi marker itu tidak akan muncul saat menggelar style yang benar
+  // (alasan yang sama sudah ditulis di komentar pilihan Item di bawah). Ini kandidat penyebab
+  // sebagian dari 68 marker berstatus Batal.
+  //
+  // Yang diingat NILAI dropdown-nya (indeks atau "semua"), bukan artikel/style, supaya opsi
+  // "berlaku untuk SEMUA style" ikut bertahan. Direset saat PO berganti -- ingatan yang menyeberang
+  // PO justru melahirkan kesalahan yang sama dengan bentuk berbeda.
+  const selLama = document.getElementById("sp-mk-item");
+  if (selLama && window.SP_MK_ITEM_PO === window.SP_PO_AKTIF) {
+    window.SP_MK_ITEM_PILIH = selLama.value;
+  } else if (window.SP_MK_ITEM_PO !== window.SP_PO_AKTIF) {
+    window.SP_MK_ITEM_PILIH = null;
+  }
+  window.SP_MK_ITEM_PO = window.SP_PO_AKTIF;
+  const pilihIngat = asal ? null : window.SP_MK_ITEM_PILIH;
   // Catatan sumber ukuran. Muncul HANYA kalau bukan dari order -- kalau selalu
   // muncul, pesannya berhenti dibaca dan justru menutupi kasus yang benar-benar
   // perlu diperhatikan.
@@ -5193,7 +5218,11 @@ function spRenderFormMarker_(asal) {
           '<label>Item (artikel &#183; style)' +
             '<select id="sp-mk-item">' +
               spDaftarItemPO_().map(function (it, idx) {
-                const terpilih = (a.artikel === it.artikel && a.style === it.style);
+                // @364: kalau ada ingatan (marker baru berturut-turut di PO yang sama), ia yang
+                // menentukan. Kalau tidak ada, perilaku lama: cocokkan dengan `asal` saat revisi.
+                const terpilih = (pilihIngat !== null && pilihIngat !== undefined)
+                  ? (String(pilihIngat) === String(idx))
+                  : (a.artikel === it.artikel && a.style === it.style);
                 return '<option' + (terpilih ? ' selected="selected"' : '') +
                   ' value="' + idx + '">' + spEsc_(it.artikel) +
                   (it.style ? ' &#183; ' + spEsc_(it.style) : '') + '</option>';
@@ -5206,7 +5235,9 @@ function spRenderFormMarker_(asal) {
               // Style dikosongkan, bukan diisi dua nilai: potongan komponen
               // bersama baru bisa dipasangkan ke style tertentu SAAT DIGELAR,
               // dan itu memang dipilih di form Gelaran.
-              '<option' + (a.artikel && !a.style ? ' selected="selected"' : '') +
+              '<option' + ((pilihIngat !== null && pilihIngat !== undefined)
+                  ? (String(pilihIngat) === "semua" ? ' selected="selected"' : '')
+                  : (a.artikel && !a.style ? ' selected="selected"' : '')) +
                 ' value="semua">&#8212; Berlaku untuk SEMUA style &#8212;</option>' +
             '</select></label>' +
         '</div>' +
