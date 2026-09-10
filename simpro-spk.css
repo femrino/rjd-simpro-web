@@ -1907,3 +1907,11 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 /* @361 (P12): kata "kembali" di depan angka pada tabel Pembagian Tercatat. Angkanya tetap
    POSITIF (konvensi v314) -- yang membedakan artinya adalah katanya, bukan tandanya. */
 .sp-qty-kembali { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
+
+/* @361 (P13): kegagalan jembatan pembalik. Dibuat MENONJOL, bukan redup: artinya angka jatah
+   line sedang salah sampai ada yang menjalankan susulannya, dan kotak sukses yang tampak
+   sepenuhnya hijau adalah kebohongan yang paling mahal di layar ini. */
+.sp-sukses-galat {
+  margin-top: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.5;
+  color: #8A3D33; background: #FBE9E7; border-left: 3px solid #D98177; border-radius: 4px;
+}

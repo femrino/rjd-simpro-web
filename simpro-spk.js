@@ -4578,10 +4578,37 @@ function spSimpanSetoran() {
     sukses: function (h) {
       const kotak = document.getElementById("sp-setor-sukses");
       if (h) {
-        kotak.innerHTML = '<div class="sp-sukses-isi"><b>' + h.totalQty +
-          ' pcs</b> disetor oleh <b>' + rjdEscapeHtml_(h.namaLine) + '</b>. ' +
-          'Sisa di tangan line: <b>' + h.sisaDiTangan + ' pcs</b>.' +
-          (h.kembar ? ' <i>(sudah tersimpan sebelumnya -- tidak dicatat dua kali)</i>' : '') + '</div>';
+        // @361 (P13, temuan #19): jembatan @350 (setoran pengembalian -> baris pembalik di
+        // SD Distribusi Potongan) boleh GAGAL tanpa menggagalkan pencatatan setoran -- itu
+        // sengaja, karena pengembaliannya nyata sedangkan pembaliknya cuma turunan. Tapi sampai
+        // v316 kegagalan itu TIDAK PUNYA LAYAR sama sekali: galatnya cuma masuk Logger, dan
+        // `pembalikDistribusi` yang sudah dikirim server sejak @350 nol kali dibaca frontend.
+        // Yang lebih buruk: kotak sukses tetap mencetak `sisaDiTangan` yang sudah memperhitungkan
+        // pengembalian, padahal alokasinya BELUM berkurang -- angkanya meleset persis sebesar
+        // qty pengembalian, dan tidak ada yang tahu.
+        const pb = h.pembalikDistribusi;
+        const jembatanGagal = !!(pb && (pb.galat || pb.ditulis === 0));
+        // Kata kerjanya mengikuti JENIS. Sampai v316 kotak ini selalu berkata "disetor", termasuk
+        // untuk pengembalian -- bertentangan dengan paragraf di layar yang SAMA yang berbunyi
+        // "Potongan yang dikembalikan TIDAK dihitung sebagai baju jadi".
+        const kerja = kembali ? ' pcs</b> dikembalikan oleh <b>' : ' pcs</b> disetor oleh <b>';
+        kotak.innerHTML = '<div class="sp-sukses-isi"><b>' + h.totalQty + kerja +
+          rjdEscapeHtml_(h.namaLine) + '</b>' + (kembali ? ' (belum dijahit)' : '') + '. ' +
+          // Pada cabang gagal, `sisaDiTangan` SENGAJA tidak dicetak: dua keadaan yang berbeda
+          // tidak boleh mengeluarkan kotak yang sama, dan angka yang salah lebih buruk daripada
+          // angka yang tidak ada.
+          (jembatanGagal
+            ? ''
+            : 'Sisa di tangan line: <b>' + h.sisaDiTangan + ' pcs</b>.') +
+          (h.kembar ? ' <i>(sudah tersimpan sebelumnya -- tidak dicatat dua kali)</i>' : '') + '</div>' +
+          (jembatanGagal
+            ? '<div class="sp-sukses-galat"><b>&#9888; Pengembalian tercatat, TAPI jatah line ' +
+              'BELUM berkurang.</b> Baris pembalik di SD Distribusi Potongan gagal ditulis' +
+              (pb && pb.galat ? ': ' + rjdEscapeHtml_(String(pb.galat)) : '') + '. ' +
+              'Sampai itu dijalankan susulan, layar Bagi ke Line akan berkata potongan ini masih ' +
+              'di tangan line. Minta admin menjalankan <b>jalankanSemuaPembalikSetoranTertunda()</b> ' +
+              'dari editor Apps Script (distribusi-potongan.gs).</div>'
+            : '');
       } else {
         kotak.innerHTML = '<div class="sp-sukses-isi"><b>' + totalKirim + ' pcs</b> sudah tersimpan (jawaban server hilang di jalan, diperiksa ulang).</div>';
       }
