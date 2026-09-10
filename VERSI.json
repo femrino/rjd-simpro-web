@@ -1,5 +1,5 @@
 {
-  "web": "v315",
+  "web": "v316",
   "catatan": "Dibaca simpro-loader.js dari cabang main (jsDelivr @main, cache-buster per menit). 'web' = tag yang dimuat semua halaman; diubah rilis-web.sh sesudah tag terpush, lalu cache jsDelivr di-purge. 'halaman' = berkas per rute; salinan cadangannya ada di simpro-loader.js (HALAMAN_CADANGAN) -- kalau menambah halaman, ubah keduanya.",
   "halaman": {
     "_global": {

@@ -1243,7 +1243,11 @@ function ckBuildItemGroupsHtml_(daftarItem, opsi){
     const badan = '<tbody>' + warnaList.map(function(w){
       const selSize = kolom.map(function(s){
         const q = qtyDi(w, s);
-        return q > 0 ? '<td>' + q + '</td>' : '<td class="nol">-</td>';
+        // @360 (P11): `!== 0`, bukan `> 0`. Sel bernilai negatif (koreksi "-KOR") dulu
+        // disembunyikan jadi "-" TAPI tetap termasuk di kolom TOTAL baris itu, sehingga baris
+        // tabel TIDAK MENJUMLAH dan penjahit yang menghitung sendiri mendapat angka lain.
+        // Menyembunyikan angka yang ikut dijumlah lebih buruk daripada mencetak angka minus.
+        return q !== 0 ? '<td' + (q < 0 ? ' class="min"' : '') + '>' + q + '</td>' : '<td class="nol">-</td>';
       }).join("");
       let selHarga = "";
       if(tampilHarga){
@@ -1385,7 +1389,21 @@ function ckSPKLineHtml_(line, ringkasan){
           (line.batch.tanggalSerah ? ' &#183; ' + rjdEscapeHtml_(line.batch.tanggalSerah) : '') +
           ' &#183; ' + rjdEscapeHtml_(line.batch.idBatch) +
           ' &#183; total jatah ' + rjdEscapeHtml_(line.namaLine) + ' di PO ini ' + line.totalQtyLineSeluruh + ' pcs' +
-          ' (' + line.persenDariPO + '% dari PO ' + line.totalQtyPO + ' pcs untuk serahan ini)'
+          ' (' + line.persenDariPO + '% dari PO ' + line.totalQtyPO + ' pcs untuk serahan ini)' +
+          // @360 (P11): berapa dari batch ini yang datang dari KOREKSI, bukan dari serahan.
+          // Baris "-KOR" ikut ke batch induknya (disengaja), jadi kertas yang dicetak sebelum
+          // kepala line mengonfirmasi "Ada Selisih" dan yang dicetak sesudahnya BERBEDA ISI
+          // dengan nomor, tanggal, dan idBatch yang identik. Sekarang kertasnya mengaku.
+          ((line.batch.koreksi || []).length
+            ? ' &#183; <b>termasuk ' + line.batch.koreksi.length + ' koreksi</b> (' +
+              line.batch.koreksi.map(function (k) {
+                return (k.qty > 0 ? '+' : '') + k.qty + ' pcs' +
+                  (k.tanggalSerah ? ' ' + rjdEscapeHtml_(k.tanggalSerah) : '');
+              }).join(", ") + ')'
+            : '') +
+          ((line.batch.jumlahPengembalian || 0)
+            ? ' &#183; line ini juga punya ' + line.batch.jumlahPengembalian + ' pengembalian di PO ini'
+            : '')
         : 'Jatah ini <b>' + line.persenDariPO + '%</b> dari total PO ' + line.totalQtyPO + ' pcs' +
           (line.serahTerakhir ? ' &#183; serah terakhir ' + rjdEscapeHtml_(line.serahTerakhir) : '')) +
       (lain.length
@@ -1394,6 +1412,31 @@ function ckSPKLineHtml_(line, ringkasan){
           }).join(", ")
         : '') +
     '</div>' +
+    // @360 (P11): SEJARAH-nya, dan hanya kalau memang ada pengembalian. Kalimatnya PERSIS sama
+    // dengan kartu di layar (simpro-spk.js) supaya kertas dan layar tidak melahirkan dua istilah
+    // untuk hal yang sama. Kata "jatah" SENGAJA tidak diganti -- sejak v315 itu kata resmi proyek
+    // untuk angka NETO, dan menggantinya di kertas justru memutus kertas dari layar. Yang selama
+    // ini hilang dari kertas bukan labelnya, melainkan angka 220 dan 90-nya.
+    ((line.totalDikembalikanDistribusi || 0) > 0 && (line.totalPernahDiserahkan || 0) > 0
+      ? '<div class="ck-spk-line-asal">pernah diserahkan <b>' + line.totalPernahDiserahkan +
+        '</b> pcs &#183; dikembalikan <b>' + line.totalDikembalikanDistribusi +
+        '</b> pcs &#183; jatah sekarang <b>' +
+        (line.totalPernahDiserahkan - line.totalDikembalikanDistribusi) + '</b> pcs</div>'
+      : '') +
+    // @360 (P11): kalau ada jatah yang TIDAK tercetak di kertas ini, kertasnya mengaku alih-alih
+    // diam-diam mencetak angka lebih kecil. Nol pada seluruh data hidup 10 Sep 2026 (28 pasangan
+    // PO x line) -- ini penjaga, dan yang paling sering memicunya adalah artikel/warna yang
+    // di-rename di Rincian SO SESUDAH potongan dibagi.
+    ((line.qtyTidakTercetak || 0) > 0
+      ? '<div class="ck-spk-line-kurang"><b>&#9888; ' + line.qtyTidakTercetak + ' pcs jatah line ini ' +
+        'TIDAK tercetak di kertas ini</b> &#8212; barisnya tidak cocok dengan rincian SO PO ini' +
+        ((line.yangDijatuhkan || []).length
+          ? ': ' + line.yangDijatuhkan.map(function (x) {
+              return rjdEscapeHtml_(x.item + " / " + x.warna) + ' (' + x.qty + ' pcs)';
+            }).join(", ")
+          : '') +
+        '. Samakan namanya di Rincian SO, lalu cetak ulang.</div>'
+      : '') +
   '</div>';
 }
 
@@ -1541,7 +1584,18 @@ function ckRenderSPK(){
   const html = pilihHtml +
     '<div class="ck-dok">' +
       (d.isDraft ? '<div class="ck-spk-wm">DRAFT</div>' : '') +
-      ckHeaderHtml(d.line ? ("SPK " + String(d.line.namaLine).toUpperCase()) : "SURAT PERINTAH KERJA", nomorSPK, d.tanggalDiajukan) +
+      // @360 (P11): slot tanggal di kepala diisi WAKTU CETAK, bukan tanggal pesanan PO.
+      // Isi kertas ini bisa berubah sesudah dicetak (koreksi "-KOR" ikut ke batchnya, alokasi
+      // jadi neto begitu ada pengembalian), dan sampai v315 dua kertas berbeda isi TIDAK BISA
+      // dibedakan sama sekali. Dua dokumen tetangga di berkas ini sudah memakai pola yang sama
+      // (Rekap Kerja Line, Bukti Kas); SPK yang tertinggal. Tanggal pesanan TIDAK dibuang --
+      // ia pindah ke ck-spk-meta di bawah, supaya tidak ada informasi yang hilang.
+      ckHeaderHtml(d.line ? ("SPK " + String(d.line.namaLine).toUpperCase()) : "SURAT PERINTAH KERJA",
+        nomorSPK,
+        d.tanggalCetak
+          ? ('Dicetak ' + rjdEscapeHtml_(d.tanggalCetak) +
+             (d.dicetakOleh ? ' oleh ' + rjdEscapeHtml_(d.dicetakOleh) : ''))
+          : d.tanggalDiajukan) +
       (d.isDraft ? '<div class="ck-dok-catatan" style="background:#FCF3E3;border-left:3px solid #EBCFA0">' +
         '<b>DRAFT &#183; status "' + d.status + '".</b> Order ini BELUM disetujui jadi PO. Jangan dijadikan dasar memulai produksi atau memotong kain.</div>' : '') +
       (d.itemTanpaKain && d.itemTanpaKain.length ?
@@ -1567,6 +1621,12 @@ function ckRenderSPK(){
           : '<div class="sel"><div class="lbl">Target Kirim</div><div class="val">' + (d.targetTanggalKirim || "-") + '</div></div>') +
         '<div class="sel"><div class="lbl">' + (modePerItem ? "Qty Item Ini" : "Total Qty") + '</div><div class="val">' + totalDitampilkan + ' pcs</div></div>' +
         '<div class="sel"><div class="lbl">No. SO</div><div class="val">' + (d.noSOHasil || "-") + '</div></div>' +
+        // @360 (P11): tanggal pesanan PO pindah ke sini dari slot tanggal di kepala, yang kini
+        // dipakai waktu cetak. Dipindah, bukan dibuang.
+        (d.tanggalCetak && d.tanggalDiajukan
+          ? '<div class="sel"><div class="lbl">Tanggal Pesanan</div><div class="val">' +
+            rjdEscapeHtml_(d.tanggalDiajukan) + '</div></div>'
+          : '') +
       '</div>' +
       itemsHtml +
       // SPK dari PO: sebagian bagian bisa kosong karena artikelnya belum
