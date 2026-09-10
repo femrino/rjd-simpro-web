@@ -5457,17 +5457,31 @@ function spMkxIsiDariTerakhir_() {
   });
   const m = daftar[daftar.length - 1];
   const cat = document.getElementById("sp-mkx-asal");
-  if (!m) { if (cat) cat.innerHTML = ""; return; }
   const isi = function (id, nilai) {
     const el = document.getElementById(id);
     if (el && !String(el.value || "").trim() && nilai !== undefined && nilai !== null &&
         String(nilai) !== "") el.value = nilai;
   };
+  if (!m) {
+    // Tidak ada marker sebelumnya di item ini: allowance jatuh ke bawaan lama 0,02 -- angka yang
+    // dipakai 236 dari 246 marker aktif. Diisi DI SINI, bukan di markup, supaya saat ADA marker
+    // sebelumnya kotaknya masih kosong dan salinannya bisa menang.
+    isi("sp-mkx-allow", "0.02");
+    window.SP_MKX_ASAL = null;
+    if (cat) cat.innerHTML = "";
+    spMkxSegarkanKode_();
+    return;
+  }
   isi("sp-mkx-pola", spMkxPolaDariKode_(m.kodeMarker, m.susunanSize));
   isi("sp-mkx-lebar", m.lebarKain);
   isi("sp-mkx-allow", m.allowancePerLapis);
   isi("sp-mkx-kain", m.jenisKain);
   isi("sp-mkx-komponen", m.komponen);
+  // v325: diingat supaya panel bisa tahu kalau operator MENGGANTI kainnya tapi membiarkan
+  // allowance-nya ikut marker lama. Bukan aturan "kain X -> allowance Y" -- data hidup tidak
+  // mendukungnya (dari 47 marker berkain "Motif", 42 beralowance 0,02 dan hanya 5 nol) --
+  // melainkan pengingat bahwa dua medan itu bergerak bersama.
+  window.SP_MKX_ASAL = { kain: String(m.jenisKain || ""), allow: String(m.allowancePerLapis) };
   if (cat) {
     cat.innerHTML = 'Medan bersama disalin dari marker terakhir <b>' + spEsc_(m.kodeMarker || m.idMarker) +
       '</b>. Diukur pada 160 pasangan marker berurutan, salinan begini benar untuk allowance 99%, ' +
@@ -5522,6 +5536,7 @@ function spMkxSegarkanKode_() {
     sel.classList.toggle("sp-mkx-kembar", kembar);
   });
   spMkxSaranPola_();
+  spMkxAwasAllowance_();
   const b = document.getElementById("sp-mkx-tombol");
   if (b) {
     b.textContent = n ? "Pratinjau " + n + " marker" : "Pilih minimal satu size";
@@ -5545,6 +5560,37 @@ function spMkxUbah_() {
   const w = document.getElementById("sp-mkx-pratinjau");
   if (w && w.innerHTML) w.innerHTML = "";
   spMkxSegarkanKode_();
+}
+
+/**
+ * v325: Jenis Kain diganti, tapi Allowance masih persis milik marker yang disalin.
+ *
+ * Sampai 10 Sep 2026 allowance praktis konstanta: 236 dari 246 marker aktif 0,02. Sejak 11 Sep
+ * ia berhenti konstan -- Femri memakai 0 untuk kain yang sudah terukur mengikuti panel motifnya.
+ * Sejak itu, menyalin allowance dari marker sebelumnya benar SELAMA kainnya sama, dan menjadi
+ * salah tepat pada saat kainnya berganti. Diukur: dari 160 pasangan marker berurutan, kainnya
+ * berganti 32 kali.
+ *
+ * Sengaja TIDAK menebak nilainya. Aturan "motif -> 0" akan salah 42 kali dari 47 di data hidup;
+ * yang benar cuma bisa dikatakan orang yang memegang kainnya. Jadi panel menunjuk, bukan mengisi.
+ */
+function spMkxAwasAllowance_() {
+  const asal = window.SP_MKX_ASAL;
+  const elK = document.getElementById("sp-mkx-kain");
+  const elA = document.getElementById("sp-mkx-allow");
+  const wadah = document.getElementById("sp-mkx-awas-allow");
+  if (!elA || !wadah) return;
+  const lbl = elA.parentNode;
+  const rapi = function (x) { return String(x || "").trim().toLowerCase(); };
+  const ganti = !!(asal && elK && rapi(elK.value) !== rapi(asal.kain) &&
+    rapi(elA.value) === rapi(asal.allow));
+  if (lbl) lbl.classList.toggle("sp-mkx-awas", ganti);
+  wadah.innerHTML = ganti
+    ? "Jenis Kain diganti jadi <b>" + spEsc_(String(elK.value || "").trim() || "(kosong)") +
+      "</b>, tapi Allowance masih <b>" + spEsc_(String(elA.value || "").trim() || "(kosong)") +
+      "</b> &#8212; ikut marker sebelumnya (" + spEsc_(asal.kain || "(kosong)") + "). " +
+      "Periksa: allowance bisa berbeda per jenis kain."
+    : "";
 }
 
 /**
@@ -5643,7 +5689,13 @@ function spMkxPratinjau() {
       '<p class="sp-info">Item <b>' + spEsc_(it.artikel || "-") +
         (it.style ? " &#183; " + spEsc_(it.style) : " &#183; semua style") + '</b> &#183; ' +
         'kain <b class="' + (kain ? "" : "sp-mkx-kosong") + '">' + spEsc_(kain || "(kosong)") + '</b> &#183; ' +
-        'lebar ' + spEsc_(lebar || "-") + ' cm &#183; allowance ' + spEsc_(allow || "-") + ' &#183; ' +
+        // v325: kotak kosong dikirim apa adanya dan backend menggantinya dengan bawaan 0,02
+        // (simpanMarker_). Menampilkannya "-" membuat gerbang pratinjau menjanjikan "tanpa
+        // allowance" lalu menyimpan 0,02 -- persis jenis kebohongan yang gerbang ini ada untuk
+        // mencegahnya.
+        'lebar ' + spEsc_(lebar || "-") + ' cm &#183; allowance ' +
+        (String(allow).trim() === "" ? '0,02 <span class="sp-mkx-kosong">(bawaan)</span>'
+          : spEsc_(allow)) + ' &#183; ' +
         'komponen ' + spEsc_(komponen || "semua panel") + '</p>' +
       '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
         '<th>Kode Marker</th><th>Size</th><th>Pola/lapis</th><th>Panjang</th><th>Lampiran</th>' +
@@ -5808,11 +5860,19 @@ function spMkxPanelHtml_() {
             'type="number" value=""/></label>' +
         '</div>' +
         '<div class="sp-grid3">' +
+          // v325: value KOSONG, 0.02 tinggal jadi placeholder. Sebelumnya kotak ini dirender
+          // value="0.02", dan karena salinan medan bersama hanya mengisi kotak yang MASIH KOSONG,
+          // salinan allowance TIDAK PERNAH berjalan -- padahal catatan di layar menjanjikan
+          // "disalin dari marker terakhir, benar untuk allowance 99%". Panel memberitahu satu hal
+          // dan melakukan hal lain, dan yang menang selalu 0,02 apa pun isi marker sebelumnya.
+          // Berbahaya sejak allowance berhenti jadi konstanta: 11 Sep 2026 Femri memakai 0 untuk
+          // kain yang sudah terukur mengikuti panel motif dan 0,02 untuk polos.
           '<label>Allowance per lapis (m)<input id="sp-mkx-allow" min="0" placeholder="0.02" ' +
-            'step="0.001" type="number" value="0.02"/></label>' +
+            'step="0.001" type="number" value=""/></label>' +
           '<label>Komponen<input id="sp-mkx-komponen" list="sp-datalist-komponen" ' +
             'placeholder="kosongkan = semua panel" type="text" value=""/></label>' +
         '</div>' +
+        '<div class="sp-mkx-saran" id="sp-mkx-awas-allow"></div>' +
         '<div class="sp-mkx-saran" id="sp-mkx-saran"></div>' +
         '<p class="sp-info sp-mkx-catatan" id="sp-mkx-asal"></p>' +
         '<p class="sp-info"><b>{size}</b> di Pola Kode diganti nama size tiap baris: ' +
