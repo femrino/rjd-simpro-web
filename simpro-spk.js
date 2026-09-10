@@ -5165,6 +5165,456 @@ function spDaftarItemPO_() {
   return window.SP_PO_DAFTAR_ITEM || [];
 }
 
+/* ============================================================
+ * MATRIKS MARKER -- input banyak marker sekaligus (v322)
+ * ============================================================
+ * Bentuk kerja yang SEBENARNYA, diukur 10 Sep 2026 atas 236 marker aktif:
+ *
+ *   217 dari 236 (92%) susunan size-nya SATU size saja; 170 di antaranya satu pola. Kode marker
+ *   mengikuti pola "<kain/warna> - <size>": "Motif - S > Motif - M > Motif - L > ..." lalu
+ *   "White - S > White - M > ...". Jadi marker bukan DAFTAR, melainkan MATRIKS kain x size.
+ *
+ *   Dalam satu grup berawalan kode sama (44 grup, 193 marker):
+ *     allowance konstan 44 dari 44 | lebar 43 dari 44 | komponen 43 dari 44 | jenis kain 36 dari 44
+ *     PANJANG berbeda di setiap baris pada 35 dari 44 grup.
+ *
+ * Artinya untuk satu warna operator mengetik ulang awalan/lebar/allowance/kain/komponen 6-12 kali,
+ * dan yang benar-benar berubah cuma SIZE dan PANJANG. Panel ini membalik urutannya: medan bersama
+ * diisi SEKALI di atas, lalu satu baris per size yang isinya panjang saja.
+ *
+ * KENAPA ADA PRATINJAU, bukan langsung simpan. Dari 68 marker berstatus Batal, 47 berpola "ketik
+ * ulang cepat" -- dibatalkan lalu diketik ulang dalam <= 60 menit dengan <= 3 medan berbeda. Itu
+ * bukan masalah kecepatan mengetik, itu masalah kesempatan MEMERIKSA. Mempercepat penyimpanan
+ * tanpa menambah pemeriksaan akan memperbanyak angka itu, bukan menguranginya. Jadi yang dipangkas
+ * pengetikannya; pemeriksaannya justru ditambah satu langkah wajib.
+ *
+ * KENAPA SATU PERMINTAAN PER BARIS, bukan satu permintaan massal. Lampiran diukur BERBEDA di setiap
+ * baris pada 41 dari 44 grup (bukan dipakai bersama), dan 227 dari 236 marker punya gambar layout.
+ * Satu payload berisi 12 baris x 2 berkas melewati batas doPost. Memakai rute simpanMarker yang
+ * sudah ada juga berarti TIDAK ADA rute tulis baru ke ledger: anti-kembar berjendela 300 detik dari
+ * @364 membuat pengiriman ulang aman, dan baris yang gagal bisa diulang sendiri tanpa menyentuh
+ * yang sudah berhasil -- baris berhasil dicentang-lepas, baris gagal tetap tercentang.
+ */
+function spMkxToggle() {
+  window.SP_MKX_BUKA = !window.SP_MKX_BUKA;
+  const isi = document.getElementById("sp-mkx-isi");
+  const tg = document.getElementById("sp-mkx-toggle");
+  if (isi) isi.hidden = !window.SP_MKX_BUKA;
+  if (tg) tg.innerHTML = spMkxLabelToggle_();
+  if (window.SP_MKX_BUKA) spMkxIsiDariTerakhir_();
+}
+
+function spMkxLabelToggle_() {
+  return (window.SP_MKX_BUKA ? "&#9660; " : "&#9654; ") +
+    "Input banyak marker sekaligus &#8212; satu baris per size";
+}
+
+/**
+ * Pola kode dari sebuah marker: "Motif - S" dengan susunan {S:1} menjadi "Motif - {size}".
+ *
+ * Hanya dikembalikan kalau token size benar-benar ada di EKOR kode (boleh diikuti kurung tutup
+ * atau spasi). Kalau tidak, pola dibiarkan kosong -- menebak awalan pada penamaan bebas seperti
+ * "Khiban Square 140" justru menanam kode yang salah di 12 baris sekaligus.
+ */
+function spMkxPolaDariKode_(kode, susunan) {
+  const sz = Object.keys(susunan || {});
+  if (sz.length !== 1) return "";
+  const k = String(kode || "");
+  const t = String(sz[0]);
+  const p = k.toUpperCase().lastIndexOf(t.toUpperCase());
+  if (p === -1) return "";
+  const ekor = k.slice(p + t.length);
+  if (ekor.replace(/[\s\)\]]/g, "") !== "") return "";
+  return k.slice(0, p) + "{size}" + ekor;
+}
+
+function spMkxKode_(pola, sz) {
+  return String(pola || "").split("{size}").join(sz).trim();
+}
+
+/**
+ * Isi medan bersama dari marker AKTIF TERAKHIR pada item yang sedang dipilih -- dan HANYA medan
+ * yang masih kosong, supaya tidak pernah menimpa yang sudah diketik.
+ *
+ * Ketepatannya diukur pada 160 pasangan marker berurutan (PO sama, jeda <= 2 jam, bukan revisi):
+ *   allowance 99% | komponen 98% | lebar 90% | jenis kain 86%
+ * Jenis kain paling sering meleset -- 22 dari 160 -- dan melesetnya SENYAP: tidak ada yang salah
+ * di layar, markernya cuma tercatat pada kain yang keliru. Karena itu medannya diberi penanda
+ * .sp-mkx-awas dan disebut namanya di catatan, bukan diam-diam dipercaya.
+ */
+function spMkxIsiDariTerakhir_() {
+  const it = spMkxItem_();
+  const daftar = (window.SP_MARKER || []).filter(function (m) {
+    if (m.warisan) return false;
+    if (String(m.status || "") === "Batal") return false;
+    if (!it) return true;
+    if (it.style) return m.artikel === it.artikel && m.style === it.style;
+    return m.artikel === it.artikel;
+  });
+  const m = daftar[daftar.length - 1];
+  const cat = document.getElementById("sp-mkx-asal");
+  if (!m) { if (cat) cat.innerHTML = ""; return; }
+  const isi = function (id, nilai) {
+    const el = document.getElementById(id);
+    if (el && !String(el.value || "").trim() && nilai !== undefined && nilai !== null &&
+        String(nilai) !== "") el.value = nilai;
+  };
+  isi("sp-mkx-pola", spMkxPolaDariKode_(m.kodeMarker, m.susunanSize));
+  isi("sp-mkx-lebar", m.lebarKain);
+  isi("sp-mkx-allow", m.allowancePerLapis);
+  isi("sp-mkx-kain", m.jenisKain);
+  isi("sp-mkx-komponen", m.komponen);
+  if (cat) {
+    cat.innerHTML = 'Medan bersama disalin dari marker terakhir <b>' + spEsc_(m.kodeMarker || m.idMarker) +
+      '</b>. Diukur pada 160 pasangan marker berurutan, salinan begini benar untuk allowance 99%, ' +
+      'komponen 98%, lebar 90% &#8212; tapi <b>jenis kain cuma 86%</b> (meleset 22 dari 160, dan ' +
+      'melesetnya tanpa tanda apa pun di layar). Periksa kotak Jenis Kain sebelum lanjut.';
+  }
+  spMkxSegarkanKode_();
+}
+
+/** Item terpilih di panel matriks; sejalan dengan pembacaan di spSimpanMarker. */
+function spMkxItem_() {
+  const daftar = spDaftarItemPO_();
+  const sel = document.getElementById("sp-mkx-item");
+  if (sel && sel.value === "semua") {
+    const dasar = daftar[0] || window.SP_PO_ITEM || {};
+    return { brand: dasar.brand, artikel: dasar.artikel, style: "" };
+  }
+  if (sel && daftar[Number(sel.value)]) return daftar[Number(sel.value)];
+  return daftar[0] || window.SP_PO_ITEM || {};
+}
+
+/** Perbarui kolom pratayang kode di tiap baris. Dipanggil tiap pola/centang berubah. */
+function spMkxSegarkanKode_() {
+  const pola = (document.getElementById("sp-mkx-pola") || {}).value || "";
+  let n = 0;
+  document.querySelectorAll("#sp-mkx-tabel tbody tr").forEach(function (tr) {
+    const cb = tr.querySelector(".sp-mkx-aktif");
+    const sel = tr.querySelector(".sp-mkx-kode");
+    const sz = (tr.querySelector(".sp-mkx-sz") || {}).textContent || "";
+    if (!sel) return;
+    const aktif = cb && cb.checked;
+    tr.classList.toggle("sp-mkx-mati", !aktif);
+    if (aktif) n++;
+    const kode = spMkxKode_(pola, sz);
+    sel.textContent = kode || "·";
+  });
+  const b = document.getElementById("sp-mkx-tombol");
+  if (b) {
+    b.textContent = n ? "Pratinjau " + n + " marker" : "Pilih minimal satu size";
+    b.disabled = !n;
+  }
+}
+
+/**
+ * Setiap perubahan di dalam panel MEMBATALKAN pratinjau.
+ *
+ * Tanpa ini gerbangnya bocor secara halus: pratinjau memperlihatkan keadaan SEBELUM perubahan,
+ * sementara tombol di bawahnya mengirim keadaan SESUDAH. Janji gerbang ini adalah "yang dilihat
+ * sama dengan yang tersimpan"; melanggarnya diam-diam lebih buruk daripada tidak punya gerbang,
+ * karena orang berhenti memeriksa justru sesudah percaya. Aturan yang sama sudah berlaku untuk
+ * seluruh frontend: snapshot tidak boleh tampil sesudah keadaannya berubah.
+ *
+ * Dipasang SEKALI di wadah panel, bukan di tiap kotak -- input dan change menggelembung, jadi
+ * kotak yang ditambahkan nanti ikut terjaga tanpa perlu diingat.
+ */
+function spMkxUbah_() {
+  const w = document.getElementById("sp-mkx-pratinjau");
+  if (w && w.innerHTML) w.innerHTML = "";
+  spMkxSegarkanKode_();
+}
+
+/**
+ * Baca grid jadi daftar baris siap kirim. Galat menyebut SIZE-nya, bukan cuma "ada yang kosong" --
+ * pesan tanpa identitas tidak bisa ditindaklanjuti pada grid berisi 12 baris.
+ */
+function spMkxKumpulkan_() {
+  const galat = [];
+  const baris = [];
+  const pola = (document.getElementById("sp-mkx-pola") || {}).value || "";
+  const trs = [];
+  document.querySelectorAll("#sp-mkx-tabel tbody tr").forEach(function (tr) { trs.push(tr); });
+  const dipakai = {};
+  trs.forEach(function (tr) {
+    const cb = tr.querySelector(".sp-mkx-aktif");
+    if (!cb || !cb.checked) return;
+    const sz = ((tr.querySelector(".sp-mkx-sz") || {}).textContent || "").trim();
+    const panjang = Number((tr.querySelector(".sp-mkx-panjang") || {}).value) || 0;
+    const qty = Number((tr.querySelector(".sp-mkx-qty") || {}).value) || 0;
+    const kode = spMkxKode_(pola, sz);
+    if (!kode) galat.push("Size " + sz + ": kode marker kosong. Isi Pola Kode di atas.");
+    if (panjang <= 0) galat.push("Size " + sz + ": panjang marker belum diisi.");
+    if (qty <= 0) galat.push("Size " + sz + ": jumlah pola per lapis harus lebih dari 0.");
+    // Dua size yang menghasilkan kode SAMA berarti pola tidak memuat {size}: baris kedua dan
+    // seterusnya akan ditolak server sebagai kembar. Lebih jujur dihentikan di sini, dengan
+    // menyebut kode yang bentrok.
+    if (kode) {
+      if (dipakai[kode]) galat.push("Kode '" + kode + "' dipakai dua kali (size " + dipakai[kode] +
+        " dan " + sz + "). Pola Kode harus memuat {size}.");
+      else dipakai[kode] = sz;
+    }
+    baris.push({ tr: tr, cb: cb, sz: sz, kode: kode, panjang: panjang, qty: qty,
+      sudahAda: spMkxKodeSudahAda_(kode),
+      elLayout: tr.querySelector(".sp-mkx-layout"), elFile: tr.querySelector(".sp-mkx-file"),
+      hasil: tr.querySelector(".sp-mkx-hasil") });
+  });
+  if (!baris.length) galat.push("Belum ada size yang dicentang.");
+  return { baris: baris, galat: galat };
+}
+
+/**
+ * Marker AKTIF di item ini yang kodenya sama persis -- PERINGATAN, bukan larangan.
+ *
+ * Kesalahan paling mungkin yang dilahirkan panel ini: satu warna selesai, lalu Pola Kode LUPA
+ * diganti dan enam marker berikutnya lahir berkode sama dengan yang barusan. Anti-kembar @364
+ * berjendela 300 detik hanya menangkapnya kalau kebetulan cepat, dan panjangnya berbeda sehingga
+ * ia BUKAN kembar menurut definisi mana pun -- yang lahir adalah dua entri berkode sama dengan
+ * panjang berbeda di dropdown gelaran, persis penyakit yang @340 (PK-3) sudah harus tambal.
+ *
+ * TIDAK dilarang, karena di data hidup pengulangan kode itu kadang DISENGAJA: LQ 4.0 punya 12
+ * marker "Grey - ..." dengan 6 kode dan 12 panjang berbeda. Melarangnya akan menolak pekerjaan
+ * yang sah. Jadi disebutkan saja di pratinjau, dengan ID marker yang sudah ada.
+ */
+function spMkxKodeSudahAda_(kode) {
+  const it = spMkxItem_();
+  const k = String(kode || "").trim().toUpperCase();
+  if (!k) return null;
+  const sama = (window.SP_MARKER || []).filter(function (m) {
+    if (m.warisan) return false;
+    if (String(m.status || "") === "Batal") return false;
+    if (String(m.kodeMarker || "").trim().toUpperCase() !== k) return false;
+    if (it && it.style) return m.artikel === it.artikel && m.style === it.style;
+    if (it) return m.artikel === it.artikel;
+    return true;
+  });
+  return sama.length ? sama[sama.length - 1] : null;
+}
+
+/** Gerbang pratinjau. Tidak ada jalur yang melewati ini menuju penyimpanan. */
+function spMkxPratinjau() {
+  const info = spMkxKumpulkan_();
+  const wadah = document.getElementById("sp-mkx-pratinjau");
+  if (!wadah) return;
+  if (info.galat.length) {
+    wadah.innerHTML = '<div class="sp-mkx-galat"><b>Belum bisa disimpan:</b><ul>' +
+      info.galat.map(function (g) { return "<li>" + spEsc_(g) + "</li>"; }).join("") + "</ul></div>";
+    return;
+  }
+  const it = spMkxItem_();
+  const kain = (document.getElementById("sp-mkx-kain") || {}).value || "";
+  const lebar = (document.getElementById("sp-mkx-lebar") || {}).value || "";
+  const allow = (document.getElementById("sp-mkx-allow") || {}).value || "";
+  const komponen = (document.getElementById("sp-mkx-komponen") || {}).value || "";
+  wadah.innerHTML =
+    '<div class="sp-mkx-pratinjau">' +
+      '<h5>Periksa dulu &#8212; ' + info.baris.length + ' marker akan dibuat</h5>' +
+      '<p class="sp-info">Item <b>' + spEsc_(it.artikel || "-") +
+        (it.style ? " &#183; " + spEsc_(it.style) : " &#183; semua style") + '</b> &#183; ' +
+        'kain <b class="' + (kain ? "" : "sp-mkx-kosong") + '">' + spEsc_(kain || "(kosong)") + '</b> &#183; ' +
+        'lebar ' + spEsc_(lebar || "-") + ' cm &#183; allowance ' + spEsc_(allow || "-") + ' &#183; ' +
+        'komponen ' + spEsc_(komponen || "semua panel") + '</p>' +
+      '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
+        '<th>Kode Marker</th><th>Size</th><th>Pola/lapis</th><th>Panjang</th><th>Lampiran</th>' +
+      '</tr></thead><tbody>' +
+      info.baris.map(function (b) {
+        const nL = (b.elLayout && b.elLayout.files) ? b.elLayout.files.length : 0;
+        const nF = (b.elFile && b.elFile.files) ? b.elFile.files.length : 0;
+        return '<tr' + (b.sudahAda ? ' class="sp-mkx-sudah"' : "") + '>' +
+          '<td><b>' + spEsc_(b.kode) + '</b>' +
+          (b.sudahAda ? '<div class="sp-mkx-sudah-teks">kode ini sudah dipakai ' +
+            spEsc_(b.sudahAda.idMarker) + ' (' + b.sudahAda.panjangMarker + ' m)</div>' : "") +
+          '</td><td>' + spEsc_(b.sz) + '</td>' +
+          '<td>' + b.qty + '</td><td>' + b.panjang + ' m</td>' +
+          '<td>' + (nL + nF ? (nL + " gambar, " + nF + " file") :
+            '<span class="sp-mkx-kosong">tidak ada</span>') + '</td></tr>';
+      }).join("") +
+      '</tbody></table></div>' +
+      (info.baris.filter(function (b) { return b.sudahAda; }).length
+        ? '<p class="sp-mkx-ingat"><b>Periksa Pola Kode.</b> ' +
+            info.baris.filter(function (b) { return b.sudahAda; }).length +
+            ' dari ' + info.baris.length + ' kode sudah dipakai marker aktif di item ini. ' +
+            'Kadang memang disengaja (satu warna bisa punya dua marker sekode dengan panjang ' +
+            'berbeda) &#8212; tapi kalau Pola Kode lupa diganti sesudah selesai satu warna, ' +
+            'yang lahir adalah dua entri berkode sama di dropdown gelaran.</p>'
+        : "") +
+      '<p class="sp-info">Disimpan satu per satu, bukan sekaligus &#8212; kalau ada yang gagal, ' +
+        'baris lain tetap tersimpan dan yang gagal bisa diulang tanpa membuat kembar.</p>' +
+      '<div class="sp-mkx-status" id="sp-mkx-status"></div>' +
+      '<button class="sp-simpan-btn" onclick="spMkxSimpan(this)" type="button">Simpan ' +
+        info.baris.length + ' marker</button>' +
+    '</div>';
+}
+
+function spMkxKirim_(payload) {
+  return fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "simpanMarker", payload: payload })
+  })
+  // Dibaca sebagai TEKS dulu, baru JSON -- pola yang sama dengan spKirim_ (PL-6). Jawaban bukan
+  // JSON hampir selalu halaman login Google, bukan cacat data; tanpa terjemahan ini dua belas
+  // baris sekaligus menampilkan "Unexpected token <" dan tidak seorang pun tahu artinya
+  // "muat ulang halamannya".
+  .then(function (r) { return r.text(); })
+  .then(function (t) {
+    let d = null;
+    try { d = JSON.parse(t); } catch (e) {
+      // Tanpa entitas HTML: pesan ini masuk lewat spEsc_ saat ditampilkan, jadi "&#8212;" akan
+      // terbaca mentah sebagai "&#8212;" di layar, bukan sebagai tanda pisah.
+      throw new Error("Sesi login sepertinya sudah habis. Muat ulang halaman ini, lalu simpan lagi. " +
+        "Baris yang sudah tersimpan tidak akan terkirim dua kali.");
+    }
+    if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
+    return d;
+  });
+}
+
+/**
+ * Kirim baris demi baris. Berhasil -> centangnya dilepas dan ID-nya ditulis di baris itu; gagal ->
+ * tetap tercentang beserta sebabnya, jadi menekan Simpan lagi hanya mengulang yang gagal.
+ * Daftar marker baru disegarkan kalau SEMUA baris beres -- menyegarkannya saat masih ada yang
+ * gagal akan menghapus grid berikut pekerjaan yang belum tersimpan.
+ */
+async function spMkxSimpan(btn) {
+  const info = spMkxKumpulkan_();
+  if (info.galat.length) { spMkxPratinjau(); return; }
+  const it = spMkxItem_();
+  const kain = (document.getElementById("sp-mkx-kain") || {}).value || "";
+  const lebar = Number((document.getElementById("sp-mkx-lebar") || {}).value) || 0;
+  const allow = (document.getElementById("sp-mkx-allow") || {}).value;
+  const komponen = (document.getElementById("sp-mkx-komponen") || {}).value || "";
+  const st = document.getElementById("sp-mkx-status");
+  if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
+  let ok = 0, gagal = 0;
+  for (let n = 0; n < info.baris.length; n++) {
+    const b = info.baris[n];
+    if (st) st.textContent = "Menyimpan " + (n + 1) + " dari " + info.baris.length + ": " + b.kode + " ...";
+    let fileLayout = [], fileMarker = [];
+    try {
+      if (b.elLayout && b.elLayout.files && b.elLayout.files.length) {
+        fileLayout = await ofBacaBanyakFileSebagaiBase64_(b.elLayout.files);
+      }
+      if (b.elFile && b.elFile.files && b.elFile.files.length) {
+        fileMarker = await ofBacaBanyakFileSebagaiBase64_(b.elFile.files);
+      }
+    } catch (errUp) {
+      // Sama dengan jalur satuan: lampiran yang gagal dibaca TIDAK membatalkan markernya.
+      fileLayout = []; fileMarker = [];
+    }
+    const susunan = {};
+    susunan[b.sz] = b.qty;
+    try {
+      const d = await spMkxKirim_({
+        idPurchaseOrder: window.SP_PO_AKTIF,
+        brand: it.brand || "", artikel: it.artikel || "", style: it.style || "",
+        kodeMarker: b.kode, lebarKain: lebar, panjangMarker: b.panjang,
+        allowancePerLapis: allow, komponen: komponen, jenisKain: kain,
+        satuanPanjang: "m", susunanSize: susunan, status: "Final", idMarkerAsal: "",
+        catatan: "", urlLayout: "", urlFileMarker: "",
+        fileLayout: fileLayout, fileMarker: fileMarker
+      });
+      ok++;
+      b.cb.checked = false;
+      b.tr.classList.remove("sp-mkx-gagal");
+      b.tr.classList.add("sp-mkx-ok");
+      if (b.hasil) {
+        b.hasil.innerHTML = '<span class="sp-mkx-ok-teks">' + spEsc_(d.idMarker || "tersimpan") +
+          (d.kembar ? " (sudah ada)" : "") + '</span>';
+      }
+    } catch (e) {
+      gagal++;
+      b.tr.classList.remove("sp-mkx-ok");
+      b.tr.classList.add("sp-mkx-gagal");
+      if (b.hasil) {
+        b.hasil.innerHTML = '<span class="sp-mkx-gagal-teks">' + spEsc_(e.message || e) + '</span>';
+      }
+    }
+  }
+  if (btn) { btn.disabled = false; btn.textContent = "Simpan ulang yang gagal"; }
+  spMkxSegarkanKode_();
+  if (st) {
+    st.innerHTML = gagal
+      ? '<b>' + ok + ' tersimpan, ' + gagal + ' gagal.</b> Baris yang gagal masih tercentang beserta ' +
+        'sebabnya &#8212; perbaiki lalu tekan Simpan lagi. Yang sudah tersimpan tidak akan terkirim dua kali.'
+      : '<b>' + ok + ' marker tersimpan.</b>';
+  }
+  if (!gagal) {
+    alert(ok + " marker tersimpan.");
+    spMuatMarker();
+  }
+}
+
+/** Panel matriks. Hanya untuk marker BARU -- revisi punya bentuk kerja sendiri. */
+function spMkxPanelHtml_() {
+  const sizes = spSizePO_();
+  const dariOrder = (window.SP_SIZE_SUMBER === "order");
+  const buka = !!window.SP_MKX_BUKA;
+  return '' +
+    '<div class="sp-mkx" id="sp-mkx">' +
+      '<button class="sp-mkx-toggle" id="sp-mkx-toggle" onclick="spMkxToggle()" type="button">' +
+        spMkxLabelToggle_() + '</button>' +
+      '<div class="sp-mkx-isi" id="sp-mkx-isi" onchange="spMkxUbah_()" oninput="spMkxUbah_()"' +
+        (buka ? "" : ' hidden="hidden"') + '>' +
+        '<p class="sp-info">Satu kain/warna, satu marker per size &#8212; bentuk yang dipakai 217 ' +
+          'dari 236 marker yang sudah ada. Medan bersama diisi sekali di sini; yang berubah tiap ' +
+          'baris cuma panjang. <b>Tidak langsung tersimpan</b>: ada pratinjau dulu.</p>' +
+        (spDaftarItemPO_().length > 1
+          ? '<div class="sp-grid3"><label>Item (artikel &#183; style)<select id="sp-mkx-item" ' +
+              'onchange="spMkxIsiDariTerakhir_()">' +
+              spDaftarItemPO_().map(function (it, idx) {
+                return '<option value="' + idx + '">' + spEsc_(it.artikel) +
+                  (it.style ? " &#183; " + spEsc_(it.style) : "") + '</option>';
+              }).join("") +
+              '<option value="semua">&#8212; Berlaku untuk SEMUA style &#8212;</option>' +
+            '</select></label></div>'
+          : "") +
+        '<div class="sp-grid3">' +
+          '<label>Pola Kode Marker<input id="sp-mkx-pola" ' +
+            'placeholder="mis. Motif - {size}" type="text" value=""/></label>' +
+          '<label class="sp-mkx-awas">Jenis Kain<input id="sp-mkx-kain" list="sp-datalist-kain" ' +
+            'placeholder="mis. Polos" value=""/></label>' +
+          '<label>Lebar Kain (cm)<input id="sp-mkx-lebar" min="0" placeholder="150" step="0.5" ' +
+            'type="number" value=""/></label>' +
+        '</div>' +
+        '<div class="sp-grid3">' +
+          '<label>Allowance per lapis (m)<input id="sp-mkx-allow" min="0" placeholder="0.02" ' +
+            'step="0.001" type="number" value="0.02"/></label>' +
+          '<label>Komponen<input id="sp-mkx-komponen" list="sp-datalist-komponen" ' +
+            'placeholder="kosongkan = semua panel" type="text" value=""/></label>' +
+        '</div>' +
+        '<p class="sp-info sp-mkx-catatan" id="sp-mkx-asal"></p>' +
+        '<p class="sp-info"><b>{size}</b> di Pola Kode diganti nama size tiap baris: ' +
+          '"Motif - {size}" jadi "Motif - S", "Motif - M", dan seterusnya. Bentuk lain ikut: ' +
+          '"Polos LS - ({size})", "Cokelat Tua {size}".</p>' +
+        (dariOrder ? "" : '<p class="sp-info sp-size-catatan">Rincian ukuran order tidak terbaca, ' +
+          'jadi daftar di bawah ukuran standar dan tidak ada yang dicentang otomatis. Centang ' +
+          'hanya ukuran yang memang ada di order ini.</p>') +
+        '<div class="sp-tabelwrap"><table class="sp-tabel sp-mkx-tabel" id="sp-mkx-tabel"><thead><tr>' +
+          '<th></th><th>Size</th><th>Kode Marker</th><th>Panjang (m)</th><th>Pola/lapis</th>' +
+          '<th>Lampiran</th><th></th></tr></thead><tbody>' +
+          sizes.map(function (sz) {
+            return '<tr>' +
+              '<td data-label=""><input class="sp-mkx-aktif" ' +
+                'type="checkbox"' + (dariOrder ? ' checked="checked"' : "") + '/></td>' +
+              '<td class="sp-mkx-sz" data-label="Size">' + spEsc_(sz) + '</td>' +
+              '<td class="sp-mkx-kode" data-label="Kode">&#183;</td>' +
+              '<td data-label="Panjang"><input class="sp-mkx-panjang" min="0" placeholder="1.207" ' +
+                'step="0.001" type="number"/></td>' +
+              '<td data-label="Pola/lapis"><input class="sp-mkx-qty" min="1" step="1" ' +
+                'type="number" value="1"/></td>' +
+              '<td class="sp-mkx-lamp" data-label="Lampiran">' +
+                '<input accept="image/*" class="sp-mkx-layout" multiple="multiple" type="file"/>' +
+                '<input class="sp-mkx-file" multiple="multiple" type="file"/></td>' +
+              '<td class="sp-mkx-hasil" data-label=""></td></tr>';
+          }).join("") +
+        '</tbody></table></div>' +
+        '<button class="sp-simpan-btn" id="sp-mkx-tombol" onclick="spMkxPratinjau()" ' +
+          'type="button">Pratinjau</button>' +
+        '<div id="sp-mkx-pratinjau"></div>' +
+      '</div>' +
+    '</div>';
+}
+
 function spRenderFormMarker_(asal) {
   const sizes = spSizePO_();
   const a = asal || {};
@@ -5204,7 +5654,11 @@ function spRenderFormMarker_(asal) {
           "Isi hanya ukuran yang memang ada di order ini.") +
     '</p>';
   document.getElementById("sp-marker-form").innerHTML =
-    '<h4 class="sp-subjudul">' + (asal ? "Revisi marker " + spEsc_(a.kodeMarker) : "Marker baru") + '</h4>' +
+    // v322: panel matriks di ATAS form satuan, dan hanya untuk marker BARU -- saat merevisi,
+    // yang dikerjakan satu marker tertentu dan panel massal cuma mengalihkan perhatian.
+    (asal ? "" : spMkxPanelHtml_()) +
+    '<h4 class="sp-subjudul">' + (asal ? "Revisi marker " + spEsc_(a.kodeMarker) : "Marker baru") +
+      (asal ? "" : ' <span class="sp-mkx-sub">&#8212; satu marker</span>') + '</h4>' +
     (asal ? '<p class="sp-info">Marker lama tetap tersimpan. Yang ini jadi baris baru berstatus Revisi.</p>' : '') +
     // Pilihan ITEM. Marker milik ITEM (artikel + style), bukan PO. Tanpa
     // pilihan ini, semua marker ARUZA tercatat "Kemeja Long Sleeve" -- termasuk
@@ -5318,6 +5772,10 @@ function spRenderFormMarker_(asal) {
     '<input id="sp-mk-asal" type="hidden" value="' + spEsc_(a.idMarker || "") + '"/>' +
     '<button class="sp-simpan-btn" onclick="spSimpanMarker()" type="button">Simpan Marker</button>';
   spHitungMarker_();
+  // v322: panel matriks dirakit ulang bersama form ini, jadi keadaan terbuka/tertutupnya
+  // dipulihkan dari ingatan dan medan bersamanya diisi ulang dari marker terakhir.
+  if (!asal && window.SP_MKX_BUKA) spMkxIsiDariTerakhir_();
+  if (!asal) spMkxSegarkanKode_();
 }
 
 function spHitungMarker_() {

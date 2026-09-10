@@ -1919,3 +1919,46 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 /* @363 (P10 #22): asal-usul angka kolam pada layar Bagi ke Line. Redup dan di bawah baris sisa --
    ia MENJELASKAN angka sisa di atasnya, bukan angka yang berdiri sendiri. */
 .sp-sisa-asal { font-size: 10.5px; color: var(--ink-soft); margin-top: 2px; }
+
+/* ---- MATRIKS MARKER (v322): input banyak marker sekaligus, satu baris per size ---- */
+.sp-mkx { margin-bottom: 18px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--white); overflow: hidden; }
+.sp-mkx-toggle { display: block; width: 100%; text-align: left; padding: 12px 14px;
+  background: var(--cream); border: none; border-bottom: 1px solid var(--line);
+  font-family: inherit; font-size: 13px; font-weight: 600; color: var(--ink); cursor: pointer; }
+.sp-mkx-toggle:hover { color: var(--thread); }
+.sp-mkx-isi { padding: 14px; }
+.sp-mkx-sub { font-weight: 400; font-size: 11.5px; color: var(--muted); }
+.sp-mkx-catatan:empty { display: none; }
+/* Jenis kain: satu-satunya medan bersama yang terukur sering meleset (86% pada 160 pasangan
+   berurutan) DAN melesetnya senyap. Penandanya menetap, bukan berkedip, supaya masih terbaca
+   saat kotaknya diisi. */
+.sp-mkx-awas input { border-color: var(--gold, #C8964A) !important;
+  background: color-mix(in srgb, var(--gold, #C8964A) 7%, transparent); }
+.sp-mkx-tabel td, .sp-mkx-tabel th { vertical-align: middle; }
+.sp-mkx-tabel input[type="number"], .sp-mkx-tabel input[type="text"] { width: 96px; margin: 0;
+  padding: 6px 8px; }
+.sp-mkx-tabel .sp-mkx-kode { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; }
+.sp-mkx-lamp input[type="file"] { display: block; font-size: 10.5px; max-width: 190px; }
+.sp-mkx-lamp input[type="file"] + input[type="file"] { margin-top: 4px; }
+.sp-mkx-mati { opacity: .42; }
+.sp-mkx-ok { background: color-mix(in srgb, var(--thread, #2E7D5B) 8%, transparent); }
+.sp-mkx-gagal { background: color-mix(in srgb, #B3261E 8%, transparent); }
+.sp-mkx-ok-teks { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--thread, #2E7D5B); }
+.sp-mkx-gagal-teks { font-size: 10.5px; color: #B3261E; }
+.sp-mkx-kosong { color: var(--muted); }
+.sp-mkx-sudah { background: color-mix(in srgb, var(--gold, #C8964A) 9%, transparent); }
+.sp-mkx-sudah-teks { font-size: 10.5px; color: var(--gold, #C8964A); font-weight: 600; }
+.sp-mkx-ingat { margin: 10px 0 0; padding: 9px 12px; border-left: 3px solid var(--gold, #C8964A);
+  background: color-mix(in srgb, var(--gold, #C8964A) 7%, transparent); font-size: 12.5px; }
+.sp-mkx-galat { margin-top: 12px; padding: 10px 14px; border: 1px solid #B3261E;
+  border-radius: 8px; background: color-mix(in srgb, #B3261E 6%, transparent); font-size: 12.5px; }
+.sp-mkx-galat ul { margin: 6px 0 0; padding-left: 18px; }
+.sp-mkx-pratinjau { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--cream); }
+.sp-mkx-pratinjau h5 { margin: 0 0 8px; font-size: 13px; }
+.sp-mkx-status { min-height: 18px; margin: 8px 0 0; font-size: 12.5px; }
+@media (max-width: 700px) {
+  .sp-mkx-tabel input[type="number"] { width: 100%; }
+  .sp-mkx-lamp input[type="file"] { max-width: 100%; }
+}
