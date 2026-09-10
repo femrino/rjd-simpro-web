@@ -4016,12 +4016,21 @@ function spRenderTercatat_(jenis) {
     return;
   }
 
-  const aktif = daftar.filter(function (k) { return k.status !== "Dibatalkan"; }).length;
-  const batal = daftar.length - aktif;
+  // @361 (P12): pengembalian BUKAN pembagian. Penghitung ini menyebut semuanya "tercatat",
+  // sehingga 1 pembagian + 2 pengembalian terbaca "3 tercatat" -- persis kekeliruan yang sudah
+  // diperbaiki di strip chip pada v314, tapi panel ini tertinggal.
+  // Gerbangnya STATUS, bukan `pembalikDari`: kriterianya jadi sama dengan ledger, dan baris
+  // "Dikembalikan" yang DITULIS TANGAN (tarikan PPIC) ikut terlabeli -- ia juga bukan pembagian.
+  const kembaliBaris_ = function (k) { return jenis === "distribusi" && k.status === "Dikembalikan"; };
+  const hidup = daftar.filter(function (k) { return k.status !== "Dibatalkan"; });
+  const aktif = hidup.filter(function (k) { return !kembaliBaris_(k); }).length;
+  const nKembali = hidup.length - aktif;
+  const batal = daftar.length - hidup.length;
 
   wadah.innerHTML = '<div class="sp-card">' +
     '<h3 class="sp-judul">' + p.judul + '</h3>' +
     '<p class="sp-info">' + aktif + ' tercatat' +
+      (nKembali ? ' &#183; ' + nKembali + ' pengembalian' : '') +
       (batal ? ' &#183; ' + batal + ' dibatalkan' : '') +
       '. Salah input? Batalkan lalu catat ulang &#8212; barisnya tidak dihapus, ' +
       'supaya jelas pernah ada kesalahan.</p>' +
@@ -4055,19 +4064,28 @@ function spRenderTercatat_(jenis) {
         (k.warna ? ' &#183; <b>' + spEsc_(k.warna) + '</b>' : '');
       // Arah panah membedakan dua hal yang angkanya sama-sama "pcs":
       // distribusi keluar ke line, setoran masuk dari line.
+      const kembali = kembaliBaris_(k);
+      // @361 (P12): arah panah dipilih dari JENIS DAFTAR saja, tidak pernah melihat status --
+      // sehingga baris pengembalian terbaca "&#8594; Pak Ali" alias barang KELUAR ke line,
+      // padahal ia justru PULANG.
       const line = k.namaLine
-        ? (jenis === "distribusi" ? " &#8594; " : " &#8592; ") + spEsc_(k.namaLine)
+        ? ((jenis === "distribusi" && !kembali) ? " &#8594; " : " &#8592; ") + spEsc_(k.namaLine)
         : "";
       return '<tr' + (dibatalkan ? ' class="sp-ord-selesai"' : '') + '>' +
         '<td data-label="Catatan"><b>' + spEsc_(k[p.kunciId] || "-") + '</b>' +
           (dibatalkan ? ' <span class="sp-tag-batal">DIBATALKAN</span>' : '') +
+          // @361 (P12): lencananya sudah ada di rumah (dipakai sisi setoran sejak lama);
+          // sisi distribusi saja yang belum pernah memakainya.
+          (kembali && !dibatalkan ? ' <span class="sp-tag-kembali">DIKEMBALIKAN</span>' : '') +
           (k.status && !dibatalkan
             ? '<div class="sp-gelar-size">' + spEsc_(k.status) + '</div>' : '') +
           '</td>' +
         '<td data-label="Item">' + item + line +
           (sz ? '<div class="sp-gelar-size">' + sz + '</div>' : '') + '</td>' +
-        '<td class="num" data-label="Qty"><b>' +
-          (Number(k[p.kunciQty]) || 0) + '</b></td>' +
+        // @361 (P12): qty tetap POSITIF -- konvensi v314 -- tapi diberi KATA, karena angka
+        // telanjang di kolom yang sama dengan pembagian terbaca sebagai pembagian.
+        '<td class="num" data-label="Qty">' + (kembali ? '<span class="sp-qty-kembali">kembali</span> ' : '') +
+          '<b>' + (Number(k[p.kunciQty]) || 0) + '</b></td>' +
         '<td data-label="Tanggal">' + spEsc_(k[p.kunciTanggal] || "-") + '</td>' +
         '<td data-label="" class="sp-td-aksi">' +
           (dibatalkan
@@ -4137,6 +4155,10 @@ function spRenderRiwayat() {
     // untuk dibatalkan. Dua layar, satu aturan; sampai @355 KEDUANYA hanya mengunci
     // "Diterima"/"Ada Selisih", jadi menambal satu saja menyisakan tombol hidup di satunya.
     const pembalik = jenis === "distribusi" && !!k.pembalikDari;
+    // @361 (P12): SEMUA baris distribusi berstatus "Dikembalikan", bukan hanya yang cermin.
+    // Tarikan PPIC yang ditulis tangan juga barang PULANG, dan sampai v316 ia tampil sebagai
+    // serah-terima keluar bertanda plus tanpa satu penanda pun.
+    const kembaliDist = jenis === "distribusi" && k.status === "Dikembalikan";
     // Membatalkan catatan bagian lain akan ditolak backend. Menampilkan
     // tombolnya tetap salah: orang menekan, gagal, lalu berhenti percaya pada
     // layarnya. Yang MELIHAT riwayat tetap semua bagian -- itu justru yang
@@ -4163,11 +4185,14 @@ function spRenderRiwayat() {
       '</div>' +
       '<div class="sp-riw-artikel">' + rjdEscapeHtml_(k.artikel) +
         ' &#183; <b>' + rjdEscapeHtml_(k.warna || "-") + '</b>' +
-        (jenis === "distribusi" ? ' &#8594; ' + rjdEscapeHtml_(k.namaLine) : '') +
+        (jenis === "distribusi" ? (kembaliDist ? ' &#8592; ' : ' &#8594; ') + rjdEscapeHtml_(k.namaLine) : '') +
         (jenis === "setoran" ? ' &#8592; ' + rjdEscapeHtml_(k.namaLine || "-") : '') +
         // Pengembalian ditandai jelas: angkanya sama-sama "pcs", tapi artinya
         // sangat berbeda -- satu jadi baju, satu masih potongan.
-        (jenis === "setoran" && k.jenisSetoran === "Dikembalikan"
+        // @361 (P12): sisi DISTRIBUSI ikut memakai lencana yang sama. Di sini ia lebih penting
+        // daripada di chip: `totalQty` tersimpan POSITIF, jadi kartunya terbaca "70 pcs" persis
+        // seperti serahan biasa, dan satu-satunya pembedanya cuma teks status kecil di bawah.
+        ((jenis === "setoran" && k.jenisSetoran === "Dikembalikan") || kembaliDist
           ? ' <span class="sp-tag-kembali">DIKEMBALIKAN</span>' : '') + '</div>' +
       '<div class="sp-riw-sizes">' +
         (jenis === "setoran"
@@ -4205,7 +4230,10 @@ function spRenderRiwayat() {
       // menyesatkan daripada di chip, karena `totalQty` di sini tersimpan POSITIF sehingga barisnya
       // terbaca "70 pcs" seperti serahan biasa. Backend menolaknya sejak @358; tombolnya tetap
       // tidak boleh ada, dengan alasan yang sama seperti tombol Batalkan (PR-5).
-      (jenis === "distribusi" && !dibatalkan && !k.pembalikDari && id
+      // @361 (P12): gerbangnya `kembaliDist` (status), bukan `pembalikDari` (penanda cermin).
+      // Baris tarikan PPIC tulis tangan juga tidak punya SPK -- server menolaknya sejak @358 --
+      // jadi menawarkan tombolnya berarti mengundang kegagalan yang pasti.
+      (jenis === "distribusi" && !dibatalkan && !kembaliDist && id
         ? '<div class="sp-riw-cetak">' +
             spTombolDok_("sp-tautan sp-tautan-btn", "Cetak SPK serahan ini",
               "/p/cetak.html?jenis=spk&id=" + encodeURIComponent(k.idPurchaseOrder) +

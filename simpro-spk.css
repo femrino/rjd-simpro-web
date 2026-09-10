@@ -1903,3 +1903,7 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 .sp-spk-rantai-warna { display: flex; flex-wrap: wrap; gap: 3px 12px; margin-top: 3px; font-size: 11px; color: var(--ink-soft); }
 .sp-spk-rantai-warna b.perlu { color: #A63D3D; }
 .sp-spk-rantai-warna b.negatif { color: #A63D3D; text-decoration: underline dotted; }
+
+/* @361 (P12): kata "kembali" di depan angka pada tabel Pembagian Tercatat. Angkanya tetap
+   POSITIF (konvensi v314) -- yang membedakan artinya adalah katanya, bukan tandanya. */
+.sp-qty-kembali { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
