@@ -5398,6 +5398,38 @@ function spMkxPolaDariKode_(kode, susunan) {
   return k.slice(0, p) + "{size}" + ekor;
 }
 
+/**
+ * v326: kode marker memuat "panel" -> kainnya sudah terukur, allowance biasanya 0.
+ *
+ * Femri, 11 Sep 2026: *"tidak semua kain/motif terukur, biasanya kain/motif yang sudah terukur
+ * kita menyebutnya sesuai 'panel', dan di kode marker biasanya saya tulis motif (panel)."*
+ *
+ * Penandanya ada di KODE MARKER, kolom yang tidak pernah dicurigai -- bukan di Jenis Kain. Itu
+ * yang membuat pengukuran sebelumnya buntu: dari 47 marker berkain "Motif", 42 beralowance 0,02,
+ * jadi nama kain memang tidak meramalkan apa pun.
+ *
+ * Diukur DUA ARAH atas 246 marker aktif (diagnosaPenandaPanel, 11 Sep 2026):
+ *   kode memuat "panel": 10 | allowance 0: 10 | keduanya: 10
+ *   -> 10/10 dari dua arah, tanpa satu pun pengecualian, dan kata itu tidak muncul di Jenis Kain,
+ *      Komponen, maupun Catatan.
+ *
+ * MENYARANKAN, BUKAN MENGISI, dan itu bukan kehati-hatian basa-basi: contohnya baru 10 dan
+ * semuanya dibuat dalam dua hari oleh satu orang. Kecocokan sempurna pada sampel sekecil itu
+ * cukup untuk menunjuk, belum cukup untuk memutuskan sendiri. Arah sebaliknya (allowance 0 tanpa
+ * kata "panel") sengaja TIDAK dijaga: sama-sama 10/10, tapi melarang orang memakai 0 untuk kain
+ * yang kebetulan tidak dinamai begitu adalah aturan yang dibuat dari sepuluh baris.
+ */
+function spKodePanel_(kode) {
+  return String(kode || "").toLowerCase().indexOf("panel") !== -1;
+}
+
+function spSaranAllowancePanelHtml_(idTombol, fnPakai) {
+  return '<span class="sp-mkx-saran-teks">Kode memuat <b>panel</b> &#8212; kain terukur biasanya ' +
+    'tanpa allowance. Semua 10 marker berkode "panel" di sistem ini beralowance 0.</span> ' +
+    '<button class="sp-mkx-saran-btn" id="' + idTombol + '" onclick="' + fnPakai +
+    '" type="button">Pakai 0</button>';
+}
+
 function spMkxKode_(pola, sz) {
   return String(pola || "").split("{size}").join(sz).trim();
 }
@@ -5426,6 +5458,13 @@ function spMkxSaranPola_() {
       return '<button class="sp-mkx-saran-btn" data-pola="' + spEsc_(b) +
         '" onclick="spMkxPakaiPola(this.dataset.pola)" type="button">' + spEsc_(b) + '</button>';
     }).join(" ");
+}
+
+function spMkxPakaiAllowanceNol() {
+  const el = document.getElementById("sp-mkx-allow");
+  if (!el) return;
+  el.value = "0";
+  spMkxUbah_();
 }
 
 function spMkxPakaiPola(pola) {
@@ -5578,10 +5617,19 @@ function spMkxAwasAllowance_() {
   const asal = window.SP_MKX_ASAL;
   const elK = document.getElementById("sp-mkx-kain");
   const elA = document.getElementById("sp-mkx-allow");
+  const elP = document.getElementById("sp-mkx-pola");
   const wadah = document.getElementById("sp-mkx-awas-allow");
   if (!elA || !wadah) return;
   const lbl = elA.parentNode;
   const rapi = function (x) { return String(x || "").trim().toLowerCase(); };
+  // v326: penanda "panel" didahulukan -- ia menyebut nilai yang SEHARUSNYA, sedangkan peringatan
+  // ganti-kain cuma menyebut bahwa sesuatu perlu diperiksa. Menampilkan keduanya sekaligus
+  // membuat yang lebih berguna tenggelam.
+  if (spKodePanel_(elP && elP.value) && Number(elA.value) !== 0) {
+    if (lbl) lbl.classList.add("sp-mkx-awas");
+    wadah.innerHTML = spSaranAllowancePanelHtml_("sp-mkx-panel-nol", "spMkxPakaiAllowanceNol()");
+    return;
+  }
   const ganti = !!(asal && elK && rapi(elK.value) !== rapi(asal.kain) &&
     rapi(elA.value) === rapi(asal.allow));
   if (lbl) lbl.classList.toggle("sp-mkx-awas", ganti);
@@ -5991,16 +6039,19 @@ function spRenderFormMarker_(asal) {
           'Pilih yang markernya sedang dibuat &#8212; marker milik ITEM, bukan order.</p>'
       : '') +
     '<div class="sp-grid3">' +
-      '<label>Kode Marker<input id="sp-mk-kode" placeholder="mis. A" type="text" value="' +
-        spEsc_(a.kodeMarker || "") + '"/></label>' +
+      // v326: oninput dipasang di kotaknya sendiri, bukan di wadah form -- wadah #sp-marker-form
+      // juga memuat panel matriks, dan handler di sana akan ikut menyala tiap kotak matriks
+      // diketik.
+      '<label>Kode Marker<input id="sp-mk-kode" oninput="spMkAwasPanel_()" ' +
+        'placeholder="mis. A" type="text" value="' + spEsc_(a.kodeMarker || "") + '"/></label>' +
       '<label>Lebar Kain (cm)<input id="sp-mk-lebar" min="0" placeholder="150" step="0.5" type="number" value="' +
         (a.lebarKain || "") + '"/></label>' +
       '<label>Panjang Marker (m)<input id="sp-mk-panjang" min="0" placeholder="1.207" step="0.001" type="number" value="' +
         (a.panjangMarker || "") + '"/></label>' +
     '</div>' +
     '<div class="sp-grid3">' +
-      '<label>Allowance per lapis (m)<input id="sp-mk-allow" min="0" placeholder="0.02" ' +
-        'step="0.001" type="number" value="' +
+      '<label>Allowance per lapis (m)<input id="sp-mk-allow" min="0" oninput="spMkAwasPanel_()" ' +
+        'placeholder="0.02" step="0.001" type="number" value="' +
         (a.allowancePerLapis !== undefined ? a.allowancePerLapis : "0.02") + '"/></label>' +
       '<label>Jenis Kain<input id="sp-mk-kain" list="sp-datalist-kain" placeholder="mis. Polos" value="' +
         spEsc_(a.jenisKain || "") + '"/></label>' +
@@ -6008,6 +6059,7 @@ function spRenderFormMarker_(asal) {
         'placeholder="kosongkan = semua panel" type="text" value="' +
         spEsc_(a.komponen || "") + '"/></label>' +
     '</div>' +
+    '<div class="sp-mkx-saran" id="sp-mk-awas-allow"></div>' +
     '<p class="sp-info"><b>Komponen</b>: kosongkan kalau marker ini memuat semua panel ' +
       '(kasus paling umum). Isi hanya kalau sebagian panel punya marker sendiri &#8212; ' +
       'mis. "Variasi" atau "Kerah, Manset" untuk interlining. Tanpa ini, dua marker ' +
@@ -6064,10 +6116,34 @@ function spRenderFormMarker_(asal) {
     '<input id="sp-mk-asal" type="hidden" value="' + spEsc_(a.idMarker || "") + '"/>' +
     '<button class="sp-simpan-btn" onclick="spSimpanMarker()" type="button">Simpan Marker</button>';
   spHitungMarker_();
+  spMkAwasPanel_();
   // v322: panel matriks dirakit ulang bersama form ini, jadi keadaan terbuka/tertutupnya
   // dipulihkan dari ingatan dan medan bersamanya diisi ulang dari marker terakhir.
   if (!asal && window.SP_MKX_BUKA) spMkxIsiDariTerakhir_();
   if (!asal) spMkxSegarkanKode_();
+}
+
+/**
+ * v326: saran allowance 0 di form SATUAN. Sama aturannya dengan panel matriks -- dua form untuk
+ * pekerjaan yang sama tidak boleh menangkap kesalahan yang berbeda.
+ */
+function spMkAwasPanel_() {
+  const elK = document.getElementById("sp-mk-kode");
+  const elA = document.getElementById("sp-mk-allow");
+  const wadah = document.getElementById("sp-mk-awas-allow");
+  if (!elA || !wadah) return;
+  const lbl = elA.parentNode;
+  const perlu = spKodePanel_(elK && elK.value) && Number(elA.value) !== 0;
+  if (lbl) lbl.classList.toggle("sp-mkx-awas", perlu);
+  wadah.innerHTML = perlu
+    ? spSaranAllowancePanelHtml_("sp-mk-panel-nol", "spMkPakaiAllowanceNol()") : "";
+}
+
+function spMkPakaiAllowanceNol() {
+  const el = document.getElementById("sp-mk-allow");
+  if (!el) return;
+  el.value = "0";
+  spMkAwasPanel_();
 }
 
 function spHitungMarker_() {
