@@ -1459,7 +1459,7 @@ function ckRantaiSelHtml_(r){
   if(!r) return '<span class="ck-rl-sub">-</span>';
   const belum = r.belumQC > 0 ? '<div class="ck-rl-ket mepet">belum QC ' + r.belumQC + '</div>'
     : (r.belumQC < 0 ? '<div class="ck-rl-ket telat">QC melebihi setoran ' + Math.abs(r.belumQC) + '</div>' : '<div class="ck-rl-ket beres">QC tuntas</div>');
-  return '<div class="ck-rl-item">setor <b>' + r.setor + '</b>' + (r.setorMenunggu ? ' <span class="wr">+' + r.setorMenunggu + ' menunggu</span>' : '') + (r.kembali ? ' <span class="wr">' + r.kembali + ' dikembalikan</span>' : '') + '</div>' +
+  return '<div class="ck-rl-item">setor <b>' + r.setor + '</b>' + (r.setorMenunggu ? ' <span class="wr">+' + r.setorMenunggu + ' menunggu</span>' : '') + (r.kembali ? ' <span class="wr">' + r.kembali + ' dikembalikan (sudah dikurangi dari jatah)</span>' : '') + '</div>' +
     '<div class="ck-rl-item">QC <b>' + r.diperiksa + '</b> &#183; lolos <b>' + r.lolos + '</b>' + (r.afkir ? ' &#183; afkir ' + r.afkir : '') + (r.ditahan ? ' &#183; ditahan ' + r.ditahan : '') + '</div>' +
     (r.setor || r.diperiksa ? belum : '');
 }
@@ -1471,8 +1471,14 @@ function ckRenderRekapLine(d){
     '<div class="ck-rl-ringkas">' +
       '<div class="ck-rl-kartu"><div class="ck-rl-angka">' + d.jumlahPO + '</div>' +
         '<div class="ck-rl-lbl">order berjalan</div></div>' +
+      // @361 (P14): "dipegang" adalah kata BRUTO untuk angka NETO, dan ia berdiri PERSIS di
+      // sebelah kartu "pcs masih di line" -- dua kartu yang sama-sama mengklaim menjawab
+      // "berapa yang ada di tangan line", dengan angka berbeda. Kepala line yang menjumlahkan
+      // sendiri (130 dipegang - 130 setor - 90 dikembalikan) mendapat -90 sementara kertas
+      // menulis 0. Kata yang diganti, bukan bilangannya; "jatah aktif" sejajar dengan "jatah"
+      // yang sudah dipakai kedua kartu di layar sejak v315.
       '<div class="ck-rl-kartu"><div class="ck-rl-angka">' + d.totalQty + '</div>' +
-        '<div class="ck-rl-lbl">pcs dipegang</div></div>' +
+        '<div class="ck-rl-lbl">pcs jatah aktif</div></div>' +
       '<div class="ck-rl-kartu' + (d.jumlahTerlambat ? ' bahaya' : '') + '">' +
         '<div class="ck-rl-angka">' + d.jumlahTerlambat + '</div>' +
         '<div class="ck-rl-lbl">lewat deadline</div></div>' +
@@ -1512,6 +1518,14 @@ function ckRenderRekapLine(d){
             }).join("") + '</td>' +
           '<td class="num"><b>' + p.qtyLine + '</b>' +
             (p.qtyPO ? '<div class="ck-rl-sub">dari ' + p.qtyPO + ' pcs PO</div>' : '') +
+            // @361 (P14): SEJARAH per PO, dan hanya kalau memang ada pengembalian. Kalimatnya
+            // sejajar dengan kartu layar (v315) dan kertas SPK (v316) -- satu kamus untuk tiga
+            // dokumen. `qtyLineBruto`/`qtyDikembalikan` datang dari ledger yang sama dengan
+            // `qtyLine`, jadi ketiganya selalu rekonsiliasi. Payload gs lama -> baris ini absen.
+            ((p.qtyDikembalikan || 0) > 0 && (p.qtyLineBruto || 0) > 0
+              ? '<div class="ck-rl-sub ck-rl-asal">pernah diserahkan <b>' + p.qtyLineBruto +
+                '</b> &#183; dikembalikan <b>' + p.qtyDikembalikan + '</b></div>'
+              : '') +
             (p.rantai ? '<div class="ck-rl-sub ck-rl-diline">masih di line <b>' + p.rantai.diLine + '</b></div>' : '') + '</td>' +
           '<td class="ck-rl-rantai">' + ckRantaiSelHtml_(p.rantai) + '</td>' +
           '<td>' + rjdEscapeHtml_(p.deadline || "-") +
