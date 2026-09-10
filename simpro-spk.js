@@ -4698,7 +4698,22 @@ const SP_SIZE_STANDAR = ["S", "M", "L", "XL", "2XL", "3XL", "4XL", "All Size"];
  * cadangan berlapis, dan sumber mana yang terpakai diberitahukan ke pemakai --
  * bukan disembunyikan.
  */
-function spSizePO_() {
+/**
+ * Daftar size yang boleh dibuatkan marker.
+ *
+ * v327: menerima ITEM. Sampai v326 daftarnya se-PO, dan di PO multi-item itu salah -- Femri
+ * 11 Sep 2026: PO 260901/Abelia punya Dress (S M L XL) dan Koko Short Sleeve (M L XL), dan form
+ * menawarkan S untuk Koko sehingga operator bisa membuat marker untuk size yang tidak dipesan.
+ * gs @368 mengirim `size` per item di daftarItem; kalau item itu tidak punya satu pun qty > 0,
+ * daftarnya kosong dan kita jatuh ke daftar se-PO -- lebih banyak pilihan daripada yang perlu
+ * masih bisa dipakai, grid tanpa satu baris pun tidak.
+ *
+ * Tanpa argumen = perilaku lama (se-PO), dipakai pemanggil yang memang tidak sedang membicarakan
+ * satu item tertentu.
+ */
+function spSizePO_(item) {
+  const perItem = (item && item.size) || [];
+  if (perItem.length) { window.SP_SIZE_SUMBER = "order"; return perItem; }
   const dariBackend = window.SP_PO_SIZE || [];
   if (dariBackend.length) { window.SP_SIZE_SUMBER = "order"; return dariBackend; }
 
@@ -5876,8 +5891,53 @@ async function spMkxSimpan(btn) {
 }
 
 /** Panel matriks. Hanya untuk marker BARU -- revisi punya bentuk kerja sendiri. */
+/** Baris grid per size -- dipisah supaya bisa dirakit ulang saat ITEM berganti. */
+function spMkxBarisHtml_(sizes, dariOrder) {
+  return sizes.map(function (sz) {
+    return '<tr>' +
+      '<td data-label=""><input class="sp-mkx-aktif" ' +
+        'type="checkbox"' + (dariOrder ? ' checked="checked"' : "") + '/></td>' +
+      '<td class="sp-mkx-sz" data-label="Size">' + spEsc_(sz) + '</td>' +
+      '<td class="sp-mkx-kode" data-label="Kode">&#183;</td>' +
+      '<td data-label="Panjang"><input class="sp-mkx-panjang" min="0" placeholder="1.207" ' +
+        'step="0.001" type="number"/></td>' +
+      '<td data-label="Pola/lapis"><input class="sp-mkx-qty" min="1" step="1" ' +
+        'type="number" value="1"/></td>' +
+      '<td class="sp-mkx-lamp" data-label="Lampiran">' +
+        '<input accept="image/*" class="sp-mkx-layout" multiple="multiple" type="file"/>' +
+        '<input class="sp-mkx-file" multiple="multiple" type="file"/></td>' +
+      '<td class="sp-mkx-hasil" data-label=""></td></tr>';
+  }).join("");
+}
+
+/**
+ * v327: ITEM berganti -> grid dirakit ulang dengan size milik item itu, dan medan bersama
+ * DIKOSONGKAN lalu disalin ulang dari marker terakhir item yang baru.
+ *
+ * Medan bersama sengaja dikosongkan dulu: catatan di bawahnya menyebut dari marker mana salinan
+ * itu datang, dan kalau kotaknya masih memegang nilai item LAMA sementara catatannya sudah
+ * menyebut marker item BARU, panel kembali memberitahu satu hal sambil melakukan hal lain --
+ * cacat yang persis sama dengan allowance di v325.
+ */
+function spMkxGantiItem() {
+  const it = spMkxItem_();
+  const sizes = spSizePO_(it);
+  const tb = document.querySelector("#sp-mkx-tabel tbody");
+  if (tb) tb.innerHTML = spMkxBarisHtml_(sizes, window.SP_SIZE_SUMBER === "order");
+  ["sp-mkx-pola", "sp-mkx-kain", "sp-mkx-lebar", "sp-mkx-allow", "sp-mkx-komponen"]
+    .forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    });
+  window.SP_MKX_ASAL = null;
+  const w = document.getElementById("sp-mkx-pratinjau");
+  if (w) w.innerHTML = "";
+  spMkxIsiDariTerakhir_();
+  spMkxUbah_();
+}
+
 function spMkxPanelHtml_() {
-  const sizes = spSizePO_();
+  const sizes = spSizePO_(spMkxItem_());
   const dariOrder = (window.SP_SIZE_SUMBER === "order");
   const buka = !!window.SP_MKX_BUKA;
   return '' +
@@ -5891,7 +5951,7 @@ function spMkxPanelHtml_() {
           'baris cuma panjang. <b>Tidak langsung tersimpan</b>: ada pratinjau dulu.</p>' +
         (spDaftarItemPO_().length > 1
           ? '<div class="sp-grid3"><label>Item (artikel &#183; style)<select id="sp-mkx-item" ' +
-              'onchange="spMkxIsiDariTerakhir_()">' +
+              'onchange="spMkxGantiItem()">' +
               spDaftarItemPO_().map(function (it, idx) {
                 return '<option value="' + idx + '">' + spEsc_(it.artikel) +
                   (it.style ? " &#183; " + spEsc_(it.style) : "") + '</option>';
@@ -5932,21 +5992,7 @@ function spMkxPanelHtml_() {
         '<div class="sp-tabelwrap"><table class="sp-tabel sp-mkx-tabel" id="sp-mkx-tabel"><thead><tr>' +
           '<th></th><th>Size</th><th>Kode Marker</th><th>Panjang (m)</th><th>Pola/lapis</th>' +
           '<th>Lampiran</th><th></th></tr></thead><tbody>' +
-          sizes.map(function (sz) {
-            return '<tr>' +
-              '<td data-label=""><input class="sp-mkx-aktif" ' +
-                'type="checkbox"' + (dariOrder ? ' checked="checked"' : "") + '/></td>' +
-              '<td class="sp-mkx-sz" data-label="Size">' + spEsc_(sz) + '</td>' +
-              '<td class="sp-mkx-kode" data-label="Kode">&#183;</td>' +
-              '<td data-label="Panjang"><input class="sp-mkx-panjang" min="0" placeholder="1.207" ' +
-                'step="0.001" type="number"/></td>' +
-              '<td data-label="Pola/lapis"><input class="sp-mkx-qty" min="1" step="1" ' +
-                'type="number" value="1"/></td>' +
-              '<td class="sp-mkx-lamp" data-label="Lampiran">' +
-                '<input accept="image/*" class="sp-mkx-layout" multiple="multiple" type="file"/>' +
-                '<input class="sp-mkx-file" multiple="multiple" type="file"/></td>' +
-              '<td class="sp-mkx-hasil" data-label=""></td></tr>';
-          }).join("") +
+          spMkxBarisHtml_(sizes, dariOrder) +
         '</tbody></table></div>' +
         '<button class="sp-simpan-btn" id="sp-mkx-tombol" onclick="spMkxPratinjau()" ' +
           'type="button">Pratinjau</button>' +
@@ -5956,7 +6002,6 @@ function spMkxPanelHtml_() {
 }
 
 function spRenderFormMarker_(asal) {
-  const sizes = spSizePO_();
   const a = asal || {};
   // @364: INGAT pilihan Item sebelum innerHTML ditimpa.
   //
@@ -5983,6 +6028,22 @@ function spRenderFormMarker_(asal) {
   }
   window.SP_MK_ITEM_PO = window.SP_PO_AKTIF;
   const pilihIngat = asal ? null : window.SP_MK_ITEM_PILIH;
+  // v327: size mengikuti ITEM yang terpilih, dan indeksnya dihitung dengan aturan yang PERSIS
+  // sama dengan yang dipakai membuat <option> di bawah -- kalau dihitung dengan cara lain, suatu
+  // hari daftar sizenya akan menggambarkan item yang berbeda dari yang tertulis di dropdown.
+  const spItemAktif_ = function () {
+    const daftar = spDaftarItemPO_();
+    if (pilihIngat !== null && pilihIngat !== undefined) {
+      return (String(pilihIngat) === "semua") ? null : (daftar[Number(pilihIngat)] || null);
+    }
+    for (let n = 0; n < daftar.length; n++) {
+      if (a.artikel === daftar[n].artikel && a.style === daftar[n].style) return daftar[n];
+    }
+    // "Berlaku untuk SEMUA style" -> tidak ada satu item pun, jadi daftar se-PO yang benar.
+    if (a.artikel && !a.style) return null;
+    return daftar[0] || null;
+  };
+  const sizes = spSizePO_(spItemAktif_());
   // Catatan sumber ukuran. Muncul HANYA kalau bukan dari order -- kalau selalu
   // muncul, pesannya berhenti dibaca dan justru menutupi kasus yang benar-benar
   // perlu diperhatikan.
@@ -6010,7 +6071,7 @@ function spRenderFormMarker_(asal) {
     (spDaftarItemPO_().length > 1
       ? '<div class="sp-grid3">' +
           '<label>Item (artikel &#183; style)' +
-            '<select id="sp-mk-item">' +
+            '<select id="sp-mk-item" onchange="spMkGantiItem()">' +
               spDaftarItemPO_().map(function (it, idx) {
                 // @364: kalau ada ingatan (marker baru berturut-turut di PO yang sama), ia yang
                 // menentukan. Kalau tidak ada, perilaku lama: cocokkan dengan `asal` saat revisi.
@@ -6069,14 +6130,7 @@ function spRenderFormMarker_(asal) {
       'nanti ketahuan penyebabnya yang mana.</p>' +
     catatanSumber +
     '<label class="sp-lbl">Susunan Size &#8212; berapa pola tiap size dalam SATU lapis</label>' +
-    '<div class="sp-susun">' +
-      sizes.map(function (sz) {
-        const v = (a.susunanSize || {})[sz] || "";
-        return '<div class="sp-susun-item"><span>' + spEsc_(sz) + '</span>' +
-          '<input class="sp-mk-sz" data-size="' + spEsc_(sz) + '" min="0" ' +
-          'oninput="spHitungMarker_()" placeholder="0" type="number" value="' + v + '"/></div>';
-      }).join("") +
-    '</div>' +
+    '<div class="sp-susun">' + spSusunHtml_(sizes, a.susunanSize) + '</div>' +
     '<p class="sp-info" id="sp-mk-hitung">Pcs per lapis: <b>0</b></p>' +
     '<div class="sp-grid3" style="margin-top:14px">' +
       '<label>Catatan<input id="sp-mk-catatan" placeholder="opsional" type="text"/></label>' +
@@ -6144,6 +6198,32 @@ function spMkPakaiAllowanceNol() {
   if (!el) return;
   el.value = "0";
   spMkAwasPanel_();
+}
+
+/** Kotak angka per size di form satuan -- dipisah supaya bisa dirakit ulang saat ITEM berganti. */
+function spSusunHtml_(sizes, susunan) {
+  return sizes.map(function (sz) {
+    const v = (susunan || {})[sz] || "";
+    return '<div class="sp-susun-item"><span>' + spEsc_(sz) + '</span>' +
+      '<input class="sp-mk-sz" data-size="' + spEsc_(sz) + '" min="0" ' +
+      'oninput="spHitungMarker_()" placeholder="0" type="number" value="' + v + '"/></div>';
+  }).join("");
+}
+
+/**
+ * v327: ITEM berganti di form SATUAN -> kotak size dirakit ulang saja, form tidak dirender ulang.
+ *
+ * Merender ulang seluruh form akan menghapus kode, panjang, lebar dan lampiran yang sudah
+ * diketik. Yang benar-benar berubah karena pergantian item hanyalah daftar sizenya, dan angka
+ * yang sudah terisi di size lama memang tidak berlaku lagi.
+ */
+function spMkGantiItem() {
+  const sel = document.getElementById("sp-mk-item");
+  const daftar = spDaftarItemPO_();
+  const it = (sel && String(sel.value) !== "semua") ? daftar[Number(sel.value)] : null;
+  const wadah = document.querySelector("#sp-marker-form .sp-susun");
+  if (wadah) wadah.innerHTML = spSusunHtml_(spSizePO_(it), {});
+  spHitungMarker_();
 }
 
 function spHitungMarker_() {
