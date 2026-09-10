@@ -5403,6 +5403,40 @@ function spMkxKode_(pola, sz) {
 }
 
 /**
+ * Saran bentuk Pola Kode saat polanya belum memuat {size}.
+ *
+ * "{size}" itu syntax yang harus DIINGAT, dan lupa mengetiknya adalah kesalahan yang paling
+ * mungkin terjadi di panel ini -- terbukti pada pemakaian pertama. Menolaknya dengan pesan galat
+ * saja berarti menyuruh orang menebak bentuk yang benar; jadi ditawarkan bentuknya, diturunkan
+ * dari apa yang BENAR-BENAR dipakai di data: "Motif - S" (paling umum), "Style 11 (XS)",
+ * "Cokelat Tua M". Ketiganya cuma berbeda pemisah, dan tidak ada cara menebak pemisah mana yang
+ * dimaksud -- karena itu ditawarkan, bukan dipilihkan.
+ */
+function spMkxSaranPola_() {
+  const el = document.getElementById("sp-mkx-pola");
+  const wadah = document.getElementById("sp-mkx-saran");
+  if (!el || !wadah) return;
+  const v = String(el.value || "").trim();
+  const nAktif = document.querySelectorAll(".sp-mkx-aktif:checked").length;
+  if (!v || v.indexOf("{size}") !== -1 || nAktif < 2) { wadah.innerHTML = ""; return; }
+  const bentuk = [v + " - {size}", v + " ({size})", v + " {size}"];
+  wadah.innerHTML = '<span class="sp-mkx-saran-teks">Pola ini belum memuat ' +
+    '<b>{size}</b>, jadi semua baris akan dapat kode yang sama. Pakai:</span> ' +
+    bentuk.map(function (b) {
+      return '<button class="sp-mkx-saran-btn" data-pola="' + spEsc_(b) +
+        '" onclick="spMkxPakaiPola(this.dataset.pola)" type="button">' + spEsc_(b) + '</button>';
+    }).join(" ");
+}
+
+function spMkxPakaiPola(pola) {
+  const el = document.getElementById("sp-mkx-pola");
+  if (!el) return;
+  el.value = pola;
+  spMkxUbah_();
+  el.focus();
+}
+
+/**
  * Isi medan bersama dari marker AKTIF TERAKHIR pada item yang sedang dipilih -- dan HANYA medan
  * yang masih kosong, supaya tidak pernah menimpa yang sudah diketik.
  *
@@ -5470,6 +5504,24 @@ function spMkxSegarkanKode_() {
     const kode = spMkxKode_(pola, sz);
     sel.textContent = kode || "·";
   });
+  // v324: baris yang kodenya KEMBAR dengan baris lain ditandai di gridnya sendiri, bukan cuma
+  // dilaporkan sesudah menekan Pratinjau -- kolom Kode Marker yang menampilkan empat "Motif" yang
+  // sama tidak terbaca sebagai masalah sampai seseorang menghitungnya.
+  const hitung = {};
+  document.querySelectorAll("#sp-mkx-tabel tbody tr").forEach(function (tr) {
+    const cb = tr.querySelector(".sp-mkx-aktif");
+    if (!cb || !cb.checked) return;
+    const k = (tr.querySelector(".sp-mkx-kode") || {}).textContent || "";
+    hitung[k] = (hitung[k] || 0) + 1;
+  });
+  document.querySelectorAll("#sp-mkx-tabel tbody tr").forEach(function (tr) {
+    const cb = tr.querySelector(".sp-mkx-aktif");
+    const sel = tr.querySelector(".sp-mkx-kode");
+    if (!sel) return;
+    const kembar = !!(cb && cb.checked) && hitung[sel.textContent] > 1;
+    sel.classList.toggle("sp-mkx-kembar", kembar);
+  });
+  spMkxSaranPola_();
   const b = document.getElementById("sp-mkx-tombol");
   if (b) {
     b.textContent = n ? "Pratinjau " + n + " marker" : "Pilih minimal satu size";
@@ -5506,6 +5558,7 @@ function spMkxKumpulkan_() {
   const trs = [];
   document.querySelectorAll("#sp-mkx-tabel tbody tr").forEach(function (tr) { trs.push(tr); });
   const dipakai = {};
+  const bentrok = [];
   trs.forEach(function (tr) {
     const cb = tr.querySelector(".sp-mkx-aktif");
     if (!cb || !cb.checked) return;
@@ -5517,11 +5570,14 @@ function spMkxKumpulkan_() {
     if (panjang <= 0) galat.push("Size " + sz + ": panjang marker belum diisi.");
     if (qty <= 0) galat.push("Size " + sz + ": jumlah pola per lapis harus lebih dari 0.");
     // Dua size yang menghasilkan kode SAMA berarti pola tidak memuat {size}: baris kedua dan
-    // seterusnya akan ditolak server sebagai kembar. Lebih jujur dihentikan di sini, dengan
-    // menyebut kode yang bentrok.
+    // seterusnya akan ditolak server sebagai kembar. Dikumpulkan dulu, dilaporkan SEKALI di bawah.
+    //
+    // Versi pertama (v322) mengeluh per PASANGAN: memilih empat size menghasilkan tiga baris galat
+    // yang mengulang fakta yang sama dan tidak satu pun bisa ditindaklanjuti. Satu sebab = satu
+    // pesan; yang perlu diketahui operator adalah "polanya kurang {size}", bukan pasangan mana
+    // saja yang bentrok.
     if (kode) {
-      if (dipakai[kode]) galat.push("Kode '" + kode + "' dipakai dua kali (size " + dipakai[kode] +
-        " dan " + sz + "). Pola Kode harus memuat {size}.");
+      if (dipakai[kode]) { if (bentrok.indexOf(kode) === -1) bentrok.push(kode); }
       else dipakai[kode] = sz;
     }
     baris.push({ tr: tr, cb: cb, sz: sz, kode: kode, panjang: panjang, qty: qty,
@@ -5530,7 +5586,12 @@ function spMkxKumpulkan_() {
       hasil: tr.querySelector(".sp-mkx-hasil") });
   });
   if (!baris.length) galat.push("Belum ada size yang dicentang.");
-  return { baris: baris, galat: galat };
+  if (bentrok.length) {
+    galat.push("Pola Kode tidak memuat {size}, jadi " + baris.length + " baris dapat kode yang " +
+      "sama: '" + bentrok.join("', '") + "'. Pakai salah satu bentuk yang disarankan di bawah " +
+      "kotak Pola Kode.");
+  }
+  return { baris: baris, galat: galat, bentrok: bentrok };
 }
 
 /**
@@ -5752,6 +5813,7 @@ function spMkxPanelHtml_() {
           '<label>Komponen<input id="sp-mkx-komponen" list="sp-datalist-komponen" ' +
             'placeholder="kosongkan = semua panel" type="text" value=""/></label>' +
         '</div>' +
+        '<div class="sp-mkx-saran" id="sp-mkx-saran"></div>' +
         '<p class="sp-info sp-mkx-catatan" id="sp-mkx-asal"></p>' +
         '<p class="sp-info"><b>{size}</b> di Pola Kode diganti nama size tiap baris: ' +
           '"Motif - {size}" jadi "Motif - S", "Motif - M", dan seterusnya. Bentuk lain ikut: ' +

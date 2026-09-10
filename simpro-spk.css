@@ -1990,3 +1990,15 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
   .sp-mkb-tombol { margin-left: 0; width: 100%; }
   .sp-tabel-kartu .sp-mkb-td { width: auto; text-align: left; }
 }
+
+/* ---- v324: saran bentuk Pola Kode & penanda kode kembar ---- */
+.sp-mkx-saran:empty { display: none; }
+.sp-mkx-saran { margin: 8px 0 0; padding: 9px 12px; border-left: 3px solid var(--gold, #C8964A);
+  background: color-mix(in srgb, var(--gold, #C8964A) 7%, transparent); font-size: 12.5px; }
+.sp-mkx-saran-teks { margin-right: 4px; }
+.sp-mkx-saran-btn { margin: 3px 3px 0 0; padding: 5px 10px; border: 1px solid var(--gold, #C8964A);
+  border-radius: 7px; background: var(--white); color: var(--ink); cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; }
+.sp-mkx-saran-btn:hover { background: var(--gold, #C8964A); color: var(--white); }
+.sp-mkx-tabel .sp-mkx-kode.sp-mkx-kembar { color: #B3261E; font-weight: 600; }
+.sp-mkx-tabel .sp-mkx-kode.sp-mkx-kembar::after { content: " (kembar)"; font-size: 10px; }
