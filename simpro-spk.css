@@ -1962,3 +1962,31 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
   .sp-mkx-tabel input[type="number"] { width: 100%; }
   .sp-mkx-lamp input[type="file"] { max-width: 100%; }
 }
+
+/* ---- BATAL MASSAL MARKER (v323) ---- */
+.sp-mkb-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 10px;
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--cream); }
+.sp-mkb-bar.sp-mkb-aktif { border-color: var(--ink); }
+.sp-mkb-semua { display: flex; align-items: center; gap: 7px; font-size: 12.5px; cursor: pointer; }
+.sp-mkb-semua input { margin: 0; }
+.sp-mkb-tombol { margin-left: auto; padding: 8px 16px; border: 1px solid var(--ink);
+  border-radius: 8px; background: var(--ink); color: var(--white); font-family: inherit;
+  font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.sp-mkb-tombol:disabled { opacity: .35; cursor: not-allowed; }
+.sp-mkb-th, .sp-mkb-td { width: 34px; text-align: center; }
+.sp-mkb-td input { margin: 0; }
+.sp-mkb-terkunci { opacity: .62; }
+.sp-mkb-kunci { font-size: 10.5px; color: var(--gold, #C8964A); font-weight: 600; }
+.sp-mkb-kotak { margin-bottom: 12px; padding: 12px 14px; border: 1px solid var(--ink);
+  border-radius: 9px; background: var(--white); }
+.sp-mkb-kotak h5 { margin: 0 0 8px; font-size: 13px; }
+.sp-mkb-daftar { margin: 8px 0; padding-left: 18px; font-size: 12.5px; max-height: 260px;
+  overflow-y: auto; }
+.sp-mkb-daftar li { margin-bottom: 3px; }
+.sp-mkb-status { min-height: 18px; margin: 8px 0 0; font-size: 12.5px; }
+.sp-mkb-tolak { margin: 6px 0; padding-left: 18px; font-size: 12px; color: #B3261E; }
+.sp-mkb-galat { color: #B3261E; }
+@media (max-width: 700px) {
+  .sp-mkb-tombol { margin-left: 0; width: 100%; }
+  .sp-tabel-kartu .sp-mkb-td { width: auto; text-align: left; }
+}

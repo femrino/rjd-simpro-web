@@ -4907,12 +4907,159 @@ function spMuatMarker() {
   });
 }
 
+/* ============================================================
+ * BATAL MASSAL MARKER (v323, butuh gs >= @365)
+ * ============================================================
+ * Femri minta fitur HAPUS marker usang berikut lampiran gambar dan .plt-nya. Diukur dulu, dan
+ * pengukurannya menjawab lain:
+ *
+ *   Dari 71 marker usang (68 Batal + 3 Digantikan): 65 berkas Drive-nya DIPAKAI BERSAMA marker
+ *   penggantinya -- form revisi terisi dari marker asal TERMASUK URL lampirannya, lalu
+ *   simpanMarker_ menggabungnya. 3 dipakai gelaran aktif. Hanya 5 yang lolos semua saringan, dan
+ *   kelimanya tanpa lampiran sama sekali. Jadi "hapus berikut lampiran" hari ini akan menghapus
+ *   5 baris dan 0 berkas, sambil membawa risiko mematikan gambar milik marker yang MASIH dipakai.
+ *   Folder Lampiran Marker 472 berkas / 60,8 MB; yang benar-benar yatim cuma 20 berkas / 1,3 MB.
+ *
+ * Dan yang menentukan: daftar ini memang SUDAH menyembunyikan Batal & Digantikan sejak @340. Jadi
+ * tombol Batal sudah memberi hasil yang dicari -- yang kurang cuma cara melakukannya sekaligus.
+ * Abelia/Dress sendiri memegang 27 marker aktif yang NOL dipakai gelaran (sisa tiga generasi
+ * rancangan); lewat tombol satuan itu 27 klik dan 27 permintaan.
+ *
+ * Marker yang dipakai gelaran aktif TIDAK bisa dicentang, dan alasannya tertulis di barisnya --
+ * `dipakaiGelaran` datang dari getMarkerPO_ (@365). Memberi tahu SEBELUM dicoba, bukan menolak
+ * sesudah dikirim: 145 dari 233 marker aktif memang sedang dipakai produksi, jadi penolakan itu
+ * keadaan biasa, bukan kejadian langka.
+ */
+function spMkbTerpilih_() {
+  const out = [];
+  document.querySelectorAll(".sp-mkb-pilih").forEach(function (cb) {
+    if (cb.checked && !cb.disabled) out.push(cb.dataset.id);
+  });
+  return out;
+}
+
+/** Setiap perubahan pilihan membatalkan pratinjau -- alasan yang sama dengan spMkxUbah_. */
+function spMkbUbah_() {
+  const n = spMkbTerpilih_().length;
+  const b = document.getElementById("sp-mkb-tombol");
+  if (b) {
+    b.textContent = n ? "Batalkan " + n + " marker terpilih" : "Belum ada yang dipilih";
+    b.disabled = !n;
+  }
+  const w = document.getElementById("sp-mkb-pratinjau");
+  if (w && w.innerHTML) w.innerHTML = "";
+  const bar = document.getElementById("sp-mkb-bar");
+  if (bar) bar.classList.toggle("sp-mkb-aktif", n > 0);
+}
+
+function spMkbPilihSemua(el) {
+  const nyala = !!(el && el.checked);
+  document.querySelectorAll(".sp-mkb-pilih").forEach(function (cb) {
+    if (!cb.disabled) cb.checked = nyala;
+  });
+  spMkbUbah_();
+}
+
+function spMkbPratinjau() {
+  const ids = spMkbTerpilih_();
+  const wadah = document.getElementById("sp-mkb-pratinjau");
+  if (!wadah) return;
+  if (!ids.length) { wadah.innerHTML = ""; return; }
+  const peta = {};
+  (window.SP_MARKER || []).forEach(function (m) { peta[m.idMarker] = m; });
+  wadah.innerHTML =
+    '<div class="sp-mkb-kotak">' +
+      '<h5>Periksa dulu &#8212; ' + ids.length + ' marker akan dibatalkan</h5>' +
+      '<p class="sp-info">Barisnya <b>tidak dihapus</b> dan lampirannya <b>tidak disentuh</b>: ' +
+        'statusnya jadi Batal, dan daftar ini memang tidak menampilkan yang berstatus Batal. ' +
+        'Kalau ternyata salah pilih, marker itu masih ada di sheet.</p>' +
+      '<ul class="sp-mkb-daftar">' +
+        ids.map(function (id) {
+          const m = peta[id] || {};
+          return "<li><b>" + spEsc_(m.kodeMarker || id) + "</b> &#183; " +
+            spEsc_(m.style || "semua style") + " &#183; " + spEsc_(m.idMarker || id) + "</li>";
+        }).join("") +
+      '</ul>' +
+      '<div class="sp-mkb-status" id="sp-mkb-status"></div>' +
+      '<button class="sp-simpan-btn" onclick="spMkbBatalkan(this)" type="button">Ya, batalkan ' +
+        ids.length + ' marker</button>' +
+    '</div>';
+}
+
+/**
+ * Satu permintaan untuk seluruh rombongan -- kebalikan dari panel matriks, yang mengirim per baris
+ * karena lampirannya besar. Di sini tidak ada lampiran sama sekali, jadi satu permintaan berarti
+ * satu lock dan satu penyisiran gelaran.
+ */
+function spMkbBatalkan(btn) {
+  const ids = spMkbTerpilih_();
+  if (!ids.length) return;
+  const st = document.getElementById("sp-mkb-status");
+  if (btn) { btn.disabled = true; btn.textContent = "Membatalkan..."; }
+  if (st) st.textContent = "Mengirim " + ids.length + " marker...";
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "batalkanMarkerMassal",
+      payload: { idMarker: ids } })
+  })
+  .then(function (r) { return r.text(); })
+  .then(function (t) {
+    let d = null;
+    try { d = JSON.parse(t); } catch (e) {
+      throw new Error("Sesi login sepertinya sudah habis. Muat ulang halaman ini, lalu coba lagi.");
+    }
+    if (!d || !d.success) throw new Error((d && d.error) || "Gagal membatalkan.");
+    const tolak = (d.hasil || []).filter(function (x) { return x.keadaan === "tolak"; });
+    if (!tolak.length) {
+      alert(d.nBatal + " marker dibatalkan" + (d.nSudah ? " (" + d.nSudah + " memang sudah tidak aktif)" : "") + ".");
+      spMuatMarker();
+      return;
+    }
+    // Sebagian ditolak -> daftar TIDAK disegarkan otomatis. Menyegarkannya menghapus panel
+    // beserta sebab penolakan yang justru perlu dibaca.
+    //
+    // Yang BERHASIL dicentang-lepas dulu, supaya "Coba lagi yang tersisa" benar-benar hanya
+    // mengirim yang tersisa. Server memang idempoten (yang sudah Batal dijawab "sudah", bukan
+    // galat), jadi ini bukan soal keamanan -- tapi ringkasan berikutnya yang berbunyi
+    // "0 dibatalkan, 5 sudah, 1 ditolak" membuat orang mengira ada yang gagal.
+    (d.hasil || []).forEach(function (x) {
+      if (x.keadaan === "tolak") return;
+      const cb = document.querySelector('.sp-mkb-pilih[data-id="' + x.idMarker + '"]');
+      if (cb) cb.checked = false;
+    });
+    if (st) {
+      st.innerHTML = '<b>' + d.nBatal + ' dibatalkan, ' + tolak.length + ' ditolak.</b>' +
+        '<ul class="sp-mkb-tolak">' + tolak.map(function (x) {
+          const m = (window.SP_MARKER || []).filter(function (y) { return y.idMarker === x.idMarker; })[0];
+          return "<li><b>" + spEsc_((m && m.kodeMarker) || x.idMarker) + "</b>: " + spEsc_(x.pesan) + "</li>";
+        }).join("") + "</ul>" +
+        '<p class="sp-info">Tekan Segarkan kalau sudah selesai membaca.</p>' +
+        '<button class="sp-btn-kecil" onclick="spMuatMarker()" type="button">Segarkan daftar</button>';
+    }
+    if (btn) { btn.disabled = false; btn.textContent = "Coba lagi yang tersisa"; }
+  })
+  .catch(function (e) {
+    if (st) st.innerHTML = '<span class="sp-mkb-galat">' + spEsc_(e.message || e) + '</span>';
+    if (btn) { btn.disabled = false; btn.textContent = "Coba lagi"; }
+  });
+}
+
 function spRenderMarker_() {
   const daftar = window.SP_MARKER || [];
   const wadah = document.getElementById("sp-marker-daftar");
 
   wadah.innerHTML = daftar.length
-    ? '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
+    // v323: bar Batal massal DI ATAS tabel, dan kolom centang paling kiri. Ditaruh di dalam
+    // cabang "ada marker" -- kalau daftarnya kosong, bar tanpa apa pun untuk dipilih cuma perabot.
+    ? '<div class="sp-mkb-bar" id="sp-mkb-bar">' +
+          '<label class="sp-mkb-semua"><input onchange="spMkbPilihSemua(this)" type="checkbox"/> ' +
+            'Pilih semua yang bisa dibatalkan</label>' +
+          '<button class="sp-mkb-tombol" id="sp-mkb-tombol" onclick="spMkbPratinjau()" ' +
+            'type="button" disabled="disabled">Belum ada yang dipilih</button>' +
+        '</div>' +
+        '<div id="sp-mkb-pratinjau"></div>' +
+        '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
+        '<th class="sp-mkb-th"></th>' +
         '<th>Kode</th><th>Style</th><th>Layout</th><th>Lebar (cm)</th><th>Panjang</th><th>Allow</th>' +
         '<th>Susunan</th><th>Pcs/lapis</th><th>Komponen</th><th>Status</th><th></th></tr></thead><tbody>' +
         daftar.map(function (m) {
@@ -4923,7 +5070,14 @@ function spRenderMarker_() {
           // data-label dipakai CSS di layar sempit: tabel berubah jadi kartu,
           // dan tiap sel memakai label ini sebagai judulnya. Tanpa itu, 9 kolom
           // dipaksa muat di layar HP dan kode marker terpotong huruf per huruf.
-          return '<tr>' +
+          // Terkunci = milik PO lain (warisan) atau sedang dipakai gelaran aktif. Alasannya
+          // ditulis di barisnya, bukan disembunyikan di balik kotak yang mati tanpa keterangan.
+          const terkunci = m.warisan || Number(m.dipakaiGelaran) > 0;
+          return '<tr' + (terkunci ? ' class="sp-mkb-terkunci"' : "") + '>' +
+            '<td class="sp-mkb-td" data-label="">' +
+              '<input class="sp-mkb-pilih" data-id="' + spEsc_(m.idMarker) + '" ' +
+                'onchange="spMkbUbah_()" type="checkbox"' + (terkunci ? ' disabled="disabled"' : "") + '/>' +
+            '</td>' +
             '<td data-label="Kode"><b>' + spEsc_(m.kodeMarker || "-") + '</b>' +
               (m.warisan ? '<div class="sp-sub" style="color:var(--gold,#C8964A)">dari ' +
                 spEsc_(m.poAsal) + '</div>' : '') + '</td>' +
@@ -4944,19 +5098,35 @@ function spRenderMarker_() {
               ? spEsc_(m.komponen)
               : '<span class="sp-kosong">semua panel</span>') + '</td>' +
             '<td data-label="Status">' + spEsc_(m.status) +
-              (m.idMarkerAsal ? ' <small>(revisi)</small>' : '') + '</td>' +
+              (m.idMarkerAsal ? ' <small>(revisi)</small>' : '') +
+              // v323: kenapa baris ini tidak bisa dicentang. 145 dari 233 marker aktif memang
+              // sedang dipakai produksi, jadi ini keadaan biasa -- bukan kejadian langka yang
+              // cukup dijelaskan lewat pesan penolakan sesudah dikirim.
+              (Number(m.dipakaiGelaran) > 0
+                ? '<div class="sp-mkb-kunci">dipakai ' + m.dipakaiGelaran + ' gelaran</div>' : '') +
+            '</td>' +
             '<td class="sp-td-aksi" data-label="">' +
               (m.warisan
                 ? '<span class="sp-sub">kelola dari PO asalnya</span>'
                 : '<button class="sp-btn-kecil" data-id="' + spEsc_(m.idMarker) +
                   '" onclick="spRevisiMarker(this.dataset.id)" type="button">Revisi</button> ' +
-                  '<button class="sp-btn-kecil" data-id="' + spEsc_(m.idMarker) +
-                  '" onclick="spBatalMarker(this.dataset.id)" type="button">Batal</button>') + '</td></tr>';
+                  // v323: tombol satuan ikut mati kalau markernya dipakai gelaran aktif. Kotak
+                  // centang massal sudah mati untuk baris yang sama; menyisakan tombol hidup di
+                  // sebelahnya untuk aksi yang PERSIS sama berarti menawarkan jalan yang sudah
+                  // kita tahu akan ditolak server -- dan penolakannya baru terbaca sesudah
+                  // permintaannya terkirim.
+                  '<button class="sp-btn-kecil" data-id="' + spEsc_(m.idMarker) + '"' +
+                  (Number(m.dipakaiGelaran) > 0
+                    ? ' disabled="disabled" title="Dipakai ' + m.dipakaiGelaran +
+                      ' gelaran aktif. Batalkan dulu gelarannya."'
+                    : '') +
+                  ' onclick="spBatalMarker(this.dataset.id)" type="button">Batal</button>') + '</td></tr>';
         }).join("") +
       '</tbody></table></div>'
     : '<p class="sp-info">Belum ada marker untuk PO ini.</p>';
 
   spRenderFormMarker_(null);
+  spMkbUbah_();
 }
 
 /**
