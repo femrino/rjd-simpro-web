@@ -762,9 +762,33 @@ function spRenderForm() {
             : 'sudah dibagi semua') + '</span></td></tr>';
       }
       return kepala + '<tr' + (habis ? ' class="sp-habis"' : '') + '>' +
+        // @363 (P10 #22): server sudah mengirim `b.keluar` dan `b.dikembalikan` sejak @353,
+        // lengkap dengan komentar yang MENJANJIKAN pemakaiannya ("angkanya tetap dibaca supaya
+        // bisa DITAMPILKAN"), tapi tidak satu pun pernah dirender -- kode mati selama tujuh hari.
+        // Akibatnya baris ini berbunyi "sisa 72 dari 220 pcs" tanpa satu kata pun tentang KE MANA
+        // 148 sisanya pergi: sebagian ke line, sebagian keluar ke klien, sebagian kembali lagi.
+        // Yang paling tidak punya pengganti adalah `keluar`: potongan yang diambil klien mengurangi
+        // kolom sisa DI BARIS YANG SAMA yang menghitungnya, dan tidak ada layar lain yang
+        // menyebutkannya di konteks ini.
         '<td><div class="sp-warna">' + rjdEscapeHtml_(b.warna || "-") + '</div>' +
           '<div class="sp-sisa-info">' + (habis ? 'sudah dibagi semua'
-            : ('sisa ' + b.totalSisa + ' dari ' + b.totalQty + ' pcs')) + '</div></td>' +
+            : ('sisa ' + b.totalSisa + ' dari ' + b.totalQty + ' pcs')) +
+            (function () {
+              const jml = function (o) {
+                return Object.keys(o || {}).reduce(function (a, k) { return a + (Number(o[k]) || 0); }, 0);
+              };
+              const kel = jml(b.keluar), kem = jml(b.dikembalikan);
+              if (!kel && !kem) return '';
+              const bagian = [];
+              if (kel) bagian.push(kel + ' keluar ke klien');
+              // "kembali dari line" SUDAH ditambahkan lagi ke kolam ini (itu memang benar sejak
+              // @350: potongan yang dikembalikan boleh dibagikan lagi). Disebutkan supaya kolam
+              // yang bertambah karena pengembalian tidak tampak identik dengan kolam yang memang
+              // belum pernah dibagi -- dua keadaan berbeda tidak boleh tampak sama.
+              if (kem) bagian.push(kem + ' kembali dari line');
+              return '<div class="sp-sisa-asal">' + bagian.join(' &#183; ') + '</div>';
+            })() +
+          '</div></td>' +
         kolom.map(function (sz) {
           const order = b.sizeQty[sz] || 0;
           const sisa = b.sisa[sz] === undefined ? 0 : b.sisa[sz];

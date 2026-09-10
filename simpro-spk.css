@@ -1915,3 +1915,7 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
   margin-top: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.5;
   color: #8A3D33; background: #FBE9E7; border-left: 3px solid #D98177; border-radius: 4px;
 }
+
+/* @363 (P10 #22): asal-usul angka kolam pada layar Bagi ke Line. Redup dan di bawah baris sisa --
+   ia MENJELASKAN angka sisa di atasnya, bukan angka yang berdiri sendiri. */
+.sp-sisa-asal { font-size: 10.5px; color: var(--ink-soft); margin-top: 2px; }
