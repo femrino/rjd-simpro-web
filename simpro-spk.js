@@ -7122,6 +7122,34 @@ function spIsiKodeKain_() {
  */
 
 /** "idMarker|warna" -> { lapis, tanggal } dari gelaran yang sudah tercatat (tanpa yang dibatalkan). */
+/*
+ * Ikon tombol aksi baris. Teks "salin"/"hapus" diganti ikon atas permintaan Femri (12 Sep 2026).
+ *
+ * DUA SYARAT yang tidak boleh ditawar, dan keduanya sudah pernah menggigit di proyek ini.
+ * SATU: ikon TANPA teks hanya boleh dipakai kalau bentuknya sendiri sudah bercerita, karena
+ * `title` TIDAK ADA di layar sentuh -- alasan yang sama kenapa sebab gagal gelaran ditulis
+ * sebagai teks di barisnya, bukan tooltip (v335). Dua-gambar-bertumpuk dan tong sampah adalah
+ * dua ikon yang paling tidak ambigu; "silang" sengaja TIDAK dipakai karena di dalam tabel ia
+ * lebih sering dibaca "tutup" daripada "hapus". DUA: tiap tombol tetap membawa `aria-label`,
+ * jadi yang memakai pembaca layar mendengar kata kerjanya, bukan "tombol".
+ *
+ * SVG-nya inline (bukan berkas) supaya tidak menambah satu pun permintaan jaringan ke halaman
+ * yang sudah memuat 13 berkas, dan mewarisi `currentColor` supaya ikut tema tanpa aturan warna
+ * kedua.
+ */
+const SP_IKON_GANDA =
+  '<svg aria-hidden="true" focusable="false" height="15" viewBox="0 0 16 16" width="15">' +
+    '<rect height="9" rx="1.6" width="8" x="5.8" y="5.8"/>' +
+    '<path d="M10.2 3.4H4.3A1.7 1.7 0 0 0 2.6 5.1v6.1"/>' +
+  '</svg>';
+const SP_IKON_HAPUS =
+  '<svg aria-hidden="true" focusable="false" height="15" viewBox="0 0 16 16" width="15">' +
+    '<path d="M2.6 4.3h10.8"/>' +
+    '<path d="M6.4 4.3V3.1a1 1 0 0 1 1-1h1.2a1 1 0 0 1 1 1v1.2"/>' +
+    '<path d="M4.1 4.3l.6 8.3a1.3 1.3 0 0 0 1.3 1.2h4a1.3 1.3 0 0 0 1.3-1.2l.6-8.3"/>' +
+    '<path d="M6.7 6.9v4.6M9.3 6.9v4.6"/>' +
+  '</svg>';
+
 function spGbSudah_() {
   const peta = {};
   (window.SP_DAFTAR_GELARAN || []).forEach(function (g) {
@@ -7183,8 +7211,7 @@ function spGbBarisHtml_(marker, warna, kain) {
       '<div class="sp-gb-baca"></div>' +
     '</td>' +
     '<td class="sp-gb-kain">' +
-      '<span class="sp-gb-kain-teks">&#8212;</span>' +
-      '<select class="sp-gb-kain-pilih hidden" onchange="spGbUbah_()">' +
+      '<select class="sp-gb-kain-pilih" onchange="spGbGantiKain(this)">' +
         '<option value="">— pilih kain —</option>' +
         kain.map(function (k) { return '<option value="' + spEsc_(k) + '">' + spEsc_(k) + '</option>'; }).join("") +
       '</select>' +
@@ -7206,10 +7233,10 @@ function spGbBarisHtml_(marker, warna, kain) {
       '<span class="sp-gb-galat"></span>' +
     '</td>' +
     '<td class="sp-gb-aksi">' +
-      '<button class="sp-mkx-catatan-btn" onclick="spGbSalin(this)" title="salin baris ini" ' +
-        'type="button">salin</button>' +
-      '<button class="sp-mkx-catatan-btn" onclick="spGbHapus(this)" title="hapus baris ini" ' +
-        'type="button">hapus</button>' +
+      '<button aria-label="Gandakan baris ini" class="sp-gb-ikon" onclick="spGbSalin(this)" ' +
+        'title="Gandakan baris ini" type="button">' + SP_IKON_GANDA + '</button>' +
+      '<button aria-label="Hapus baris ini" class="sp-gb-ikon sp-gb-ikon-hapus" ' +
+        'onclick="spGbHapus(this)" title="Hapus baris ini" type="button">' + SP_IKON_HAPUS + '</button>' +
     '</td>' +
   '</tr>';
 }
@@ -7293,9 +7320,14 @@ function spGbSalin(btn) {
   if (!baru) return;
   const allow = tr.querySelector(".sp-gb-allow").value;
   if (allow) baru.querySelector(".sp-gb-allow").value = allow;
+  // Jenis kain SELALU ikut tersalin. Sampai v335 ia hanya disalin kalau kotaknya "terbuka"
+  // (yaitu saat markernya tidak berkain) -- sisa dari masa ketika kain terkunci mengikuti marker.
+  // Sekarang kain boleh diubah tangan, jadi menyalin baris tanpa membawa kainnya justru membuang
+  // satu-satunya isian yang sengaja dikoreksi orang.
   const kp = tr.querySelector(".sp-gb-kain-pilih");
-  if (kp && !kp.classList.contains("hidden")) {
-    baru.querySelector(".sp-gb-kain-pilih").value = kp.value;
+  if (kp && kp.value) {
+    spGbPastikanOpsi_(baru.querySelector(".sp-gb-kain-pilih"), kp.value);
+    baru.classList.remove("sp-gb-tanpa-kain");
   }
   const wn = baru.querySelector(".sp-gb-warna");
   if (wn) wn.focus();
@@ -7315,35 +7347,52 @@ function spGbKunci(ev, inp) {
 }
 
 /** Marker berganti -> jenis kain, allowance, dan baris baca-balik ikut. */
+/**
+ * Pastikan `pilih` punya opsi bernilai `nilai`, lalu pilih. Kembalikan true kalau ada isinya.
+ *
+ * Perlu karena jenis kain MARKER tidak selalu ada di daftar kain PO. Terukur 12 Sep 2026: 30 dari
+ * 320 baris gelaran memakai jenis kain yang BERBEDA dari markernya, dan bentuk bedanya nyata --
+ * marker menulis nama bahannya ("Toyobo") sementara gelaran menulis slot penyusun style
+ * ("Polos"). Kalau nilai marker dipasang ke select yang tidak memuatnya, select diam-diam
+ * menampilkan kosong dan orang mengira markernya belum berkain.
+ */
+function spGbPastikanOpsi_(pilih, nilai) {
+  const v = String(nilai || "").trim();
+  if (!v) { pilih.value = ""; return false; }
+  const ada = Array.prototype.some.call(pilih.options, function (o) { return o.value === v; });
+  if (!ada) {
+    const o = document.createElement("option");
+    o.value = v;
+    o.textContent = v + " (dari marker)";
+    pilih.appendChild(o);
+  }
+  pilih.value = v;
+  return true;
+}
+
 function spGbGantiMarker(sel) {
   const tr = sel.closest("tr");
   const m = spGbPetaMarker_()[sel.value];
-  const teks = tr.querySelector(".sp-gb-kain-teks");
   const pilih = tr.querySelector(".sp-gb-kain-pilih");
   const baca = tr.querySelector(".sp-gb-baca");
   const allow = tr.querySelector(".sp-gb-allow");
 
   if (!m) {
-    teks.textContent = "—"; teks.classList.remove("hidden");
-    pilih.classList.add("hidden"); pilih.value = "";
+    pilih.value = "";
     baca.textContent = ""; allow.value = "";
     tr.classList.remove("sp-gb-tanpa-kain");
+    spGbKodeAwal_(tr);
     spGbUbah_(); return;
   }
 
-  // 21% marker aktif TIDAK punya jenis kain, dan server menolak gelaran tanpa itu. Jadi kotaknya
-  // DIBUKA, bukan disembunyikan -- dan jawabannya mengajari markernya lewat
+  // JENIS KAIN = ISIAN AWAL, bukan kunci (Femri, 12 Sep 2026). v335 menguncinya sebagai teks
+  // karena kain dianggap milik marker; diukur, 9,4% baris gelaran menyimpang dari markernya, jadi
+  // kunci itu memaksa orang keluar dari form untuk kasus yang terjadi sekali dalam sebelas baris.
+  // Yang tetap dipertahankan dari v335: marker TANPA jenis kain menandai barisnya, karena server
+  // menolak payload tanpa jenisKain -- dan jawabannya mengajari markernya lewat
   // mgAjariJenisKainMarker_ di backend, yang tidak pernah menimpa sel yang sudah terisi.
-  if (m.jenisKain) {
-    teks.textContent = m.jenisKain;
-    teks.classList.remove("hidden");
-    pilih.classList.add("hidden");
-    tr.classList.remove("sp-gb-tanpa-kain");
-  } else {
-    teks.classList.add("hidden");
-    pilih.classList.remove("hidden");
-    tr.classList.add("sp-gb-tanpa-kain");
-  }
+  const adaKain = spGbPastikanOpsi_(pilih, m.jenisKain);
+  tr.classList.toggle("sp-gb-tanpa-kain", !adaKain);
 
   const susun = m.susunanSize || {};
   const isiSusun = Object.keys(susun).map(function (sz) { return sz + ":" + susun[sz]; }).join(" ");
@@ -7357,57 +7406,101 @@ function spGbGantiMarker(sel) {
     ? m.allowancePerLapis : "0.02";
 
   spGbDaftarKode_(tr);
+  spGbKodeAwal_(tr);
   spGbUbah_();
 }
 
 function spGbGantiWarna(sel) {
-  spGbDaftarKode_(sel.closest("tr"));
+  const tr = sel.closest("tr");
+  spGbDaftarKode_(tr);
+  spGbKodeAwal_(tr);
+  spGbUbah_();
+}
+
+/** Jenis kain diubah tangan: usulan kode kain ikut berubah, karena kuncinya (kain x warna). */
+function spGbGantiKain(sel) {
+  const tr = sel.closest("tr");
+  tr.classList.toggle("sp-gb-tanpa-kain", !sel.value);
+  spGbDaftarKode_(tr);
+  spGbKodeAwal_(tr);
   spGbUbah_();
 }
 
 /**
- * Susun DAFTAR PILIHAN kode kain untuk baris ini. TIDAK pernah mengisi kotaknya.
+ * Kode rencana untuk pasangan (jenis kain, warna) baris ini, atau "" kalau tidak ada.
  *
- * Femri, 11 Sep 2026: *"kode kain dibantu daftar pilihan saja, jangan otomatis"* -- diminta
- * sesudah saya mengusulkan pengisian otomatis dari rencana order. Keputusannya benar dan
- * alasannya lebih kuat daripada usulan saya: isian otomatis yang SALAH lebih berbahaya daripada
- * kotak kosong, karena kotak kosong terlihat sedangkan angka yang sudah terisi cenderung
- * dibiarkan. Rencana order adalah RENCANA; yang dicatat di gelaran adalah gulungan yang
- * BENAR-BENAR dibentangkan, dan hanya orang di lantai yang tahu bedanya.
+ * Kuncinya bukan pilihan gaya -- diukur, satu warna bisa memakai tiga kode berbeda dalam sehari
+ * (CERUTYCNA, ARMANICN67, LUNASOFTCN36 pada warna yang sama), dan yang membedakannya jenis kain.
+ * `SP_BAHAN_RENCANA.peta` memang sudah berkunci "warna||jenisKain" -- granularitas yang sama.
+ */
+function spGbKodeRencana_(tr) {
+  const rencana = (window.SP_BAHAN_RENCANA || {}).peta || {};
+  const norm = function (s) { return String(s || "").trim().toLowerCase().replace(/\s+/g, " "); };
+  const warna = tr.querySelector(".sp-gb-warna").value || "";
+  const kain = spGbKainBaris_(tr);
+  if (!warna || !kain) return "";
+  return rencana[norm(warna) + "||" + norm(kain)] || "";
+}
+
+/**
+ * ISIAN AWAL kode kain -- terisi sendiri, tetap bisa diedit, dan TIDAK PERNAH menimpa ketikan.
  *
- * Yang dilakukan: kode yang direncanakan untuk pasangan (jenis kain, warna) baris ini ditaruh
- * PALING ATAS daftar, sisanya menyusul. Kuncinya bukan pilihan gaya -- diukur, satu warna bisa
- * memakai tiga kode berbeda dalam sehari (CERUTYCNA, ARMANICN67, LUNASOFTCN36 pada warna yang
- * sama), dan yang membedakannya jenis kain. `SP_BAHAN_RENCANA.peta` memang sudah berkunci
- * "warna||jenisKain" -- granularitas yang sama persis.
+ * Femri membalik keputusannya di sini, dan pembalikannya benar. 11 Sep 2026 dia minta "dibantu
+ * daftar pilihan saja, jangan otomatis"; 12 Sep 2026 dia minta isian awal yang bisa diedit. Yang
+ * menyelesaikan perbedaannya bukan pendapat melainkan tiga angka:
+ *
+ *   1. Form gelaran SATUAN sudah mengisi kotak ini otomatis sejak v143 (`spIsiKodeKain_`), dan
+ *      form terima roll sejak v203. Yang menyimpang dari kebiasaan rumah justru daftar v335.
+ *   2. Dari 31 baris gelaran yang punya kode kain, 30 sama dengan rencana dan 1 DITIMPA tangan --
+ *      dan yang ditimpa itu baris RE-CUT, persis keadaan di mana rencana memang sudah tidak
+ *      berlaku (panel cacat diganti dari gulungan yang kebetulan ada). Jadi isian otomatisnya
+ *      terbukti bisa dilawan, bukan de-facto paksaan.
+ *   3. Server MEMBAKUKAN kodenya sendiri lewat `normKodeKain_` (v203) di kedua pintu masuk, roll
+ *      dan gelaran, jadi mengisi "Ceruty CN A" tetap tersimpan "CERUTYCNA" -- kunci bersama sisi
+ *      masuk dan sisi keluar tidak pecah oleh ejaan rencana.
+ *
+ * PENJAGANYA (dipinjam utuh dari `spIsiKodeKain_` v143, jangan disederhanakan): kotak hanya boleh
+ * ditimpa kalau ia KOSONG, atau isinya persis apa yang ditaruh isian otomatis sebelumnya. Begitu
+ * seseorang mengetik sendiri, pergantian warna atau kain berikutnya tidak boleh menghapusnya
+ * diam-diam. Penandanya disimpan di data-attribute, bukan disimpulkan dari teks yang kebetulan
+ * tampil -- identitas data tidak pernah bersandar pada tampilan.
+ */
+function spGbKodeAwal_(tr) {
+  const kotak = tr.querySelector(".sp-gb-kode");
+  if (!kotak) return;
+  const kode = spGbKodeRencana_(tr);
+  const isiSekarang = String(kotak.value || "").trim();
+  const dariRencana = kotak.getAttribute("data-dari-rencana") || "";
+  if (isiSekarang && isiSekarang !== dariRencana) return;   // ketikan manusia: jangan disentuh
+  kotak.value = kode;
+  kotak.setAttribute("data-dari-rencana", kode);
+}
+
+/**
+ * Susun DAFTAR PILIHAN kode kain untuk baris ini: kode rencana PALING ATAS berikut labelnya,
+ * sisanya menyusul. Daftar tetap ada walau kotaknya sudah terisi awal -- gulungan yang benar
+ * sering bukan yang direncanakan, dan mengganti lewat daftar lebih cepat daripada mengetik.
  */
 function spGbDaftarKode_(tr) {
   const kotak = tr.querySelector(".sp-gb-kode");
   const dl = tr.querySelector("datalist");
   if (!kotak || !dl) return;
   const bahan = window.SP_BAHAN_RENCANA || {};
-  const rencana = bahan.peta || {};
-  const norm = function (s) { return String(s || "").trim().toLowerCase().replace(/\s+/g, " "); };
-  const warna = tr.querySelector(".sp-gb-warna").value || "";
   const kain = spGbKainBaris_(tr);
-  const cocok = rencana[norm(warna) + "||" + norm(kain)] || "";
+  const warna = tr.querySelector(".sp-gb-warna").value || "";
+  const cocok = spGbKodeRencana_(tr);
   const lain = (bahan.semuaKode || []).filter(function (k) { return k && k !== cocok; });
   dl.innerHTML = (cocok
     ? '<option value="' + spEsc_(cocok) + '">rencana order untuk ' + spEsc_(kain) + ' ' +
       spEsc_(warna) + '</option>'
     : "") + lain.map(function (k) { return '<option value="' + spEsc_(k) + '"></option>'; }).join("");
-  // Penanda kecil bahwa daftarnya memang punya usulan untuk pasangan ini -- supaya orang tahu
-  // ada yang bisa dibuka, tanpa satu pun karakter masuk ke kotaknya.
-  kotak.setAttribute("placeholder", cocok ? "opsional · ada usulan" : "opsional");
+  kotak.setAttribute("placeholder", cocok ? "dari rencana · bisa diganti" : "opsional");
 }
 
-/** Jenis kain baris ini: dari markernya, atau dari kotak pilih saat markernya belum berkain. */
+/** Jenis kain baris ini. Satu sumber: kotak pilihnya sendiri, terisi awal dari markernya. */
 function spGbKainBaris_(tr) {
   const pilih = tr.querySelector(".sp-gb-kain-pilih");
-  if (pilih && !pilih.classList.contains("hidden")) return pilih.value || "";
-  const teks = tr.querySelector(".sp-gb-kain-teks");
-  const t = teks ? String(teks.textContent || "").trim() : "";
-  return t === "—" ? "" : t;
+  return pilih ? (pilih.value || "") : "";
 }
 
 /**

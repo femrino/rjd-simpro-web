@@ -2057,7 +2057,9 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
    marker yang nyaris kembar ("Motif (Panel) - (S)" vs "- (M)") -- angkanya berbeda walau
    kodenya mirip, dan mata menangkap angka yang salah lebih cepat daripada huruf yang salah. */
 .sp-gb-baca { margin-top: 3px; font-size: 10.5px; color: var(--redup, #6B6357); line-height: 1.3; }
-.sp-gb-kain-teks { font-size: 12px; }
+/* v336: .sp-gb-kain-teks DIHAPUS. Jenis kain bukan lagi teks terkunci melainkan kotak pilih
+   yang terisi awal dari markernya -- diukur 9,4% baris gelaran memakai kain yang berbeda dari
+   markernya, jadi menguncinya memaksa orang keluar dari form sekali tiap sebelas baris. */
 /* 21% marker aktif belum punya jenis kain, dan server MENOLAK gelaran tanpa itu. Barisnya
    ditandai supaya pilihannya terlihat sebagai pekerjaan, bukan sebagai kotak kosong biasa. */
 .sp-gb-tanpa-kain { background: color-mix(in srgb, #B07A00 7%, transparent); }
@@ -2066,7 +2068,21 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 .sp-gb-hasil-teks { display: block; }
 .sp-gb-sudah { display: block; font-size: 10px; color: #8A5D00; margin-top: 2px; }
 .sp-gb-galat { display: block; font-size: 10.5px; color: #B3261E; margin-top: 2px; line-height: 1.35; }
-.sp-gb-aksi { white-space: nowrap; }
+.sp-gb-aksi { white-space: nowrap; text-align: right; }
+/* Tombol ikon baris (v336). Kotak sentuhnya 30px -- di bawah itu, dua tombol bersebelahan di
+   layar sentuh mulai saling tertekan, dan tombol yang tertekan di sini MENGHAPUS baris. Ikonnya
+   sendiri 15px; sisanya ruang aman, bukan hiasan. */
+.sp-gb-ikon { display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0; border: 1px solid transparent; border-radius: 8px;
+  background: none; color: var(--muted); cursor: pointer; vertical-align: middle; }
+.sp-gb-ikon + .sp-gb-ikon { margin-left: 2px; }
+.sp-gb-ikon svg { fill: none; stroke: currentColor; stroke-width: 1.35;
+  stroke-linecap: round; stroke-linejoin: round; }
+.sp-gb-ikon:hover { color: var(--thread); border-color: var(--line);
+  background: color-mix(in srgb, var(--thread) 7%, transparent); }
+.sp-gb-ikon-hapus:hover { color: #B3261E; border-color: color-mix(in srgb, #B3261E 35%, transparent);
+  background: color-mix(in srgb, #B3261E 8%, transparent); }
+.sp-gb-ikon:focus-visible { outline: 2px solid var(--thread); outline-offset: 1px; }
 .sp-gb-ok { background: color-mix(in srgb, var(--thread, #2E7D5B) 10%, transparent); }
 .sp-gb-gagal { background: color-mix(in srgb, #B3261E 8%, transparent); }
 .sp-gb-salah select, .sp-gb-salah input { border-color: #B3261E !important; }
