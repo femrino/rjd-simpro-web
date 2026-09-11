@@ -6820,9 +6820,16 @@ function spRenderFormGelaran_() {
         'type="radio" value="Panel Klien"/>' +
         '<span><b>Panel klien</b><small>diminta klien &#183; kain saja</small></span></label>' +
     '</div>' +
-    '<div class="sp-grid3">' +
+    // Panel matriks berdiri SENDIRI, di LUAR .sp-grid3. Versi pertamanya disisipkan di dalam grid
+    // tiga kolom itu, jadi seluruh tabelnya terjepit jadi satu sel selebar sepertiga layar --
+    // nama marker terpecah per huruf -- dan </div> penutupnya menutup elemen yang salah sehingga
+    // Jumlah Lapis serta Kode Kain milik form satuan bocor keluar padahal formnya sedang
+    // disembunyikan. Ujinya LOLOS karena ia memeriksa kelas dan jumlah sel, bukan apa yang
+    // benar-benar terlihat. Sekarang blok #sp-gl-satuan membungkus SELURUH form satuan berikut
+    // grid-nya, bukan dibuka di tengah-tengah.
     '<div id="sp-glx-panel">' + spGlxPanelHtml_(marker, warna) + '</div>' +
     '<div class="hidden" id="sp-gl-satuan">' +
+    '<div class="sp-grid3">' +
       '<label>Marker<select id="sp-gl-marker" onchange="spMarkerGelaranGanti_()">' +
         '<option value="">(tanpa marker &#8212; potong manual)</option>' +
         marker.map(function (m) {
