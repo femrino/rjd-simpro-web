@@ -5885,7 +5885,8 @@ async function spMkxSimpan(btn) {
   const komponen = (document.getElementById("sp-mkx-komponen") || {}).value || "";
   const st = document.getElementById("sp-mkx-status");
   if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
-  let ok = 0, gagal = 0;
+  let ok = 0, gagal = 0, awas = 0;
+  const pesanAwas = [];
   for (let n = 0; n < info.baris.length; n++) {
     const b = info.baris[n];
     if (st) st.textContent = "Menyimpan " + (n + 1) + " dari " + info.baris.length + ": " + b.kode + " ...";
@@ -5916,9 +5917,19 @@ async function spMkxSimpan(btn) {
       b.cb.checked = false;
       b.tr.classList.remove("sp-mkx-gagal");
       b.tr.classList.add("sp-mkx-ok");
+      // Peringatan panjang dari berkas .plt-nya sendiri (butuh gs >= @371). Barisnya diberi
+      // warna sendiri: tersimpan-dengan-peringatan bukan tersimpan-bersih, dan kalau keduanya
+      // tampak sama, peringatannya tidak akan pernah dibaca.
+      if (d.peringatanPanjang) {
+        awas++;
+        pesanAwas.push(b.kode + ": " + d.peringatanPanjang);
+        b.tr.classList.add("sp-mkx-beda");
+      }
       if (b.hasil) {
         b.hasil.innerHTML = '<span class="sp-mkx-ok-teks">' + spEsc_(d.idMarker || "tersimpan") +
-          (d.kembar ? " (sudah ada)" : "") + '</span>';
+          (d.kembar ? " (sudah ada)" : "") + '</span>' +
+          (d.peringatanPanjang
+            ? '<div class="sp-mkx-beda-teks">' + spEsc_(d.peringatanPanjang) + '</div>' : "");
       }
     } catch (e) {
       gagal++;
@@ -5932,14 +5943,29 @@ async function spMkxSimpan(btn) {
   if (btn) { btn.disabled = false; btn.textContent = "Simpan ulang yang gagal"; }
   spMkxSegarkanKode_();
   if (st) {
-    st.innerHTML = gagal
+    // Peringatan ditulis JUGA di ringkasan, bukan hanya di barisnya. Pada gelaran 12 baris,
+    // peringatan di baris ketiga tergulung lewat tanpa pernah terlihat.
+    const ringkasAwas = awas
+      ? '<div class="sp-mkx-beda-teks"><b>' + awas + ' marker panjangnya beda dari gambar .plt-nya:</b><br/>' +
+        pesanAwas.map(function (x) { return spEsc_(x); }).join("<br/>") +
+        '<br/><br/>Semuanya sudah TERSIMPAN. Daftar di bawah sengaja tidak disegarkan sendiri ' +
+        'supaya peringatan ini tidak hilang &#8212; tekan Refresh kalau sudah dibaca.</div>'
+      : "";
+    st.innerHTML = (gagal
       ? '<b>' + ok + ' tersimpan, ' + gagal + ' gagal.</b> Baris yang gagal masih tercentang beserta ' +
         'sebabnya &#8212; perbaiki lalu tekan Simpan lagi. Yang sudah tersimpan tidak akan terkirim dua kali.'
-      : '<b>' + ok + ' marker tersimpan.</b>';
+      : '<b>' + ok + ' marker tersimpan.</b>') + ringkasAwas;
   }
   if (!gagal) {
-    alert(ok + " marker tersimpan.");
-    spMuatMarker();
+    alert(ok + " marker tersimpan." +
+      (awas ? "\n\n" + awas + " di antaranya panjangnya beda dari gambar .plt-nya. Peringatannya " +
+        "ada di baris masing-masing dan di ringkasan di bawah tabel." : ""));
+    // MENYEGARKAN MERAKIT ULANG SELURUH PANEL, dan itu menghapus peringatannya berikut penanda
+    // baris mana yang bermasalah. Jadi saat ada peringatan, daftar TIDAK disegarkan sendiri --
+    // markernya sudah tersimpan, yang belum cuma tampilannya. Cacat yang sama dengan v330
+    // (hasil ditulis ke seluruh sel sehingga menghapus kotak catatan), dan kali ini harness
+    // yang menemukannya sebelum sampai ke layar siapa pun.
+    if (!awas) spMuatMarker();
   }
 }
 
@@ -6484,7 +6510,9 @@ async function spSimpanMarker() {
   .then(function (r) { return r.json(); })
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
-    alert("Marker tersimpan: " + d.idMarker + " (" + d.pcsPerLapis + " pcs/lapis)");
+    // butuh gs >= @371: peringatan panjang marker dari berkas .plt-nya sendiri
+    alert("Marker tersimpan: " + d.idMarker + " (" + d.pcsPerLapis + " pcs/lapis)" +
+      (d.peringatanPanjang ? "\n\nPERHATIAN: " + d.peringatanPanjang : ""));
     spMuatMarker();
   })
   .catch(function (e) { alert(e.message || e); })

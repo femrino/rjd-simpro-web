@@ -1946,6 +1946,14 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 .sp-mkx-gagal { background: color-mix(in srgb, #B3261E 8%, transparent); }
 .sp-mkx-ok-teks { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--thread, #2E7D5B); }
 .sp-mkx-gagal-teks { font-size: 10.5px; color: #B3261E; }
+/* Tersimpan TAPI panjangnya beda dari gambar .plt-nya. Warnanya sendiri, di antara hijau dan
+   merah: ia bukan kegagalan (markernya tersimpan) dan bukan keberhasilan bersih. Kalau ia
+   memakai warna hijau, tidak akan ada yang membacanya.
+   NAMANYA sp-mkx-beda, BUKAN sp-mkx-awas: nama itu sudah dipakai peringatan allowance/jenis kain
+   sejak v326, dan memakainya lagi membuat kotak isiannya ikut berubah rupa lewat aturan
+   `.sp-mkx-awas input`. Ketahuan oleh harness, bukan oleh mata. */
+.sp-mkx-beda { background: color-mix(in srgb, #B07A00 10%, transparent); }
+.sp-mkx-beda-teks { font-size: 10.5px; color: #8A5D00; line-height: 1.35; margin-top: 2px; }
 .sp-mkx-kosong { color: var(--muted); }
 .sp-mkx-sudah { background: color-mix(in srgb, var(--gold, #C8964A) 9%, transparent); }
 .sp-mkx-sudah-teks { font-size: 10.5px; color: var(--gold, #C8964A); font-weight: 600; }
