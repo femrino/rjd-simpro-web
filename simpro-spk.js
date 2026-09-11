@@ -6821,6 +6821,8 @@ function spRenderFormGelaran_() {
         '<span><b>Panel klien</b><small>diminta klien &#183; kain saja</small></span></label>' +
     '</div>' +
     '<div class="sp-grid3">' +
+    '<div id="sp-glx-panel">' + spGlxPanelHtml_(marker, warna) + '</div>' +
+    '<div class="hidden" id="sp-gl-satuan">' +
       '<label>Marker<select id="sp-gl-marker" onchange="spMarkerGelaranGanti_()">' +
         '<option value="">(tanpa marker &#8212; potong manual)</option>' +
         marker.map(function (m) {
@@ -6938,7 +6940,9 @@ function spRenderFormGelaran_() {
       '</p>' +
     '</div>' +
     '<div class="sp-hitung" id="sp-gl-hasil"></div>' +
-    '<button class="sp-simpan-btn" onclick="spSimpanGelaran()" type="button">Simpan Gelaran</button>';
+    '<button class="sp-simpan-btn" onclick="spSimpanGelaran()" type="button">Simpan Gelaran</button>' +
+    '</div>';
+  spGlxUbah_();
   spUbahModeGelaran_();
 }
 
@@ -6955,6 +6959,17 @@ function spUbahModeGelaran_() {
   // dan itu penting: "komponen yang diganti" tidak masuk akal untuk panel
   // yang diserahkan ke klien.
   const bukanBaju = (mode === "Re-cut" || mode === "Panel Klien");
+
+  // MATRIKS HANYA UNTUK GELARAN NORMAL. Re-cut dan Panel Klien menuntut komponen dan alasan yang
+  // KHAS satu kejadian ("Lengan", "kain sobek") -- keduanya tidak punya arti kalau disebar ke
+  // seluruh sel marker x warna, dan keduanya memang peristiwa tunggal, bukan pekerjaan borongan.
+  // Jadi kedua mode itu memakai form satuan yang sudah ada, persis seperti revisi marker memakai
+  // form satuannya sendiri sejak v330.
+  const panelMx = document.getElementById("sp-glx-panel");
+  const formSatuan = document.getElementById("sp-gl-satuan");
+  if (panelMx) panelMx.classList.toggle("hidden", bukanBaju);
+  if (formSatuan) formSatuan.classList.toggle("hidden", !bukanBaju);
+
   const blok = document.getElementById("sp-gl-recut");
   if (blok) blok.classList.toggle("hidden", !bukanBaju);
   if (bukanBaju) {
@@ -7060,6 +7075,330 @@ function spIsiKodeKain_() {
   if (isiSekarang && isiSekarang !== dariRencana) return;
   kotak.value = kode;
   kotak.setAttribute("data-dari-rencana", kode);
+}
+
+/* ============================================================
+ * PANEL MATRIKS GELARAN -- baris = MARKER, kolom = WARNA, sel = jumlah lapis
+ * ============================================================
+ *
+ * Femri, 11 Sep 2026: *"biasanya gelaran dilakukan bisa lebih dari 1 warna sekaligus, bahkan bisa
+ * langsung digelar semua warna, tetapi form gelaran saat ini hanya bisa input per warna."*
+ *
+ * Yang diukur lebih dulu (diagnosaGelaranMultiWarna, 320 baris gelaran aktif):
+ *
+ *   Baris lahir di sesi MULTI WARNA        : 202 dari 320 (63%), sampai 8 warna sekaligus
+ *   Hari kerja menyentuh >1 MARKER         : 26 dari 28 (93%), mencakup 99% baris
+ *   Hari tersibuk                          : 20 marker x 5 warna = 72 baris dalam sehari
+ *   Jumlah lapis seragam antar warna       : 36% saja
+ *   Kode Kain terisi                       : 31 dari 320 (10%)
+ *   Semua warna digelar dalam satu hari    : 63 kasus vs 2 yang terpecah
+ *
+ * KENAPA MATRIKS, BUKAN SEKADAR GRID WARNA. Angka yang menentukan bukan yang ditanyakan: 93% hari
+ * kerja menyentuh lebih dari satu marker. Grid warna saja menurunkan jumlah buka-form dari 320 ke
+ * 174; matriks marker x warna menurunkannya ke 28. Dan grid warna adalah matriks dengan satu
+ * baris, jadi membangun matriks tidak membuang pekerjaan grid warna -- ia memuatnya.
+ *
+ * KENAPA TIDAK ADA TOMBOL "ISI SEMUA". Dugaan pertama saya: lapis mengikuti warna (Butter 95, 97,
+ * 96, 95, 97 di beberapa marker terlihat rapat), jadi cukup diisi sekali per kolom. DIUKUR dan
+ * SALAH -- saya cuma melihat 8 dari 20 marker; marker lain punya Butter = 1 dan 48. Sebaran lapis
+ * di dalam satu warna 1,70 dan di dalam satu marker 1,08: dua-duanya lebar, tidak ada sumbu yang
+ * cukup rapat untuk disalin. Tombol salin di sumbu yang salah membuat orang mengetik ulang seluruh
+ * grid, jadi tidak ada tombol sama sekali. Lapis diketik per sel, karena memang segitu bedanya.
+ *
+ * MEDAN MANA DI MANA, semuanya dari angka di atas:
+ *   Jenis Kain & allowance -> milik MARKER, dibaca dari markernya sendiri dan tampil per baris.
+ *                             (Ini juga yang menjelaskan 7 sesi ber-jenis-kain campur: markernya
+ *                             yang beda kain, bukan operatornya yang tidak konsisten.)
+ *   Jumlah lapis           -> per SEL. 36% seragam terlalu rendah untuk diangkat jadi satu kotak.
+ *   Tanggal                -> bersama.
+ *   Kode Kain              -> per KOLOM (per warna), disembunyikan di balik tombol.
+ *
+ * CATATAN JUJUR SOAL KODE KAIN. Penempatannya di kolom diturunkan dari barangnya, bukan dari
+ * pengukuran: kode kain adalah GULUNGAN FISIK, dan gulungan milik warna, bukan milik kombinasi
+ * size sebuah marker. Pengukurannya sudah ditulis (diagnosaGelaranMultiWarna bagian 8) tapi belum
+ * sempat dijalankan -- API Google tidak bisa dihubungi saat ini. Kalau nanti ternyata satu warna
+ * bisa memakai dua kode dalam satu hari, sel yang menyimpang diselamatkan form satuan yang tetap
+ * ada. Terisi cuma 10%, jadi salah tempat di sini tidak menghentikan siapa pun.
+ *
+ * SEL YANG SUDAH DIGELAR ditandai. Cuma 2 dari 65 kasus yang terpecah antar hari, tapi penjagaan
+ * ini murah dan gelaran ganda merugikan DUA kali: output naik dan pemakaian kain naik, dan
+ * keduanya tidak saling membatalkan.
+ */
+
+/** Peta "sudah digelar": "idMarker|warna" -> total lapis yang sudah tercatat (tanpa yang dibatalkan). */
+function spGlxSudah_() {
+  const peta = {};
+  (window.SP_DAFTAR_GELARAN || []).forEach(function (g) {
+    if (String(g.status || "").toLowerCase() === "dibatalkan") return;
+    const k = (g.idMarker || "") + "|" + (g.warna || "");
+    peta[k] = (peta[k] || 0) + (Number(g.jumlahLapis) || 0);
+  });
+  return peta;
+}
+
+function spGlxPanelHtml_(marker, warna) {
+  if (!warna || !warna.length) {
+    return '<p class="sp-info">Warna PO ini belum terbaca, jadi matriks tidak bisa dirakit. ' +
+      'Pakai form satuan di bawah &#8212; pilih mode Re-cut lalu kembali ke Normal untuk ' +
+      'menampilkannya, atau isi warna di Edit Order dulu.</p>';
+  }
+  const sudah = spGlxSudah_();
+  const kepala = warna.map(function (w) {
+    return '<th class="sp-glx-wh">' + spEsc_(w) + '</th>';
+  }).join("");
+
+  const baris = marker.map(function (m) {
+    const sel = warna.map(function (w) {
+      const k = (m.idMarker || "") + "|" + w;
+      const lalu = sudah[k] || 0;
+      return '<td class="sp-glx-sel' + (lalu ? ' sp-glx-sudah' : '') + '">' +
+        '<input class="sp-glx-lapis" data-marker="' + spEsc_(m.idMarker) + '" ' +
+        'data-warna="' + spEsc_(w) + '" inputmode="numeric" oninput="spGlxUbah_()" ' +
+        'placeholder="' + (lalu ? '(' + lalu + ')' : '0') + '" type="text"/>' +
+        (lalu ? '<span class="sp-glx-sudah-teks">sudah ' + lalu + '</span>' : '') +
+        '</td>';
+    }).join("");
+    return '<tr data-marker="' + spEsc_(m.idMarker) + '">' +
+      '<td class="sp-glx-mk">' +
+        '<b>' + spEsc_(m.kodeMarker || m.idMarker) + '</b>' +
+        '<small>' + m.panjangMarker + ' m &#183; ' + m.pcsPerLapis + ' pcs/lapis' +
+          (m.jenisKain ? ' &#183; ' + spEsc_(m.jenisKain) : ' &#183; kain belum diisi') +
+          (m.komponen ? ' &#183; ' + spEsc_(m.komponen) : '') + '</small>' +
+      '</td>' +
+      '<td class="sp-glx-allow">' +
+        '<input class="sp-glx-allow-inp" data-marker="' + spEsc_(m.idMarker) + '" ' +
+        'inputmode="decimal" oninput="spGlxUbah_()" type="text" value="' +
+        (m.allowancePerLapis !== undefined && m.allowancePerLapis !== "" ? m.allowancePerLapis : "0.02") +
+        '"/></td>' +
+      sel +
+      '<td class="sp-glx-hasil"><span class="sp-glx-hasil-teks"></span></td></tr>';
+  }).join("");
+
+  return '<div class="sp-glx">' +
+    '<p class="sp-info">Isi jumlah lapis di sel yang digelar &#8212; kosongkan yang tidak. ' +
+    'Tiap sel jadi SATU baris gelaran, sama persis dengan form satuan. ' +
+    'Sel berlatar kuning berarti marker &#215; warna itu sudah pernah digelar.</p>' +
+    '<div class="sp-grid3">' +
+      '<label>Tanggal<input id="sp-glx-tanggal" type="date" value="' +
+        new Date().toISOString().slice(0, 10) + '"/></label>' +
+      '<label>Catatan (untuk semua)<input id="sp-glx-catatan" placeholder="opsional" type="text"/></label>' +
+      '<label class="sp-glx-kode-toggle"><button class="sp-mkx-catatan-btn" onclick="spGlxKodeBuka()" ' +
+        'type="button">+ kode kain per warna</button></label>' +
+    '</div>' +
+    '<div class="hidden" id="sp-glx-kode">' +
+      '<p class="sp-info">Kode kain = gulungan fisiknya, satu per warna. Terisi di 10% gelaran; ' +
+      'kalau satu warna memakai dua gulungan berbeda, simpan yang menyimpang lewat form satuan.</p>' +
+      '<div class="sp-glx-kode-baris">' +
+        warna.map(function (w) {
+          return '<label>' + spEsc_(w) + '<input class="sp-glx-kode-inp" ' +
+            'data-warna="' + spEsc_(w) + '" list="sp-datalist-kodekain" ' +
+            'placeholder="opsional" type="text"/></label>';
+        }).join("") +
+      '</div>' +
+    '</div>' +
+    '<div class="sp-glx-gulung">' +
+      '<table class="sp-glx-tabel" id="sp-glx-tabel">' +
+        '<thead><tr><th>Marker</th><th class="sp-glx-wh">Allow</th>' + kepala +
+          '<th>Hasil</th></tr></thead>' +
+        '<tbody>' + baris + '</tbody>' +
+      '</table>' +
+    '</div>' +
+    '<div class="sp-hitung" id="sp-glx-ringkas"></div>' +
+    '<div class="sp-glx-status" id="sp-glx-status"></div>' +
+    '<button class="sp-simpan-btn" id="sp-glx-btn" onclick="spGlxSimpan(this)" type="button">' +
+      'Simpan Gelaran</button>' +
+    '</div>';
+}
+
+function spGlxKodeBuka() {
+  const el = document.getElementById("sp-glx-kode");
+  if (el) el.classList.toggle("hidden");
+}
+
+/** Marker yang sedang ditawarkan panel, dipetakan dari idMarker. */
+function spGlxPetaMarker_() {
+  const peta = {};
+  (window.SP_MARKER || []).forEach(function (m) { peta[m.idMarker] = m; });
+  return peta;
+}
+
+/**
+ * Kumpulkan sel yang terisi. Satu sel = satu gelaran.
+ *
+ * Angka dibaca dari kotak TEKS, bukan input number: sejak v330 semua kotak angka di panel matriks
+ * memakai type="text" inputmode="numeric", karena `appearance: textfield` kalah oleh aturan lain
+ * di berkas CSS ini dan spinnernya menutupi angkanya sendiri.
+ */
+function spGlxKumpulkan_() {
+  const peta = spGlxPetaMarker_();
+  const out = { baris: [], galat: [] };
+  Array.prototype.forEach.call(document.querySelectorAll(".sp-glx-lapis"), function (inp) {
+    const teks = String(inp.value || "").trim();
+    if (!teks) return;
+    const lapis = Number(teks.replace(",", "."));
+    const m = peta[inp.dataset.marker];
+    const nama = (m && (m.kodeMarker || m.idMarker)) + " × " + inp.dataset.warna;
+    if (!isFinite(lapis) || lapis <= 0 || Math.floor(lapis) !== lapis) {
+      out.galat.push(nama + ": jumlah lapis harus bilangan bulat lebih dari 0 (terbaca \"" + teks + "\")");
+      inp.classList.add("sp-glx-salah");
+      return;
+    }
+    inp.classList.remove("sp-glx-salah");
+    if (!m) { out.galat.push(nama + ": markernya tidak ditemukan lagi"); return; }
+    const allowEl = document.querySelector('.sp-glx-allow-inp[data-marker="' +
+      (inp.dataset.marker || "").replace(/"/g, "") + '"]');
+    const allow = allowEl ? String(allowEl.value || "").trim().replace(",", ".") : "0.02";
+    const kodeEl = document.querySelector('.sp-glx-kode-inp[data-warna="' +
+      (inp.dataset.warna || "").replace(/"/g, "") + '"]');
+    out.baris.push({
+      marker: m, idMarker: m.idMarker, warna: inp.dataset.warna, lapis: lapis,
+      allow: allow, kodeKain: kodeEl ? String(kodeEl.value || "").trim() : "",
+      inp: inp, td: inp.parentNode,
+      hasil: (inp.parentNode.parentNode || {}).querySelector
+        ? inp.parentNode.parentNode.querySelector(".sp-glx-hasil-teks") : null
+    });
+  });
+  return out;
+}
+
+/** Hitung ulang ringkasan: per baris, per warna, dan totalnya. */
+function spGlxUbah_() {
+  const ringkas = document.getElementById("sp-glx-ringkas");
+  if (!ringkas) return;
+  const info = spGlxKumpulkan_();
+
+  // Ringkasan per BARIS ditulis ke span tersendiri, bukan ke seluruh sel -- pelajaran v330: hasil
+  // yang ditulis ke sel penuh menghapus kotak isian yang ada di sel yang sama.
+  const perBaris = {};
+  info.baris.forEach(function (b) {
+    const pcs = Object.keys(b.marker.susunanSize || {}).reduce(function (a, sz) {
+      return a + (Number(b.marker.susunanSize[sz]) || 0) * b.lapis;
+    }, 0);
+    const perLapis = (Number(b.marker.panjangMarker) || 0) + (Number(b.allow) || 0);
+    b.pcs = pcs;
+    b.kain = Math.round(perLapis * b.lapis * 100) / 100;
+    if (!perBaris[b.idMarker]) perBaris[b.idMarker] = { pcs: 0, kain: 0, n: 0, el: null };
+    perBaris[b.idMarker].pcs += pcs;
+    perBaris[b.idMarker].kain += b.kain;
+    perBaris[b.idMarker].n++;
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("#sp-glx-tabel tbody tr"), function (tr) {
+    const el = tr.querySelector(".sp-glx-hasil-teks");
+    if (!el) return;
+    const p = perBaris[tr.dataset.marker];
+    el.textContent = p ? (p.pcs + " pcs · " + (Math.round(p.kain * 100) / 100) + " m") : "";
+  });
+
+  const perWarna = {};
+  info.baris.forEach(function (b) {
+    if (!perWarna[b.warna]) perWarna[b.warna] = { pcs: 0, kain: 0, n: 0 };
+    perWarna[b.warna].pcs += b.pcs;
+    perWarna[b.warna].kain += b.kain;
+    perWarna[b.warna].n++;
+  });
+  const totPcs = info.baris.reduce(function (a, b) { return a + b.pcs; }, 0);
+  const totKain = info.baris.reduce(function (a, b) { return a + b.kain; }, 0);
+
+  if (!info.baris.length && !info.galat.length) {
+    ringkas.innerHTML = '<span class="sp-info">Isi jumlah lapis di sel yang digelar untuk ' +
+      'melihat hasilnya.</span>';
+    return;
+  }
+  ringkas.innerHTML =
+    (info.galat.length
+      ? '<div class="sp-glx-galat"><b>' + info.galat.length + ' isian belum benar:</b><br/>' +
+        info.galat.map(function (g) { return spEsc_(g); }).join("<br/>") + '</div>'
+      : "") +
+    '<div class="sp-hitung-baris"><span>Gelaran</span><div><b class="sp-hitung-total">' +
+      info.baris.length + '</b> baris akan dibuat</div></div>' +
+    (Object.keys(perWarna).length
+      ? '<div class="sp-hitung-baris"><span>Per warna</span><div>' +
+        Object.keys(perWarna).map(function (w) {
+          return '<span class="sp-chip">' + spEsc_(w) + ' <b>' + perWarna[w].pcs + '</b> pcs &#183; ' +
+            (Math.round(perWarna[w].kain * 100) / 100) + ' m</span>';
+        }).join("") + '</div></div>'
+      : "") +
+    '<div class="sp-hitung-baris"><span>Total</span><div><b class="sp-hitung-total">' +
+      totPcs + ' pcs</b> &#183; kain <b>' + (Math.round(totKain * 100) / 100) + ' m</b></div></div>';
+}
+
+/**
+ * Simpan seluruh sel terisi. Satu sel = satu panggilan `simpanGelaran`, sama persis dengan form
+ * satuan -- backendnya TIDAK diubah sama sekali, jadi tidak ada jalur tulis baru yang perlu
+ * dipercaya. Sel yang berhasil dikosongkan supaya tekan-ulang hanya mengirim sisanya.
+ */
+async function spGlxSimpan(btn) {
+  const info = spGlxKumpulkan_();
+  if (info.galat.length) { spGlxUbah_(); return; }
+  if (!info.baris.length) { alert("Belum ada sel yang diisi."); return; }
+
+  const item = spItemGelaranTerpilih_();
+  const tgl = (document.getElementById("sp-glx-tanggal") || {}).value || "";
+  const catatan = (document.getElementById("sp-glx-catatan") || {}).value || "";
+  const st = document.getElementById("sp-glx-status");
+  if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
+
+  let ok = 0, gagal = 0;
+  for (let n = 0; n < info.baris.length; n++) {
+    const b = info.baris[n];
+    const nama = (b.marker.kodeMarker || b.idMarker) + " × " + b.warna;
+    if (st) st.textContent = "Menyimpan " + (n + 1) + " dari " + info.baris.length + ": " + nama + " ...";
+    try {
+      const d = await spGlxKirim_({
+        idPurchaseOrder: window.SP_PO_AKTIF,
+        idMarker: b.idMarker,
+        warna: b.warna,
+        // Jenis kain dibaca dari MARKERNYA. Marker digambar untuk kain tertentu, jadi kainnya
+        // sudah melekat di sana -- menanyakannya lagi per baris cuma menambah kesempatan salah.
+        jenisKain: b.marker.jenisKain || "",
+        jenisGelaran: "Normal",
+        komponen: "", alasan: "", untukLine: "", recutDariQC: "", kainTerpakai: "",
+        jumlahLapis: b.lapis,
+        allowancePerLapis: b.allow,
+        tanggalPotong: tgl,
+        catatan: catatan,
+        kodeKain: b.kodeKain || "",
+        noSO: item.noSO || "", brand: item.brand || "",
+        artikel: item.artikel || "", style: item.style || ""
+      });
+      ok++;
+      b.td.classList.remove("sp-glx-gagal");
+      b.td.classList.add("sp-glx-ok");
+      b.inp.value = "";
+      if (b.hasil) {
+        b.hasil.textContent = (d.totalPotongan || "") + " pcs · " + (d.kainTerpakai || "") + " m";
+      }
+    } catch (e) {
+      gagal++;
+      b.td.classList.remove("sp-glx-ok");
+      b.td.classList.add("sp-glx-gagal");
+      b.inp.title = String(e.message || e);
+    }
+  }
+  if (btn) { btn.disabled = false; btn.textContent = gagal ? "Simpan ulang yang gagal" : "Simpan Gelaran"; }
+  if (st) {
+    st.innerHTML = gagal
+      ? '<b>' + ok + ' tersimpan, ' + gagal + ' gagal.</b> Sel yang gagal masih berisi angkanya ' +
+        'beserta sebabnya &#8212; arahkan kursor ke selnya. Yang sudah tersimpan dikosongkan, jadi ' +
+        'tekan Simpan lagi tidak akan mengirimnya dua kali.'
+      : '<b>' + ok + ' gelaran tersimpan.</b>';
+  }
+  if (!gagal) {
+    alert(ok + " gelaran tersimpan.");
+    spMuatGelaran();
+  }
+}
+
+function spGlxKirim_(payload) {
+  return fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "simpanGelaran", payload: payload })
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
+    return d;
+  });
 }
 
 function spHitungGelaran_() {

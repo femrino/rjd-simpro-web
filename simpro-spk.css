@@ -2035,3 +2035,37 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 .sp-mkx-tabel .sp-mkx-catatan-isi { width: 150px; font-size: 11px; padding: 5px 7px; }
 .sp-mk-satuan-toggle { margin-top: 4px; border-radius: 9px; border: 1px solid var(--line); }
 .sp-mk-satuan { padding-top: 8px; }
+
+/* ============================================================
+   PANEL MATRIKS GELARAN (v333) -- baris = marker, kolom = warna
+   ============================================================
+   Gaya tabelnya sengaja MENUMPANG pada .sp-mkx-tabel yang sudah ada: dua tabel matriks yang
+   berperilaku beda di layar yang sama akan terasa seperti dua aplikasi. Yang ditambahkan di sini
+   hanya yang memang khas gelaran -- sel angka yang lebih sempit (kolomnya bisa delapan) dan
+   penanda "sudah digelar". */
+.sp-glx-gulung { overflow-x: auto; }
+.sp-glx-tabel { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.sp-glx-tabel th, .sp-glx-tabel td { padding: 5px 6px; border-bottom: 1px solid var(--garis, #E4E0D8);
+  vertical-align: middle; }
+.sp-glx-tabel th { text-align: left; font-weight: 600; white-space: nowrap; }
+.sp-glx-tabel th.sp-glx-wh { text-align: center; }
+.sp-glx-mk b { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; }
+.sp-glx-mk small { display: block; color: var(--redup, #6B6357); font-size: 10.5px; }
+.sp-glx-sel { text-align: center; }
+.sp-glx-sel input, .sp-glx-allow input { width: 62px; text-align: center; padding: 6px 4px; margin: 0; }
+.sp-glx-allow input { width: 58px; }
+.sp-glx-hasil { white-space: nowrap; font-size: 11px; color: var(--redup, #6B6357); }
+/* Sudah pernah digelar. Ditandai, TIDAK dikunci: menggelar ulang marker x warna yang sama memang
+   sah (gelaran kedua di hari lain), yang tidak sah cuma melakukannya tanpa sadar. */
+.sp-glx-sudah { background: color-mix(in srgb, #B07A00 8%, transparent); }
+.sp-glx-sudah-teks { display: block; font-size: 9.5px; color: #8A5D00; margin-top: 1px; }
+.sp-glx-ok { background: color-mix(in srgb, var(--thread, #2E7D5B) 12%, transparent); }
+.sp-glx-gagal { background: color-mix(in srgb, #B3261E 12%, transparent); }
+.sp-glx-salah { border-color: #B3261E !important; }
+.sp-glx-galat { color: #B3261E; font-size: 12px; margin-bottom: 6px; line-height: 1.4; }
+.sp-glx-status { min-height: 18px; margin: 8px 0 0; font-size: 12.5px; }
+.sp-glx-kode-baris { display: flex; flex-wrap: wrap; gap: 8px; }
+.sp-glx-kode-baris label { flex: 1 1 140px; }
+@media (max-width: 720px) {
+  .sp-glx-sel input, .sp-glx-allow input { width: 52px; }
+}
