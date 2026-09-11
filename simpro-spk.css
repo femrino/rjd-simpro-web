@@ -2007,7 +2007,15 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 .sp-mkx-szgrid { display: flex; flex-wrap: wrap; gap: 5px; }
 .sp-mkx-szgrid label { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .sp-mkx-szgrid span { font-size: 10px; font-family: 'IBM Plex Mono', monospace; color: var(--muted); }
-.sp-mkx-tabel .sp-mkx-szgrid input { width: 46px; text-align: center; padding: 5px 3px; }
+/* Kotak qty per size: angkanya harus MUAT. Versi pertama 46px dengan spinner bawaan masih
+   menyala -- panah spinner memakan ~15px dari lebar isi, dan angkanya terpotong jadi serpihan
+   yang tidak terbaca (dilaporkan Femri 11 Sep 2026, v328). Aturan penyembunyi spinner yang sudah
+   ada di berkas ini di-scope ke [id^="sp-panel-"] sehingga grid ini tidak ikut; ditulis ulang
+   tanpa awalan itu supaya berlaku juga di harness, yang merender form tanpa pembungkus panel. */
+.sp-mkx-tabel .sp-mkx-szgrid input { width: 58px; text-align: center; padding: 6px 4px; }
+.sp-mkx-szgrid input::-webkit-outer-spin-button,
+.sp-mkx-szgrid input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.sp-mkx-szgrid input { -moz-appearance: textfield; appearance: textfield; }
 .sp-mkx-lbl-file { display: block; font-size: 10px; color: var(--muted); }
 .sp-mkx-lbl-file + .sp-mkx-lbl-file { margin-top: 4px; }
 .sp-mkx-tambah { margin-top: 10px; }
