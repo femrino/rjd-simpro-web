@@ -2037,40 +2037,54 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 .sp-mk-satuan { padding-top: 8px; }
 
 /* ============================================================
-   PANEL MATRIKS GELARAN (v333) -- baris = marker, kolom = warna
+   DAFTAR BENTANGAN (v335) -- satu baris = satu gelaran
    ============================================================
-   Gaya tabelnya sengaja MENUMPANG pada .sp-mkx-tabel yang sudah ada: dua tabel matriks yang
-   berperilaku beda di layar yang sama akan terasa seperti dua aplikasi. Yang ditambahkan di sini
-   hanya yang memang khas gelaran -- sel angka yang lebih sempit (kolomnya bisa delapan) dan
-   penanda "sudah digelar". */
-.sp-glx-gulung { overflow-x: auto; }
-.sp-glx-tabel { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.sp-glx-tabel th, .sp-glx-tabel td { padding: 5px 6px; border-bottom: 1px solid var(--garis, #E4E0D8);
-  vertical-align: middle; }
-.sp-glx-tabel th { text-align: left; font-weight: 600; white-space: nowrap; }
-.sp-glx-tabel th.sp-glx-wh { text-align: center; }
-/* Lebar minimum kolom marker. Tanpa ini, tabel yang sempit memecah kode marker PER HURUF
-   ("Motif (Panel ) - (S)" jadi satu huruf per baris) -- yang terbaca sebagai kerusakan, bukan
-   sebagai teks panjang. Tabelnya sendiri sudah bisa digulung mendatar (.sp-glx-gulung). */
-.sp-glx-mk { min-width: 190px; }
-.sp-glx-mk b { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px;
-  word-break: normal; overflow-wrap: anywhere; }
-.sp-glx-mk small { display: block; color: var(--redup, #6B6357); font-size: 10.5px; }
-.sp-glx-sel { text-align: center; }
-.sp-glx-sel input, .sp-glx-allow input { width: 62px; text-align: center; padding: 6px 4px; margin: 0; }
-.sp-glx-allow input { width: 58px; }
-.sp-glx-hasil { white-space: nowrap; font-size: 11px; color: var(--redup, #6B6357); }
-/* Sudah pernah digelar. Ditandai, TIDAK dikunci: menggelar ulang marker x warna yang sama memang
-   sah (gelaran kedua di hari lain), yang tidak sah cuma melakukannya tanpa sadar. */
-.sp-glx-sudah { background: color-mix(in srgb, #B07A00 8%, transparent); }
-.sp-glx-sudah-teks { display: block; font-size: 9.5px; color: #8A5D00; margin-top: 1px; }
-.sp-glx-ok { background: color-mix(in srgb, var(--thread, #2E7D5B) 12%, transparent); }
-.sp-glx-gagal { background: color-mix(in srgb, #B3261E 12%, transparent); }
-.sp-glx-salah { border-color: #B3261E !important; }
-.sp-glx-galat { color: #B3261E; font-size: 12px; margin-bottom: 6px; line-height: 1.4; }
-.sp-glx-status { min-height: 18px; margin: 8px 0 0; font-size: 12.5px; }
-.sp-glx-kode-baris { display: flex; flex-wrap: wrap; gap: 8px; }
-.sp-glx-kode-baris label { flex: 1 1 140px; }
+   Menggantikan panel matriks v333/v334. Tabelnya sengaja meminjam tinggi baris dan warna garis
+   dari .sp-mkx-tabel supaya dua tabel di aplikasi yang sama tidak terasa seperti dua aplikasi.
+   Yang khas gelaran cuma: kolom baca-balik di bawah select marker, penanda baris tanpa jenis
+   kain, dan tiga span hasil yang harus bisa hidup berdampingan di satu sel. */
+.sp-gb-gulung { overflow-x: auto; }
+.sp-gb-tabel { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.sp-gb-tabel th, .sp-gb-tabel td { padding: 6px; border-bottom: 1px solid var(--garis, #E4E0D8);
+  vertical-align: top; }
+.sp-gb-tabel th { text-align: left; font-weight: 600; white-space: nowrap; }
+.sp-gb-tabel select, .sp-gb-tabel input { margin: 0; width: 100%; }
+.sp-gb-mk { min-width: 210px; }
+.sp-gb-kain, .sp-gb-tabel td:nth-child(3) { min-width: 120px; }
+.sp-gb-kode-sel { min-width: 130px; }
+.sp-gb-tabel .sp-gb-allow, .sp-gb-tabel .sp-gb-lapis { width: 72px; text-align: center; }
+/* Baca-balik marker: pcs/lapis, susunan size, meter per lapis. Pagar termurah terhadap kode
+   marker yang nyaris kembar ("Motif (Panel) - (S)" vs "- (M)") -- angkanya berbeda walau
+   kodenya mirip, dan mata menangkap angka yang salah lebih cepat daripada huruf yang salah. */
+.sp-gb-baca { margin-top: 3px; font-size: 10.5px; color: var(--redup, #6B6357); line-height: 1.3; }
+.sp-gb-kain-teks { font-size: 12px; }
+/* 21% marker aktif belum punya jenis kain, dan server MENOLAK gelaran tanpa itu. Barisnya
+   ditandai supaya pilihannya terlihat sebagai pekerjaan, bukan sebagai kotak kosong biasa. */
+.sp-gb-tanpa-kain { background: color-mix(in srgb, #B07A00 7%, transparent); }
+.sp-gb-tanpa-kain .sp-gb-kain-pilih { border-color: var(--gold, #C8964A); }
+.sp-gb-hasil { min-width: 150px; font-size: 11px; color: var(--redup, #6B6357); }
+.sp-gb-hasil-teks { display: block; }
+.sp-gb-sudah { display: block; font-size: 10px; color: #8A5D00; margin-top: 2px; }
+.sp-gb-galat { display: block; font-size: 10.5px; color: #B3261E; margin-top: 2px; line-height: 1.35; }
+.sp-gb-aksi { white-space: nowrap; }
+.sp-gb-ok { background: color-mix(in srgb, var(--thread, #2E7D5B) 10%, transparent); }
+.sp-gb-gagal { background: color-mix(in srgb, #B3261E 8%, transparent); }
+.sp-gb-salah select, .sp-gb-salah input { border-color: #B3261E !important; }
+.sp-gb-tombol { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
+.sp-mini { padding: 7px 12px; font-size: 12.5px; border: 1px solid var(--garis, #E4E0D8);
+  background: var(--white, #fff); border-radius: 8px; cursor: pointer; }
+.sp-mini:hover { border-color: var(--thread, #2E7D5B); color: var(--thread, #2E7D5B); }
+.sp-gb-status { min-height: 18px; margin: 8px 0 0; font-size: 12.5px; }
+.sp-gb-galat-ringkas { color: #B3261E; font-size: 12px; margin-bottom: 6px; line-height: 1.4; }
+.sp-gb-awas-ringkas { color: #8A5D00; font-size: 12px; margin-bottom: 6px; line-height: 1.4; }
+.sp-gb-kisi { width: 100%; border-collapse: collapse; font-size: 12px; }
+.sp-gb-kisi th, .sp-gb-kisi td { padding: 5px 6px; border-bottom: 1px solid var(--garis, #E4E0D8);
+  text-align: center; }
+.sp-gb-kisi th:first-child, .sp-gb-kisi td:first-child { text-align: left; }
+.sp-gb-kisi .sp-gb-mk b { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+.sp-gb-kisi .sp-gb-mk small { display: block; color: var(--redup, #6B6357); font-size: 10px; }
+.sp-gb-kisi-sel .sp-gb-sudah { display: inline; margin-left: 3px; }
 @media (max-width: 720px) {
-  .sp-glx-sel input, .sp-glx-allow input { width: 52px; }
+  .sp-gb-mk { min-width: 170px; }
+  .sp-gb-tabel .sp-gb-allow, .sp-gb-tabel .sp-gb-lapis { width: 58px; }
 }

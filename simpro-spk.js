@@ -6827,7 +6827,7 @@ function spRenderFormGelaran_() {
     // disembunyikan. Ujinya LOLOS karena ia memeriksa kelas dan jumlah sel, bukan apa yang
     // benar-benar terlihat. Sekarang blok #sp-gl-satuan membungkus SELURUH form satuan berikut
     // grid-nya, bukan dibuka di tengah-tengah.
-    '<div id="sp-glx-panel">' + spGlxPanelHtml_(marker, warna) + '</div>' +
+    '<div id="sp-gb-panel">' + spGbPanelHtml_(marker, warna, kain) + '</div>' +
     '<div class="hidden" id="sp-gl-satuan">' +
     '<div class="sp-grid3">' +
       '<label>Marker<select id="sp-gl-marker" onchange="spMarkerGelaranGanti_()">' +
@@ -6949,7 +6949,7 @@ function spRenderFormGelaran_() {
     '<div class="sp-hitung" id="sp-gl-hasil"></div>' +
     '<button class="sp-simpan-btn" onclick="spSimpanGelaran()" type="button">Simpan Gelaran</button>' +
     '</div>';
-  spGlxUbah_();
+  spGbUbah_();
   spUbahModeGelaran_();
 }
 
@@ -6972,7 +6972,7 @@ function spUbahModeGelaran_() {
   // seluruh sel marker x warna, dan keduanya memang peristiwa tunggal, bukan pekerjaan borongan.
   // Jadi kedua mode itu memakai form satuan yang sudah ada, persis seperti revisi marker memakai
   // form satuannya sendiri sejak v330.
-  const panelMx = document.getElementById("sp-glx-panel");
+  const panelMx = document.getElementById("sp-gb-panel");
   const formSatuan = document.getElementById("sp-gl-satuan");
   if (panelMx) panelMx.classList.toggle("hidden", bukanBaju);
   if (formSatuan) formSatuan.classList.toggle("hidden", !bukanBaju);
@@ -7085,238 +7085,443 @@ function spIsiKodeKain_() {
 }
 
 /* ============================================================
- * PANEL MATRIKS GELARAN -- baris = MARKER, kolom = WARNA, sel = jumlah lapis
+ * DAFTAR BENTANGAN -- satu baris = satu gelaran
  * ============================================================
  *
- * Femri, 11 Sep 2026: *"biasanya gelaran dilakukan bisa lebih dari 1 warna sekaligus, bahkan bisa
- * langsung digelar semua warna, tetapi form gelaran saat ini hanya bisa input per warna."*
+ * Menggantikan panel MATRIKS (marker x warna) yang hidup satu hari di v333/v334.
  *
- * Yang diukur lebih dulu (diagnosaGelaranMultiWarna, 320 baris gelaran aktif):
+ * Femri, 11 Sep 2026: *"yang tidak ada di form ini adalah field kode kain tiap warna dan jenis
+ * kain, jadi setiap kode marker itu biasanya mewakili jenis kain, dan setiap jenis kain bisa
+ * banyak warna, dan setiap warna memiliki kode kain, jadi urutannya pilih marker, jenis kain,
+ * warna, kode kain, allowance, jumlah lapis. redesain formnya.. jangan tampilkan semua marker
+ * sekaligus seperti sekarang karena tidak semua marker digunakan saat gelaran."*
  *
- *   Baris lahir di sesi MULTI WARNA        : 202 dari 320 (63%), sampai 8 warna sekaligus
- *   Hari kerja menyentuh >1 MARKER         : 26 dari 28 (93%), mencakup 99% baris
- *   Hari tersibuk                          : 20 marker x 5 warna = 72 baris dalam sehari
- *   Jumlah lapis seragam antar warna       : 36% saja
- *   Kode Kain terisi                       : 31 dari 320 (10%)
- *   Semua warna digelar dalam satu hari    : 63 kasus vs 2 yang terpecah
+ * Dia benar, dan dua pengukuran sesudahnya membantah dua keputusan saya di matriks:
  *
- * KENAPA MATRIKS, BUKAN SEKADAR GRID WARNA. Angka yang menentukan bukan yang ditanyakan: 93% hari
- * kerja menyentuh lebih dari satu marker. Grid warna saja menurunkan jumlah buka-form dari 320 ke
- * 174; matriks marker x warna menurunkannya ke 28. Dan grid warna adalah matriks dengan satu
- * baris, jadi membangun matriks tidak membuang pekerjaan grid warna -- ia memuatnya.
+ * 1. KODE KAIN BUKAN MILIK WARNA. Matriks menaruhnya di kepala kolom warna. Diukur: pada
+ *    260901/Abelia satu hari, warna "Warna A" memakai TIGA kode -- CERUTYCNA, ARMANICN67,
+ *    LUNASOFTCN36 -- dan ketiganya jenis kain yang berbeda. Kode kain milik pasangan
+ *    (JENIS KAIN x WARNA), persis kalimat Femri, dan persis kunci `SP_BAHAN_RENCANA.peta`
+ *    ("warna||jenisKain") yang sudah lama ada di sistem ini. Kotak per kolom warna akan
+ *    menempelkan CERUTYCNA ke baris Armani.
  *
- * KENAPA TIDAK ADA TOMBOL "ISI SEMUA". Dugaan pertama saya: lapis mengikuti warna (Butter 95, 97,
- * 96, 95, 97 di beberapa marker terlihat rapat), jadi cukup diisi sekali per kolom. DIUKUR dan
- * SALAH -- saya cuma melihat 8 dari 20 marker; marker lain punya Butter = 1 dan 48. Sebaran lapis
- * di dalam satu warna 1,70 dan di dalam satu marker 1,08: dua-duanya lebar, tidak ada sumbu yang
- * cukup rapat untuk disalin. Tombol salin di sumbu yang salah membuat orang mengetik ulang seluruh
- * grid, jadi tidak ada tombol sama sekali. Lapis diketik per sel, karena memang segitu bedanya.
+ * 2. MARKER TANPA JENIS KAIN BUKAN KASUS PINGGIR. Diukur: 52 dari 243 marker aktif (21%) kolom
+ *    Jenis Kain-nya KOSONG. `simpanGelaran_` menolak payload tanpa jenisKain, dan matriks
+ *    mengirim `m.jenisKain` apa adanya -- jadi satu dari lima marker PASTI gagal disimpan lewat
+ *    matriks. Form satuan lama aman karena operator memilih kainnya sendiri. Cacat itu saya
+ *    rilis pagi ini dan ditemukan saat merancang penggantinya.
  *
- * MEDAN MANA DI MANA, semuanya dari angka di atas:
- *   Jenis Kain & allowance -> milik MARKER, dibaca dari markernya sendiri dan tampil per baris.
- *                             (Ini juga yang menjelaskan 7 sesi ber-jenis-kain campur: markernya
- *                             yang beda kain, bukan operatornya yang tidak konsisten.)
- *   Jumlah lapis           -> per SEL. 36% seragam terlalu rendah untuk diangkat jadi satu kotak.
- *   Tanggal                -> bersama.
- *   Kode Kain              -> per KOLOM (per warna), disembunyikan di balik tombol.
+ * KENAPA DAFTAR, BUKAN MATRIKS. Matriks menampilkan SEMUA marker x SEMUA warna; di layar Femri
+ * mayoritas selnya kosong. Daftar mulai kosong dan tumbuh sebanyak yang dipakai. Harganya: hari
+ * tersibuk (20 marker x 5 warna = 72 baris) butuh lebih banyak klik -- dan itu dibayar tombol
+ * "Tambah banyak" yang melahirkan baris dari kisi centang, tanpa satu pun kotak ketikan.
  *
- * CATATAN JUJUR SOAL KODE KAIN. Penempatannya di kolom diturunkan dari barangnya, bukan dari
- * pengukuran: kode kain adalah GULUNGAN FISIK, dan gulungan milik warna, bukan milik kombinasi
- * size sebuah marker. Pengukurannya sudah ditulis (diagnosaGelaranMultiWarna bagian 8) tapi belum
- * sempat dijalankan -- API Google tidak bisa dihubungi saat ini. Kalau nanti ternyata satu warna
- * bisa memakai dua kode dalam satu hari, sel yang menyimpang diselamatkan form satuan yang tetap
- * ada. Terisi cuma 10%, jadi salah tempat di sini tidak menghentikan siapa pun.
- *
- * SEL YANG SUDAH DIGELAR ditandai. Cuma 2 dari 65 kasus yang terpecah antar hari, tapi penjagaan
- * ini murah dan gelaran ganda merugikan DUA kali: output naik dan pemakaian kain naik, dan
- * keduanya tidak saling membatalkan.
+ * TIDAK ADA TOMBOL SALIN LAPIS: diukur, jumlah lapis seragam antar warna cuma 36%, dan tidak ada
+ * sumbu yang cukup rapat untuk disalin. Yang ditekan cuma perjalanan tangan -- Enter memindahkan
+ * fokus ke kotak lapis baris berikutnya.
  */
 
-/** Peta "sudah digelar": "idMarker|warna" -> total lapis yang sudah tercatat (tanpa yang dibatalkan). */
-function spGlxSudah_() {
+/** "idMarker|warna" -> { lapis, tanggal } dari gelaran yang sudah tercatat (tanpa yang dibatalkan). */
+function spGbSudah_() {
   const peta = {};
   (window.SP_DAFTAR_GELARAN || []).forEach(function (g) {
     if (String(g.status || "").toLowerCase() === "dibatalkan") return;
     const k = (g.idMarker || "") + "|" + (g.warna || "");
-    peta[k] = (peta[k] || 0) + (Number(g.jumlahLapis) || 0);
+    if (!peta[k]) peta[k] = { lapis: 0, tanggal: "" };
+    peta[k].lapis += Number(g.jumlahLapis) || 0;
+    const t = String(g.tanggal || g.tanggalPotong || "").slice(0, 10);
+    if (t && t > peta[k].tanggal) peta[k].tanggal = t;
   });
   return peta;
 }
 
-function spGlxPanelHtml_(marker, warna) {
-  if (!warna || !warna.length) {
-    return '<p class="sp-info">Warna PO ini belum terbaca, jadi matriks tidak bisa dirakit. ' +
-      'Pakai form satuan di bawah &#8212; pilih mode Re-cut lalu kembali ke Normal untuk ' +
-      'menampilkannya, atau isi warna di Edit Order dulu.</p>';
-  }
-  const sudah = spGlxSudah_();
-  const kepala = warna.map(function (w) {
-    return '<th class="sp-glx-wh">' + spEsc_(w) + '</th>';
-  }).join("");
-
-  const baris = marker.map(function (m) {
-    const sel = warna.map(function (w) {
-      const k = (m.idMarker || "") + "|" + w;
-      const lalu = sudah[k] || 0;
-      return '<td class="sp-glx-sel' + (lalu ? ' sp-glx-sudah' : '') + '">' +
-        '<input class="sp-glx-lapis" data-marker="' + spEsc_(m.idMarker) + '" ' +
-        'data-warna="' + spEsc_(w) + '" inputmode="numeric" oninput="spGlxUbah_()" ' +
-        'placeholder="' + (lalu ? '(' + lalu + ')' : '0') + '" type="text"/>' +
-        (lalu ? '<span class="sp-glx-sudah-teks">sudah ' + lalu + '</span>' : '') +
-        '</td>';
-    }).join("");
-    return '<tr data-marker="' + spEsc_(m.idMarker) + '">' +
-      '<td class="sp-glx-mk">' +
-        '<b>' + spEsc_(m.kodeMarker || m.idMarker) + '</b>' +
-        '<small>' + m.panjangMarker + ' m &#183; ' + m.pcsPerLapis + ' pcs/lapis' +
-          (m.jenisKain ? ' &#183; ' + spEsc_(m.jenisKain) : ' &#183; kain belum diisi') +
-          (m.komponen ? ' &#183; ' + spEsc_(m.komponen) : '') + '</small>' +
-      '</td>' +
-      '<td class="sp-glx-allow">' +
-        '<input class="sp-glx-allow-inp" data-marker="' + spEsc_(m.idMarker) + '" ' +
-        'inputmode="decimal" oninput="spGlxUbah_()" type="text" value="' +
-        (m.allowancePerLapis !== undefined && m.allowancePerLapis !== "" ? m.allowancePerLapis : "0.02") +
-        '"/></td>' +
-      sel +
-      '<td class="sp-glx-hasil"><span class="sp-glx-hasil-teks"></span></td></tr>';
-  }).join("");
-
-  return '<div class="sp-glx">' +
-    '<p class="sp-info">Isi jumlah lapis di sel yang digelar &#8212; kosongkan yang tidak. ' +
-    'Tiap sel jadi SATU baris gelaran, sama persis dengan form satuan. ' +
-    'Sel berlatar kuning berarti marker &#215; warna itu sudah pernah digelar.</p>' +
-    '<div class="sp-grid3">' +
-      '<label>Tanggal<input id="sp-glx-tanggal" type="date" value="' +
-        new Date().toISOString().slice(0, 10) + '"/></label>' +
-      '<label>Catatan (untuk semua)<input id="sp-glx-catatan" placeholder="opsional" type="text"/></label>' +
-      '<label class="sp-glx-kode-toggle"><button class="sp-mkx-catatan-btn" onclick="spGlxKodeBuka()" ' +
-        'type="button">+ kode kain per warna</button></label>' +
-    '</div>' +
-    '<div class="hidden" id="sp-glx-kode">' +
-      '<p class="sp-info">Kode kain = gulungan fisiknya, satu per warna. Terisi di 10% gelaran; ' +
-      'kalau satu warna memakai dua gulungan berbeda, simpan yang menyimpang lewat form satuan.</p>' +
-      '<div class="sp-glx-kode-baris">' +
-        warna.map(function (w) {
-          return '<label>' + spEsc_(w) + '<input class="sp-glx-kode-inp" ' +
-            'data-warna="' + spEsc_(w) + '" list="sp-datalist-kodekain" ' +
-            'placeholder="opsional" type="text"/></label>';
-        }).join("") +
-      '</div>' +
-    '</div>' +
-    '<div class="sp-glx-gulung">' +
-      '<table class="sp-glx-tabel" id="sp-glx-tabel">' +
-        '<thead><tr><th>Marker</th><th class="sp-glx-wh">Allow</th>' + kepala +
-          '<th>Hasil</th></tr></thead>' +
-        '<tbody>' + baris + '</tbody>' +
-      '</table>' +
-    '</div>' +
-    '<div class="sp-hitung" id="sp-glx-ringkas"></div>' +
-    '<div class="sp-glx-status" id="sp-glx-status"></div>' +
-    '<button class="sp-simpan-btn" id="sp-glx-btn" onclick="spGlxSimpan(this)" type="button">' +
-      'Simpan Gelaran</button>' +
-    '</div>';
-}
-
-function spGlxKodeBuka() {
-  const el = document.getElementById("sp-glx-kode");
-  if (el) el.classList.toggle("hidden");
-}
-
-/** Marker yang sedang ditawarkan panel, dipetakan dari idMarker. */
-function spGlxPetaMarker_() {
+function spGbPetaMarker_() {
   const peta = {};
   (window.SP_MARKER || []).forEach(function (m) { peta[m.idMarker] = m; });
   return peta;
 }
 
 /**
- * Kumpulkan sel yang terisi. Satu sel = satu gelaran.
+ * Opsi marker DIKELOMPOKKAN per jenis kain.
  *
- * Angka dibaca dari kotak TEKS, bukan input number: sejak v330 semua kotak angka di panel matriks
- * memakai type="text" inputmode="numeric", karena `appearance: textfield` kalah oleh aturan lain
- * di berkas CSS ini dan spinnernya menutupi angkanya sendiri.
+ * Femri: "setiap kode marker itu biasanya mewakili jenis kain". Optgroup mewujudkan hierarki itu
+ * di tempat yang memang dilihat orang saat memilih, tanpa menambah satu medan pun. Marker tanpa
+ * kain dikumpulkan di grup sendiri yang menyebut dirinya -- 21% dari markernya ada di situ, dan
+ * menyembunyikannya berarti orang baru tahu saat penyimpanannya ditolak.
  */
-function spGlxKumpulkan_() {
-  const peta = spGlxPetaMarker_();
+function spGbOpsiMarkerHtml_(marker) {
+  const grup = {};
+  marker.forEach(function (m) {
+    const k = m.jenisKain || "(belum berjenis kain)";
+    (grup[k] = grup[k] || []).push(m);
+  });
+  return '<option value="">— pilih marker —</option>' +
+    Object.keys(grup).sort(function (a, b) {
+      // Grup tanpa kain selalu TERAKHIR: ia perlu terlihat, tapi bukan yang pertama ditawarkan.
+      if (a.indexOf("(belum") === 0) return 1;
+      if (b.indexOf("(belum") === 0) return -1;
+      return a.localeCompare(b);
+    }).map(function (k) {
+      return '<optgroup label="' + spEsc_(k) + '">' + grup[k].map(function (m) {
+        return '<option value="' + spEsc_(m.idMarker) + '">' +
+          spEsc_(m.kodeMarker || m.idMarker) + ' &#183; ' + m.panjangMarker + ' m &#183; ' +
+          m.pcsPerLapis + ' pcs/lapis' + (m.komponen ? ' &#183; ' + spEsc_(m.komponen) : '') +
+          '</option>';
+      }).join("") + '</optgroup>';
+    }).join("");
+}
+
+function spGbBarisHtml_(marker, warna, kain) {
+  // Nomor urut cuma untuk menautkan <input list> ke <datalist> miliknya sendiri. Datalist harus
+  // per baris karena isinya disaring per (jenis kain, warna) baris itu.
+  window.SP_GB_URUT = (window.SP_GB_URUT || 0) + 1;
+  const urut = window.SP_GB_URUT;
+  return '<tr class="sp-gb-baris">' +
+    '<td class="sp-gb-mk">' +
+      '<select class="sp-gb-marker" onchange="spGbGantiMarker(this)">' +
+        spGbOpsiMarkerHtml_(marker) + '</select>' +
+      '<div class="sp-gb-baca"></div>' +
+    '</td>' +
+    '<td class="sp-gb-kain">' +
+      '<span class="sp-gb-kain-teks">&#8212;</span>' +
+      '<select class="sp-gb-kain-pilih hidden" onchange="spGbUbah_()">' +
+        '<option value="">— pilih kain —</option>' +
+        kain.map(function (k) { return '<option value="' + spEsc_(k) + '">' + spEsc_(k) + '</option>'; }).join("") +
+      '</select>' +
+    '</td>' +
+    '<td><select class="sp-gb-warna" onchange="spGbGantiWarna(this)">' +
+      '<option value="">— pilih warna —</option>' +
+      warna.map(function (w) { return '<option value="' + spEsc_(w) + '">' + spEsc_(w) + '</option>'; }).join("") +
+      '</select></td>' +
+    '<td class="sp-gb-kode-sel">' +
+      '<input class="sp-gb-kode" list="sp-gb-dl-' + urut + '" placeholder="opsional" type="text"/>' +
+      '<datalist id="sp-gb-dl-' + urut + '"></datalist>' +
+    '</td>' +
+    '<td><input class="sp-gb-allow" inputmode="decimal" oninput="spGbUbah_()" type="text"/></td>' +
+    '<td><input class="sp-gb-lapis" inputmode="numeric" oninput="spGbUbah_()" ' +
+      'onkeydown="spGbKunci(event, this)" placeholder="0" type="text"/></td>' +
+    '<td class="sp-gb-hasil">' +
+      '<span class="sp-gb-hasil-teks"></span>' +
+      '<span class="sp-gb-sudah"></span>' +
+      '<span class="sp-gb-galat"></span>' +
+    '</td>' +
+    '<td class="sp-gb-aksi">' +
+      '<button class="sp-mkx-catatan-btn" onclick="spGbSalin(this)" title="salin baris ini" ' +
+        'type="button">salin</button>' +
+      '<button class="sp-mkx-catatan-btn" onclick="spGbHapus(this)" title="hapus baris ini" ' +
+        'type="button">hapus</button>' +
+    '</td>' +
+  '</tr>';
+}
+
+function spGbPanelHtml_(marker, warna, kain) {
+  if (!marker || !marker.length) {
+    return '<p class="sp-info">Belum ada marker yang siap dipakai.</p>';
+  }
+  window.SP_GB_MARKER = marker;
+  window.SP_GB_WARNA = warna || [];
+  window.SP_GB_KAIN = kain || [];
+  return '<div class="sp-gb">' +
+    '<p class="sp-info">Satu baris = satu bentangan, sama persis dengan form satuan. ' +
+    'Tambah baris sebanyak yang digelar &#8212; yang tidak digelar tidak perlu ada di sini.</p>' +
+    '<div class="sp-grid3">' +
+      '<label>Tanggal<input id="sp-gb-tanggal" type="date" value="' +
+        new Date().toISOString().slice(0, 10) + '"/></label>' +
+      '<label>Catatan (untuk semua)<input id="sp-gb-catatan" placeholder="opsional" type="text"/></label>' +
+    '</div>' +
+    '<div class="sp-gb-gulung">' +
+      '<table class="sp-gb-tabel" id="sp-gb-tabel">' +
+        '<thead><tr>' +
+          '<th>Marker</th><th>Jenis Kain</th><th>Warna</th><th>Kode Kain</th>' +
+          '<th>Allow</th><th>Lapis</th><th>Hasil</th><th></th>' +
+        '</tr></thead><tbody>' + spGbBarisHtml_(marker, warna || [], kain || []) + '</tbody>' +
+      '</table>' +
+    '</div>' +
+    '<div class="sp-gb-tombol">' +
+      '<button class="sp-mini" onclick="spGbTambah()" type="button">+ Tambah baris</button>' +
+      '<button class="sp-mini" onclick="spGbBanyakBuka()" type="button">+ Tambah banyak &#8230;</button>' +
+    '</div>' +
+    '<div class="hidden" id="sp-gb-banyak"></div>' +
+    '<div class="sp-hitung" id="sp-gb-ringkas"></div>' +
+    '<div class="sp-gb-status" id="sp-gb-status"></div>' +
+    '<button class="sp-simpan-btn" id="sp-gb-btn" onclick="spGbSimpan(this)" type="button">' +
+      'Simpan Gelaran</button>' +
+  '</div>';
+}
+
+function spGbTambah(idMarker, warnaTerpilih) {
+  const tb = document.querySelector("#sp-gb-tabel tbody");
+  if (!tb) return null;
+  const tmp = document.createElement("tbody");
+  tmp.innerHTML = spGbBarisHtml_(window.SP_GB_MARKER || [], window.SP_GB_WARNA || [],
+    window.SP_GB_KAIN || []);
+  const tr = tmp.firstChild;
+  tb.appendChild(tr);
+  if (idMarker) {
+    const sel = tr.querySelector(".sp-gb-marker");
+    sel.value = idMarker;
+    spGbGantiMarker(sel);
+  }
+  if (warnaTerpilih) {
+    const wn = tr.querySelector(".sp-gb-warna");
+    wn.value = warnaTerpilih;
+    spGbGantiWarna(wn);
+  }
+  spGbUbah_();
+  return tr;
+}
+
+function spGbHapus(btn) {
+  const tr = btn.closest("tr");
+  const tb = tr.parentNode;
+  tr.parentNode.removeChild(tr);
+  // Jangan pernah menyisakan tabel tanpa baris: layar kosong tanpa kotak isian terbaca sebagai
+  // rusak, bukan sebagai "belum ada isi".
+  if (!tb.querySelector("tr")) spGbTambah();
+  spGbUbah_();
+}
+
+/**
+ * Salin baris: marker, jenis kain dan allowance IKUT; warna, kode kain dan lapis DIKOSONGKAN.
+ * Yang disalin adalah yang melekat pada markernya; yang dikosongkan adalah yang membedakan satu
+ * bentangan dari bentangan berikutnya. Menyalin warna berarti menawarkan baris kembar.
+ */
+function spGbSalin(btn) {
+  const tr = btn.closest("tr");
+  const mk = tr.querySelector(".sp-gb-marker").value;
+  const baru = spGbTambah(mk);
+  if (!baru) return;
+  const allow = tr.querySelector(".sp-gb-allow").value;
+  if (allow) baru.querySelector(".sp-gb-allow").value = allow;
+  const kp = tr.querySelector(".sp-gb-kain-pilih");
+  if (kp && !kp.classList.contains("hidden")) {
+    baru.querySelector(".sp-gb-kain-pilih").value = kp.value;
+  }
+  const wn = baru.querySelector(".sp-gb-warna");
+  if (wn) wn.focus();
+}
+
+/** Enter / panah bawah -> kotak lapis baris berikutnya. Shift+Enter / panah atas -> sebelumnya. */
+function spGbKunci(ev, inp) {
+  const turun = ev.key === "Enter" && !ev.shiftKey;
+  const naik = (ev.key === "Enter" && ev.shiftKey) || ev.key === "ArrowUp";
+  if (!turun && !naik && ev.key !== "ArrowDown") return;
+  ev.preventDefault();
+  const semua = Array.prototype.slice.call(document.querySelectorAll(".sp-gb-lapis"));
+  const i = semua.indexOf(inp);
+  const j = (naik ? i - 1 : i + 1);
+  if (j >= 0 && j < semua.length) { semua[j].focus(); semua[j].select(); }
+  else if (!naik) { const b = document.getElementById("sp-gb-btn"); if (b) b.focus(); }
+}
+
+/** Marker berganti -> jenis kain, allowance, dan baris baca-balik ikut. */
+function spGbGantiMarker(sel) {
+  const tr = sel.closest("tr");
+  const m = spGbPetaMarker_()[sel.value];
+  const teks = tr.querySelector(".sp-gb-kain-teks");
+  const pilih = tr.querySelector(".sp-gb-kain-pilih");
+  const baca = tr.querySelector(".sp-gb-baca");
+  const allow = tr.querySelector(".sp-gb-allow");
+
+  if (!m) {
+    teks.textContent = "—"; teks.classList.remove("hidden");
+    pilih.classList.add("hidden"); pilih.value = "";
+    baca.textContent = ""; allow.value = "";
+    tr.classList.remove("sp-gb-tanpa-kain");
+    spGbUbah_(); return;
+  }
+
+  // 21% marker aktif TIDAK punya jenis kain, dan server menolak gelaran tanpa itu. Jadi kotaknya
+  // DIBUKA, bukan disembunyikan -- dan jawabannya mengajari markernya lewat
+  // mgAjariJenisKainMarker_ di backend, yang tidak pernah menimpa sel yang sudah terisi.
+  if (m.jenisKain) {
+    teks.textContent = m.jenisKain;
+    teks.classList.remove("hidden");
+    pilih.classList.add("hidden");
+    tr.classList.remove("sp-gb-tanpa-kain");
+  } else {
+    teks.classList.add("hidden");
+    pilih.classList.remove("hidden");
+    tr.classList.add("sp-gb-tanpa-kain");
+  }
+
+  const susun = m.susunanSize || {};
+  const isiSusun = Object.keys(susun).map(function (sz) { return sz + ":" + susun[sz]; }).join(" ");
+  baca.textContent = m.pcsPerLapis + " pcs/lapis" + (isiSusun ? " · " + isiSusun : "") +
+    " · " + m.panjangMarker + " m/lapis";
+
+  // Allowance MILIK MARKER dan diisi ulang tiap ganti marker -- di layar Femri ada marker
+  // beralowance 0 (motif panel, kain sudah terukur) bersebelahan dengan 0,02 (kain polos).
+  // Membiarkan angka marker sebelumnya adalah cara allowance tertukar tanpa ada yang sadar.
+  allow.value = (m.allowancePerLapis !== undefined && m.allowancePerLapis !== "")
+    ? m.allowancePerLapis : "0.02";
+
+  spGbDaftarKode_(tr);
+  spGbUbah_();
+}
+
+function spGbGantiWarna(sel) {
+  spGbDaftarKode_(sel.closest("tr"));
+  spGbUbah_();
+}
+
+/**
+ * Susun DAFTAR PILIHAN kode kain untuk baris ini. TIDAK pernah mengisi kotaknya.
+ *
+ * Femri, 11 Sep 2026: *"kode kain dibantu daftar pilihan saja, jangan otomatis"* -- diminta
+ * sesudah saya mengusulkan pengisian otomatis dari rencana order. Keputusannya benar dan
+ * alasannya lebih kuat daripada usulan saya: isian otomatis yang SALAH lebih berbahaya daripada
+ * kotak kosong, karena kotak kosong terlihat sedangkan angka yang sudah terisi cenderung
+ * dibiarkan. Rencana order adalah RENCANA; yang dicatat di gelaran adalah gulungan yang
+ * BENAR-BENAR dibentangkan, dan hanya orang di lantai yang tahu bedanya.
+ *
+ * Yang dilakukan: kode yang direncanakan untuk pasangan (jenis kain, warna) baris ini ditaruh
+ * PALING ATAS daftar, sisanya menyusul. Kuncinya bukan pilihan gaya -- diukur, satu warna bisa
+ * memakai tiga kode berbeda dalam sehari (CERUTYCNA, ARMANICN67, LUNASOFTCN36 pada warna yang
+ * sama), dan yang membedakannya jenis kain. `SP_BAHAN_RENCANA.peta` memang sudah berkunci
+ * "warna||jenisKain" -- granularitas yang sama persis.
+ */
+function spGbDaftarKode_(tr) {
+  const kotak = tr.querySelector(".sp-gb-kode");
+  const dl = tr.querySelector("datalist");
+  if (!kotak || !dl) return;
+  const bahan = window.SP_BAHAN_RENCANA || {};
+  const rencana = bahan.peta || {};
+  const norm = function (s) { return String(s || "").trim().toLowerCase().replace(/\s+/g, " "); };
+  const warna = tr.querySelector(".sp-gb-warna").value || "";
+  const kain = spGbKainBaris_(tr);
+  const cocok = rencana[norm(warna) + "||" + norm(kain)] || "";
+  const lain = (bahan.semuaKode || []).filter(function (k) { return k && k !== cocok; });
+  dl.innerHTML = (cocok
+    ? '<option value="' + spEsc_(cocok) + '">rencana order untuk ' + spEsc_(kain) + ' ' +
+      spEsc_(warna) + '</option>'
+    : "") + lain.map(function (k) { return '<option value="' + spEsc_(k) + '"></option>'; }).join("");
+  // Penanda kecil bahwa daftarnya memang punya usulan untuk pasangan ini -- supaya orang tahu
+  // ada yang bisa dibuka, tanpa satu pun karakter masuk ke kotaknya.
+  kotak.setAttribute("placeholder", cocok ? "opsional · ada usulan" : "opsional");
+}
+
+/** Jenis kain baris ini: dari markernya, atau dari kotak pilih saat markernya belum berkain. */
+function spGbKainBaris_(tr) {
+  const pilih = tr.querySelector(".sp-gb-kain-pilih");
+  if (pilih && !pilih.classList.contains("hidden")) return pilih.value || "";
+  const teks = tr.querySelector(".sp-gb-kain-teks");
+  const t = teks ? String(teks.textContent || "").trim() : "";
+  return t === "—" ? "" : t;
+}
+
+/**
+ * Kumpulkan baris terisi. Satu baris = satu gelaran.
+ *
+ * SEMUA pencarian elemen dikurung ke `tr`-nya sendiri. Versi matriks memakai
+ * `document.querySelector('.sp-glx-allow-inp[data-marker=...]')` yang GLOBAL; di daftar ini marker
+ * yang sama boleh muncul di beberapa baris, dan selektor global akan mengambil allowance baris
+ * pertama untuk semua baris bermarker sama.
+ */
+function spGbKumpulkan_() {
+  const peta = spGbPetaMarker_();
   const out = { baris: [], galat: [] };
-  Array.prototype.forEach.call(document.querySelectorAll(".sp-glx-lapis"), function (inp) {
-    const teks = String(inp.value || "").trim();
-    if (!teks) return;
-    const lapis = Number(teks.replace(",", "."));
-    const m = peta[inp.dataset.marker];
-    const nama = (m && (m.kodeMarker || m.idMarker)) + " × " + inp.dataset.warna;
-    if (!isFinite(lapis) || lapis <= 0 || Math.floor(lapis) !== lapis) {
-      out.galat.push(nama + ": jumlah lapis harus bilangan bulat lebih dari 0 (terbaca \"" + teks + "\")");
-      inp.classList.add("sp-glx-salah");
-      return;
+  const dipakai = {};
+  Array.prototype.forEach.call(document.querySelectorAll("#sp-gb-tabel tbody tr"), function (tr, i) {
+    const idMk = tr.querySelector(".sp-gb-marker").value;
+    const warna = tr.querySelector(".sp-gb-warna").value;
+    const lapisTeks = String(tr.querySelector(".sp-gb-lapis").value || "").trim();
+    const kosongSemua = !idMk && !warna && !lapisTeks;
+    tr.classList.remove("sp-gb-salah");
+    if (kosongSemua) return;   // baris kosong diabaikan, bukan dikeluhkan
+
+    const m = peta[idMk];
+    const nomor = "Baris " + (i + 1);
+    if (!m) { out.galat.push(nomor + ": marker belum dipilih"); tr.classList.add("sp-gb-salah"); return; }
+    const nama = (m.kodeMarker || idMk);
+    if (!warna) { out.galat.push(nomor + " (" + nama + "): warna belum dipilih"); tr.classList.add("sp-gb-salah"); return; }
+    const kain = spGbKainBaris_(tr);
+    if (!kain) {
+      out.galat.push(nomor + " (" + nama + "): marker ini belum punya Jenis Kain, pilih kainnya");
+      tr.classList.add("sp-gb-salah"); return;
     }
-    inp.classList.remove("sp-glx-salah");
-    if (!m) { out.galat.push(nama + ": markernya tidak ditemukan lagi"); return; }
-    const allowEl = document.querySelector('.sp-glx-allow-inp[data-marker="' +
-      (inp.dataset.marker || "").replace(/"/g, "") + '"]');
-    const allow = allowEl ? String(allowEl.value || "").trim().replace(",", ".") : "0.02";
-    const kodeEl = document.querySelector('.sp-glx-kode-inp[data-warna="' +
-      (inp.dataset.warna || "").replace(/"/g, "") + '"]');
+    const lapis = Number(lapisTeks.replace(",", "."));
+    if (!lapisTeks || !isFinite(lapis) || lapis <= 0 || Math.floor(lapis) !== lapis) {
+      out.galat.push(nomor + " (" + nama + " × " + warna +
+        "): jumlah lapis harus bilangan bulat lebih dari 0" + (lapisTeks ? " (terbaca \"" + lapisTeks + "\")" : ""));
+      tr.classList.add("sp-gb-salah"); return;
+    }
+    const kunci = idMk + "|" + warna;
+    if (dipakai[kunci]) {
+      // TIDAK memblokir: menggelar marker x warna yang sama dua kali dalam sehari memang terjadi.
+      // Yang dilakukan cuma memberitahu, karena gelaran ganda yang TIDAK disengaja merugikan dua
+      // kali -- output naik DAN pemakaian kain naik, dan keduanya tidak saling membatalkan.
+      out.galat.push("__AWAS__" + nomor + " (" + nama + " × " + warna +
+        "): pasangan ini sudah ada di baris " + dipakai[kunci] + " daftar ini. Disimpan sebagai dua gelaran terpisah.");
+    }
+    dipakai[kunci] = i + 1;
+
     out.baris.push({
-      marker: m, idMarker: m.idMarker, warna: inp.dataset.warna, lapis: lapis,
-      allow: allow, kodeKain: kodeEl ? String(kodeEl.value || "").trim() : "",
-      inp: inp, td: inp.parentNode,
-      hasil: (inp.parentNode.parentNode || {}).querySelector
-        ? inp.parentNode.parentNode.querySelector(".sp-glx-hasil-teks") : null
+      tr: tr, marker: m, idMarker: idMk, warna: warna, kain: kain, lapis: lapis,
+      allow: String(tr.querySelector(".sp-gb-allow").value || "0.02").trim().replace(",", "."),
+      kodeKain: String(tr.querySelector(".sp-gb-kode").value || "").trim()
     });
   });
   return out;
 }
 
-/** Hitung ulang ringkasan: per baris, per warna, dan totalnya. */
-function spGlxUbah_() {
-  const ringkas = document.getElementById("sp-glx-ringkas");
+function spGbUbah_() {
+  const ringkas = document.getElementById("sp-gb-ringkas");
   if (!ringkas) return;
-  const info = spGlxKumpulkan_();
-
-  // Ringkasan per BARIS ditulis ke span tersendiri, bukan ke seluruh sel -- pelajaran v330: hasil
-  // yang ditulis ke sel penuh menghapus kotak isian yang ada di sel yang sama.
-  const perBaris = {};
-  info.baris.forEach(function (b) {
-    const pcs = Object.keys(b.marker.susunanSize || {}).reduce(function (a, sz) {
-      return a + (Number(b.marker.susunanSize[sz]) || 0) * b.lapis;
-    }, 0);
-    const perLapis = (Number(b.marker.panjangMarker) || 0) + (Number(b.allow) || 0);
-    b.pcs = pcs;
-    b.kain = Math.round(perLapis * b.lapis * 100) / 100;
-    if (!perBaris[b.idMarker]) perBaris[b.idMarker] = { pcs: 0, kain: 0, n: 0, el: null };
-    perBaris[b.idMarker].pcs += pcs;
-    perBaris[b.idMarker].kain += b.kain;
-    perBaris[b.idMarker].n++;
-  });
-  Array.prototype.forEach.call(document.querySelectorAll("#sp-glx-tabel tbody tr"), function (tr) {
-    const el = tr.querySelector(".sp-glx-hasil-teks");
-    if (!el) return;
-    const p = perBaris[tr.dataset.marker];
-    el.textContent = p ? (p.pcs + " pcs · " + (Math.round(p.kain * 100) / 100) + " m") : "";
-  });
+  const info = spGbKumpulkan_();
+  const sudah = spGbSudah_();
 
   const perWarna = {};
+  let totPcs = 0, totKain = 0;
   info.baris.forEach(function (b) {
-    if (!perWarna[b.warna]) perWarna[b.warna] = { pcs: 0, kain: 0, n: 0 };
-    perWarna[b.warna].pcs += b.pcs;
-    perWarna[b.warna].kain += b.kain;
-    perWarna[b.warna].n++;
+    const susun = b.marker.susunanSize || {};
+    const pcs = Object.keys(susun).reduce(function (a, sz) {
+      return a + (Number(susun[sz]) || 0) * b.lapis;
+    }, 0);
+    const kain = Math.round(((Number(b.marker.panjangMarker) || 0) + (Number(b.allow) || 0)) * b.lapis * 100) / 100;
+    totPcs += pcs; totKain += kain;
+    if (!perWarna[b.warna]) perWarna[b.warna] = { pcs: 0, kain: 0 };
+    perWarna[b.warna].pcs += pcs;
+    perWarna[b.warna].kain += kain;
+    // Hasil ditulis ke SPAN tersendiri, bukan ke seluruh sel -- pelajaran v330: menulis ke sel
+    // menghapus kotak isian yang ada di sel yang sama.
+    const el = b.tr.querySelector(".sp-gb-hasil-teks");
+    if (el) el.textContent = pcs + " pcs · " + kain + " m";
   });
-  const totPcs = info.baris.reduce(function (a, b) { return a + b.pcs; }, 0);
-  const totKain = info.baris.reduce(function (a, b) { return a + b.kain; }, 0);
 
-  if (!info.baris.length && !info.galat.length) {
-    ringkas.innerHTML = '<span class="sp-info">Isi jumlah lapis di sel yang digelar untuk ' +
-      'melihat hasilnya.</span>';
+  // Lencana "sudah digelar" -- angka dan tanggal, bukan warna latar. Warna latar cuma bilang
+  // "ada sesuatu"; angka bilang BERAPA, dan itu yang menentukan apakah ini gelaran lanjutan atau
+  // pengulangan yang tidak disengaja.
+  Array.prototype.forEach.call(document.querySelectorAll("#sp-gb-tabel tbody tr"), function (tr) {
+    const el = tr.querySelector(".sp-gb-sudah");
+    if (!el) return;
+    const k = tr.querySelector(".sp-gb-marker").value + "|" + tr.querySelector(".sp-gb-warna").value;
+    const s = sudah[k];
+    el.textContent = s ? ("sudah " + s.lapis + " lapis" + (s.tanggal ? " · " + s.tanggal : "")) : "";
+    if (!tr.querySelector(".sp-gb-lapis").value) {
+      const hs = tr.querySelector(".sp-gb-hasil-teks");
+      if (hs) hs.textContent = "";
+    }
+  });
+
+  const awas = info.galat.filter(function (g) { return g.indexOf("__AWAS__") === 0; })
+    .map(function (g) { return g.slice(8); });
+  const salah = info.galat.filter(function (g) { return g.indexOf("__AWAS__") !== 0; });
+
+  if (!info.baris.length && !salah.length && !awas.length) {
+    ringkas.innerHTML = '<span class="sp-info">Pilih marker, warna, lalu isi jumlah lapis.</span>';
     return;
   }
   ringkas.innerHTML =
-    (info.galat.length
-      ? '<div class="sp-glx-galat"><b>' + info.galat.length + ' isian belum benar:</b><br/>' +
-        info.galat.map(function (g) { return spEsc_(g); }).join("<br/>") + '</div>'
+    (salah.length
+      ? '<div class="sp-gb-galat-ringkas"><b>' + salah.length + ' baris belum siap:</b><br/>' +
+        salah.map(function (g) { return spEsc_(g); }).join("<br/>") + '</div>'
       : "") +
-    '<div class="sp-hitung-baris"><span>Gelaran</span><div><b class="sp-hitung-total">' +
+    (awas.length
+      ? '<div class="sp-gb-awas-ringkas"><b>Perhatikan:</b><br/>' +
+        awas.map(function (g) { return spEsc_(g); }).join("<br/>") + '</div>'
+      : "") +
+    '<div class="sp-hitung-baris"><span>Bentangan</span><div><b class="sp-hitung-total">' +
       info.baris.length + '</b> baris akan dibuat</div></div>' +
     (Object.keys(perWarna).length
       ? '<div class="sp-hitung-baris"><span>Per warna</span><div>' +
@@ -7330,19 +7535,88 @@ function spGlxUbah_() {
 }
 
 /**
- * Simpan seluruh sel terisi. Satu sel = satu panggilan `simpanGelaran`, sama persis dengan form
- * satuan -- backendnya TIDAK diubah sama sekali, jadi tidak ada jalur tulis baru yang perlu
- * dipercaya. Sel yang berhasil dikosongkan supaya tekan-ulang hanya mengirim sisanya.
+ * "Tambah banyak": kisi centang marker x warna yang MELAHIRKAN baris.
+ *
+ * Ini yang membayar harga bentuk daftar di hari tersibuk (20 marker x 5 warna = 72 baris terukur).
+ * Tidak ada satu pun kotak ketikan di kisi ini -- ia cuma memilih pasangan; angka lapis tetap
+ * diketik di daftarnya, karena memang tidak ada sumbu yang bisa disalin.
  */
-async function spGlxSimpan(btn) {
-  const info = spGlxKumpulkan_();
-  if (info.galat.length) { spGlxUbah_(); return; }
-  if (!info.baris.length) { alert("Belum ada sel yang diisi."); return; }
+function spGbBanyakBuka() {
+  const wadah = document.getElementById("sp-gb-banyak");
+  if (!wadah) return;
+  if (!wadah.classList.contains("hidden")) { wadah.classList.add("hidden"); return; }
+  const marker = window.SP_GB_MARKER || [], warna = window.SP_GB_WARNA || [];
+  const sudah = spGbSudah_();
+  wadah.innerHTML =
+    '<p class="sp-info">Centang pasangan yang digelar, lalu tekan Buat. Angka lapisnya diketik ' +
+    'di daftar. Pasangan yang sudah ada di daftar tidak dibuat ulang.</p>' +
+    '<div class="sp-gb-gulung"><table class="sp-gb-kisi"><thead><tr><th>Marker</th>' +
+    warna.map(function (w) {
+      return '<th>' + spEsc_(w) + '<br/><button class="sp-mkx-catatan-btn" type="button" ' +
+        'onclick="spGbKisiKolom(\'' + spEsc_(w).replace(/'/g, "") + '\')">semua</button></th>';
+    }).join("") + '</tr></thead><tbody>' +
+    marker.map(function (m) {
+      return '<tr><td class="sp-gb-mk"><b>' + spEsc_(m.kodeMarker || m.idMarker) + '</b>' +
+        '<small>' + (m.jenisKain || "(belum berjenis kain)") + '</small></td>' +
+        warna.map(function (w) {
+          const s = sudah[m.idMarker + "|" + w];
+          return '<td class="sp-gb-kisi-sel"><label><input class="sp-gb-centang" type="checkbox" ' +
+            'data-marker="' + spEsc_(m.idMarker) + '" data-warna="' + spEsc_(w) + '"/>' +
+            (s ? '<span class="sp-gb-sudah">' + s.lapis + '</span>' : '') + '</label></td>';
+        }).join("") + '</tr>';
+    }).join("") + '</tbody></table></div>' +
+    '<button class="sp-mini" onclick="spGbBanyakBuat()" type="button">Buat baris dari yang dicentang</button>';
+  wadah.classList.remove("hidden");
+}
+
+function spGbKisiKolom(warna) {
+  const kotak = document.querySelectorAll('.sp-gb-centang[data-warna="' + warna + '"]');
+  const semua = Array.prototype.every.call(kotak, function (c) { return c.checked; });
+  Array.prototype.forEach.call(kotak, function (c) { c.checked = !semua; });
+}
+
+function spGbBanyakBuat() {
+  const ada = {};
+  Array.prototype.forEach.call(document.querySelectorAll("#sp-gb-tabel tbody tr"), function (tr) {
+    const k = tr.querySelector(".sp-gb-marker").value + "|" + tr.querySelector(".sp-gb-warna").value;
+    if (tr.querySelector(".sp-gb-marker").value) ada[k] = true;
+  });
+  let dibuat = 0, dilewati = 0;
+  Array.prototype.forEach.call(document.querySelectorAll(".sp-gb-centang:checked"), function (c) {
+    const k = c.dataset.marker + "|" + c.dataset.warna;
+    if (ada[k]) { dilewati++; return; }
+    spGbTambah(c.dataset.marker, c.dataset.warna);
+    ada[k] = true;
+    dibuat++;
+  });
+  // Baris kosong bawaan dibuang kalau baris sungguhan sudah lahir -- kalau tidak, daftar selalu
+  // diakhiri satu baris hampa yang terbaca seperti pekerjaan yang belum selesai.
+  if (dibuat) {
+    Array.prototype.forEach.call(document.querySelectorAll("#sp-gb-tabel tbody tr"), function (tr) {
+      if (!tr.querySelector(".sp-gb-marker").value && document.querySelectorAll("#sp-gb-tabel tbody tr").length > 1) {
+        tr.parentNode.removeChild(tr);
+      }
+    });
+  }
+  const wadah = document.getElementById("sp-gb-banyak");
+  if (wadah) wadah.classList.add("hidden");
+  const st = document.getElementById("sp-gb-status");
+  if (st) {
+    st.textContent = dibuat + " baris dibuat" + (dilewati ? ", " + dilewati + " sudah ada di daftar" : "") + ".";
+  }
+  spGbUbah_();
+}
+
+async function spGbSimpan(btn) {
+  const info = spGbKumpulkan_();
+  const salah = info.galat.filter(function (g) { return g.indexOf("__AWAS__") !== 0; });
+  if (salah.length) { spGbUbah_(); return; }
+  if (!info.baris.length) { alert("Belum ada baris yang siap disimpan."); return; }
 
   const item = spItemGelaranTerpilih_();
-  const tgl = (document.getElementById("sp-glx-tanggal") || {}).value || "";
-  const catatan = (document.getElementById("sp-glx-catatan") || {}).value || "";
-  const st = document.getElementById("sp-glx-status");
+  const tgl = (document.getElementById("sp-gb-tanggal") || {}).value || "";
+  const catatan = (document.getElementById("sp-gb-catatan") || {}).value || "";
+  const st = document.getElementById("sp-gb-status");
   if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
 
   let ok = 0, gagal = 0;
@@ -7351,43 +7625,41 @@ async function spGlxSimpan(btn) {
     const nama = (b.marker.kodeMarker || b.idMarker) + " × " + b.warna;
     if (st) st.textContent = "Menyimpan " + (n + 1) + " dari " + info.baris.length + ": " + nama + " ...";
     try {
-      const d = await spGlxKirim_({
+      const d = await spGbKirim_({
         idPurchaseOrder: window.SP_PO_AKTIF,
-        idMarker: b.idMarker,
-        warna: b.warna,
-        // Jenis kain dibaca dari MARKERNYA. Marker digambar untuk kain tertentu, jadi kainnya
-        // sudah melekat di sana -- menanyakannya lagi per baris cuma menambah kesempatan salah.
-        jenisKain: b.marker.jenisKain || "",
+        idMarker: b.idMarker, warna: b.warna, jenisKain: b.kain,
         jenisGelaran: "Normal",
         komponen: "", alasan: "", untukLine: "", recutDariQC: "", kainTerpakai: "",
-        jumlahLapis: b.lapis,
-        allowancePerLapis: b.allow,
-        tanggalPotong: tgl,
-        catatan: catatan,
-        kodeKain: b.kodeKain || "",
+        jumlahLapis: b.lapis, allowancePerLapis: b.allow,
+        tanggalPotong: tgl, catatan: catatan, kodeKain: b.kodeKain,
         noSO: item.noSO || "", brand: item.brand || "",
         artikel: item.artikel || "", style: item.style || ""
       });
       ok++;
-      b.td.classList.remove("sp-glx-gagal");
-      b.td.classList.add("sp-glx-ok");
-      b.inp.value = "";
-      if (b.hasil) {
-        b.hasil.textContent = (d.totalPotongan || "") + " pcs · " + (d.kainTerpakai || "") + " m";
-      }
+      b.tr.classList.remove("sp-gb-gagal");
+      b.tr.classList.add("sp-gb-ok");
+      b.tr.querySelector(".sp-gb-galat").textContent = "";
+      const hs = b.tr.querySelector(".sp-gb-hasil-teks");
+      if (hs) hs.textContent = (d.totalPotongan || "") + " pcs · " + (d.kainTerpakai || "") + " m";
+      // Baris yang berhasil DIKUNCI, bukan dihapus: operator perlu melihat apa yang barusan
+      // tersimpan, dan mengunci membuat tekan-ulang tidak mengirimnya dua kali.
+      Array.prototype.forEach.call(b.tr.querySelectorAll("input, select, button"), function (el) {
+        el.disabled = true;
+      });
     } catch (e) {
       gagal++;
-      b.td.classList.remove("sp-glx-ok");
-      b.td.classList.add("sp-glx-gagal");
-      b.inp.title = String(e.message || e);
+      b.tr.classList.remove("sp-gb-ok");
+      b.tr.classList.add("sp-gb-gagal");
+      // Sebab gagal sebagai TEKS di barisnya, bukan title: tooltip tidak ada di layar sentuh, dan
+      // sebab yang tidak terbaca sama saja dengan tidak ada sebab.
+      b.tr.querySelector(".sp-gb-galat").textContent = String(e.message || e);
     }
   }
   if (btn) { btn.disabled = false; btn.textContent = gagal ? "Simpan ulang yang gagal" : "Simpan Gelaran"; }
   if (st) {
     st.innerHTML = gagal
-      ? '<b>' + ok + ' tersimpan, ' + gagal + ' gagal.</b> Sel yang gagal masih berisi angkanya ' +
-        'beserta sebabnya &#8212; arahkan kursor ke selnya. Yang sudah tersimpan dikosongkan, jadi ' +
-        'tekan Simpan lagi tidak akan mengirimnya dua kali.'
+      ? '<b>' + ok + ' tersimpan, ' + gagal + ' gagal.</b> Baris yang gagal masih berisi isiannya ' +
+        'beserta sebabnya. Yang sudah tersimpan dikunci, jadi tekan Simpan lagi tidak mengirimnya dua kali.'
       : '<b>' + ok + ' gelaran tersimpan.</b>';
   }
   if (!gagal) {
@@ -7396,7 +7668,7 @@ async function spGlxSimpan(btn) {
   }
 }
 
-function spGlxKirim_(payload) {
+function spGbKirim_(payload) {
   return fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "simpanGelaran", payload: payload })
