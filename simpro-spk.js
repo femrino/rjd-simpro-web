@@ -5391,7 +5391,7 @@ function spMkxToggle() {
 
 function spMkxLabelToggle_() {
   return (window.SP_MKX_BUKA ? "&#9660; " : "&#9654; ") +
-    "Input banyak marker sekaligus &#8212; satu baris per size";
+    "Input banyak marker sekaligus &#8212; satu baris per marker";
 }
 
 /**
@@ -5445,8 +5445,23 @@ function spSaranAllowancePanelHtml_(idTombol, fnPakai) {
     '" type="button">Pakai 0</button>';
 }
 
+/**
+ * {size} diganti daftar size baris itu. Untuk baris SATU size hasilnya sama persis dengan
+ * sebelumnya; untuk baris gabungan, sizenya digabung dengan PEMISAH YANG DIPILIH.
+ *
+ * Pemisahnya ditawarkan, tidak ditebak -- alasan yang sama dengan saran bentuk pola di v324, dan
+ * datanya memang terbelah: dari 16 marker multi-size yang kodenya menyebut sizenya, 9 memakai
+ * spasi ("Brokat - (S M L)") dan 7 memakai titik ("Polos 1 - S.M.L.XL (badan depan)").
+ */
+function spMkxPemisah_() {
+  const el = document.getElementById("sp-mkx-pemisah");
+  const v = el ? String(el.value) : " ";
+  return (v === "titik") ? "." : (v === "koma") ? ", " : " ";
+}
+
 function spMkxKode_(pola, sz) {
-  return String(pola || "").split("{size}").join(sz).trim();
+  const daftar = Array.isArray(sz) ? sz : [sz];
+  return String(pola || "").split("{size}").join(daftar.join(spMkxPemisah_())).trim();
 }
 
 /**
@@ -5561,17 +5576,25 @@ function spMkxItem_() {
 function spMkxSegarkanKode_() {
   const pola = (document.getElementById("sp-mkx-pola") || {}).value || "";
   let n = 0;
+  let adaGabungan = false;
   document.querySelectorAll("#sp-mkx-tabel tbody tr").forEach(function (tr) {
     const cb = tr.querySelector(".sp-mkx-aktif");
     const sel = tr.querySelector(".sp-mkx-kode");
-    const sz = (tr.querySelector(".sp-mkx-sz") || {}).textContent || "";
+    const selSz = tr.querySelector(".sp-mkx-sz");
     if (!sel) return;
     const aktif = cb && cb.checked;
     tr.classList.toggle("sp-mkx-mati", !aktif);
     if (aktif) n++;
-    const kode = spMkxKode_(pola, sz);
-    sel.textContent = kode || "·";
+    // Kolom Size jadi TURUNAN: ia menampilkan size mana saja yang qty-nya terisi di baris itu.
+    const daftarSz = Object.keys(spMkxSusunBaris_(tr));
+    if (daftarSz.length > 1) adaGabungan = true;
+    if (selSz) selSz.textContent = daftarSz.join(" ") || "·";
+    sel.textContent = (daftarSz.length ? spMkxKode_(pola, daftarSz) : "") || "·";
   });
+  // Pemisah cuma berarti kalau ada baris bergabung -- disembunyikan selama tidak ada, supaya
+  // 92% pekerjaan (satu size per marker) tidak dibebani pilihan yang tidak dipakainya.
+  const wp = document.getElementById("sp-mkx-pemisah-wadah");
+  if (wp) wp.hidden = !adaGabungan;
   // v324: baris yang kodenya KEMBAR dengan baris lain ditandai di gridnya sendiri, bukan cuma
   // dilaporkan sesudah menekan Pratinjau -- kolom Kode Marker yang menampilkan empat "Motif" yang
   // sama tidak terbaca sebagai masalah sampai seseorang menghitungnya.
@@ -5671,13 +5694,18 @@ function spMkxKumpulkan_() {
   trs.forEach(function (tr) {
     const cb = tr.querySelector(".sp-mkx-aktif");
     if (!cb || !cb.checked) return;
-    const sz = ((tr.querySelector(".sp-mkx-sz") || {}).textContent || "").trim();
+    const susun = spMkxSusunBaris_(tr);
+    const daftarSz = Object.keys(susun);
+    const sz = daftarSz.join(" ") || "(kosong)";
     const panjang = Number((tr.querySelector(".sp-mkx-panjang") || {}).value) || 0;
-    const qty = Number((tr.querySelector(".sp-mkx-qty") || {}).value) || 0;
-    const kode = spMkxKode_(pola, sz);
-    if (!kode) galat.push("Size " + sz + ": kode marker kosong. Isi Pola Kode di atas.");
-    if (panjang <= 0) galat.push("Size " + sz + ": panjang marker belum diisi.");
-    if (qty <= 0) galat.push("Size " + sz + ": jumlah pola per lapis harus lebih dari 0.");
+    const kode = daftarSz.length ? spMkxKode_(pola, daftarSz) : "";
+    if (!daftarSz.length) {
+      galat.push("Baris ke-" + (baris.length + 1) + ": belum ada size yang diisi pola/lapisnya. " +
+        "Isi minimal satu kotak di kolom Pola/lapis, atau lepas centangnya.");
+    } else {
+      if (!kode) galat.push("Size " + sz + ": kode marker kosong. Isi Pola Kode di atas.");
+      if (panjang <= 0) galat.push("Size " + sz + ": panjang marker belum diisi.");
+    }
     // Dua size yang menghasilkan kode SAMA berarti pola tidak memuat {size}: baris kedua dan
     // seterusnya akan ditolak server sebagai kembar. Dikumpulkan dulu, dilaporkan SEKALI di bawah.
     //
@@ -5689,7 +5717,8 @@ function spMkxKumpulkan_() {
       if (dipakai[kode]) { if (bentrok.indexOf(kode) === -1) bentrok.push(kode); }
       else dipakai[kode] = sz;
     }
-    baris.push({ tr: tr, cb: cb, sz: sz, kode: kode, panjang: panjang, qty: qty,
+    baris.push({ tr: tr, cb: cb, sz: sz, kode: kode, panjang: panjang, susun: susun,
+      qty: daftarSz.reduce(function (a, k) { return a + susun[k]; }, 0),
       sudahAda: spMkxKodeSudahAda_(kode),
       elLayout: tr.querySelector(".sp-mkx-layout"), elFile: tr.querySelector(".sp-mkx-file"),
       hasil: tr.querySelector(".sp-mkx-hasil") });
@@ -5771,7 +5800,8 @@ function spMkxPratinjau() {
           (b.sudahAda ? '<div class="sp-mkx-sudah-teks">kode ini sudah dipakai ' +
             spEsc_(b.sudahAda.idMarker) + ' (' + b.sudahAda.panjangMarker + ' m)</div>' : "") +
           '</td><td>' + spEsc_(b.sz) + '</td>' +
-          '<td>' + b.qty + '</td><td>' + b.panjang + ' m</td>' +
+          '<td>' + Object.keys(b.susun).map(function (k) {
+            return spEsc_(k) + ":" + b.susun[k]; }).join(" ") + '</td><td>' + b.panjang + ' m</td>' +
           '<td>' + (nL + nF ? (nL + " gambar, " + nF + " file") :
             '<span class="sp-mkx-kosong">tidak ada</span>') + '</td></tr>';
       }).join("") +
@@ -5847,8 +5877,7 @@ async function spMkxSimpan(btn) {
       // Sama dengan jalur satuan: lampiran yang gagal dibaca TIDAK membatalkan markernya.
       fileLayout = []; fileMarker = [];
     }
-    const susunan = {};
-    susunan[b.sz] = b.qty;
+    const susunan = b.susun;
     try {
       const d = await spMkxKirim_({
         idPurchaseOrder: window.SP_PO_AKTIF,
@@ -5891,23 +5920,77 @@ async function spMkxSimpan(btn) {
 }
 
 /** Panel matriks. Hanya untuk marker BARU -- revisi punya bentuk kerja sendiri. */
-/** Baris grid per size -- dipisah supaya bisa dirakit ulang saat ITEM berganti. */
+/**
+ * Satu baris = SATU MARKER (v328), bukan satu size.
+ *
+ * Rancangan Femri, 11 Sep 2026: *"bagian pola/lapis berisi field size yang bisa diisi qty nya,
+ * lalu nama marker otomatis dari field size yang diisi."* Kolom Pola/lapis berubah dari satu
+ * kotak jadi grid size -> qty, dan kolom Size jadi TURUNAN: ia menampilkan size mana saja yang
+ * qty-nya terisi.
+ *
+ * Kenapa qty boleh beda tiap size, padahal diukur seragam di 18 dari 18 marker multi-size:
+ * Femri menyebutnya bisa berbeda, dan 18 contoh tidak cukup untuk membantah orang yang memegang
+ * markernya. Grid yang mengizinkan qty berbeda juga tidak memaksa siapa pun memakainya.
+ *
+ * Bawaannya tetap SATU BARIS PER SIZE dengan sizenya sendiri terisi 1 -- bentuk yang dipakai 228
+ * dari 246 marker aktif, dan mengubahnya berarti memperlambat 92% pekerjaan demi 7%. Yang
+ * ditambahkan cuma KEMAMPUAN: mengisi size lain di baris yang sama, atau menambah baris kosong
+ * lewat tombol di bawah grid.
+ */
+function spMkxBarisSatuHtml_(sizes, sizeTerisi, dariOrder) {
+  const isi = sizeTerisi || {};
+  return '<tr>' +
+    '<td data-label=""><input class="sp-mkx-aktif" ' +
+      'type="checkbox"' + (dariOrder ? ' checked="checked"' : "") + '/></td>' +
+    '<td class="sp-mkx-sz" data-label="Size">&#183;</td>' +
+    '<td class="sp-mkx-kode" data-label="Kode">&#183;</td>' +
+    '<td data-label="Panjang"><input class="sp-mkx-panjang" min="0" placeholder="1.207" ' +
+      'step="0.001" type="number"/></td>' +
+    '<td class="sp-mkx-susun" data-label="Pola/lapis"><div class="sp-mkx-szgrid">' +
+      sizes.map(function (sz) {
+        return '<label><span>' + spEsc_(sz) + '</span>' +
+          '<input class="sp-mkx-qty" data-size="' + spEsc_(sz) + '" min="0" placeholder="0" ' +
+          'step="1" type="number" value="' + (isi[sz] === undefined ? "" : isi[sz]) + '"/></label>';
+      }).join("") +
+    '</div></td>' +
+    // Label lampiran: keduanya masuk KOLOM YANG BERBEDA di sheet (URL Layout vs URL File Marker),
+    // dan daftar marker merendernya berbeda pula -- gambar jadi thumbnail, berkas jadi tautan.
+    // Sampai v327 keduanya cuma dua tombol "Choose Files" tanpa keterangan, dan tertukar berarti
+    // thumbnail rusak di satu sisi dan tautan yang tidak bisa dibuka di sisi lain.
+    '<td class="sp-mkx-lamp" data-label="Lampiran">' +
+      '<label class="sp-mkx-lbl-file">Gambar' +
+        '<input accept="image/*" class="sp-mkx-layout" multiple="multiple" type="file"/></label>' +
+      '<label class="sp-mkx-lbl-file">File .plt' +
+        '<input class="sp-mkx-file" multiple="multiple" type="file"/></label></td>' +
+    '<td class="sp-mkx-hasil" data-label=""></td></tr>';
+}
+
+/** Grid bawaan: satu baris per size, sizenya sendiri terisi 1. */
 function spMkxBarisHtml_(sizes, dariOrder) {
   return sizes.map(function (sz) {
-    return '<tr>' +
-      '<td data-label=""><input class="sp-mkx-aktif" ' +
-        'type="checkbox"' + (dariOrder ? ' checked="checked"' : "") + '/></td>' +
-      '<td class="sp-mkx-sz" data-label="Size">' + spEsc_(sz) + '</td>' +
-      '<td class="sp-mkx-kode" data-label="Kode">&#183;</td>' +
-      '<td data-label="Panjang"><input class="sp-mkx-panjang" min="0" placeholder="1.207" ' +
-        'step="0.001" type="number"/></td>' +
-      '<td data-label="Pola/lapis"><input class="sp-mkx-qty" min="1" step="1" ' +
-        'type="number" value="1"/></td>' +
-      '<td class="sp-mkx-lamp" data-label="Lampiran">' +
-        '<input accept="image/*" class="sp-mkx-layout" multiple="multiple" type="file"/>' +
-        '<input class="sp-mkx-file" multiple="multiple" type="file"/></td>' +
-      '<td class="sp-mkx-hasil" data-label=""></td></tr>';
+    const isi = {};
+    isi[sz] = 1;
+    return spMkxBarisSatuHtml_(sizes, isi, dariOrder);
   }).join("");
+}
+
+/** Tambah satu baris KOSONG -- untuk marker gabungan yang bukan salah satu size tunggal. */
+function spMkxTambahBaris() {
+  const tb = document.querySelector("#sp-mkx-tabel tbody");
+  if (!tb) return;
+  const sizes = spSizePO_(spMkxItem_());
+  tb.insertAdjacentHTML("beforeend", spMkxBarisSatuHtml_(sizes, {}, true));
+  spMkxUbah_();
+}
+
+/** Susunan size satu baris: {size: qty} untuk qty > 0 saja. */
+function spMkxSusunBaris_(tr) {
+  const out = {};
+  tr.querySelectorAll(".sp-mkx-qty").forEach(function (inp) {
+    const q = Number(inp.value) || 0;
+    if (q > 0) out[inp.dataset.size] = q;
+  });
+  return out;
 }
 
 /**
@@ -5946,9 +6029,11 @@ function spMkxPanelHtml_() {
         spMkxLabelToggle_() + '</button>' +
       '<div class="sp-mkx-isi" id="sp-mkx-isi" onchange="spMkxUbah_()" oninput="spMkxUbah_()"' +
         (buka ? "" : ' hidden="hidden"') + '>' +
-        '<p class="sp-info">Satu kain/warna, satu marker per size &#8212; bentuk yang dipakai 217 ' +
-          'dari 236 marker yang sudah ada. Medan bersama diisi sekali di sini; yang berubah tiap ' +
-          'baris cuma panjang. <b>Tidak langsung tersimpan</b>: ada pratinjau dulu.</p>' +
+        '<p class="sp-info">Satu kain/warna, <b>satu baris = satu marker</b>. Bawaannya satu ' +
+          'marker per size &#8212; bentuk yang dipakai 228 dari 246 marker yang sudah ada &#8212; ' +
+          'tapi satu baris boleh memuat beberapa size sekaligus: isi kotak Pola/lapis untuk tiap ' +
+          'size yang masuk dalam SATU lapis, dan kodenya ikut menyebut semuanya. Medan bersama ' +
+          'diisi sekali di sini. <b>Tidak langsung tersimpan</b>: ada pratinjau dulu.</p>' +
         (spDaftarItemPO_().length > 1
           ? '<div class="sp-grid3"><label>Item (artikel &#183; style)<select id="sp-mkx-item" ' +
               'onchange="spMkxGantiItem()">' +
@@ -5983,17 +6068,28 @@ function spMkxPanelHtml_() {
         '<div class="sp-mkx-saran" id="sp-mkx-awas-allow"></div>' +
         '<div class="sp-mkx-saran" id="sp-mkx-saran"></div>' +
         '<p class="sp-info sp-mkx-catatan" id="sp-mkx-asal"></p>' +
-        '<p class="sp-info"><b>{size}</b> di Pola Kode diganti nama size tiap baris: ' +
+        '<p class="sp-info"><b>{size}</b> di Pola Kode diganti nama size baris itu: ' +
           '"Motif - {size}" jadi "Motif - S", "Motif - M", dan seterusnya. Bentuk lain ikut: ' +
-          '"Polos LS - ({size})", "Cokelat Tua {size}".</p>' +
+          '"Polos LS - ({size})", "Cokelat Tua {size}". Untuk baris yang memuat beberapa size, ' +
+          '{size} jadi daftarnya &#8212; "Motif - S M L" &#8212; dan pemisahnya bisa dipilih.</p>' +
         (dariOrder ? "" : '<p class="sp-info sp-size-catatan">Rincian ukuran order tidak terbaca, ' +
           'jadi daftar di bawah ukuran standar dan tidak ada yang dicentang otomatis. Centang ' +
           'hanya ukuran yang memang ada di order ini.</p>') +
+        '<div class="sp-mkx-pemisah-wadah" hidden="hidden" id="sp-mkx-pemisah-wadah">' +
+          '<label>Pemisah size di kode gabungan ' +
+            '<select id="sp-mkx-pemisah">' +
+              '<option value="spasi">S M L (spasi)</option>' +
+              '<option value="titik">S.M.L (titik)</option>' +
+              '<option value="koma">S, M, L (koma)</option>' +
+            '</select></label>' +
+        '</div>' +
         '<div class="sp-tabelwrap"><table class="sp-tabel sp-mkx-tabel" id="sp-mkx-tabel"><thead><tr>' +
           '<th></th><th>Size</th><th>Kode Marker</th><th>Panjang (m)</th><th>Pola/lapis</th>' +
           '<th>Lampiran</th><th></th></tr></thead><tbody>' +
           spMkxBarisHtml_(sizes, dariOrder) +
         '</tbody></table></div>' +
+        '<button class="sp-btn-kecil sp-mkx-tambah" onclick="spMkxTambahBaris()" type="button">' +
+          '+ Tambah baris (marker gabungan beberapa size)</button>' +
         '<button class="sp-simpan-btn" id="sp-mkx-tombol" onclick="spMkxPratinjau()" ' +
           'type="button">Pratinjau</button>' +
         '<div id="sp-mkx-pratinjau"></div>' +
