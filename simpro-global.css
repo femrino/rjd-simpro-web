@@ -1236,3 +1236,76 @@ body[data-bagian~="lintas"] .rjd-bagian-lain { display: none; }
   color:#8a4b1d;
   font-weight:600;
 }
+
+/* ============================================================
+ * ORDER MASUK -- proofing pengajuan order klien (v339)
+ * ============================================================
+ * PINDAH dari simpro-dashboard.css, sepasang dengan blok JS-nya di
+ * simpro-global.js. Alasannya sama: subtab "Orderan Masuk" di halaman
+ * Produksi memakai komponen yang sama, dan halaman itu tidak memuat
+ * simpro-dashboard.css.
+ *
+ * URUTAN DI DALAM BLOK INI DIPERTAHANKAN apa adanya dari dashboard.css
+ * (dasar -> bayangan -> modal proofing): .om-group-card didefinisikan tiga
+ * kali dan yang belakangan menimpa yang depan. Menyusunnya "lebih rapi"
+ * akan mengubah tampilannya.
+ *
+ * DIPERIKSA sebelum pindah, karena berkas ini dimuat SEBELUM CSS halaman
+ * (jadi seri spesifisitas sekarang dimenangkan dashboard.css/spk.css):
+ * satu-satunya aturan om yang menyentuh input adalah `.om-verify-fields
+ * input` (0,1,1), dan kotak verifikasinya SIBLING dari .of-form-section di
+ * dalam .lp-edit-modal-body -- bukan anaknya. Jadi tidak ada elemen yang
+ * cocok dengan dua-duanya, dan tidak ada seri yang bisa berbalik.
+ * ============================================================ */
+.om-group-card{background:var(--white);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:10px}
+.om-group-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;cursor:pointer}
+.om-group-nama{font-weight:700;font-size:14px}
+.om-group-meta{font-size:11.5px;color:var(--ink-soft);margin-top:2px}
+.om-status-badge{font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap}
+.om-status-pending{background:#FCF3E3;color:#8A5D1F}
+.om-status-menunggu-verifikasi{background:#E6ECF5;color:#1F3A66}
+.om-status-disetujui{background:#E3EFE6;color:#2C6B3F}
+.om-status-ditolak{background:#FDECEA;color:#8f2c22}
+.om-btn{font-size:11.5px;font-weight:700;padding:7px 14px;border-radius:20px;border:1px solid var(--line);background:var(--white);cursor:pointer;font-family:inherit}
+.om-btn-danger{color:#8f2c22;border-color:#E8A49C}
+.om-btn-success{color:#2C6B3F;border-color:#B7D6BE}
+.om-verify-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.om-verify-fields input{width:100%;min-width:0;box-sizing:border-box;font-size:12.5px;padding:8px 10px;border:1px solid var(--line);border-radius:6px}
+@media (max-width:480px){
+  .om-verify-fields{grid-template-columns:1fr}
+}
+.om-group-card { border-radius: 12px; box-shadow: var(--shadow-sm); transition: transform .18s ease, box-shadow .18s ease; }
+/* ---- Modal Proofing ---- */
+.om-group-head { cursor: pointer; }
+.om-verif-box { background: #EDF3FA; border: 1px solid #B9D0E8; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+.om-verif-judul { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13px; color: var(--sky); margin-bottom: 10px; }
+.om-verif-catatan { font-size: 11.5px; color: var(--ink-soft); margin-top: 8px; }
+.om-proofing-foot { flex-wrap: wrap; gap: 8px; }
+.om-status-final { font-size: 12.5px; color: #2C6B3F; font-weight: 600; align-self: center; }
+.om-group-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+
+/* ---- kartu ringkas Order Masuk: tiga hitungan di atas daftar ----
+   Dipasang BERSAMA db-stat-* di markup (satu elemen, dua kelas), bukan
+   menggantikannya: db-stat-* dipakai 14 kali oleh section dashboard lain dan
+   tinggal di simpro-dashboard.css. Karena berkas ini dimuat SEBELUM CSS
+   halaman, dashboard tetap memakai aturannya sendiri (ia menang seri), dan
+   halaman produksi -- yang tidak memuat dashboard.css sama sekali -- memakai
+   aturan di bawah.
+
+   Angkanya bukan karangan: ini nilai EFEKTIF kartu Order Masuk di dashboard,
+   yaitu .db-stat-card (dasar + blok "TAHAP 2") sesudah ditimpa
+   .db-perhatian-card-grid -- kelas yang memang jadi wadah
+   #db-ordermasuk-summary di template. Jadi yang ditiru varian PADAT-nya
+   (padding 12/14, angka 20px, label 9px), bukan kartu besar 25px. Meniru
+   kartu besar akan terlihat "beda" justru karena ia benar di tempat lain.
+
+   Animasi masuk (dbCardIn) SENGAJA tidak ikut: ia butuh @keyframes yang
+   tinggal di dashboard.css, dan tiga kartu yang melayang masuk di dalam tab
+   yang dibuka-tutup berkali-kali sehari lebih mengganggu daripada membantu. */
+.om-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
+.om-stat-card{border-radius:14px;padding:12px 14px;min-width:0;box-shadow:var(--shadow-sm)}
+.om-stat-num{font-family:'Archivo',ui-sans-serif,system-ui,sans-serif;font-size:20px;font-weight:900;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
+.om-stat-label{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.06em;text-transform:uppercase;opacity:.9;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:760px){
+  .om-stat-grid{grid-auto-flow:column;grid-auto-columns:minmax(120px,1fr);grid-template-columns:none;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px}
+}

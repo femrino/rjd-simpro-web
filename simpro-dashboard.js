@@ -565,35 +565,6 @@ function dbRenderAgingPiutang(data){
   dbSetTabBadge("db-tab-badge-aging", window.DB_AGING.daftarPiutang.length);
 }
 
-const OM_STATUS_CLASS = {
-  "Pending": "om-status-pending",
-  "Menunggu Verifikasi Klien Baru": "om-status-menunggu-verifikasi",
-  "Disetujui": "om-status-disetujui",
-  "Ditolak": "om-status-ditolak",
-  "Revisi Diminta": "om-status-pending"
-};
-
-// Label tampilan badge -- dipisah dari g.status (nilai data mentah yg dipakai buat logika).
-// "Pending" ditampilkan "Menunggu Proofing" biar sejajar gayanya dgn "Menunggu Verifikasi
-// Klien Baru" (dua-duanya status nunggu -> dua-duanya "Menunggu X"). Ganti label doang,
-// status aslinya nggak disentuh, jadi filter/aksi yg baca g.status tetap jalan.
-const OM_STATUS_LABEL = {
-  "Pending": "Menunggu Proofing",
-  "Menunggu Verifikasi Klien Baru": "Menunggu Verifikasi Klien Baru",
-  "Disetujui": "Disetujui",
-  "Ditolak": "Ditolak",
-  "Revisi Diminta": "Revisi Diminta"
-};
-
-const OM_SIZE_KOLOM = ["XS","S","M","L","XL","2XL","3XL","4XL","5XL","All Size"];
-
-/**
- * Section BARU Dashboard -- Order Masuk (Form Order Klien). Beda dari section lain,
- * ini fetch TERPISAH (bukan bagian dari payload dbFetch() utama) -- lewat action
- * "getOrderRequests" di doPost, karena proofing/approve butuh round-trip sendiri
- * (bukan cuma tampilkan data, tapi juga aksi tulis). Dipanggil dari dbRender(data)
- * SETELAH dbRenderAgingPiutang(data) dipanggil.
- */
 /* ============ TAB JADWAL PRODUKSI ============
    Menampilkan hasil penjadwalan-produksi.gs: papan beban divisi + estimasi
    selesai per order dengan timeline tiap tahap.
@@ -754,366 +725,62 @@ function jpRenderAsumsi(){
     (baris.length ? '<br/>' + baris.join('<br/>') : '');
 }
 
+/* ============================================================
+ * NISAN: komponen Order Masuk PINDAH ke simpro-global.js (v339)
+ * ============================================================
+ * Yang pindah: OM_STATUS_CLASS / OM_STATUS_LABEL / OM_SIZE_KOLOM dan sepuluh
+ * fungsi om* (render, modal proofing, verifikasi klien baru, approve, reject,
+ * hapus) -- 382 baris.
+ *
+ * KENAPA. Subtab "Orderan Masuk" di halaman Produksi (v339) memakai komponen
+ * yang SAMA. Menyalinnya ke simpro-spk.js berarti dua salinan satu barang;
+ * simpro-dashboard.js sendiri tidak bisa dimuat di halaman produksi karena
+ * berkas ini memasang window.onload di tingkat atas -- onload halaman
+ * produksi akan tertimpa.
+ *
+ * Yang TINGGAL di sini cuma pemetaan id: markup dashboard memakai
+ * db-ordermasuk-*, markup produksi memakai sp-om-*.
+ * ============================================================ */
 function dbRenderOrderMasuk(){
-  fetch(DB_API_URL, {
-    method: "POST",
-    body: JSON.stringify({ idToken: DB_ID_TOKEN, action: "getOrderRequests" })
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(data){
-    if(!data.success){
-      document.getElementById("db-ordermasuk-list").innerHTML =
-        '<p style="color:var(--ink-soft);font-size:13px;padding:16px">' + (data.error || "Gagal memuat order masuk.") + '</p>';
-      return;
-    }
-    window.DB_ORDER_MASUK = data.daftar || [];
-    omRenderSummary(window.DB_ORDER_MASUK);
-    omRenderList(window.DB_ORDER_MASUK);
-    const perluAksi = window.DB_ORDER_MASUK.filter(function(g){
-      return g.status === "Pending" || g.status === "Menunggu Verifikasi Klien Baru";
-    }).length;
-    dbSetTabBadge("db-tab-badge-ordermasuk", perluAksi);
-  })
-  .catch(function(){
-    document.getElementById("db-ordermasuk-list").innerHTML =
-      '<p style="color:var(--ink-soft);font-size:13px;padding:16px">Gagal menghubungi server.</p>';
+  omRender_({
+    api: DB_API_URL,
+    token: DB_ID_TOKEN,
+    idList: "db-ordermasuk-list",
+    idSummary: "db-ordermasuk-summary",
+    idBadge: "db-tab-badge-ordermasuk",
+    sesudahRender: dbBukaOrderMasukDariHash_
   });
-}
-
-function omRenderSummary(daftar){
-  const jumlahPending = daftar.filter(function(g){ return g.status === "Pending"; }).length;
-  const jumlahVerifikasi = daftar.filter(function(g){ return g.status === "Menunggu Verifikasi Klien Baru"; }).length;
-  const jumlahDisetujui = daftar.filter(function(g){ return g.status === "Disetujui"; }).length;
-  document.getElementById("db-ordermasuk-summary").innerHTML =
-    '<div class="db-stat-card" style="background:#FCF3E3;border:1px solid #EBCFA0"><div class="db-stat-num" style="color:#8A5D1F">' + jumlahPending + '</div><div class="db-stat-label" style="color:#8A5D1F">MENUNGGU PROOFING</div></div>' +
-    '<div class="db-stat-card" style="background:#E6ECF5;border:1px solid #A9BEDD"><div class="db-stat-num" style="color:#1F3A66">' + jumlahVerifikasi + '</div><div class="db-stat-label" style="color:#1F3A66">KLIEN BARU PERLU VERIFIKASI</div></div>' +
-    '<div class="db-stat-card" style="background:#E3EFE6;border:1px solid #B7D6BE"><div class="db-stat-num" style="color:#2C6B3F">' + jumlahDisetujui + '</div><div class="db-stat-label" style="color:#2C6B3F">SUDAH DISETUJUI</div></div>';
-}
-
-function omRenderList(daftar){
-  const el = document.getElementById("db-ordermasuk-list");
-  if(!daftar.length){
-    el.innerHTML = '<p style="color:var(--ink-soft);font-size:13px;padding:16px">Belum ada order masuk.</p>';
-    return;
-  }
-  el.innerHTML = daftar.map(function(g, idx){
-    const statusClass = OM_STATUS_CLASS[g.status] || "om-status-pending";
-    const totalQty = g.items.reduce(function(sum, it){
-      return sum + OM_SIZE_KOLOM.reduce(function(s, size){ return s + (it.sizeQty[size] || 0); }, 0);
-    }, 0);
-    const jumlahItem = rjdGroupOrderItems_(g.items).length;
-    const labelIsi = jumlahItem + ' item &#183; ' + g.items.length + ' warna &#183; ' + totalQty + ' pcs';
-    // Klik kartu -> MODAL PROOFING (dulu: buka-tutup detail inline). Modal
-    // memakai komponen form yang sama dengan Form Order & Edit Order, jadi
-    // tampilan proofing seragam dengan sisa sistem.
-    return '<div class="om-group-card" id="om-group-' + idx + '">' +
-      '<div class="om-group-head" onclick="omBukaModalProofing(' + idx + ')" title="Buka proofing order ini">' +
-        '<div>' +
-          '<span class="om-group-nama">' + (g.namaKlien || g.namaPerusahaanBaru || "(tanpa nama)") + '</span>' +
-          '<div class="om-group-meta">' + labelIsi + ' &#183; Target kirim: ' + (g.targetTanggalKirim || "-") + '</div>' +
-          '<div class="om-group-meta">Diajukan: ' + (g.diajukanOleh || "-") + '</div>' +
-        '</div>' +
-        '<span class="om-status-badge ' + statusClass + '">' + (OM_STATUS_LABEL[g.status] || g.status) + '</span>' +
-      '</div>' +
-      '<div style="padding:0 16px 12px;display:flex;gap:16px;flex-wrap:wrap" onclick="event.stopPropagation()">' +
-        '<a class="lp-cetak-link" href="/p/cetak.html?jenis=konfirmasiorder&id=' + encodeURIComponent(g.idOrderRequest) + '" target="_blank">&#128424; Cetak Konfirmasi Order</a>' +
-        // SPK STAFF ONLY -- sengaja cuma di Dashboard, TIDAK di kartu Orderan
-        // Portal Klien. Backend juga menolak kalau klien memaksa buka URL-nya.
-        '<a class="lp-cetak-link" href="/p/cetak.html?jenis=spk&id=' + encodeURIComponent(g.idOrderRequest) + '" target="_blank">&#128736; Cetak SPK</a>' +
-      '</div>' +
-    '</div>';
-  }).join("");
 }
 
 /**
- * Susun HTML buat 1 slot lampiran yang isinya BISA lebih dari 1 URL (digabung
- * 1 sel sheet, dipisah "; " -- lihat simpanBanyakFileKeDrive_ di backend).
- * Sekarang dirender jadi THUMBNAIL (bukan link teks lagi) biar admin bisa lihat
- * desainnya langsung tanpa buka tab satu-satu. Logikanya didelegasikan ke
- * rjdBuildThumbHtml_() di blok global -- 1 salinan, dipakai bareng sama daftar
- * Orderan di tracking/Detail Klien. Tiap file tetap dapet nomor urut sendiri
- * ("Foto Desain 1", "Foto Desain 2", dst) & tetap bisa diklik buka file aslinya.
+ * Tautan dalam dari halaman Produksi: /p/dashboard.html#ordermasuk=OR-001.
+ *
+ * Subtab "Orderan Masuk" di halaman produksi (v339) menautkan ke sini karena
+ * modal proofingnya bergaya dari simpro-dashboard.css -- alasan lengkapnya di
+ * omKlikKartu_ (simpro-global.js). Supaya perpindahannya tidak terasa seperti
+ * "dibuang ke halaman lain", ia mendarat langsung di modal order yang diklik.
+ *
+ * Hash DIHAPUS sesudah dipakai: tanpa itu, Refresh atau render ulang sesudah
+ * approve akan membuka modal yang sama lagi -- dan pada order yang BARU SAJA
+ * disetujui, itu menampilkan keadaan basi. Pemanggilnya (omRender_) menjalankan
+ * kail ini di TIAP render, jadi idempotensinya tanggung jawab fungsi ini.
  */
-function omBuildLampiranLinksHtml_(urlGabungan, ikon, labelDasar){
-  const html = rjdBuildThumbHtml_(urlGabungan, ikon, labelDasar);
-  return html ? '<div class="rjd-thumb-row">' + html + '</div>' : "";
-}
-
-
-/* ============ MODAL PROOFING (Dashboard > Order Masuk) ============
-   Memakai KOMPONEN FORM ORDER yang sama dengan /p/order.html, modal "Ajukan
-   Order Baru", dan modal "Edit Order" -- jadi susunan & urutan fieldnya identik
-   di seluruh sistem. Bedanya cuma dua, dan dua-duanya memang wewenang admin:
-     1. Ada kolom HARGA per Warna (opsi {harga:true})
-     2. Ada tombol aksi proofing: Setujui / Tolak / Hapus
-   Simpan memakai rute rewriteOrderRequest -- SAMA dengan modal Edit. Staff lolos
-   gerbang izin, dan cuma staff yang harganya dihormati backend. Satu jalur
-   simpan buat semua form. */
-function omBukaModalProofing(idx){
-  // Sumbernya window.DB_ORDER_MASUK -- array yang SAMA yang dipakai omRenderList,
-  // jadi idx dari kartu pasti cocok (daftarnya nggak difilter sebelum di-render).
-  var g = (window.DB_ORDER_MASUK || [])[idx];
-  if(!g){ alert("Data order tidak ditemukan, coba Refresh."); return; }
-
-  var klienBaruBelumVerif = (g.tipeKlien === "Baru" && g.status === "Menunggu Verifikasi Klien Baru");
-
-  // Blok verifikasi klien baru -- gerbang sebelum order boleh diproofing.
-  var verifHtml = klienBaruBelumVerif
-    ? '<div class="om-verif-box">' +
-        '<div class="om-verif-judul">Klien Baru &#183; perlu diverifikasi dulu</div>' +
-        '<div class="om-verify-fields">' +
-          '<input id="om-verify-nama-' + idx + '" placeholder="Nama resmi" value="' + (g.namaPerusahaanBaru || "") + '"/>' +
-          '<input id="om-verify-kontak-' + idx + '" placeholder="Kontak Person" value="' + (g.picBaru || "") + '"/>' +
-          '<input id="om-verify-tlp-' + idx + '" placeholder="No Telepon/WA" value="' + (g.noWaBaru || "") + '"/>' +
-          '<input id="om-verify-email-' + idx + '" placeholder="Email" value="' + (g.emailBaru || "") + '"/>' +
-        '</div>' +
-        '<p class="om-verif-catatan">Order baru bisa disetujui jadi PO setelah klien ini punya Client ID.</p>' +
-      '</div>'
-    : '';
-
-  var lampiran = omBuildLampiranLinksHtml_(g.urlFileLainnya, "\uD83D\uDCCE", "File Lainnya");
-  var lampiranHtml = lampiran
-    ? '<div class="of-foto-lama" style="margin-top:14px"><div class="of-foto-lama-lbl">Lampiran pengajuan</div>' +
-      '<div class="rjd-thumb-row">' + lampiran + '</div></div>'
-    : '';
-  // Admin juga perlu bisa MENAMBAH/MENGGANTI lampiran level pengajuan saat proofing
-  // (misal nyusulin size pack dari klien). Sebelumnya lampiran cuma bisa dilihat,
-  // nggak bisa diunggah dari sini.
-  var lampiranUploadHtml =
-    '<label style="display:block;margin-top:14px"><span id="om-proofing-file-lbl">' +
-      (lampiran
-        ? 'Ganti Lampiran Pengajuan (opsional -- kalau diisi, lampiran di atas akan DIGANTI)'
-        : 'Lampiran Pengajuan (opsional, misal size pack, foto referensi umum)') +
-    '</span><input type="file" id="om-proofing-file" multiple="multiple"/></label>';
-
-  // Tombol aksi -- beda per status, sama persis aturannya dengan versi lama.
-  var aksiHtml;
-  if(klienBaruBelumVerif){
-    aksiHtml =
-      '<button class="om-btn om-btn-success" onclick="omVerifikasiKlien(\'' + g.idOrderRequest + '\', ' + idx + ', true)" type="button">Terima &amp; Buat Client ID</button>' +
-      '<button class="om-btn om-btn-danger" onclick="omVerifikasiKlien(\'' + g.idOrderRequest + '\', ' + idx + ', false)" type="button">Tolak Pengajuan</button>' +
-      '<button class="om-btn" onclick="omHapus(\'' + g.idOrderRequest + '\')" style="color:#8f2c22" type="button">Hapus</button>';
-  } else if(g.status === "Pending"){
-    aksiHtml =
-      '<button class="lp-edit-save" id="om-simpan-btn" onclick="omSimpanProofing(\'' + g.idOrderRequest + '\')" type="button">Simpan Perubahan</button>' +
-      '<button class="om-btn om-btn-success" onclick="omApprove(\'' + g.idOrderRequest + '\')" type="button">Setujui Order</button>' +
-      '<button class="om-btn om-btn-danger" onclick="omReject(\'' + g.idOrderRequest + '\')" type="button">Tolak</button>' +
-      '<button class="om-btn" onclick="omHapus(\'' + g.idOrderRequest + '\')" style="color:#8f2c22" type="button">Hapus</button>';
-  } else if(g.status === "Disetujui"){
-    aksiHtml = '<span class="om-status-final">&#10003; Sudah jadi PO: <b>' + (g.idPurchaseOrderHasil || "-") + '</b></span>';
-  } else {
-    aksiHtml = '<button class="om-btn" onclick="omHapus(\'' + g.idOrderRequest + '\')" style="color:#8f2c22" type="button">Hapus</button>';
-  }
-
-  var overlay = document.createElement("div");
-  overlay.className = "lp-edit-overlay";
-  overlay.id = "om-proofing-overlay";
-  overlay.innerHTML =
-    '<div class="lp-edit-modal">' +
-      '<div class="lp-edit-modal-head">' +
-        '<div><div class="lp-edit-modal-title">Proofing Order</div>' +
-        '<div class="lp-edit-modal-sub">' + (g.namaKlien || g.namaPerusahaanBaru || "(tanpa nama)") + ' &#183; ' + g.idOrderRequest + '</div></div>' +
-        '<button class="lp-edit-close" onclick="omTutupModalProofing()" type="button">&#10005;</button>' +
-      '</div>' +
-      '<div class="lp-edit-modal-body">' +
-        verifHtml +
-        '<div id="om-proofing-items"></div>' +
-        (klienBaruBelumVerif ? '' : '<button class="of-add-item-btn" onclick="ofTambahItem(\'om-proofing-items\', null, {harga:true})" type="button">+ ITEM</button>') +
-        '<div class="of-form-section" style="margin-top:4px">' +
-          '<h4>Detail Pengiriman</h4>' +
-          '<label style="display:block">Target Tanggal Kirim <span class="of-hint-akhir">(deadline akhir)</span><input type="date" id="om-proofing-target" value="' + rjdTanggalKeIso_(g) + '"/></label>' +
-          '<div class="of-jadwal-wrap">' +'<div class="of-jadwal-lbl">Jadwal Kirim Bertahap (opsional -- isi kalau pengiriman dipecah)</div>' +'<div class="of-jadwal" id="om-proofing-jadwal"></div>' +'<button class="of-jadwal-add" onclick="ofTambahBarisJadwal_(\'om-proofing-jadwal\')" type="button">+ Tambah Tahap</button>' +'</div>' +
-          '<div class="of-jadwal-wrap">' +'<div class="of-jadwal-lbl">Estimasi Kain Dari Klien (opsional -- perkiraan kain yang akan dikirim klien)</div>' +'<div id="om-proofing-kaink"></div>' +'<button class="of-jadwal-add" onclick="ofTambahBarisKainKlien_(\'om-proofing-kaink\')" type="button">+ Tambah Kain</button>' +'</div>' +
-          // Catatan klien ditaruh DI SINI supaya letaknya sama dengan modal Edit
-          // Order (di bagian Detail Pengiriman, bukan menumpuk di atas sebelum
-          // daftar ITEM). Di proofing sifatnya BACA SAJA -- ini catatan klien,
-          // admin punya kolom sendiri. pre-wrap dipakai supaya ENTER & baris
-          // kosong yang diketik klien tampil apa adanya.
-          // Catatan klien BISA DIEDIT admin. Dulu tampil baca-saja, padahal saat
-          // proofing admin sering perlu merapikan/menambah keterangan yang
-          // disepakati lewat telepon -- kalau tidak, koreksinya cuma ada di
-          // kepala admin dan tidak ikut tercetak di dokumen.
-          '<label style="display:block;margin-top:14px">Catatan Klien' +
-            '<textarea id="om-proofing-catatan-klien" class="rjd-autogrow" rows="3">' +
-            rjdEscapeHtml_(g.catatanKlien || "") + '</textarea></label>' +
-        '</div>' +
-        lampiranHtml +
-        (klienBaruBelumVerif ? '' : lampiranUploadHtml) +
-      '</div>' +
-      '<div class="lp-edit-modal-foot om-proofing-foot">' +
-        '<button class="lp-edit-cancel" onclick="omTutupModalProofing()" type="button">Tutup</button>' +
-        aksiHtml +
-      '</div>' +
-    '</div>';
-  document.body.appendChild(overlay);
-  document.body.style.overflow = "hidden";
-  rjdIsiFormDariOrder_("om-proofing-items", g.items, { harga: true });
-
-  // Saran kain & warna untuk baris Estimasi Kain Dari Klien. Diambil dari
-  // pengajuan ini sendiri -- supaya nama yang sudah diketik di bagian item
-  // tidak diketik ulang dengan ejaan berbeda di bagian kain.
-  if (typeof ofSetSaranKain_ === "function") {
-    const kain = [];
-    (g.items || []).forEach(function (it) {
-      (it.komposisiKain || []).forEach(function (k) {
-        if (k.nama && kain.indexOf(k.nama) === -1) kain.push(k.nama);
-      });
-    });
-    ofSetSaranKain_(kain);
-  }
-  if (typeof ofSetSaranWarna_ === "function") {
-    const warna = [];
-    (g.items || []).forEach(function (it) {
-      (it.warnaList || []).forEach(function (w) {
-        if (w.warna && warna.indexOf(w.warna) === -1) warna.push(w.warna);
-      });
-    });
-    ofSetSaranWarna_(warna);
-  }
-  ofMuatMasterArtikel_(g.idKlien || null);
-  ofRenderJadwalKirim_("om-proofing-jadwal", g.jadwalKirim);
-  ofRenderKainKlien_("om-proofing-kaink", g.kainDariKlien);
-  rjdBindAutoGrowAll(overlay);
-}
-
-function omTutupModalProofing(){
-  var ov = document.getElementById("om-proofing-overlay");
-  if(ov) ov.remove();
-  document.body.style.overflow = "";
-}
-
-/** Simpan perubahan proofing -- jalur SAMA dengan modal Edit (rewriteOrderRequest). */
-async function omSimpanProofing(idOrderRequest){
-  var btn = document.getElementById("om-simpan-btn");
-  if(btn){ btn.disabled = true; btn.textContent = "Menyimpan..."; }
-
-  var items;
-  try{
-    const mslh = ofCekItemBelumLengkap_("om-proofing-items");
-    if(mslh.length){
-      alert("Ada item yang belum lengkap dan TIDAK akan tersimpan:\n\n- " + mslh.join("\n- "));
-      if(btn){ btn.disabled = false; btn.textContent = "Simpan Perubahan"; }
-      return;
-    }
-    items = await ofKumpulkanItemsAsync("om-proofing-items");
-  }catch(e){
-    alert(e.message || "Gagal membaca file.");
-    if(btn){ btn.disabled = false; btn.textContent = "Simpan Perubahan"; }
+function dbBukaOrderMasukDariHash_(daftar){
+  const cocok = /^#ordermasuk=(.+)$/.exec(window.location.hash || "");
+  if(!cocok) return;
+  const id = decodeURIComponent(cocok[1]);
+  // Hash dibuang LEBIH DULU, sebelum keberhasilan dicek: id yang tidak ada
+  // (order sudah dihapus, tautan basi) tidak boleh menempel dan mencoba
+  // membuka modal lagi di tiap render berikutnya.
+  try { history.replaceState(null, "", window.location.pathname + window.location.search); }
+  catch(e){ window.location.hash = ""; }
+  dbSwitchTab("ordermasuk");
+  const idx = (daftar || []).findIndex(function(g){ return g.idOrderRequest === id; });
+  if(idx < 0){
+    alert("Order " + id + " tidak ada lagi di daftar Order Masuk. Mungkin sudah disetujui, ditolak, atau dihapus.");
     return;
   }
-  if(!items.length){
-    alert("Isi minimal 1 item (Artikel & Warna wajib) dengan minimal 1 ukuran.");
-    if(btn){ btn.disabled = false; btn.textContent = "Simpan Perubahan"; }
-    return;
-  }
-
-  // Lampiran level pengajuan. Kalau admin nggak pilih file baru, array-nya kosong
-  // dan backend MEMPERTAHANKAN lampiran lama (lihat rewriteOrderRequest_).
-  var fileLainnyaList = [];
-  try{
-    var inpFile = document.getElementById("om-proofing-file");
-    fileLainnyaList = await ofBacaBanyakFileSebagaiBase64_(inpFile ? inpFile.files : null);
-  }catch(eFile){
-    alert(eFile.message || "Gagal membaca file lampiran.");
-    if(btn){ btn.disabled = false; btn.textContent = "Simpan Perubahan"; }
-    return;
-  }
-
-  fetch(DB_API_URL, {
-    method: "POST",
-    body: JSON.stringify({
-      idToken: DB_ID_TOKEN,
-      action: "rewriteOrderRequest",
-      idOrderRequest: idOrderRequest,
-      payload: {
-        targetTanggalKirim: (document.getElementById("om-proofing-target").value || "").trim(),
-        jadwalKirim: ofKumpulkanJadwalKirim_("om-proofing-jadwal"),
-        kainDariKlien: ofKumpulkanKainKlien_("om-proofing-kaink"),
-        catatanKlien: (function(){
-          const el = document.getElementById("om-proofing-catatan-klien");
-          return el ? el.value.trim() : undefined; // undefined = jangan sentuh nilai lama
-        })(),
-        items: items,
-        fileLainnyaList: fileLainnyaList
-      }
-    })
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(data){
-    if(data.success){
-      omTutupModalProofing();
-      dbRenderOrderMasuk();
-    } else {
-      alert(data.error || "Gagal menyimpan perubahan.");
-      if(btn){ btn.disabled = false; btn.textContent = "Simpan Perubahan"; }
-    }
-  })
-  .catch(function(){
-    alert("Gagal menghubungi server. Coba lagi.");
-    if(btn){ btn.disabled = false; btn.textContent = "Simpan Perubahan"; }
-  });
-}
-
-function omVerifikasiKlien(idOrderRequest, idx, disetujui){
-  const body = { idToken: DB_ID_TOKEN, action: "verifyKlienBaruRequest", idOrderRequest: idOrderRequest, disetujui: disetujui };
-  if(disetujui){
-    body.dataKlienFinal = {
-      nama: document.getElementById("om-verify-nama-" + idx).value.trim(),
-      kontakPerson: document.getElementById("om-verify-kontak-" + idx).value.trim(),
-      nomorTelepon: document.getElementById("om-verify-tlp-" + idx).value.trim(),
-      email1: document.getElementById("om-verify-email-" + idx).value.trim()
-    };
-  } else {
-    const alasan = prompt("Alasan penolakan (opsional):");
-    body.alasan = alasan || "";
-  }
-  fetch(DB_API_URL, { method: "POST", body: JSON.stringify(body) })
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      if(data.success){ omTutupModalProofing(); dbRenderOrderMasuk(); } else { alert(data.error || "Gagal memproses verifikasi."); }
-    });
-}
-
-function omApprove(idOrderRequest){
-  if(!confirm("Setujui order ini? Akan otomatis dibuat Purchase Order baru.")) return;
-  fetch(DB_API_URL, {
-    method: "POST",
-    body: JSON.stringify({ idToken: DB_ID_TOKEN, action: "approveOrderRequest", idOrderRequest: idOrderRequest })
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(data){
-    if(data.success){
-      alert("Order disetujui. PO baru: " + data.idPurchaseOrder);
-      omTutupModalProofing(); // aksi selesai -> modal ditutup biar nggak nampilin data basi
-      dbRenderOrderMasuk();
-    } else {
-      alert(data.error || "Gagal approve order.");
-    }
-  });
-}
-
-function omReject(idOrderRequest){
-  const alasan = prompt("Alasan penolakan (opsional):");
-  fetch(DB_API_URL, {
-    method: "POST",
-    body: JSON.stringify({ idToken: DB_ID_TOKEN, action: "rejectOrderRequest", idOrderRequest: idOrderRequest, alasan: alasan || "" })
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(data){
-    if(data.success){ omTutupModalProofing(); dbRenderOrderMasuk(); } else { alert(data.error || "Gagal menolak order."); }
-  });
-}
-
-function omHapus(idOrderRequest){
-  if(!confirm("Hapus order request '" + idOrderRequest + "' secara permanen? Tindakan ini tidak bisa dibatalkan.")) return;
-  fetch(DB_API_URL, {
-    method: "POST",
-    body: JSON.stringify({ idToken: DB_ID_TOKEN, action: "hapusOrderRequest", idOrderRequest: idOrderRequest })
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(data){
-    if(data.success){ omTutupModalProofing(); dbRenderOrderMasuk(); } else { alert(data.error || "Gagal menghapus order."); }
-  });
+  omBukaModalProofing(idx);
 }
 
 /**

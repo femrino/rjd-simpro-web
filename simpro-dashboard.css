@@ -297,40 +297,34 @@ body {
 .db-perhatian-card-grid::-webkit-scrollbar-track{background:transparent}
 .db-perhatian-card-grid::-webkit-scrollbar-thumb{background:var(--line);border-radius:2px}
 .lp-invoice-summary{background:var(--paper-2);border:1px solid var(--line);border-radius:14px;padding:14px 18px;margin-top:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
-.om-group-card{background:var(--white);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:10px}
-.om-group-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;cursor:pointer}
-.om-group-nama{font-weight:700;font-size:14px}
-.om-group-meta{font-size:11.5px;color:var(--ink-soft);margin-top:2px}
-.om-status-badge{font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap}
-.om-status-pending{background:#FCF3E3;color:#8A5D1F}
-.om-status-menunggu-verifikasi{background:#E6ECF5;color:#1F3A66}
-.om-status-disetujui{background:#E3EFE6;color:#2C6B3F}
-.om-status-ditolak{background:#FDECEA;color:#8f2c22}
-.om-detail{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);display:none}
-.om-item-row{background:var(--paper-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;max-width:100%;overflow:hidden}
-.om-item-fields{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:10px}
-.om-item-fields input{width:100%;min-width:0;box-sizing:border-box;font-size:12.5px;padding:7px 8px;border:1px solid var(--line);border-radius:6px;background:var(--white)}
-.om-item-harga-row{display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-bottom:10px;align-items:center}
-.om-item-harga-row input{width:100%;min-width:0;box-sizing:border-box;font-size:12.5px;padding:7px 8px;border:1px solid var(--line);border-radius:6px;background:var(--white)}
-.om-size-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:6px;margin-bottom:8px}
-.om-size-grid label{display:flex;flex-direction:column;align-items:center;font-size:9.5px;color:var(--ink-soft);gap:2px;min-width:0}
-.om-size-grid input{width:100%;min-width:0;box-sizing:border-box;text-align:center;font-size:12px;padding:5px 2px;border:1px solid var(--line);border-radius:5px;background:var(--white)}
-.om-btn{font-size:11.5px;font-weight:700;padding:7px 14px;border-radius:20px;border:1px solid var(--line);background:var(--white);cursor:pointer;font-family:inherit}
-.om-btn-primary{background:var(--ink);color:var(--white);border-color:var(--ink)}
-.om-btn-danger{color:#8f2c22;border-color:#E8A49C}
-.om-btn-success{color:#2C6B3F;border-color:#B7D6BE}
-.om-action-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-.om-verify-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
-.om-verify-fields input{width:100%;min-width:0;box-sizing:border-box;font-size:12.5px;padding:8px 10px;border:1px solid var(--line);border-radius:6px}
+/* ============================================================
+ * NISAN: CSS om-* PINDAH ke simpro-global.css (v339)
+ * ============================================================
+ * Yang pindah, 23 aturan yang masih dipakai: om-group-card (+bayangan
+ * +hover), om-group-head/nama/meta, om-status-badge + empat warna status,
+ * om-btn (+danger +success), om-verify-fields (+input +media 480px),
+ * om-verif-box/judul/catatan, om-proofing-foot, om-status-final.
+ *
+ * Yang DIHAPUS, bukan dipindah -- 13 kelas mati (28 baris aturan):
+ *   om-detail, om-item-row, om-item-fields(+input), om-item-harga-row(+input),
+ *   om-size-grid(+label +input), om-btn-primary, om-action-row, om-item-nomor,
+ *   om-fld(+input/textarea/focus), om-warna-wrap/blok/head(+media)/foto
+ *
+ * Sisa dari masa modal proofing membangun editor item & warnanya SENDIRI;
+ * sejak ia memakai komponen form order bersama (rjdIsiFormDariOrder_ +
+ * kelas of-*), tidak ada lagi yang melahirkannya.
+ *
+ * DIUKUR, bukan dikira -- dua arah, karena markup halaman ini tinggal di
+ * template Blogger di luar repo:
+ *   1. grep om[A-Za-z-] atas 15 berkas simpro-*.js  -> nol
+ *   2. curl https://app.rjdapparel.id/p/dashboard.html -> nol kelas om-,
+ *      sementara id db-ordermasuk-list/summary & db-tab-badge-ordermasuk
+ *      MEMANG ada di sana (jadi yang diukur benar halaman utuh, bukan
+ *      kerangka login yang kebetulan kosong)
+ * ============================================================ */
 @media (max-width:760px){
   .lp-section-tab{padding:10px 12px;font-size:13px}
   .db-perhatian-card-grid{grid-auto-flow:column;grid-auto-columns:minmax(120px,1fr);grid-template-columns:none;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px}
-  .om-item-fields{grid-template-columns:1fr 1fr}
-}
-@media (max-width:480px){
-  .om-item-fields{grid-template-columns:1fr}
-  .om-item-harga-row{grid-template-columns:1fr}
-  .om-verify-fields{grid-template-columns:1fr}
 }
 
 /* ============ REDESIGN DASHBOARD : TAHAP 2 (komponen isi) ============
@@ -567,7 +561,6 @@ body {
 .lp-orderan-card { border-radius: 12px; box-shadow: var(--shadow-sm); transition: transform .18s ease, box-shadow .18s ease; }
 .lp-orderan-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .lp-invoice-summary { border-radius: 14px; }
-.om-group-card { border-radius: 12px; box-shadow: var(--shadow-sm); transition: transform .18s ease, box-shadow .18s ease; }
 /* ============ CSS MODAL & KOMPONEN FORM (SALINAN dari cabang tracking) ============
    WAJIB diduplikasi ke sini: <b:if> mengisolasi CSS antar cabang, jadi kelas yang
    didefinisikan di cabang tracking TIDAK berlaku di dashboard walaupun JS-nya
@@ -1118,29 +1111,6 @@ body {
 .jp-asumsi b { color: var(--navy); }
 @media (max-width: 760px) { .jp-minggu-row { grid-template-columns: repeat(4, 1fr); } }
 
-/* ---- Modal Proofing ---- */
-.om-group-head { cursor: pointer; }
-.om-verif-box { background: #EDF3FA; border: 1px solid #B9D0E8; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
-.om-verif-judul { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13px; color: var(--sky); margin-bottom: 10px; }
-.om-verif-catatan { font-size: 11.5px; color: var(--ink-soft); margin-top: 8px; }
-.om-proofing-foot { flex-wrap: wrap; gap: 8px; }
-.om-status-final { font-size: 12.5px; color: #2C6B3F; font-weight: 600; align-self: center; }
-/* ---- editor proofing: ITEM -> Warna (seragam dengan Form Order) ---- */
-.om-item-nomor { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: .1em; color: var(--terra); margin-bottom: 10px; }
-.om-fld { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); }
-.om-fld input, .om-fld textarea {
-  display: block; width: 100%; box-sizing: border-box; margin-top: 4px;
-  font-family: 'Inter', sans-serif; font-size: 13px; color: var(--navy);
-  padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--white);
-}
-.om-fld textarea { resize: vertical; }
-.om-fld input:focus, .om-fld textarea:focus { outline: none; border-color: var(--terra); }
-.om-warna-wrap { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
-.om-warna-blok { background: var(--paper-2); border: 1px solid var(--line); border-left: 3px solid var(--terra); border-radius: 10px; padding: 12px 14px; }
-.om-warna-head { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-.om-warna-foto { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-@media (max-width: 640px) { .om-warna-head { grid-template-columns: 1fr; } }
-.om-group-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 
 /* ---------- form profil ---------- */
 .lp-profil-label input, .lp-profil-label textarea { border-radius: 10px; transition: border-color .18s ease; }

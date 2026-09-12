@@ -1002,7 +1002,11 @@ const SP_FASE_PETA = [
   // harga ke halaman produksi. Pemisahan barang vs uang sudah ada sejak awal
   // dan tidak perlu dilonggarkan lalu ditambal filter.
   // v160: subtab kedua "Detail Order" -- isi SPK produksi tanpa harus mencetak.
-  ["orderan", "Orderan", [["orderan", "Orderan Berjalan"], ["detailorder", "Detail Order"]]],
+  // v339: "Orderan Masuk" PALING KIRI -- urutannya mengikuti urutan hidup
+  // sebuah order: pengajuan klien -> disetujui jadi PO -> rinciannya. Subtab
+  // ini hanya LAHIR untuk peran ber-area "order" (lihat spTabBoleh_), jadi
+  // untuk staf lantai deret ini tetap dua seperti sebelumnya.
+  ["orderan", "Orderan", [["ordermasuk", "Orderan Masuk"], ["orderan", "Orderan Berjalan"], ["detailorder", "Detail Order"]]],
   ["polamarker", "Pola & Marker", [["pola", "Pola"], ["marker", "Marker"]]],
   ["sampel",     "Sampel",        [["sampel", "Sampel"], ["approval", "Approval"]]],
   // v181: QC pindah ke rumah pemiliknya. Tiga pintu, SATU panel fisik
@@ -1072,8 +1076,16 @@ const SP_FASE_PETA = [
  * dengan gerbang peran, dan pemisahan itu TIDAK ikut dilonggarkan.
  */
 function spTabBoleh_(tab) {
-  void tab;
-  return true;   // v156: semua tab terlihat
+  // v156: semua tab PRODUKSI terlihat; yang dibatasi cuma MENGISI
+  // (spTabEditBoleh_). v339 menambah SATU pengecualian, dan cuma satu --
+  // lihat alasannya di kepala blok SUBTAB "ORDERAN MASUK" di bawah.
+  //
+  // Fungsi ini memang sempat jadi stub (`return true`) sejak v156. Ia tidak
+  // dihapus karena SUDAH tersambung ke dua tempat yang menentukan: pemilihan
+  // subtab awal di spPilihFase_ dan tampil-tidaknya bar subtab di
+  // spRenderSub_. Menghidupkannya kembali = nol konsep baru.
+  if (tab === "ordermasuk") return spBisaOrderMasuk_();
+  return true;
 }
 
 /** Boleh MENGISI tab ini? Ini yang menggantikan peran lama spTabBoleh_. */
@@ -1116,7 +1128,11 @@ function spRenderSub_() {
   if (!w) return;
   const f = SP_FASE_PETA.filter(function (x) { return x[0] === window.SP_FASE; })[0];
   if (!f) { w.innerHTML = ""; return; }
-  w.innerHTML = f[2].map(function (s) {
+  // v339: disaring spTabBoleh_ dulu. Sampai v338 baris ini me-map SEMUA
+  // subtab fase dan spTabBoleh_ cuma dipakai di baris display di bawah --
+  // artinya tombol yang "tidak boleh" tetap dilahirkan. Itu benar selama
+  // tidak ada tab yang harus disembunyikan; sekarang ada satu.
+  w.innerHTML = f[2].filter(function (s) { return spTabBoleh_(s[0]); }).map(function (s) {
     // v156: tab yang tidak boleh diisi tetap DILAHIRKAN, cuma diberi gembok.
     // Penandanya di ikon, bukan warna pudar: tab pudar terbaca "rusak" atau
     // "belum siap", padahal isinya benar-benar bisa dibaca.
@@ -1205,7 +1221,10 @@ const SP_BAGIAN_TAB = {
   // Sama seperti SOP: tidak dimiliki bagian mana pun, jadi tidak pernah jadi
   // fase pendaratan. Isinya memang cuma dibaca.
   orderan: null,
-  detailorder: null
+  detailorder: null,
+  // v339: sama seperti dua di atas -- tidak ada BAGIAN yang memilikinya.
+  // Pembatasnya PERAN, dan itu diurus spTabBoleh_, bukan peta ini.
+  ordermasuk: null
 };
 
 /**
@@ -1216,6 +1235,21 @@ const SP_BAGIAN_TAB = {
 function spTerapkanBagian_(d) {
   const bagian = (d && d.bagian) ? d.bagian : [];
   const lintas = !!(d && d.lintasBagian);
+
+  // v339: gerbang subtab "Orderan Masuk". bisaOrder = punya area "order" di
+  // AREA_PER_AKSI -- cerminan gerbang server, BUKAN daftar peran kedua yang
+  // ditulis ulang di frontend.
+  //
+  // Kalau jawaban peran TIDAK PERNAH DATANG (fetch gagal, atau
+  // simpro-global.js tidak termuat sehingga rjdAmbilPeran_ tidak ada),
+  // nilainya tetap undefined dan subtabnya TIDAK lahir. Itu KEBALIKAN dari
+  // konvensi halaman ini (gagal -> tampilkan semua tab) dan disengaja:
+  // datanya tidak bisa bocor karena server tetap menolak, jadi yang tersisa
+  // cuma pilihan tampilan -- dan staf lantai yang melihat tab bernama
+  // "Orderan Masuk" berisi pesan ditolak akan bertanya-tanya, atau lebih
+  // buruk, mengira sistemnya rusak.
+  window.SP_BISA_ORDER = !!(d && d.bisaOrder);
+  if (window.SP_BISA_ORDER) spPastikanPanelOrderMasuk_();
 
   // Kosong = semua bagian (staf lama yang kolomnya belum diisi).
   // Lintas = peran full/admin.
@@ -1248,6 +1282,27 @@ function spTerapkanBagian_(d) {
   // ketinggalan karena ia ditulis sebagai jalan pintas.
   if (!window.SP_SUDAH_MENDARAT) {
     window.SP_SUDAH_MENDARAT = true;
+    // v339: subtab pertama yang BOLEH baru diketahui sekarang -- sebelum
+    // jawaban peran tiba, "Orderan Masuk" belum lahir. Masalahnya
+    // spPilihFase_ menghormati SP_SUBTAB_TERAKHIR, dan blok DOM-ready sudah
+    // mengisinya lewat spSwitchTab("orderan") -- jadi tanpa baris di bawah,
+    // pendaratan selalu jatuh ke Orderan Berjalan.
+    //
+    // Yang ditimpa HANYA nilai otomatis itu, bukan pilihan orang: pola
+    // penjaga yang sama dengan spIsiKodeKain_ (v143) -- timpa kalau isinya
+    // persis apa yang kita taruh sendiri. Kalau orang sempat mengklik subtab
+    // lain selama menunggu peran, pilihannya dihormati.
+    //
+    // BATASNYA, supaya tercatat: kalau yang diklik justru subtab yang SAMA dengan
+    // pilihan otomatis itu, penjaga ini tidak bisa membedakannya dari klik siapa pun --
+    // nilainya identik. Akibatnya orang itu tetap dipindahkan ke Orderan Masuk. Tidak
+    // ditutup karena mengklik tab yang sudah aktif bukan tindakan yang berarti, dan
+    // menutupnya butuh membedakan klik dari pemanggilan programatik -- satu lapis
+    // mekanisme baru untuk keadaan yang tidak ada gunanya bagi siapa pun.
+    const ingat = (window.SP_SUBTAB_TERAKHIR || {})["orderan"];
+    if (ingat && ingat === window.SP_TAB_AWAL_OTOMATIS) {
+      delete window.SP_SUBTAB_TERAKHIR["orderan"];
+    }
     spPilihFase_("orderan");
   }
 
@@ -1493,6 +1548,20 @@ const SP_PANDUAN = {
       ["Angka per line untuk belajar, bukan menghukum",
        "Line dengan perbaikan tinggi butuh dicek prosesnya, bukan orangnya. " +
        "Angka self-check jangan pernah dipakai memotong upah."]
+    ]
+  },
+  ordermasuk: {
+    judul: "Cara memproses Orderan Masuk",
+    isi: [
+      ["Ini pengajuan, BUKAN PO",
+       "Order di layar ini belum punya nomor PO dan belum boleh dikerjakan. " +
+       "Setujui dulu -- PO-nya dibuat otomatis, dan barulah ia muncul di Orderan Berjalan."],
+      ["Klien baru: verifikasi dulu, setujui kemudian",
+       "Pengajuan dari klien baru perlu Client ID sebelum bisa jadi PO. Lengkapi nama resmi, " +
+       "kontak, telepon, dan email di kotak biru -- barulah tombol Setujui berarti."],
+      ["Harga diisi di sini, dan cuma di sini",
+       "Kolom harga per warna tidak ada di tab lain mana pun. Angka yang Anda setujui jadi " +
+       "dasar invoice, jadi periksa SEBELUM menekan Setujui -- bukan sesudah PO terbit."]
     ]
   },
   orderan: {
@@ -1840,8 +1909,11 @@ function spSwitchTab(tab) {
   // satu layar cuma bikin ragu mana yang berlaku.
   // detailorder TIDAK ikut disembunyikan: ia justru butuh PO terpilih, dan
   // kartunya adalah satu-satunya cara mengganti PO tanpa balik ke daftar.
+  // ordermasuk (v339) ikut menyembunyikan kartu Pilih PO, dan alasannya
+  // paling telanjang di antara semuanya: isi tab itu justru order yang BELUM
+  // punya PO. Kartu pemilih PO di atasnya cuma mengundang salah paham.
   if (kartuPO) kartuPO.classList.toggle("hidden",
-    tab === "riw" || tab === "sop" || tab === "orderan");
+    tab === "riw" || tab === "sop" || tab === "orderan" || tab === "ordermasuk");
 
   if (tab === "konfpot") { spMuatKonfMode_("potongan"); return; }
   if (tab === "konfset") { spMuatKonfMode_("setoran"); return; }
@@ -1860,6 +1932,7 @@ function spSwitchTab(tab) {
   if (tab === "qcring") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("ringkasan"); qcMuatRiwayatPO_(); return; }   // v298: sesi QC PO aktif
   if (tab === "approval") { spMuatApproval_(); return; }
   if (tab === "sop") { spMuatSOP_(); return; }
+  if (tab === "ordermasuk") { spMuatOrderMasuk_(); return; }
   if (tab === "orderan") { spRenderOrderan_(); return; }
   if (tab === "detailorder") { spMuatDetailOrder_(); return; }
   // v178: daftar tercatat dimuat SEKALIGUS saat tabnya dibuka, tidak menunggu
@@ -2561,6 +2634,109 @@ function spOrderanPilih_(idPO) {
    Detail Order, jadi fungsi ini tidak punya pemanggil lagi. Dibuang, bukan
    ditinggalkan: fungsi tanpa pemanggil membuat pembaca berikutnya mencari-cari
    dari mana ia dipakai. */
+
+/* ============================================================
+   SUBTAB "ORDERAN MASUK" (v339) -- proofing pengajuan order klien
+   ============================================================
+   Pintu KEDUA ke komponen yang sama dengan section Order Masuk di halaman
+   dashboard. Kodenya tidak di sini: ia tinggal di simpro-global.js sejak
+   v339 (lihat nisan di simpro-dashboard.js). Yang ada di berkas ini cuma
+   tiga hal -- cangkang panel, pemetaan id, dan gerbang tampilannya.
+
+   GERBANG. Satu-satunya syarat: `bisaOrder` dari getPeranSaya, yaitu
+   PERSIS gerbang server untuk keenam rutenya (AREA_PER_AKSI menaruh
+   getOrderRequests, rewrite, verifikasi, reject, hapus di area "order" dan
+   approve di "keuangan"+bagian admin; yang punya area "order" cuma peran
+   full & admin). SENGAJA bukan `peran === "full" || peran === "admin"`:
+   dua bentuk kunci untuk satu barang pasti melenceng suatu hari, dan kalau
+   nanti ada peran baru ber-area order, subtab ini ikut sendiri.
+
+   Menyembunyikan subtab BUKAN PENGAMAN -- siapa pun yang tahu nama rutenya
+   tetap bisa memanggilnya, dan yang menolak tetap pastikanBoleh_ di server.
+   Yang dicegah di sini cuma satu keadaan: staf lantai membuka tab bernama
+   "Orderan Masuk" lalu mendapat pesan ditolak.
+
+   MENYIMPANG dari v156 ("semua tab terlihat, yang dibatasi cuma mengisi"),
+   dan itu disengaja. v156 bicara soal data PRODUKSI, di mana keterbukaan
+   justru gunanya: orang yang pekerjaannya dicatat adalah pemeriksa terbaik
+   atas catatan itu. Isi tab ini bukan data produksi -- di dalamnya kontak
+   klien, harga per warna, dan keputusan komersial. Karena itu ia
+   satu-satunya subtab halaman ini yang disaring per PERAN, bukan per BAGIAN.
+
+   BELUM ADA, dan itu keputusan: lencana angka di tab fase "Orderan".
+   Supaya menyala tanpa membuka subtabnya, halaman ini harus menembak
+   getOrderRequests tiap kali dimuat untuk semua admin -- dan seberapa
+   sering angkanya nol belum diukur. Penanda yang menyala hampir selalu
+   bukan penanda. Kalau nanti ditambah, tempatnya spRenderFase_.
+   ============================================================ */
+
+/** Gerbang subtab. undefined (peran belum/tidak pernah datang) -> false. */
+function spBisaOrderMasuk_() {
+  return window.SP_BISA_ORDER === true;
+}
+
+/**
+ * Cangkang panel, DIBUAT DARI SINI.
+ *
+ * Markup halaman produksi tinggal di template Blogger -- di luar repo, dan
+ * menempelnya langkah manual yang gagal tanpa suara. Panel ini dibuat JS
+ * supaya subtabnya cukup satu rilis berkas: pola yang sama dengan
+ * spMuatSemuaMarker_ dan beberapa wadah lain di halaman ini.
+ *
+ * Ditaruh sebagai TETANGGA sp-panel-orderan, bukan di dalamnya: wildcard
+ * [id^='sp-panel-'] di spSwitchTab-lah yang membuka-tutup panel, dan ia
+ * menemukan panel yang lahir kapan pun selama id-nya berpola itu dan
+ * induknya sama.
+ */
+function spPastikanPanelOrderMasuk_() {
+  if (document.getElementById("sp-panel-ordermasuk")) return true;
+  const tetangga = document.getElementById("sp-panel-orderan");
+  if (!tetangga || !tetangga.parentNode) return false;
+  const p = document.createElement("div");
+  p.id = "sp-panel-ordermasuk";
+  p.className = "hidden";
+  p.innerHTML =
+    '<div class="sp-card">' +
+      '<h3 class="sp-judul">Orderan Masuk</h3>' +
+      '<p class="sp-info">Pengajuan order dari klien yang belum jadi PO. ' +
+        'Klik kartunya untuk proofing &mdash; layar proofing terbuka di halaman ' +
+        '<b>Dashboard</b>, dan langsung pada order yang Anda klik.</p>' +
+      '<div id="sp-om-summary" class="om-stat-grid"></div>' +
+      '<div id="sp-om-list"></div>' +
+    '</div>';
+  tetangga.parentNode.insertBefore(p, tetangga.nextSibling);
+  return true;
+}
+
+function spMuatOrderMasuk_() {
+  if (!spBisaOrderMasuk_()) return;
+  if (!spPastikanPanelOrderMasuk_()) return;
+  // simpro-global.js gagal dimuat -> komponennya tidak ada. Katakan apa
+  // adanya; panel kosong tanpa sebab bikin orang mengira datanya habis.
+  if (typeof omRender_ !== "function") {
+    const el = document.getElementById("sp-om-list");
+    if (el) el.innerHTML = '<p class="sp-info">Komponen Orderan Masuk gagal dimuat. ' +
+      'Muat ulang halaman (Ctrl+F5); kalau tetap begini, laporkan.</p>';
+    return;
+  }
+  omRender_({
+    api: SP_API_URL,
+    token: SP_ID_TOKEN,
+    idList: "sp-om-list",
+    idSummary: "sp-om-summary",
+    // idBadge sengaja TIDAK disebut -- halaman ini belum punya lencana.
+    //
+    // bukaDi: kartu MENAUTKAN ke dashboard, tidak membuka modal di tempat.
+    // Bukan pilihan rasa: modal proofing memakai komponen form order yang
+    // bergaya dari simpro-dashboard.css, dan halaman ini tidak memuatnya --
+    // 74 dari 77 kelas di dalam modal tampil beda (terukur 12 Sep 2026).
+    // Memuat CSS halaman lain ke sini juga ditolak pengukuran: tracking.css
+    // menggeser 208 dari 258 elemen halaman ini, dashboard.css & order.css 65.
+    // Konsolidasi ~463 deklarasi komponen form ke simpro-global.css adalah
+    // sesi tersendiri; sesudah itu HAPUS baris ini dan modalnya terbuka di sini.
+    bukaDi: "/p/dashboard.html"
+  });
+}
 
 function spRenderOrderan_() {
   const panel = document.getElementById("sp-panel-orderan");
@@ -10956,6 +11132,10 @@ function qcRenderRingkasan_(d) {
     // server. Kalau daftarnya belum tiba, panel menampilkan keadaan itu apa
     // adanya dan dirender ulang begitu datanya masuk (lihat spMuatDaftarPO).
     spSwitchTab(window.SP_TAB);
+    // v339: tandai bahwa subtab ini pilihan OTOMATIS, bukan klik orang.
+    // Pendaratan di spTerapkanBagian_ memakainya untuk memutuskan boleh atau
+    // tidaknya menimpanya begitu jawaban peran datang.
+    window.SP_TAB_AWAL_OTOMATIS = window.SP_TAB;
   };
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", mulai);
