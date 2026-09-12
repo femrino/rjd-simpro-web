@@ -6837,7 +6837,7 @@ function spRenderFormGelaran_() {
             '" data-allow="' + (m.allowancePerLapis !== undefined ? m.allowancePerLapis : 0.02) +
             '" data-kain="' + spEsc_(m.jenisKain || "") +
             '" data-susun="' + spEsc_(JSON.stringify(m.susunanSize)) + '" value="' + m.idMarker + '">' +
-            spEsc_(m.kodeMarker || m.idMarker) + " &#183; " + m.panjangMarker + "m &#183; " +
+            spEsc_(m.kodeMarker || m.idMarker) + " &#183; " + spNumPendek_(m.panjangMarker) + "m &#183; " +
             m.pcsPerLapis + " pcs/lapis" +
             (m.jenisKain ? (" &#183; " + spEsc_(m.jenisKain)) : "") +
             (m.komponen ? (" &#183; " + spEsc_(m.komponen)) : "") +
@@ -7177,6 +7177,15 @@ function spGbPetaMarker_() {
  * kain dikumpulkan di grup sendiri yang menyebut dirinya -- 21% dari markernya ada di situ, dan
  * menyembunyikannya berarti orang baru tahu saat penyimpanannya ditolak.
  */
+/* Panjang marker DITAMPILKAN 2 desimal. Sumbernya bisa 2.569464, dan enam desimal itu noise yang
+   memakan ~33px di label select yang ruangnya sudah diperebutkan. Hanya untuk TAMPILAN --
+   perhitungan kain tetap memakai nilai aslinya (lihat spGbHitung_). */
+function spNumPendek_(n) {
+  const a = Number(n);
+  if (!isFinite(a)) return (n === undefined || n === null) ? "" : String(n);
+  return String(Math.round(a * 100) / 100);
+}
+
 function spGbOpsiMarkerHtml_(marker) {
   const grup = {};
   marker.forEach(function (m) {
@@ -7192,7 +7201,7 @@ function spGbOpsiMarkerHtml_(marker) {
     }).map(function (k) {
       return '<optgroup label="' + spEsc_(k) + '">' + grup[k].map(function (m) {
         return '<option value="' + spEsc_(m.idMarker) + '">' +
-          spEsc_(m.kodeMarker || m.idMarker) + ' &#183; ' + m.panjangMarker + ' m &#183; ' +
+          spEsc_(m.kodeMarker || m.idMarker) + ' &#183; ' + spNumPendek_(m.panjangMarker) + ' m &#183; ' +
           m.pcsPerLapis + ' pcs/lapis' + (m.komponen ? ' &#183; ' + spEsc_(m.komponen) : '') +
           '</option>';
       }).join("") + '</optgroup>';
@@ -7212,12 +7221,12 @@ function spGbBarisHtml_(marker, warna, kain) {
     '</td>' +
     '<td class="sp-gb-kain">' +
       '<select class="sp-gb-kain-pilih" onchange="spGbGantiKain(this)">' +
-        '<option value="">— pilih kain —</option>' +
+        '<option value="">— kain —</option>' +
         kain.map(function (k) { return '<option value="' + spEsc_(k) + '">' + spEsc_(k) + '</option>'; }).join("") +
       '</select>' +
     '</td>' +
     '<td><select class="sp-gb-warna" onchange="spGbGantiWarna(this)">' +
-      '<option value="">— pilih warna —</option>' +
+      '<option value="">— warna —</option>' +
       warna.map(function (w) { return '<option value="' + spEsc_(w) + '">' + spEsc_(w) + '</option>'; }).join("") +
       '</select></td>' +
     '<td class="sp-gb-kode-sel">' +
@@ -7404,7 +7413,7 @@ function spGbGantiMarker(sel) {
   const susun = m.susunanSize || {};
   const isiSusun = Object.keys(susun).map(function (sz) { return sz + ":" + susun[sz]; }).join(" ");
   baca.textContent = m.pcsPerLapis + " pcs/lapis" + (isiSusun ? " · " + isiSusun : "") +
-    " · " + m.panjangMarker + " m/lapis";
+    " · " + spNumPendek_(m.panjangMarker) + " m/lapis";
 
   // Allowance MILIK MARKER dan diisi ulang tiap ganti marker -- di layar Femri ada marker
   // beralowance 0 (motif panel, kain sudah terukur) bersebelahan dengan 0,02 (kain polos).

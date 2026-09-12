@@ -2049,8 +2049,18 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
   vertical-align: top; }
 .sp-gb-tabel th { text-align: left; font-weight: 600; white-space: nowrap; }
 .sp-gb-tabel select, .sp-gb-tabel input { margin: 0; width: 100%; }
-.sp-gb-mk { min-width: 210px; }
-.sp-gb-kain, .sp-gb-tabel td:nth-child(3) { min-width: 120px; }
+.sp-gb-mk { min-width: 240px; }
+.sp-gb-kain, .sp-gb-tabel td:nth-child(3) { min-width: 130px; }
+/* Padding kompak KHUSUS di dalam tabel bentangan. Aturan luas di baris 687 dirancang untuk form
+   satu kolom; di sel tabel 44px dari 198px habis jadi padding dan kode marker terpotong -- diukur
+   12 Sep 2026: ruang teks 152px, kode "Motif (Panel) - (S M L XL)" butuh 170px.
+   SPESIFISITASNYA SENGAJA MENYAMAI aturan luas itu. `[id^="sp-panel-"] input:not(...)` bernilai
+   (0,4,1) dan mengalahkan satu kelas biasa, jadi `.sp-gb-tabel input` saja akan mati DIAM-DIAM
+   sementara selectnya berubah -- setengah perbaikan yang justru membuat tinggi baris tidak
+   seragam. Pola yang sama dipakai .sp-roll-sisa di atas: naikkan spesifisitas, jangan !important. */
+.sp-gb-tabel input:not([type="radio"]):not([type="checkbox"]):not([type="file"]),
+.sp-gb-tabel select { padding: 10px 10px; }
+.sp-gb-tabel select { padding-right: 22px; }
 .sp-gb-kode-sel { min-width: 130px; }
 .sp-gb-tabel .sp-gb-allow, .sp-gb-tabel .sp-gb-lapis { width: 72px; text-align: center; }
 /* Baca-balik marker: pcs/lapis, susunan size, meter per lapis. Pagar termurah terhadap kode
@@ -2101,6 +2111,6 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 .sp-gb-kisi .sp-gb-mk small { display: block; color: var(--redup, #6B6357); font-size: 10px; }
 .sp-gb-kisi-sel .sp-gb-sudah { display: inline; margin-left: 3px; }
 @media (max-width: 720px) {
-  .sp-gb-mk { min-width: 170px; }
+  .sp-gb-mk { min-width: 235px; }
   .sp-gb-tabel .sp-gb-allow, .sp-gb-tabel .sp-gb-lapis { width: 58px; }
 }
