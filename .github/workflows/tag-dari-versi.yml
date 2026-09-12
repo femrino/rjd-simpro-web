@@ -1,0 +1,23 @@
+name: Tag dari VERSI.json
+
+# Dipicu hanya kalau VERSI.json yang berubah di main -- itu satu-satunya berkas
+# yang menentukan versi mana yang dimuat semua halaman, jadi ia juga penanda
+# yang tepat untuk "rilis baru butuh tag".
+on:
+  push:
+    branches: [main]
+    paths: ['VERSI.json']
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # hanya untuk membuat tag; tidak ada rahasia yang disimpan
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Logikanya ada di berkas terpisah, BUKAN inline di sini, supaya bisa
+      # diuji di luar Actions. Penjaganya dibuktikan 12 Sep 2026 pada repo
+      # tiruan: bentuk salah ditolak, tag yang sudah ada tidak disentuh.
+      - run: bash .github/buat-tag-dari-versi.sh "$GITHUB_SHA"
