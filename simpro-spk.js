@@ -7381,6 +7381,13 @@ function spGbGantiMarker(sel) {
     pilih.value = "";
     baca.textContent = ""; allow.value = "";
     tr.classList.remove("sp-gb-tanpa-kain");
+    // DAFTAR dulu, baru isian awal -- urutan yang sama dengan cabang marker terisi di bawah.
+    // v336 memanggil spGbKodeAwal_ saja di sini, jadi kotaknya benar-benar dikosongkan tapi
+    // datalist dan placeholder-nya tertinggal: label "rencana order untuk Brokat Butter" dan
+    // tulisan "dari rencana - bisa diganti" masih terbaca di baris yang sudah tidak punya marker.
+    // Kosmetik, tapi ia berbohong tentang ADA-nya usulan, dan penanda yang berbohong saat kosong
+    // adalah penanda yang tidak bisa dipercaya saat terisi.
+    spGbDaftarKode_(tr);
     spGbKodeAwal_(tr);
     spGbUbah_(); return;
   }
@@ -7511,16 +7518,60 @@ function spGbKainBaris_(tr) {
  * yang sama boleh muncul di beberapa baris, dan selektor global akan mengambil allowance baris
  * pertama untuk semua baris bermarker sama.
  */
+/**
+ * Sidik jari isi sebuah baris -- dipakai untuk tahu apakah barisnya SUDAH BERUBAH sejak gagal.
+ *
+ * Sengaja dibaca dari DOM, bukan dari objek hasil pengumpulan: sebab gagal harus bisa dibersihkan
+ * juga pada baris yang sekarang TIDAK SAH (mis. lapisnya dikosongkan), dan baris begitu tidak
+ * pernah sampai ke `out.baris`.
+ */
+function spGbSidik_(tr) {
+  const v = function (sel) { const e = tr.querySelector(sel); return e ? String(e.value || "") : ""; };
+  return [v(".sp-gb-marker"), v(".sp-gb-warna"), v(".sp-gb-kain-pilih"),
+    v(".sp-gb-lapis"), v(".sp-gb-allow"), v(".sp-gb-kode")].join("|");
+}
+
 function spGbKumpulkan_() {
   const peta = spGbPetaMarker_();
   const out = { baris: [], galat: [] };
   const dipakai = {};
   Array.prototype.forEach.call(document.querySelectorAll("#sp-gb-tabel tbody tr"), function (tr, i) {
+    // BARIS YANG SUDAH TERSIMPAN TIDAK IKUT TERKUMPUL LAGI. Tanpa baris ini, menekan tombol yang
+    // berbunyi "Simpan ulang yang gagal" akan mengirim ULANG semua baris yang tadi berhasil --
+    // dan SD Gelaran tidak punya anti-kembar, jadi hasilnya baris gelaran KEMBAR: output pcs naik
+    // DAN pemakaian kain naik, dua-duanya salah, dan keduanya tidak saling membatalkan.
+    //
+    // v335 mengunci baris sukses lewat `el.disabled = true` lalu menulis di layar "Yang sudah
+    // tersimpan dikunci, jadi tekan Simpan lagi tidak mengirimnya dua kali". Janji itu TIDAK
+    // ditepati: `disabled` menghentikan pengeditan, bukan pengumpulan -- querySelectorAll tetap
+    // menemukan elemen disabled dan `.value`-nya tetap terbaca. Kelas `sp-gb-ok` sendiri cuma
+    // pernah DITULIS dan diberi warna, tidak pernah sekali pun dibaca sebagai penjaga.
+    //
+    // Pola yang benar sudah ada di berkas yang sama: `spMkxSimpan` melepas centang baris yang
+    // sukses DAN `spMkxKumpulkan_` melewati baris tak tercentang. Daftar bentangan menyalin
+    // kalimat janjinya tanpa menyalin mekanismenya.
+    if (tr.classList.contains("sp-gb-ok")) return;
+
     const idMk = tr.querySelector(".sp-gb-marker").value;
     const warna = tr.querySelector(".sp-gb-warna").value;
     const lapisTeks = String(tr.querySelector(".sp-gb-lapis").value || "").trim();
     const kosongSemua = !idMk && !warna && !lapisTeks;
     tr.classList.remove("sp-gb-salah");
+
+    // Sebab gagal dari server berlaku untuk ISI yang waktu itu dikirim. Begitu barisnya diubah,
+    // sebab itu kedaluwarsa dan harus hilang -- kalau tidak, baris yang sudah dibetulkan tetap
+    // merah dengan alasan yang tidak lagi benar, dan orang berhenti mempercayai warnanya.
+    // Dibandingkan per SIDIK ISI, bukan dibersihkan borongan: pengumpul ini berjalan pada SETIAP
+    // ketikan di baris MANA PUN, jadi membersihkan tanpa syarat akan menghapus sebab gagal baris
+    // lain yang belum disentuh siapa pun.
+    const sidikGagal = tr.getAttribute("data-gagal-sidik");
+    if (sidikGagal && sidikGagal !== spGbSidik_(tr)) {
+      tr.classList.remove("sp-gb-gagal");
+      const g = tr.querySelector(".sp-gb-galat");
+      if (g) g.textContent = "";
+      tr.removeAttribute("data-gagal-sidik");
+    }
+
     if (kosongSemua) return;   // baris kosong diabaikan, bukan dikeluhkan
 
     const m = peta[idMk];
@@ -7746,13 +7797,16 @@ async function spGbSimpan(btn) {
       // Sebab gagal sebagai TEKS di barisnya, bukan title: tooltip tidak ada di layar sentuh, dan
       // sebab yang tidak terbaca sama saja dengan tidak ada sebab.
       b.tr.querySelector(".sp-gb-galat").textContent = String(e.message || e);
+      // Sidik isi SAAT gagal: pengumpul memakainya untuk tahu kapan sebab ini kedaluwarsa.
+      b.tr.setAttribute("data-gagal-sidik", spGbSidik_(b.tr));
     }
   }
   if (btn) { btn.disabled = false; btn.textContent = gagal ? "Simpan ulang yang gagal" : "Simpan Gelaran"; }
   if (st) {
     st.innerHTML = gagal
       ? '<b>' + ok + ' tersimpan, ' + gagal + ' gagal.</b> Baris yang gagal masih berisi isiannya ' +
-        'beserta sebabnya. Yang sudah tersimpan dikunci, jadi tekan Simpan lagi tidak mengirimnya dua kali.'
+        'beserta sebabnya. Yang sudah tersimpan dikeluarkan dari daftar kirim, jadi tekan Simpan ' +
+        'lagi hanya mengirim yang gagal.'
       : '<b>' + ok + ' gelaran tersimpan.</b>';
   }
   if (!gagal) {
