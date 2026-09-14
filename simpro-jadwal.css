@@ -804,6 +804,9 @@ table.jm-beban td.jm-beban-lebih{ color: #8A2A22; font-weight: 700; background: 
 .jm-harian-meta{ font-size: 12px; color: var(--ink-soft, #5F6B7A); flex: 1 1 240px; min-width: 0; }
 .jm-harian-lencana{ display: inline-flex; gap: 4px; flex: 0 0 auto; }
 .jm-harian-ubah{ margin-left: auto; }
+/* v341: bar antrean di mode harian -- menggantikan tombol Ubah yang dulu
+   ditawarkan padahal jmEdit pasti menolaknya (id "ANTRE:..." tidak ada di sheet). */
+.jm-harian-antre{ font-size: 11px; font-style: italic; color: #3B5A80; white-space: nowrap; }
 .jm-harian-baris.jm-k-batal .jm-harian-nama{ text-decoration: line-through; color: var(--ink-soft, #5F6B7A); }
 .jm-harian-baris.jm-k-selesai .jm-harian-nama{ color: var(--ink-soft, #5F6B7A); }
 .jm-lencana-real{ background: #E3F0E6; color: #2F6B3A; }
@@ -993,6 +996,18 @@ table.jm-beban td.jm-beban-lebih{ color: #8A2A22; font-weight: 700; background: 
 }
 .jm-kal-chip.jm-kal-batal { text-decoration: line-through; opacity: .6; }
 .jm-kal-titik { width: 6px; height: 6px; border-radius: 50%; background: var(--terra, #BD4335); display: inline-block; flex: 0 0 auto; }
+/* Bar yang masih di kotak keluar (antrean v226). Penandanya CINCIN KOSONG, bukan
+   garis miring: garis miring sudah dipakai "rencana" di chip ini, dan 45 derajat
+   (bahasa .jm-bar-menunggu di matriks) vs 90 derajat tidak terbaca pada kotak
+   setinggi 17 px. Cincin kosong = "belum padat, belum sampai", dan ia BENTUK --
+   bukan warna saja. Opacity .85, bukan .55 seperti bar matriks: bar tidak
+   bertulisan, chip bertulisan. */
+.jm-kal-antre {
+  width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex: 0 0 auto;
+  border: 1.5px solid currentColor; background: transparent; opacity: .85;
+}
+.jm-kal-chip.jm-kal-menunggu { opacity: .85; }
+.jm-kal-chip.jm-kal-menunggu .jm-kal-n { font-style: italic; }
 
 /* ---------- penanda deadline ---------- */
 .jm-kal-tenggat {
@@ -1033,6 +1048,13 @@ table.jm-beban td.jm-beban-lebih{ color: #8A2A22; font-weight: 700; background: 
   background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.85) 0 3px, transparent 3px 7px);
 }
 .jm-kal-kartu.jm-kal-batal .jm-kal-kartu-nama { text-decoration: line-through; opacity: .65; }
+/* Kartu punya ruang untuk kata-kata, jadi keadaan antreannya DITULIS; strip
+   kirinya dibuat berselang supaya terbaca juga saat teksnya terpotong. */
+.jm-kal-kartu.jm-kal-menunggu { background: #FBFAF7; }
+.jm-kal-kartu.jm-kal-menunggu .jm-kal-strip {
+  background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.65) 0 4px, transparent 4px 8px);
+}
+.jm-kal-antre-teks { display: inline-flex; align-items: center; gap: 4px; color: #3B5A80; font-style: italic; }
 .jm-kal-kartu-tahap {
   font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; letter-spacing: .06em;
   text-transform: uppercase; font-weight: 600; color: var(--navy-soft, #2A3754);

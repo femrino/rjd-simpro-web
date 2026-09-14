@@ -2242,7 +2242,11 @@ function jmRenderHarian_(wadah) {
           (x.keterangan ? ' \u00b7 <i>' + jmEsc_(x.keterangan) + '</i>' : '') + '</span>' +
         '<span class="jm-harian-lencana">' + jmLencanaLaporan_(r.b, hariIni) +
           (lap !== null ? '<span class="jm-lencana jm-lencana-real jm-lencana-kecil" title="Laporan harian tanggal ini (jumlah output semua proses, bukan baju jadi)">laporan' + (lap ? ' ' + Number(lap).toLocaleString("id-ID") + ' output' : '') + '</span>' : '') + '</span>' +
-        (JM_BOLEH_TULIS && x.id ? '<button type="button" class="jm-btn jm-btn-kecil jm-harian-ubah" onclick="jmEdit(' + JSON.stringify(x.id).replace(/"/g, "&quot;") + ')">Ubah</button>' : '') +
+        // v341: bar antrean tidak menawarkan Ubah -- sama dengan sel matriks
+        // (nisan v287) dan kartu kalender. Dulu ditawarkan dan jmEdit-nya
+        // membuka form untuk id "ANTRE:..." yang tidak ada di sheet.
+        (x.menunggu ? '<span class="jm-harian-antre">menunggu terkirim</span>' : '') +
+        (JM_BOLEH_TULIS && x.id && !x.menunggu ? '<button type="button" class="jm-btn jm-btn-kecil jm-harian-ubah" onclick="jmEdit(' + JSON.stringify(x.id).replace(/"/g, "&quot;") + ')">Ubah</button>' : '') +
         '</div>';
     });
     html += '</div>';
@@ -2376,7 +2380,7 @@ function jmKalRingkas_(isi) {
     const pakaiLine = e.b.tahap === "Sewing" && e.b.sub;
     const kunci = pakaiLine ? "L:" + e.b.sub : "T:" + e.b.tahap;
     if (!peta[kunci]) {
-      peta[kunci] = { tahap: e.b.tahap, n: 0, rencana: true, batal: true, dev: false,
+      peta[kunci] = { tahap: e.b.tahap, n: 0, rencana: true, batal: true, dev: false, antre: false, nAntre: 0,
         label: pakaiLine ? e.b.sub : jmKalPendek_(e.b.tahap) };
       urut.push(kunci);
     }
@@ -2386,6 +2390,12 @@ function jmKalRingkas_(isi) {
     if (k !== "rencana") c.rencana = false;
     if (k !== "batal") c.batal = false;
     if (e.dev) c.dev = true;
+    // SENGAJA "ada satu saja", bukan "semuanya" seperti rencana/batal di atas:
+    // rencana & batal adalah KEADAAN barangnya (boleh diringkas jadi polos kalau
+    // campuran), sedangkan antrean adalah PERINGATAN -- "ada isi sel ini yang
+    // belum sampai ke server". Peringatan yang hilang karena bertetangga dengan
+    // bar yang sudah tersimpan adalah peringatan yang salah.
+    if (e.x.menunggu) { c.antre = true; c.nAntre++; }
   });
   const urutTahap = JM_DATA.tahap || Object.keys(JM_KELAS_TAHAP);
   return urut.map(function (k) { return peta[k]; }).sort(function (a, b) {
@@ -2395,9 +2405,16 @@ function jmKalRingkas_(isi) {
   });
 }
 function jmKalChip_(c) {
+  // Penanda antrean CINCIN KOSONG, bukan garis miring: garis miring sudah berarti
+  // "rencana" di chip ini (dan 45 derajat vs 90 derajat tidak terbaca pada kotak
+  // 17 px). Cincin kosong = "belum padat, belum sampai" -- bentuk, bukan cuma
+  // warna, dan ia menempati slot yang sama dengan titik deviasi.
   return '<span class="jm-kal-chip ' + jmKalKelas_(c.tahap) +
     (c.rencana ? " jm-kal-rencana" : "") + (c.batal ? " jm-kal-batal" : "") +
-    '" title="' + jmEsc_(c.label + " \u00b7 " + c.n + " pekerjaan" + (c.dev ? " \u00b7 ada deviasi laporan" : "")) + '">' +
+    (c.antre ? " jm-kal-menunggu" : "") +
+    '" title="' + jmEsc_(c.label + " \u00b7 " + c.n + " pekerjaan" + (c.dev ? " \u00b7 ada deviasi laporan" : "") +
+      (c.antre ? " \u00b7 " + c.nAntre + " menunggu terkirim, belum bisa diubah" : "")) + '">' +
+    (c.antre ? '<i class="jm-kal-antre" aria-hidden="true"></i>' : "") +
     (c.dev ? '<i class="jm-kal-titik" aria-hidden="true"></i>' : "") +
     '<b>' + jmEsc_(c.label) + '</b><span class="jm-kal-n">' + c.n + '</span></span>';
 }
@@ -2526,7 +2543,10 @@ function jmKalKartu_(e, iso) {
   // background PENUH (satu definisi warna, lihat catatan 4 di kepala blok) dan
   // teks 12 px di atas #5B4A9E tidak terbaca. Strip menjaga keduanya.
   return '<div class="jm-kal-kartu' + (k === "rencana" ? " jm-kal-rencana" : "") +
-      (k === "batal" ? " jm-kal-batal" : "") + '" data-id="' + jmEsc_(x.id || "") + '">' +
+      (k === "batal" ? " jm-kal-batal" : "") + (x.menunggu ? " jm-kal-menunggu" : "") +
+      // Bar antrean TIDAK diberi data-id, sama dengan sel matriks (nisan v287):
+      // pemilih "[data-id=...]" mana pun tidak boleh menemukannya.
+      (x.menunggu ? '" data-antre="' + jmEsc_(x.id || "") + '">' : '" data-id="' + jmEsc_(x.id || "") + '">') +
     '<i class="jm-kal-strip ' + jmKalKelas_(b.tahap) + '" aria-hidden="true"></i>' +
     '<div class="jm-kal-kartu-tahap">' + jmEsc_(jmKalPendek_(b.tahap)) + (b.sub ? " \u00b7 " + jmEsc_(b.sub) : "") + '</div>' +
     '<button type="button" class="jm-kal-kartu-nama" onclick="jmBukaMenuItem_(' + kunciJs + ', event)"' +
@@ -2536,7 +2556,12 @@ function jmKalKartu_(e, iso) {
       (x.qty ? '<span>' + Number(x.qty).toLocaleString("id-ID") + ' pcs</span>' : '') +
       '<span>' + (total > 1 ? "hari ke-" + Math.max(1, Math.min(ke, total)) + "/" + total : "1 hari") + '</span>' +
       (k !== "aktif" ? '<span>' + jmEsc_(JM_LABEL_KEADAAN[k] || k) + '</span>' : '') +
-      (JM_BOLEH_TULIS && x.id ? '<button type="button" class="jm-kal-ubah" onclick="jmEdit(' +
+      // Kartu punya ruang untuk KATA-KATA, tidak seperti chip -- jadi keadaannya
+      // ditulis, bukan cuma dipola. Tombol Ubah sengaja TIDAK ditawarkan:
+      // jmEdit menolaknya (penjaga v341), dan tombol yang pasti ditolak lebih
+      // buruk daripada tombol yang tidak ada.
+      (x.menunggu ? '<span class="jm-kal-antre-teks"><i class="jm-kal-antre" aria-hidden="true"></i>menunggu terkirim</span>' : '') +
+      (JM_BOLEH_TULIS && x.id && !x.menunggu ? '<button type="button" class="jm-kal-ubah" onclick="jmEdit(' +
         JSON.stringify(x.id).replace(/"/g, "&quot;") + ')">Ubah</button>' : '') +
       '</div></div>';
 }
@@ -2916,6 +2941,19 @@ function jmEdit(id) {
   if (!JM_BOLEH_TULIS) return;
   const b = jmBarDariId_(id);
   if (!b) { jmFormPesan_("Baris ini tidak punya ID -- muat ulang halaman, ID akan diberikan otomatis.", true); return; }
+  /* v341 -- PENJAGA ANTREAN PINDAH KE SINI.
+     Nisan v287 (FE-9) di jmSelBaris_ memasang penjaganya di MARKUP matriks: bar
+     yang masih di antrean tidak diberi data-id, jadi kliknya tidak membuka form
+     yang berujung "baris tidak ditemukan" untuk bar yang barusan dibuat sendiri.
+     Tapi penjaga yang hidup di markup satu tampilan harus DIINGAT ULANG oleh tiap
+     tampilan baru -- dan mode harian (v278, lebih tua dari v287) tidak
+     mengingatnya: tombol Ubah-nya memanggil jmEdit apa adanya. Di sini penjaganya
+     jadi satu, dan tampilan mana pun yang ditambah nanti ikut terlindungi. */
+  if (b.menunggu) {
+    jmFormPesan_("Perubahan ini masih menunggu terkirim, jadi belum bisa diubah. " +
+      "Tunggu ia terkirim (otomatis saat sambungan kembali), lalu ubah dari sana.", true);
+    return;
+  }
   JM_EDIT_ID = id;
   document.getElementById("jm-in-item").value = b.item;
   // v294 (7 Sep 2026): label tombol pemilih item (v267) HARUS disegarkan di sini. Dulu hanya
