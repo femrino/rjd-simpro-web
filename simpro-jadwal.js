@@ -65,7 +65,10 @@ const JM_LIHAT = {
                        // beda dengan line yang tingkat-item -- lihat catatan di
                        // jmRenderLaci_. Nilainya utama saat dipadukan mode tahap:
                        // "Per tahap + Cutting" = daftar kerja harian kepala cutting.
-  mode: "artikel",     // v231: "artikel" (grup = item, baris = tahap) | "tahap" (dibalik)
+  mode: "artikel",     // v231: "artikel" (grup = item, baris = tahap) | "tahap" (dibalik);
+                       // v278: "harian"; v341: "bulan" | "minggu" (kalender)
+  bulan: null,         // v341: ISO tanggal 1 bulan yang dilihat mode Bulan -- jangkar SENDIRI,
+                       // lihat jmBulanLihat_
   sembunyi: {}         // v246: {kunci item: true} -- disembunyikan MANUAL, di localStorage (lihat jmBacaSembunyi_)
 };
 
@@ -80,12 +83,16 @@ const JM_LIHAT = {
    Mode disimpan di localStorage (bukan sessionStorage seperti filter lain):
    ini preferensi peran, kepala cutting tidak perlu mengganti tiap pagi. */
 const JM_MODE_KUNCI = "jm_mode";
+/* v341: satu daftar mode yang sah, dipakai jmBacaMode_ DAN jmGantiMode. Dua
+   daftar terpisah adalah bagaimana mode baru bisa dipilih tapi tidak pernah
+   pulih sesudah muat ulang -- salah satunya pasti ketinggalan. */
+const JM_MODE_SAH = ["artikel", "tahap", "harian", "bulan", "minggu"];
 function jmBacaMode_() {
-  try { const m = localStorage.getItem(JM_MODE_KUNCI); if (m === "tahap" || m === "artikel" || m === "harian") JM_LIHAT.mode = m; }
+  try { const m = localStorage.getItem(JM_MODE_KUNCI); if (JM_MODE_SAH.indexOf(m) !== -1) JM_LIHAT.mode = m; }
   catch (e) { /* abaikan */ }
 }
 function jmGantiMode(mode) {
-  JM_LIHAT.mode = (mode === "tahap" || mode === "harian") ? mode : "artikel";   // v278: + harian
+  JM_LIHAT.mode = JM_MODE_SAH.indexOf(mode) !== -1 ? mode : "artikel";   // v278: + harian; v341: + bulan/minggu
   try { localStorage.setItem(JM_MODE_KUNCI, JM_LIHAT.mode); } catch (e) { /* abaikan */ }
   jmRenderTombolMode_();
   jmRender();
@@ -702,6 +709,15 @@ function jmRenderTombolMode_() {
                     '<span class="jm-lbl-panjang">Per artikel</span><span class="jm-lbl-pendek">Artikel</span></button>' +
                   '<button type="button" data-mode="tahap" onclick="jmGantiMode(\'tahap\')">' +
                     '<span class="jm-lbl-panjang">Per tahap</span><span class="jm-lbl-pendek">Tahap</span></button>' +
+                  // v341: kalender. Ditaruh di antara Tahap dan Hari supaya lima tombolnya
+                  // membentuk satu runtun perbesaran dari kiri ke kanan:
+                  // matriks (artikel, tahap) -> Bulan -> Minggu -> Hari, arah yang sama
+                  // dengan klik turun tingkat (sel bulan -> minggu -> hari).
+                  // Sengaja TANPA pasangan label panjang/pendek: di layar sempit sumbu
+                  // kini punya baris sendiri (lihat @media 640 di CSS), jadi "Bulan" dan
+                  // "Minggu" muat utuh. Dua label yang isinya sama cuma menipu pembaca.
+                  '<button type="button" data-mode="bulan" onclick="jmGantiMode(\'bulan\')">Bulan</button>' +
+                  '<button type="button" data-mode="minggu" onclick="jmGantiMode(\'minggu\')">Minggu</button>' +
                   // v278: mode ketiga -- daftar pekerjaan satu hari (bawaan tetap matriks)
                   '<button type="button" data-mode="harian" onclick="jmGantiMode(\'harian\')">' +
                     '<span class="jm-lbl-panjang">Per hari</span><span class="jm-lbl-pendek">Hari</span></button>';
@@ -710,10 +726,39 @@ function jmRenderTombolMode_() {
   Array.prototype.forEach.call(w.querySelectorAll("button"), function (b) {
     b.classList.toggle("jm-sumbu-aktif", b.getAttribute("data-mode") === JM_LIHAT.mode);
   });
+  jmRenderNavJudul_();
+}
+
+/* v341 -- TOMBOL NAV TIDAK BOLEH BERBOHONG.
+   Judulnya dipatok di template ("Mundur seminggu") sementara jmGeser sudah
+   memindahkan SEHARI di mode harian sejak v278, dan sekarang SEBULAN di mode
+   bulan. Judul itu diperbaiki dari sini, bukan dengan menempel template ulang:
+   satu-satunya yang tahu modenya adalah JS.
+   Lebar jendela (#jm-f-minggu) hanya berarti untuk matriks. Di tiga mode lain
+   ia di-disable, bukan disembunyikan -- ia memegang satu sel grid di laci
+   filter layar sempit, dan menghilangkannya menggeser pasangan sel di
+   sebelahnya. Nilainya tetap terbaca jmUbahFilter, jadi lebar jendela matriks
+   tidak berubah saat kembali. */
+function jmRenderNavJudul_() {
+  const satuan = JM_LIHAT.mode === "harian" ? "sehari" : JM_LIHAT.mode === "bulan" ? "sebulan" : "seminggu";
+  Array.prototype.forEach.call(document.querySelectorAll(".jm-nav button"), function (b) {
+    const aksi = b.getAttribute("onclick") || "";
+    if (aksi.indexOf("jmGeser(-1)") !== -1) b.title = "Mundur " + satuan;
+    else if (aksi.indexOf("jmGeser(1)") !== -1) b.title = "Maju " + satuan;
+  });
+  const selM = document.getElementById("jm-f-minggu");
+  if (selM) {
+    const matriks = JM_LIHAT.mode === "artikel" || JM_LIHAT.mode === "tahap";
+    selM.disabled = !matriks;
+    selM.title = matriks ? "Lebar jendela" : "Lebar jendela hanya berlaku di mode Per artikel & Per tahap";
+  }
 }
 
 const JM_HARI = ["S", "S", "R", "K", "J", "S"]; // Senin..Sabtu
 const JM_BULAN = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+// v341: judul mode Bulan ("September 2026"); baris info punya ruang untuk itu.
+const JM_BULAN_PANJANG = ["Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
 // Kelas warna per tahap. Nama tahap datang dari backend (TAHAP_JADWAL); kalau
 // backend menambah tahap baru yang belum ada di sini, jatuh ke kelas "lain".
@@ -872,6 +917,7 @@ function jmBacaLihat_() {
     if (d.mulai) JM_LIHAT.mulai = jmDariIso_(d.mulai);
     if (d.minggu) JM_LIHAT.minggu = Number(d.minggu) || 8;
     if (typeof d.hari === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.hari)) JM_LIHAT.hari = d.hari;   // v278
+    if (typeof d.bulan === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.bulan)) JM_LIHAT.bulan = d.bulan;   // v341
     // v255: dulu string tunggal; sesi lama diterima dan diubah jadi daftar.
     JM_LIHAT.klien = jmDaftarDari_(d.klien);
     JM_LIHAT.line = jmDaftarDari_(d.line);
@@ -889,7 +935,8 @@ function jmSimpanLihat_() {
       mulai: JM_LIHAT.mulai ? jmIso_(JM_LIHAT.mulai) : null,
       minggu: JM_LIHAT.minggu, klien: JM_LIHAT.klien, line: JM_LIHAT.line,
       sembunyiLewat: JM_LIHAT.sembunyiLewat, tahap: JM_LIHAT.tahap, keadaan: JM_LIHAT.keadaan,
-      hari: JM_LIHAT.hari || null   // v278
+      hari: JM_LIHAT.hari || null,   // v278
+      bulan: JM_LIHAT.bulan || null   // v341
     }));
   } catch (e) { /* abaikan */ }
 }
@@ -1137,6 +1184,10 @@ function jmGeser(n) {
     let h = jmTambahHari_(jmDariIso_(jmHariLihat_()), n);
     if (h.getDay() === 0) h = jmTambahHari_(h, n);
     JM_LIHAT.hari = jmIso_(h);
+  } else if (JM_LIHAT.mode === "bulan") {   // v341: sebulan
+    jmKalGeserBulan_(n);
+  } else if (JM_LIHAT.mode === "minggu") {   // v341: seminggu, jangkar hari (lihat jmKalMinggu_)
+    JM_LIHAT.hari = jmIso_(jmTambahHari_(jmDariIso_(jmHariLihat_()), n * 7));
   } else {
     JM_LIHAT.mulai = jmTambahHari_(JM_LIHAT.mulai, n * 7);
   }
@@ -1146,6 +1197,7 @@ function jmGeser(n) {
 function jmKeHariIni() {
   JM_LIHAT.mulai = jmSenin_(jmTambahHari_(jmDariIso_(JM_DATA.hariIni), -7));
   JM_LIHAT.hari = JM_DATA.hariIni;   // v278
+  JM_LIHAT.bulan = null;   // v341: null = bulan hari ini (jmBulanLihat_)
   JM_SUDAH_GULIR_AWAL = false;   // v289 (AUDIT FE-7)
   jmSimpanLihat_(); jmRender();
 }
@@ -2199,6 +2251,309 @@ function jmRenderHarian_(wadah) {
   jmRenderInfo_(jumlahItem, jumlahKerja, judul, "pekerjaan");
 }
 
+/* v341 -- MODE KALENDER: Bulan & Minggu.
+   Femri 14 Sep 2026, sesudah melihat contoh visualnya: "bentuknya sudah oke".
+   Tiga keputusannya: Minggu DITAMPILKAN, chip per LINE, deviasi cukup TITIK
+   MERAH (bukan teks "belum ada laporan" seperti matriks -- di sel 140 px teks
+   itu menelan chipnya).
+
+   Data & filter SAMA dengan mode artikel dan harian (jmKelompok_ +
+   jmBarisGrup_), jadi klien, line, tahap, keadaan, sembunyi manual dan
+   "sembunyikan yang tuntas" semuanya berlaku tanpa satu baris penyaringan
+   disalin ulang. Salinan penyaringan adalah bagaimana dua tampilan atas satu
+   data mulai berbeda diam-diam.
+
+   Empat hal yang DIUKUR, bukan ditebak:
+
+   1. MINGGU DITAMPILKAN, SENGAJA KOSONG. jmKolom_ menggambar 6 hari
+      (Senin-Sabtu): jadwalnya tidak merencanakan kerja Minggu, jadi kalender
+      pun tidak mengisinya. Tapi SELNYA ADA dan ditandai "libur" -- kalau
+      suatu hari ada lembur Minggu, ia punya tempat untuk terlihat, dan
+      sebelum ini kolomnya tidak ada sama sekali. Bar yang jatuh HANYA di
+      Minggu tetap disebut jmRenderPeringatan_; itu satu-satunya jalur yang
+      bisa memberitahunya, dan panel itu ikut tampil di mode ini.
+
+   2. CHIP PER LINE, TAPI HANYA UNTUK SEWING. jmBarisGrup_ memecah Sewing per
+      line (b.sub = namaLine) dan mendorong enam tahap lain dengan sub kosong
+      atau jenis. Kalau chip dipaksa per line seragam, lima dari tujuh tahap
+      jatuh ke satu keranjang tanpa nama. Jadi: nama LINE untuk Sewing, nama
+      TAHAP untuk sisanya. Warnanya tetap warna tahap, supaya dua line Sewing
+      terbaca bersaudara.
+
+   3. PENGIRIMAN TIDAK PERNAH DIPOTONG. Pemecahan per line menambah jumlah
+      chip; pada render pertama contoh visualnya, chip Kirim terdorong ke balik
+      "+1 lagi". Hari pengiriman adalah hal paling berkonsekuensi dalam satu
+      sel -- batas chip yang menyensor justru itu lebih buruk daripada tidak
+      ada batas. Jadi: JM_KAL_BATAS_CHIP chip pertama + SEMUA chip kirim, dan
+      kirim tidak ikut dihitung di "+N lagi".
+
+   4. WARNA TAHAP TIDAK DISALIN. Chip memakai kelas .jm-t-* yang sudah dipakai
+      swatch dan bar matriks, jadi warna tahap tetap punya SATU definisi. Kalau
+      suatu hari #5B4A9E diganti, kalender ikut tanpa disentuh. Yang ditambah
+      hanya lapisan di atasnya (rencana, batal) dengan spesifisitas lebih
+      tinggi -- lihat nisan v286 di simpro-jadwal.css soal shorthand background.
+*/
+const JM_KAL_BATAS_CHIP = 3;
+/* Nama pendek chip. Tahap yang tidak ada di sini memakai namanya sendiri --
+   tahap baru dari backend harus TAMPIL, bukan jadi chip tanpa label. */
+const JM_KAL_PENDEK = {
+  "Pengadaan Bahan": "Bahan",
+  "Pola & Marker": "Pola",
+  "Pola & Konsumsi": "Pola",   // nama lama, masih bisa datang dari sheet
+  "Pengiriman": "Kirim"
+};
+function jmKalPendek_(tahap) { return JM_KAL_PENDEK[tahap] || tahap; }
+function jmKalKelas_(tahap) { return "jm-t-" + (JM_KELAS_TAHAP[tahap] || "lain"); }
+
+/* Bulan yang sedang dilihat (ISO tanggal 1). Punya jangkar SENDIRI, tidak
+   diturunkan dari JM_LIHAT.mulai: mulai adalah kolom PERTAMA dari jendela 8
+   minggu, jadi bulannya sering bukan bulan yang sedang dibaca orang. Menekan
+   "Bulan" harus membuka bulan ini, bukan menebak. */
+function jmBulanLihat_() {
+  if (JM_LIHAT.bulan) return JM_LIHAT.bulan;
+  const d = jmDariIso_((JM_DATA && JM_DATA.hariIni) || jmIso_(new Date()));
+  return jmIso_(new Date(d.getFullYear(), d.getMonth(), 1));
+}
+function jmKalGeserBulan_(n) {
+  const d = jmDariIso_(jmBulanLihat_());
+  JM_LIHAT.bulan = jmIso_(new Date(d.getFullYear(), d.getMonth() + n, 1));
+}
+
+/* Identitas satu pekerjaan untuk penghitungan. Bar antrean (kotak keluar
+   v226) punya id "ANTRE:...", bar server punya id sheet; yang tanpa id sama
+   sekali dibedakan dari bentuknya, supaya "12 pekerjaan" tidak berarti "12
+   hari-bar" saat satu bar melintasi dua minggu. */
+function jmKalKunciKerja_(x) {
+  return x.id || (x.item + "|" + x.tahap + "|" + (x.line || "") + "|" + (x.sub || "") + "|" + x.mulai);
+}
+
+/**
+ * Peta tanggal ISO -> daftar {g, b, x, dev} untuk semua grup yang lolos filter.
+ * Satu bar mengisi setiap hari kerja yang dilintasinya; Minggu dilewati
+ * (lihat catatan 1 di kepala blok ini).
+ */
+function jmKalPeta_(grup, hariIni) {
+  const peta = {};
+  grup.forEach(function (g) {
+    jmBarisGrup_(g).forEach(function (b) {
+      const dev = !!jmDeviasiBaris_(b, hariIni);
+      b.bar.forEach(function (x) {
+        // selesai < mulai tidak mungkin lolos server (cekBaris), tapi render
+        // yang berputar tanpa henti membekukan halaman -- jadi dijaga di sini.
+        if (!x.mulai || !x.selesai || x.selesai < x.mulai) return;
+        const akhir = jmDariIso_(x.selesai);
+        for (let d = jmDariIso_(x.mulai); d <= akhir; d = jmTambahHari_(d, 1)) {
+          if (d.getDay() === 0) continue;
+          const iso = jmIso_(d);
+          (peta[iso] = peta[iso] || []).push({ g: g, b: b, x: x, dev: dev });
+        }
+      });
+    });
+  });
+  return peta;
+}
+
+/** Peta tanggal ISO -> item yang deadline PO-nya jatuh di tanggal itu. */
+function jmKalTenggat_(grup) {
+  const peta = {};
+  grup.forEach(function (g) {
+    const it = g.item;
+    if (!it || !it.deadline) return;
+    (peta[it.deadline] = peta[it.deadline] || []).push(it);
+  });
+  return peta;
+}
+
+/**
+ * Ringkas isi satu sel jadi chip: per LINE untuk Sewing, per TAHAP untuk
+ * sisanya. rencana/batal hanya menempel kalau SELURUH isi chip begitu --
+ * chip campuran digambar polos, dan kebenarannya ada di sel harian yang
+ * dibuka dari situ.
+ */
+function jmKalRingkas_(isi) {
+  const peta = {}, urut = [];
+  isi.forEach(function (e) {
+    const pakaiLine = e.b.tahap === "Sewing" && e.b.sub;
+    const kunci = pakaiLine ? "L:" + e.b.sub : "T:" + e.b.tahap;
+    if (!peta[kunci]) {
+      peta[kunci] = { tahap: e.b.tahap, n: 0, rencana: true, batal: true, dev: false,
+        label: pakaiLine ? e.b.sub : jmKalPendek_(e.b.tahap) };
+      urut.push(kunci);
+    }
+    const c = peta[kunci];
+    const k = e.b.keadaan || jmKeadaan_(e.g.item);
+    c.n++;
+    if (k !== "rencana") c.rencana = false;
+    if (k !== "batal") c.batal = false;
+    if (e.dev) c.dev = true;
+  });
+  const urutTahap = JM_DATA.tahap || Object.keys(JM_KELAS_TAHAP);
+  return urut.map(function (k) { return peta[k]; }).sort(function (a, b) {
+    const ia = urutTahap.indexOf(a.tahap), ib = urutTahap.indexOf(b.tahap);
+    if (ia !== ib) return ia - ib;
+    return String(a.label).localeCompare(String(b.label));
+  });
+}
+function jmKalChip_(c) {
+  return '<span class="jm-kal-chip ' + jmKalKelas_(c.tahap) +
+    (c.rencana ? " jm-kal-rencana" : "") + (c.batal ? " jm-kal-batal" : "") +
+    '" title="' + jmEsc_(c.label + " \u00b7 " + c.n + " pekerjaan" + (c.dev ? " \u00b7 ada deviasi laporan" : "")) + '">' +
+    (c.dev ? '<i class="jm-kal-titik" aria-hidden="true"></i>' : "") +
+    '<b>' + jmEsc_(c.label) + '</b><span class="jm-kal-n">' + c.n + '</span></span>';
+}
+
+/** Penanda deadline PO. Nama dipotong CSS (ellipsis), bukan JS -- title penuh. */
+function jmKalFlagTenggat_(items, hariIni, blok) {
+  return (items || []).map(function (it) {
+    const nama = jmNamaItem_(it);
+    return '<' + (blok ? "div" : "span") + ' class="jm-kal-tenggat' + (it.deadline < hariIni ? " jm-kal-lewat" : "") +
+      '" title="' + jmEsc_("Deadline PO " + (it.po || "") + " \u00b7 " + nama + " \u00b7 " + (it.namaKlien || it.idKlien || "")) + '">' +
+      '&#9873; <b>' + jmEsc_(nama) + '</b> <span>tenggat</span></' + (blok ? "div" : "span") + '>';
+  }).join("");
+}
+
+function jmRenderKalender_(wadah) {
+  const hariIni = JM_DATA.hariIni;
+  const grup = jmKelompok_();
+  JM_GRUP_TERAKHIR = grup;   // v291 (AUDIT FE-13): dipakai jmRenderInfo_ -> jmDaftarDeviasi_
+  const peta = jmKalPeta_(grup, hariIni);
+  const tenggat = jmKalTenggat_(grup);
+  if (JM_LIHAT.mode === "minggu") jmKalMinggu_(wadah, peta, tenggat, hariIni);
+  else jmKalBulan_(wadah, peta, tenggat, hariIni);
+}
+
+const JM_KAL_KEPALA = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+
+function jmKalBulan_(wadah, peta, tenggat, hariIni) {
+  const acuan = jmDariIso_(jmBulanLihat_());
+  const awal = new Date(acuan.getFullYear(), acuan.getMonth(), 1);
+  const jumlahHari = new Date(acuan.getFullYear(), acuan.getMonth() + 1, 0).getDate();
+  const geser = (awal.getDay() + 6) % 7;                       // Senin=0
+  // DIHITUNG, bukan dipatok 5: Februari yang mulai Senin butuh 4 baris,
+  // bulan 31 hari yang mulai Sabtu butuh 6. Contoh visualnya memakai 5 karena
+  // September 2026 kebetulan pas -- itu cacat yang tidak akan terlihat sampai
+  // bulan berikutnya.
+  const nBaris = Math.ceil((geser + jumlahHari) / 7);
+  const itemSet = {}, kerjaSet = {};
+
+  let html = '<div class="jm-kal jm-kal-bulan" id="jm-kal"><div class="jm-kal-kepala">' +
+    JM_KAL_KEPALA.map(function (h) { return '<div>' + h + '</div>'; }).join("") +
+    '</div><div class="jm-kal-kisi">';
+  let d = jmSenin_(awal);
+  for (let i = 0; i < nBaris * 7; i++, d = jmTambahHari_(d, 1)) {
+    const iso = jmIso_(d);
+    const luar = d.getMonth() !== acuan.getMonth();
+    const libur = d.getDay() === 0;
+    const isi = peta[iso] || [];
+    // Hitungan di baris info mengikuti JUDULNYA: hari limpahan bulan
+    // sebelah tergambar tapi tidak ikut dihitung sebagai "September".
+    if (!luar) isi.forEach(function (e) { itemSet[e.g.item.kunci] = true; kerjaSet[jmKalKunciKerja_(e.x)] = true; });
+
+    const ringkas = jmKalRingkas_(isi);
+    const kirim = ringkas.filter(function (c) { return c.tahap === "Pengiriman"; });
+    const biasa = ringkas.filter(function (c) { return c.tahap !== "Pengiriman"; });
+    const tampil = biasa.slice(0, JM_KAL_BATAS_CHIP), sisa = biasa.length - tampil.length;
+
+    html += '<button type="button" class="jm-kal-sel' + (luar ? " jm-kal-luar" : "") +
+      (libur ? " jm-kal-libur" : "") + (iso === hariIni ? " jm-hari-ini" : "") +
+      '" data-iso="' + iso + '" onclick="jmKalKeMinggu(' + JSON.stringify(iso).replace(/"/g, "&quot;") + ')"' +
+      ' aria-label="' + jmEsc_(JM_NAMA_HARI[d.getDay()] + " " + d.getDate() + " " + JM_BULAN[d.getMonth()] +
+        ", " + isi.length + " pekerjaan -- buka minggunya") + '">' +
+      '<span class="jm-kal-baris-tgl"><span class="jm-kal-tgl">' + d.getDate() +
+        (d.getDate() === 1 ? " " + JM_BULAN[d.getMonth()] : "") + '</span>' +
+        (isi.length ? '<span class="jm-kal-beban">' + isi.length + '</span>' : '') + '</span>' +
+      jmKalFlagTenggat_(tenggat[iso], hariIni, false) +
+      tampil.concat(kirim).map(jmKalChip_).join("") +
+      (libur ? '<span class="jm-kal-libur-tanda">libur</span>' : '') +
+      (sisa > 0 ? '<span class="jm-kal-lebih">+' + sisa + ' lagi</span>' : '') +
+      '</button>';
+  }
+  wadah.innerHTML = html + '</div></div>';
+  jmRenderInfo_(Object.keys(itemSet).length, Object.keys(kerjaSet).length,
+    JM_BULAN_PANJANG[acuan.getMonth()] + " " + acuan.getFullYear(), "pekerjaan");
+}
+
+function jmKalMinggu_(wadah, peta, tenggat, hariIni) {
+  // Berjangkar pada JM_LIHAT.hari (jangkar mode harian), BUKAN JM_LIHAT.mulai:
+  // mulai adalah kolom pertama jendela matriks dan jmKeHariIni menyetelnya
+  // seminggu KE BELAKANG dengan sengaja -- dipakai di sini, "Hari ini" akan
+  // membuka minggu lalu. Berbagi jangkar dengan mode harian juga membuat
+  // rantai Bulan > Minggu > Hari memegang tanggal yang sama, dan navigasi
+  // kalender tidak menggeser posisi jendela matriks.
+  const mulai = jmSenin_(jmDariIso_(jmHariLihat_()));
+  const urutTahap = JM_DATA.tahap || Object.keys(JM_KELAS_TAHAP);
+  const itemSet = {}, kerjaSet = {};
+  let html = '<div class="jm-kal jm-kal-pekan" id="jm-kal">';
+  let d = mulai;
+  for (let i = 0; i < 7; i++, d = jmTambahHari_(d, 1)) {
+    const iso = jmIso_(d);
+    const libur = d.getDay() === 0;
+    const isi = (peta[iso] || []).slice().sort(function (a, b) {
+      const ia = urutTahap.indexOf(a.b.tahap), ib = urutTahap.indexOf(b.b.tahap);
+      if (ia !== ib) return ia - ib;
+      const sa = String(a.b.sub || ""), sb = String(b.b.sub || "");
+      if (sa !== sb) return sa.localeCompare(sb);
+      return jmNamaItem_(a.g.item).localeCompare(jmNamaItem_(b.g.item));
+    });
+    isi.forEach(function (e) { itemSet[e.g.item.kunci] = true; kerjaSet[jmKalKunciKerja_(e.x)] = true; });
+
+    html += '<div class="jm-kal-kol' + (libur ? " jm-kal-libur" : "") + (iso === hariIni ? " jm-hari-ini" : "") + '">' +
+      '<button type="button" class="jm-kal-kol-kepala" data-iso="' + iso + '"' +
+        ' onclick="jmKalKeHari(' + JSON.stringify(iso).replace(/"/g, "&quot;") + ')"' +
+        ' title="Buka daftar pekerjaan hari ini (mode Per hari)">' +
+        '<span class="jm-kal-hr">' + jmEsc_(JM_NAMA_HARI[d.getDay()]) + '</span>' +
+        '<span class="jm-kal-no">' + d.getDate() + " " + JM_BULAN[d.getMonth()] + '</span></button>' +
+      '<div class="jm-kal-kol-isi">' + jmKalFlagTenggat_(tenggat[iso], hariIni, true) +
+      (isi.length ? isi.map(function (e) { return jmKalKartu_(e, iso); }).join("")
+        : '<div class="jm-kal-kosong">' + (libur ? "Libur. Lembur Minggu akan muncul di sini."
+            : "Tidak ada pekerjaan terjadwal.") + '</div>') +
+      '</div></div>';
+  }
+  const akhir = jmTambahHari_(mulai, 6);
+  wadah.innerHTML = html + '</div>';
+  jmRenderInfo_(Object.keys(itemSet).length, Object.keys(kerjaSet).length,
+    jmTanggalPendek_(jmIso_(mulai)) + " \u2013 " + jmTanggalPendek_(jmIso_(akhir)) + " " + akhir.getFullYear(), "pekerjaan");
+}
+
+/** Satu kartu pekerjaan di mode Minggu. */
+function jmKalKartu_(e, iso) {
+  const it = e.g.item, x = e.x, b = e.b;
+  const k = b.keadaan || jmKeadaan_(it);
+  const total = jmHariKerjaAntara_(x.mulai, jmIso_(jmTambahHari_(jmDariIso_(x.selesai), 1)));
+  const ke = jmHariKerjaAntara_(x.mulai, jmIso_(jmTambahHari_(jmDariIso_(iso), 1)));
+  const kunciJs = JSON.stringify(it.kunci).replace(/"/g, "&quot;");
+  // Warna tahap dibawa STRIP di tepi kiri, bukan latar kartunya: .jm-t-* memberi
+  // background PENUH (satu definisi warna, lihat catatan 4 di kepala blok) dan
+  // teks 12 px di atas #5B4A9E tidak terbaca. Strip menjaga keduanya.
+  return '<div class="jm-kal-kartu' + (k === "rencana" ? " jm-kal-rencana" : "") +
+      (k === "batal" ? " jm-kal-batal" : "") + '" data-id="' + jmEsc_(x.id || "") + '">' +
+    '<i class="jm-kal-strip ' + jmKalKelas_(b.tahap) + '" aria-hidden="true"></i>' +
+    '<div class="jm-kal-kartu-tahap">' + jmEsc_(jmKalPendek_(b.tahap)) + (b.sub ? " \u00b7 " + jmEsc_(b.sub) : "") + '</div>' +
+    '<button type="button" class="jm-kal-kartu-nama" onclick="jmBukaMenuItem_(' + kunciJs + ', event)"' +
+      ' title="' + jmEsc_((it.namaKlien || it.idKlien || "") + " \u00b7 " + (it.po || "")) + '">' +
+      jmEsc_(jmNamaItem_(it)) + '</button>' +
+    '<div class="jm-kal-kartu-meta">' + (e.dev ? '<i class="jm-kal-titik" aria-hidden="true"></i>' : '') +
+      (x.qty ? '<span>' + Number(x.qty).toLocaleString("id-ID") + ' pcs</span>' : '') +
+      '<span>' + (total > 1 ? "hari ke-" + Math.max(1, Math.min(ke, total)) + "/" + total : "1 hari") + '</span>' +
+      (k !== "aktif" ? '<span>' + jmEsc_(JM_LABEL_KEADAAN[k] || k) + '</span>' : '') +
+      (JM_BOLEH_TULIS && x.id ? '<button type="button" class="jm-kal-ubah" onclick="jmEdit(' +
+        JSON.stringify(x.id).replace(/"/g, "&quot;") + ')">Ubah</button>' : '') +
+      '</div></div>';
+}
+
+/* Turun tingkat: sel bulan -> minggunya, kepala kolom minggu -> harinya.
+   Rantai Bulan > Minggu > Hari, arah yang sama dengan tombol modenya. */
+function jmKalKeMinggu(iso) {
+  JM_LIHAT.hari = iso;
+  jmSimpanLihat_();   // jmGantiMode hanya menyimpan jm_mode, bukan jangkar tanggalnya
+  jmGantiMode("minggu");
+}
+function jmKalKeHari(iso) {
+  JM_LIHAT.hari = iso;
+  jmSimpanLihat_();
+  jmGantiMode("harian");
+}
+
 function jmRenderMatriks_() {
   const wadah = document.getElementById("jm-matriks");
   // v289 (AUDIT FE-7): posisi gulir DISIMPAN sebelum innerHTML diganti, dipulihkan
@@ -2211,6 +2566,7 @@ function jmRenderMatriks_() {
   if (!JM_DATA.sheetAda) { wadah.innerHTML = ""; jmRenderInfo_(0, 0); return; }
 
   if (JM_LIHAT.mode === "harian") { jmRenderHarian_(wadah); return; }   // v278
+  if (JM_LIHAT.mode === "bulan" || JM_LIHAT.mode === "minggu") { jmRenderKalender_(wadah); return; }   // v341
   const kolom = jmKolom_();
   const modeTahap = JM_LIHAT.mode === "tahap";
   const grup = modeTahap ? jmKelompokTahap_() : jmKelompok_();

@@ -424,6 +424,22 @@ body.jm-modal-terbuka{ overflow: hidden; }
    ke bawah sebagai baris info (order flex, bukan perubahan DOM). */
 .jm-lbl-pendek{ display:none; }
 
+/* v341 -- LABEL PENDEK SAMPAI 1280 px, bukan cuma 640.
+   Terukur: deret lima tombol berlabel panjang = 367 px (tiga = 241), jadi dua
+   tombol baru menambah 126 px. Di 1000 px DENGAN mode fokus aktif ("Keluar
+   fokus" 105 px) isi bilah jadi 960 px sementara ruang dalamnya 944 -- bilah
+   tumbuh satu baris tepat di mode yang gunanya MEMAKSIMALKAN tinggi matriks.
+   Di 760 px lebih parah lagi. Label pendek + padding dirapatkan membawa deret
+   itu ke ~250 px, dan pita 801-1280 kembali satu baris seperti rancangan v270.
+   Di atas 1280 px label panjang tetap dipakai (harness jalan31 #6 memegangnya). */
+@media (max-width: 1280px){
+  .jm-lbl-panjang{ display:none; }
+  .jm-lbl-pendek{ display:inline; }
+}
+@media (min-width: 641px) and (max-width: 1280px){
+  .jm-sumbu button{ padding:8px 9px; }
+}
+
 @media (max-width: 640px){
   .jm-lbl-panjang{ display:none; }
   .jm-lbl-pendek{ display:inline; }
@@ -450,7 +466,22 @@ body.jm-modal-terbuka{ overflow: hidden; }
      "disembunyikan" jadi tidak bisa diklik (jalan38 G). */
   .jm-rentang{ white-space:normal; line-height:1.3; }
   .jm-rentang .jm-rentang-sub{ display:inline; margin-top:0; }   /* v266: satu baris teks, boleh membungkus */
-  .jm-btn-jadwal{ order:4; }                           /* v266: "+" ikut baris 1 di kanan sumbu */
+  /* v341: LIMA tombol mode tidak muat di strip 135 px yang v278 ukur untuk
+     tiga (Artikel|Tahap|Bulan|Minggu|Hari ~ 190 px isi). Daripada memampatkan
+     labelnya jadi satu-dua huruf, sumbu diberi BARIS SENDIRI selebar bilah:
+     5 x ~67 px di 390 px -- kotak sentuhnya justru lebih besar daripada strip
+     rapat sebelumnya, dan label utuh ("Bulan", bukan "Bln"). Harganya bilah
+     jadi tiga baris: [nav + "+"] / [mode] / [rentang + Filter]. Yang dipindah
+     HANYA "+" (order 4 -> 2): tanpa itu ia terlempar ke baris sendiri di bawah
+     sumbu dan bilahnya jadi EMPAT baris. Pasangan rentang+Filter di baris
+     terakhir dibiarkan utuh -- itu rancangan v266 dan sudah dipegang harness
+     tata letak lama. Diukur di jalan94 blok N, dibandingkan dengan keadaan
+     TANPA dua tombol baru. */
+  .jm-sumbu{ order:4; flex:1 1 100%; }
+  .jm-sumbu button{ flex:1 1 0; justify-content:center; }
+  /* Nisan v291 di atas memperingatkan order:2 bentrok .jm-btn-fokus -- di blok
+     ini fokus display:none (v251), jadi tidak ada yang berebut posisi 2. */
+  .jm-btn-jadwal{ order:2; }                           /* v341: "+" naik ke baris 1 (v266: di kanan sumbu) */
   /* DUA kelas: aturan global .jm-alat-putus{display:none} ditulis SESUDAH blok ini
      dan menang kalau spesifisitasnya sama (terbukti di fixture jalan31, 4 Sep 2026). */
   .jm-alat .jm-alat-putus{ display:block; flex-basis:100%; height:0; order:6; }
@@ -877,10 +908,171 @@ table.jm-beban td.jm-beban-lebih{ color: #8A2A22; font-weight: 700; background: 
   #jm-panel-sembunyi, #jm-menu-item, #jm-modal, #jm-modal-filter, #jm-modal-rencana,
   #jm-panel-tahap, #jm-panel-klien, #jm-panel-line, #jm-panel-keadaan, #jm-panel-item,
   #jm-panel-deviasi, #jm-panel-beban, #jm-panel-bar, .jm-rentang-deviasi, .jm-rentang-beban,
-  .jm-btn-fokus, .jm-catatan-batal button, .jm-harian-ubah, .jm-penanda { display: none !important; }
+  .jm-btn-fokus, .jm-catatan-batal button, .jm-harian-ubah, .jm-penanda,
+  .jm-kal-ubah { display: none !important; }   /* v341 */
 }
 
 /* v291 (AUDIT FE-15): panel rincian bar (peran baca-saja / layar sentuh) */
 .jm-panel-bar{ min-width: 260px; max-width: min(420px, 92vw); }
 .jm-panel-bar .jm-panel-kepala{ display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .jm-panel-bar .jm-panel-baris{ font-size: 12.5px; padding: 3px 0; white-space: pre-line; }
+
+/* ============================================================
+   v341 -- MODE KALENDER (Bulan & Minggu)
+
+   Prefiks jm-kal-. Warna tahap TIDAK disalin ke sini: chip dan strip kartu
+   memakai kelas .jm-t-* yang sudah ada di atas, jadi warna tahap tetap punya
+   satu definisi. Yang ditulis di sini hanya lapisan di atasnya.
+
+   NISAN v286 DIPATUHI: .jm-hari-ini (#FFF4D6, baris 168) spesifisitasnya
+   (0,1,0) dan ditulis JAUH di atas blok ini, jadi setiap aturan .jm-kal-*
+   yang menyentuh `background` akan mengalahkannya dan sorotan hari ini mati
+   diam-diam -- persis cacat yang sudah dibayar sekali di bar matriks. Karena
+   itu sorotan hari ini di sini ditulis (0,2,0): .jm-kal-sel.jm-hari-ini.
+   ============================================================ */
+.jm-kal { background: #fff; border: 1px solid var(--line, #E5E0D6); border-radius: 14px; overflow: hidden; }
+.jm-kal-kepala { display: grid; grid-template-columns: repeat(7, 1fr); background: #F6F3EC; border-bottom: 1px solid var(--line, #E5E0D6); }
+.jm-kal-kepala div {
+  font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-soft, #5F6B7A); padding: 7px 9px;
+}
+.jm-kal-kisi { display: grid; grid-template-columns: repeat(7, 1fr); }
+
+/* ---------- sel bulan ---------- */
+.jm-kal-sel {
+  display: flex; flex-direction: column; gap: 4px; align-items: stretch;
+  min-height: 112px; padding: 6px 7px 8px; overflow: hidden;
+  border: 0; border-right: 1px solid #EDE9E1; border-bottom: 1px solid #EDE9E1;
+  background: none; font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.jm-kal-kisi .jm-kal-sel:nth-child(7n) { border-right: none; }
+.jm-kal-sel:hover { background: #FAF8F3; }
+.jm-kal-sel:focus-visible { outline: 2px solid var(--terra, #BD4335); outline-offset: -2px; }
+.jm-kal-luar { background: #FBFAF7; }
+.jm-kal-luar .jm-kal-tgl { color: var(--ink-soft, #5F6B7A); opacity: .7; }
+/* Minggu ditampilkan (keputusan Femri 14 Sep 2026) tapi SENGAJA tidak diisi:
+   jmKolom_ pun 6 hari. Gunanya justru selnya ada -- lembur Minggu punya tempat
+   untuk terlihat; sebelum ini kolomnya tidak ada sama sekali. */
+.jm-kal-libur { background: #F4F1E9; }
+.jm-kal-libur .jm-kal-tgl { color: var(--ink-soft, #5F6B7A); }
+.jm-kal-libur-tanda {
+  font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink-soft, #5F6B7A); opacity: .75;
+}
+.jm-kal-sel.jm-hari-ini { background: #FFF4D6; }   /* (0,2,0) -- lihat nisan di kepala blok */
+.jm-kal-baris-tgl { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.jm-kal-tgl { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.jm-kal-sel.jm-hari-ini .jm-kal-tgl {
+  background: var(--navy, #17212F); color: #fff; border-radius: 999px; padding: 1px 7px; margin-left: -3px;
+}
+.jm-kal-beban { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft, #5F6B7A); font-variant-numeric: tabular-nums; }
+.jm-kal-lebih { font-size: 11px; color: var(--ink-soft, #5F6B7A); padding-left: 4px; }
+
+/* ---------- chip ---------- */
+.jm-kal-chip {
+  display: flex; align-items: center; gap: 5px; overflow: hidden;
+  border-radius: 6px; padding: 2px 6px 2px 5px; font-size: 11.5px; line-height: 1.35;
+  color: var(--ink, #17212F);
+}
+.jm-kal-chip b { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jm-kal-chip .jm-kal-n {
+  font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; font-weight: 600;
+  margin-left: auto; opacity: .75; font-variant-numeric: tabular-nums;
+}
+/* Pengiriman (#5B4A9E) satu-satunya warna tahap yang gelap; tulisan ink di
+   atasnya 2,2:1. Putih dipatok, BUKAN var -- token yang bisa dibalik tema
+   adalah bagaimana tulisan gelap mendarat di atas latar gelap. */
+.jm-kal-chip.jm-t-kirim { color: #fff; }
+.jm-kal-chip.jm-t-kirim .jm-kal-n { opacity: .9; }
+/* Resep garis miring SAMA dengan .jm-bar.jm-bar-rencana (baris 657) supaya
+   "miring = rencana" berarti hal yang sama di matriks dan di kalender.
+   Opacity-nya TIDAK diikutkan: bar tidak bertulisan, chip bertulisan. */
+.jm-kal-chip.jm-kal-rencana {
+  background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.75) 0 5px, transparent 5px 11px);
+  box-shadow: inset 0 0 0 1.5px rgba(23,33,47,.35);
+}
+.jm-kal-chip.jm-kal-batal { text-decoration: line-through; opacity: .6; }
+.jm-kal-titik { width: 6px; height: 6px; border-radius: 50%; background: var(--terra, #BD4335); display: inline-block; flex: 0 0 auto; }
+
+/* ---------- penanda deadline ---------- */
+.jm-kal-tenggat {
+  display: flex; align-items: center; gap: 4px; overflow: hidden;
+  font-size: 11px; font-weight: 700; color: #8f2c22;
+  background: #FBEDEA; border-left: 3px solid var(--terra, #BD4335);
+  border-radius: 0 5px 5px 0; padding: 2px 5px;
+}
+.jm-kal-tenggat b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.jm-kal-tenggat span { font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 600; flex: 0 0 auto; }
+.jm-kal-tenggat.jm-kal-lewat { text-decoration: line-through; opacity: .8; }
+
+/* ---------- mode minggu ---------- */
+.jm-kal-pekan { display: grid; grid-template-columns: repeat(7, 1fr); }
+.jm-kal-kol { border-right: 1px solid #EDE9E1; min-width: 0; }
+.jm-kal-kol:last-child { border-right: none; }
+.jm-kal-kol-kepala {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 6px; width: 100%;
+  padding: 7px 9px; border: 0; border-bottom: 1px solid var(--line, #E5E0D6);
+  background: #F6F3EC; font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.jm-kal-kol-kepala:hover { background: #EFEBE1; }
+.jm-kal-kol.jm-kal-libur .jm-kal-kol-kepala { background: #F0ECE3; }
+.jm-kal-kol.jm-hari-ini .jm-kal-kol-kepala { background: #FBE7B3; }
+.jm-kal-hr {
+  font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink-soft, #5F6B7A);
+}
+.jm-kal-no { font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 13.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.jm-kal-kol-isi { padding: 7px; display: flex; flex-direction: column; gap: 6px; }
+.jm-kal-kosong { padding: 10px 4px; font-size: 11.5px; color: var(--ink-soft, #5F6B7A); line-height: 1.5; }
+.jm-kal-kartu {
+  position: relative; padding: 6px 8px 6px 12px; background: #fff;
+  border: 1px solid #EDE9E1; border-left: 0; border-radius: 0 8px 8px 0; min-width: 0;
+}
+.jm-kal-strip { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: 0; }
+.jm-kal-kartu.jm-kal-rencana .jm-kal-strip {
+  background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.85) 0 3px, transparent 3px 7px);
+}
+.jm-kal-kartu.jm-kal-batal .jm-kal-kartu-nama { text-decoration: line-through; opacity: .65; }
+.jm-kal-kartu-tahap {
+  font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; letter-spacing: .06em;
+  text-transform: uppercase; font-weight: 600; color: var(--navy-soft, #2A3754);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.jm-kal-kartu-nama {
+  display: block; width: 100%; padding: 1px 0 0; border: 0; background: none;
+  font: inherit; font-size: 12px; font-weight: 700; line-height: 1.3; color: var(--ink, #17212F);
+  text-align: left; cursor: pointer; overflow-wrap: anywhere;
+}
+.jm-kal-kartu-nama:hover { color: var(--terra, #BD4335); }
+.jm-kal-kartu-meta {
+  display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-top: 2px;
+  font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft, #5F6B7A);
+}
+.jm-kal-ubah {
+  border: 1px solid var(--line, #E5E0D6); background: #fff; border-radius: 6px;
+  padding: 1px 6px; font-family: inherit; font-size: 10px; font-weight: 600;
+  color: var(--ink, #17212F); cursor: pointer; line-height: 1.5;
+}
+.jm-kal-ubah:hover { border-color: var(--ink, #17212F); }
+
+/* ---------- layar sempit ---------- */
+/* Bulan tetap 7 kolom di ponsel: bentuk kalender itu sendiri yang menjawab
+   "tanggal berapa" -- satu kolom akan jadi daftar, dan mode Per hari sudah
+   daftar. Yang dilepas label chip & kata "tenggat"; warna + angka tetap
+   terbaca, dan nama item tetap ada di penanda deadline. */
+@media (max-width: 720px) {
+  .jm-kal-sel { min-height: 88px; padding: 5px 4px 6px; gap: 3px; }
+  .jm-kal-kepala div { padding: 6px 4px; font-size: 9px; letter-spacing: .04em; }
+  .jm-kal-chip { font-size: 10px; padding: 2px 4px; gap: 4px; }
+  .jm-kal-chip b { display: none; }
+  .jm-kal-chip .jm-kal-n { margin-left: 0; }
+  .jm-kal-beban { display: none; }
+  .jm-kal-tgl { font-size: 11.5px; }
+  .jm-kal-tenggat { font-size: 9.5px; padding: 2px 4px; }
+  .jm-kal-tenggat span, .jm-kal-tenggat b { display: none; }
+  .jm-kal-libur-tanda { display: none; }
+  /* Minggu jadi SATU kolom: tujuh kolom kartu di 390 px = 55 px per kolom. */
+  .jm-kal-pekan { grid-template-columns: 1fr; }
+  .jm-kal-kol { border-right: none; border-bottom: 1px solid var(--line, #E5E0D6); }
+  .jm-kal-kol:last-child { border-bottom: none; }
+}
