@@ -3125,17 +3125,12 @@ function omEl_(kunci) {
   return document.createElement("div");
 }
 
-/* Lencana angka di tab. Pengganti dbSetTabBadge, yang tinggal di
-   simpro-dashboard.js dan TIDAK dimuat halaman produksi. Halaman yang tidak
-   punya lencana cukup tidak menyebut idBadge -- dan itu keadaan yang sah,
-   bukan kesalahan, jadi di sini sengaja tidak diperingatkan. */
-function omSetLencana_(id, jumlah) {
-  if (!id) return;
-  var el = document.getElementById(id);
-  if (!el) return;
-  if (jumlah > 0) { el.textContent = jumlah; el.style.display = "inline-flex"; }
-  else { el.style.display = "none"; }
-}
+/* NISAN: omSetLencana_ + opsi `idBadge` DIHAPUS di v340.
+   Ia memasang angka ke SEBUAH ELEMEN, dan itu hanya benar kalau elemennya
+   bertahan. Lencana dashboard hilang bersama tabnya; lencana halaman produksi
+   ada di tombol FASE, yang dirender ulang tiap ganti tab -- elemen yang diisi
+   sekali akan terhapus pada render berikutnya. Penggantinya window.OM_PERLU_AKSI
+   (satu angka, satu definisi) yang dibaca spRenderFase_ tiap kali merender. */
 
 const OM_STATUS_CLASS = {
   "Pending": "om-status-pending",
@@ -3159,6 +3154,22 @@ const OM_STATUS_LABEL = {
 
 const OM_SIZE_KOLOM = ["XS","S","M","L","XL","2XL","3XL","4XL","5XL","All Size"];
 
+/**
+ * Kail sesudah render, DIPANGGIL DI KETIGA JALUR -- sukses, server menolak, dan
+ * jaringan putus -- dengan penanda `berhasil`.
+ *
+ * Kenapa ketiganya, bukan cuma sukses: pemanggil memakai kail ini untuk melepas
+ * keadaan "sedang memuat". Kalau jalur gagal tidak memanggilnya, penanda itu
+ * menempel selamanya dan pemuatan berikutnya diblokir oleh penjaganya sendiri --
+ * panel tertahan di pesan galat sampai halaman dimuat ulang. Cacat itu ditemukan
+ * saat merancang ujinya, bukan sesudah dipakai orang (v340).
+ */
+function omKail_(berhasil) {
+  if (!OM_KONF || typeof OM_KONF.sesudahRender !== "function") return;
+  try { OM_KONF.sesudahRender(window.OM_DAFTAR || [], !!berhasil); }
+  catch (e) { try { console.warn("[order-masuk] sesudahRender gagal: " + e.message); } catch (e2) {} }
+}
+
 function omRender_(konf){
   if (konf) OM_KONF = konf;
   if (!OM_KONF) return;
@@ -3171,6 +3182,7 @@ function omRender_(konf){
     if(!data.success){
       omEl_("idList").innerHTML =
         '<p style="color:var(--ink-soft);font-size:13px;padding:16px">' + (data.error || "Gagal memuat order masuk.") + '</p>';
+      omKail_(false);
       return;
     }
     window.OM_DAFTAR = data.daftar || [];
@@ -3179,19 +3191,18 @@ function omRender_(konf){
     const perluAksi = window.OM_DAFTAR.filter(function(g){
       return g.status === "Pending" || g.status === "Menunggu Verifikasi Klien Baru";
     }).length;
-    omSetLencana_(OM_KONF.idBadge, perluAksi);
-    // Kail untuk pemanggil: dipakai dashboard membuka modal dari hash tautan
-    // dalam (lihat dbBukaOrderMasukDariHash_). Dipanggil di tiap render --
-    // termasuk render ulang sesudah approve/reject -- jadi yang memakainya
-    // harus idempoten sendiri.
-    if (typeof OM_KONF.sesudahRender === "function") {
-      try { OM_KONF.sesudahRender(window.OM_DAFTAR); }
-      catch (e) { try { console.warn("[order-masuk] sesudahRender gagal: " + e.message); } catch (e2) {} }
-    }
+    // SATU definisi "perlu aksi", dibaca pemanggil. Sebelum v340 angka ini
+    // dipasang ke elemen lencana lewat omSetLencana_(idBadge); lencana dashboard
+    // ikut hilang bersama tabnya, dan lencana halaman produksi ditaruh di tombol
+    // FASE yang dirender ulang tiap ganti tab -- elemen yang diisi sekali akan
+    // terhapus. Jadi yang diekspor angkanya, dan yang merendernya spRenderFase_.
+    window.OM_PERLU_AKSI = perluAksi;
+    omKail_(true);
   })
   .catch(function(){
     omEl_("idList").innerHTML =
       '<p style="color:var(--ink-soft);font-size:13px;padding:16px">Gagal menghubungi server.</p>';
+    omKail_(false);
   });
 }
 
@@ -3200,33 +3211,13 @@ function omRender_(konf){
    simpro-global.css. Singkatnya: db-stat-* dipakai 14 kali oleh section
    dashboard lain dan tinggal di simpro-dashboard.css, jadi menggantinya
    berarti mempertaruhkan tampilan dashboard demi halaman lain. */
-/**
- * Klik kartu. DUA tujuan, dan yang menentukan konfigurasi pemanggilnya:
- *
- *   tanpa bukaDi  -> modal proofing di tempat (halaman dashboard)
- *   dengan bukaDi -> pindah ke halaman itu, membawa id order di hash
- *
- * KENAPA ADA CABANG INI. Modal proofing memakai komponen form order, dan
- * KOMPONEN ITU BERGAYA DARI CSS HALAMAN, bukan dari simpro-global.css:
- * diukur 12 Sep 2026, 74 dari 77 kelas di dalam modal tampil beda di halaman
- * produksi (yang tidak memuat simpro-dashboard.css). Menambal dengan memuat
- * CSS halaman lain juga ditolak oleh pengukuran -- simpro-tracking.css
- * menggeser 208 dari 258 elemen halaman produksi, dashboard.css & order.css
- * 65 elemen (dashboard.css membawa reset `*, *::before, *::after`).
- *
- * Yang benar: 94 aturan / ~463 deklarasi komponen form itu dikonsolidasikan ke
- * simpro-global.css sekali, dan itu pekerjaan tersendiri dengan pengukurannya
- * sendiri. Sampai itu terjadi, kartu di halaman produksi MENAUTKAN -- bukan
- * menampilkan modal yang separuh bergaya. Begitu konsolidasinya selesai,
- * cukup hapus `bukaDi` di spMuatOrderMasuk_ dan modalnya terbuka di tempat.
- */
-function omKlikKartu_(idx) {
-  const tujuan = OM_KONF && OM_KONF.bukaDi;
-  if (!tujuan) { omBukaModalProofing(idx); return; }
-  const g = (window.OM_DAFTAR || [])[idx];
-  if (!g) { alert("Data order tidak ditemukan, coba Refresh."); return; }
-  window.location.href = tujuan + "#ordermasuk=" + encodeURIComponent(g.idOrderRequest);
-}
+/* NISAN: omKlikKartu_ + opsi `bukaDi` DIHAPUS di v340.
+   Keduanya hidup satu hari. Fungsinya menautkan kartu di halaman produksi ke
+   halaman dashboard, karena modal proofing di sana tampil separuh bergaya --
+   74 dari 77 kelasnya beda (terukur v339). v340 mengkonsolidasikan 105 aturan
+   komponen form ke simpro-global.css, jadi modalnya kini terbuka DI TEMPAT dan
+   penautannya tidak punya alasan lagi. Ikut dibuang: dbBukaOrderMasukDariHash_
+   di simpro-dashboard.js (pembaca hash di ujung lain). */
 
 function omRenderSummary(daftar){
   const jumlahPending = daftar.filter(function(g){ return g.status === "Pending"; }).length;
@@ -3255,9 +3246,7 @@ function omRenderList(daftar){
     // memakai komponen form yang sama dengan Form Order & Edit Order, jadi
     // tampilan proofing seragam dengan sisa sistem.
     return '<div class="om-group-card" id="om-group-' + idx + '">' +
-      '<div class="om-group-head" onclick="omKlikKartu_(' + idx + ')" title="' +
-        (OM_KONF && OM_KONF.bukaDi ? 'Buka proofing order ini di halaman Dashboard'
-                                   : 'Buka proofing order ini') + '">' +
+      '<div class="om-group-head" onclick="omBukaModalProofing(' + idx + ')" title="Buka proofing order ini">' +
         '<div>' +
           '<span class="om-group-nama">' + (g.namaKlien || g.namaPerusahaanBaru || "(tanpa nama)") + '</span>' +
           '<div class="om-group-meta">' + labelIsi + ' &#183; Target kirim: ' + (g.targetTanggalKirim || "-") + '</div>' +

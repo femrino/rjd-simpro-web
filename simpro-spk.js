@@ -1117,9 +1117,20 @@ function spRenderFase_() {
   if (!w) return;
   w.innerHTML = SP_FASE_PETA.map(function (f) {
     if (!spFaseBoleh_(f)) return "";
+    // v340: lencana angka. Hanya fase "Orderan", hanya untuk peran yang boleh
+    // melihat subtabnya, dan hanya kalau angkanya > 0 -- penanda yang menyala
+    // terus berhenti jadi penanda. Dirender dari window.OM_PERLU_AKSI setiap
+    // kali deret ini digambar, bukan diisi sekali ke elemennya: fungsi ini
+    // menimpa innerHTML-nya tiap ganti tab, jadi elemen yang diisi sekali pasti
+    // hilang (itu sebabnya omSetLencana_ dipensiunkan).
+    const n = (f[0] === "orderan" && spBisaOrderMasuk_()) ? (window.OM_PERLU_AKSI || 0) : 0;
+    const lencana = n > 0
+      ? ' <span class="sp-tab-lencana" aria-label="' + n + ' pengajuan perlu tindakan">' + n + '</span>'
+      : '';
     return '<button class="sp-tab' + (f[0] === window.SP_FASE ? ' active' : '') +
+      (n > 0 ? ' sp-tab-berlencana' : '') +
       '" data-fase="' + f[0] + '" onclick="spPilihFase_(\'' + f[0] + '\')" type="button">' +
-      f[1] + '</button>';
+      f[1] + lencana + '</button>';
   }).join("");
 }
 
@@ -1249,7 +1260,14 @@ function spTerapkanBagian_(d) {
   // "Orderan Masuk" berisi pesan ditolak akan bertanya-tanya, atau lebih
   // buruk, mengira sistemnya rusak.
   window.SP_BISA_ORDER = !!(d && d.bisaOrder);
-  if (window.SP_BISA_ORDER) spPastikanPanelOrderMasuk_();
+  if (window.SP_BISA_ORDER) {
+    spPastikanPanelOrderMasuk_();
+    // v340: dimuat SEKARANG, tidak menunggu subtabnya dibuka -- kalau menunggu,
+    // lencana di tab fase "Orderan" tidak akan punya angka sampai orang membuka
+    // tab yang lencananya justru dimaksudkan untuk memberitahunya. Satu
+    // permintaan, dan penjaga di spMuatOrderMasuk_ mencegah yang kedua.
+    spMuatOrderMasuk_();
+  }
 
   // Kosong = semua bagian (staf lama yang kolomnya belum diisi).
   // Lintas = peran full/admin.
@@ -1932,7 +1950,7 @@ function spSwitchTab(tab) {
   if (tab === "qcring") { spMuatQC_(); qcSinkronPOAktif_(); qcModeSub_("ringkasan"); qcMuatRiwayatPO_(); return; }   // v298: sesi QC PO aktif
   if (tab === "approval") { spMuatApproval_(); return; }
   if (tab === "sop") { spMuatSOP_(); return; }
-  if (tab === "ordermasuk") { spMuatOrderMasuk_(); return; }
+  if (tab === "ordermasuk") { spMuatOrderMasuk_(); return; }   // tanpa paksa: lihat penjaga di fungsinya
   if (tab === "orderan") { spRenderOrderan_(); return; }
   if (tab === "detailorder") { spMuatDetailOrder_(); return; }
   // v178: daftar tercatat dimuat SEKALIGUS saat tabnya dibuka, tidak menunggu
@@ -2697,10 +2715,18 @@ function spPastikanPanelOrderMasuk_() {
   p.className = "hidden";
   p.innerHTML =
     '<div class="sp-card">' +
-      '<h3 class="sp-judul">Orderan Masuk</h3>' +
+      '<div class="sp-om-kepala">' +
+        '<h3 class="sp-judul">Orderan Masuk</h3>' +
+        // Antrean berubah sepanjang hari dan halaman ini tidak dimuat ulang tiap
+        // menit. Tanpa tombol ini, satu-satunya cara menyegarkan adalah F5 --
+        // dan data yang dibaca sekali lalu didiamkan adalah snapshot, yang di
+        // sistem ini sudah punya aturannya sendiri.
+        '<button type="button" class="sp-btn-kecil" id="sp-om-segarkan" ' +
+          'onclick="spMuatOrderMasuk_(true)">Segarkan</button>' +
+      '</div>' +
       '<p class="sp-info">Pengajuan order dari klien yang belum jadi PO. ' +
-        'Klik kartunya untuk proofing &mdash; layar proofing terbuka di halaman ' +
-        '<b>Dashboard</b>, dan langsung pada order yang Anda klik.</p>' +
+        'Klik kartunya untuk proofing; yang disetujui otomatis terbit sebagai ' +
+        'Purchase Order.</p>' +
       '<div id="sp-om-summary" class="om-stat-grid"></div>' +
       '<div id="sp-om-list"></div>' +
     '</div>';
@@ -2708,9 +2734,24 @@ function spPastikanPanelOrderMasuk_() {
   return true;
 }
 
-function spMuatOrderMasuk_() {
+/**
+ * Muat/segarkan daftar Orderan Masuk.
+ *
+ * `paksa` mengikuti pola yang sudah dipakai di halaman ini (spMuatSemuaMarker_)
+ * dan di dashboard (jpMuatData): tanpa paksa, pemuatan kedua dan seterusnya
+ * dilewati. Alasannya bukan hemat-hematan -- sejak v340 fungsi ini dipanggil
+ * dari DUA tempat: sekali saat peran datang (supaya lencana tab fase punya
+ * angka tanpa orang membuka subtabnya) dan sekali tiap subtabnya dibuka. Tanpa
+ * penjaga ini, mendarat di subtab itu berarti dua permintaan untuk satu layar.
+ */
+function spMuatOrderMasuk_(paksa) {
   if (!spBisaOrderMasuk_()) return;
   if (!spPastikanPanelOrderMasuk_()) return;
+  // Penjaga: lewati kalau sudah termuat ATAU sedang dalam perjalanan. Yang
+  // menandai "sudah termuat" hanya render yang BERHASIL (lihat sesudahRender di
+  // bawah) -- kalau pemuatan gagal, masuk lagi ke subtab ini mencobanya ulang,
+  // bukan memperlihatkan pesan galat yang sama selamanya.
+  if (!paksa && (window.SP_OM_JALAN || window.SP_OM_DIMUAT)) return;
   // simpro-global.js gagal dimuat -> komponennya tidak ada. Katakan apa
   // adanya; panel kosong tanpa sebab bikin orang mengira datanya habis.
   if (typeof omRender_ !== "function") {
@@ -2719,22 +2760,33 @@ function spMuatOrderMasuk_() {
       'Muat ulang halaman (Ctrl+F5); kalau tetap begini, laporkan.</p>';
     return;
   }
+  window.SP_OM_JALAN = true;
+  const btn = document.getElementById("sp-om-segarkan");
+  if (btn) { btn.disabled = true; btn.textContent = "Memuat..."; }
   omRender_({
     api: SP_API_URL,
     token: SP_ID_TOKEN,
     idList: "sp-om-list",
     idSummary: "sp-om-summary",
-    // idBadge sengaja TIDAK disebut -- halaman ini belum punya lencana.
-    //
-    // bukaDi: kartu MENAUTKAN ke dashboard, tidak membuka modal di tempat.
-    // Bukan pilihan rasa: modal proofing memakai komponen form order yang
-    // bergaya dari simpro-dashboard.css, dan halaman ini tidak memuatnya --
-    // 74 dari 77 kelas di dalam modal tampil beda (terukur 12 Sep 2026).
-    // Memuat CSS halaman lain ke sini juga ditolak pengukuran: tracking.css
-    // menggeser 208 dari 258 elemen halaman ini, dashboard.css & order.css 65.
-    // Konsolidasi ~463 deklarasi komponen form ke simpro-global.css adalah
-    // sesi tersendiri; sesudah itu HAPUS baris ini dan modalnya terbuka di sini.
-    bukaDi: "/p/dashboard.html"
+    // v340: modal proofing dibuka DI TEMPAT. Opsi `bukaDi` yang menautkannya ke
+    // dashboard sudah dibuang bersama alasannya -- 105 aturan komponen form
+    // dikonsolidasikan ke simpro-global.css, dan celah 74-dari-77 kelas itu
+    // sekarang nol (terukur).
+    sesudahRender: function (daftar, berhasil) {
+      window.SP_OM_JALAN = false;
+      // Hanya render BERHASIL yang menandai "sudah termuat". Pada kegagalan,
+      // OM_PERLU_AKSI sengaja DIBIARKAN apa adanya: lencana yang menunjukkan
+      // angka terakhir yang diketahui lebih baik daripada lencana yang hilang,
+      // karena hilang terbaca "tidak ada yang perlu dikerjakan".
+      window.SP_OM_DIMUAT = berhasil ? Date.now() : 0;
+      const b = document.getElementById("sp-om-segarkan");
+      if (b) { b.disabled = false; b.textContent = "Segarkan"; }
+      // Lencana tab fase dirender dari window.OM_PERLU_AKSI, jadi deret fase
+      // harus digambar ULANG begitu angkanya datang. Dipanggil di tiap render,
+      // termasuk sesudah approve/reject -- itu justru yang dibutuhkan: angka
+      // yang tidak turun sesudah antreannya dikerjakan akan berhenti dipercaya.
+      spRenderFase_();
+    }
   });
 }
 

@@ -1309,3 +1309,154 @@ body[data-bagian~="lintas"] .rjd-bagian-lain { display: none; }
 @media (max-width:760px){
   .om-stat-grid{grid-auto-flow:column;grid-auto-columns:minmax(120px,1fr);grid-template-columns:none;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px}
 }
+
+/* ============================================================
+ * KOMPONEN FORM ORDER + MODAL PROOFING -- konsolidasi (v340)
+ * ============================================================
+ * 105 aturan kelas of-* / lp-edit-* DISALIN dari simpro-dashboard.css supaya
+ * modal proofing Order Masuk bisa dibuka di halaman PRODUKSI, yang tidak
+ * memuat berkas itu. Sebelum ini 74 dari 77 kelas di dalam modal tampil beda
+ * di sana (terukur v339), jadi kartunya menautkan ke dashboard alih-alih
+ * membuka modal separuh bergaya.
+ *
+ * DIKURUNG ke dalam modal, DAN TANPA MENAIKKAN SPESIFISITAS: tiap selektor
+ * dibungkus `:where(#om-proofing-overlay)`, dan `:where()` menyumbang NOL
+ * spesifisitas. Akibatnya dua sifat yang dua-duanya penting:
+ *   1. Aturan ini TIDAK PERNAH menyentuh apa pun di luar modal proofing --
+ *      form order di /p/order.html tidak ikut berubah. Itu bukan teori:
+ *      versi TANPA kurung ini mengubah margin 7 input di halaman itu, dan
+ *      pengukuran 8 halaman yang memergokinya.
+ *   2. Di halaman yang PUNYA salinannya sendiri (dashboard, order, tracking),
+ *      salinan halaman tetap menang seri seperti sebelumnya -- berkas ini
+ *      dimuat lebih dulu. Jadi blok ini cadangan, bukan penimpa, dan
+ *      simpro-dashboard.css / order.css / tracking.css TIDAK disentuh sama
+ *      sekali: tiga halaman yang sudah lama bekerja tidak dipertaruhkan demi
+ *      halaman keempat.
+ *
+ * `:where()` aman di sini menurut presedan proyek sendiri, bukan dugaan:
+ * simpro-*.css sudah memakai `:has()` 13 kali, dan dukungan browser `:has()`
+ * LEBIH SEMPIT (Chrome 105) daripada `:where()` (Chrome 88).
+ *
+ * YANG SENGAJA TIDAK IKUT: 25 aturan berselektor tanpa kelas -- terutama reset
+ * `*, *::before, *::after` milik dashboard.css. Reset itulah yang menggeser 65
+ * dari 258 elemen halaman produksi waktu seluruh dashboard.css dicoba dimuat,
+ * dan ia tidak punya urusan dengan modal.
+ *
+ * Daftar kelasnya DITURUNKAN, bukan diketik: modal dirender di DUA keadaan
+ * (klien lama & klien baru -- blok verifikasi hanya lahir pada yang kedua),
+ * lalu semua className di dalam overlay dikumpulkan: 126 kelas. Aturan yang
+ * dipilih adalah yang selektornya menyentuh salah satunya.
+ *
+ * Urutan dan konteks @media DIPERTAHANKAN apa adanya dari dashboard.css:
+ * beberapa kelas didefinisikan lebih dari sekali dan yang belakangan menimpa
+ * yang depan. Menyusunnya "lebih rapi" akan mengubah tampilannya.
+ * ============================================================ */
+:where(#om-proofing-overlay) .of-item-card, :where(#om-proofing-overlay).of-item-card { background: var(--white); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; margin-bottom: 14px; position: relative; box-shadow: var(--shadow-sm); }
+:where(#om-proofing-overlay) .of-item-head, :where(#om-proofing-overlay).of-item-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+:where(#om-proofing-overlay) .of-item-head b, :where(#om-proofing-overlay).of-item-head b { font-size: 12.5px; font-family: 'IBM Plex Mono', monospace; letter-spacing: .04em; color: var(--terra); }
+:where(#om-proofing-overlay) .of-item-remove, :where(#om-proofing-overlay).of-item-remove { background: none; border: none; color: var(--ink-soft); cursor: pointer; font-size: 17px; line-height: 1; padding: 2px 6px; border-radius: 6px; transition: all .15s; }
+:where(#om-proofing-overlay) .of-item-remove:hover, :where(#om-proofing-overlay).of-item-remove:hover { color: #8f2c22; background: #FDECEA; }
+:where(#om-proofing-overlay) .of-item-grid, :where(#om-proofing-overlay).of-item-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+:where(#om-proofing-overlay) .of-item-card label, :where(#om-proofing-overlay).of-item-card label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+:where(#om-proofing-overlay) .of-item-card input, :where(#om-proofing-overlay).of-item-card input, :where(#om-proofing-overlay) .of-item-card select, :where(#om-proofing-overlay).of-item-card select, :where(#om-proofing-overlay) .of-item-card textarea, :where(#om-proofing-overlay).of-item-card textarea { font-family: 'Inter', sans-serif; font-size: 13.5px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--cream); color: var(--navy); width: 100%; box-sizing: border-box; transition: border-color .18s ease, box-shadow .18s ease; }
+:where(#om-proofing-overlay) .of-item-card input:focus, :where(#om-proofing-overlay).of-item-card input:focus, :where(#om-proofing-overlay) .of-item-card select:focus, :where(#om-proofing-overlay).of-item-card select:focus, :where(#om-proofing-overlay) .of-item-card textarea:focus, :where(#om-proofing-overlay).of-item-card textarea:focus { outline: none; border-color: var(--terra); box-shadow: 0 0 0 3px rgba(189,67,53,.10); background: var(--white); }
+:where(#om-proofing-overlay) .of-item-card textarea, :where(#om-proofing-overlay).of-item-card textarea { resize: vertical; font-weight: 400; }
+:where(#om-proofing-overlay) .of-matrix-wrap, :where(#om-proofing-overlay).of-matrix-wrap { overflow-x:auto;margin-top:16px }
+:where(#om-proofing-overlay) .of-matrix, :where(#om-proofing-overlay).of-matrix { width:100%;border-collapse:collapse;font-size:13px }
+:where(#om-proofing-overlay) .of-matrix th, :where(#om-proofing-overlay).of-matrix th { background:transparent;border:none;border-bottom:1.5px solid var(--line);padding:4px 6px 9px;font-size:10.5px;font-family:'IBM Plex Mono',monospace;color:var(--ink-soft);font-weight:700;text-align:center;white-space:nowrap }
+:where(#om-proofing-overlay) .of-matrix th.of-th-warna, :where(#om-proofing-overlay).of-matrix th.of-th-warna { text-align:left;min-width:168px }
+:where(#om-proofing-overlay) .of-matrix td, :where(#om-proofing-overlay).of-matrix td { border:none;border-bottom:1px solid var(--line-soft);padding:5px 4px;vertical-align:middle;background:transparent }
+:where(#om-proofing-overlay) .of-matrix tbody tr:last-child td, :where(#om-proofing-overlay).of-matrix tbody tr:last-child td { border-bottom:none }
+:where(#om-proofing-overlay) .of-matrix tbody.of-warna-blok, :where(#om-proofing-overlay).of-matrix tbody.of-warna-blok { background:transparent;border:none;border-left:3px solid var(--terra-light);border-radius:0;padding:0 }
+:where(#om-proofing-overlay) .of-matrix .of-td-warna input, :where(#om-proofing-overlay).of-matrix .of-td-warna input, :where(#om-proofing-overlay) .of-matrix .of-td-size input, :where(#om-proofing-overlay).of-matrix .of-td-size input, :where(#om-proofing-overlay) .of-matrix .of-td-harga input, :where(#om-proofing-overlay).of-matrix .of-td-harga input { width:100%;margin:0;padding:7px 6px }
+:where(#om-proofing-overlay) .of-matrix .of-td-size input, :where(#om-proofing-overlay).of-matrix .of-td-size input { text-align:center;min-width:56px }
+:where(#om-proofing-overlay) .of-matrix th.of-th-size, :where(#om-proofing-overlay).of-matrix th.of-th-size { white-space:nowrap }
+:where(#om-proofing-overlay) .of-matrix .of-td-harga input, :where(#om-proofing-overlay).of-matrix .of-td-harga input { min-width:88px;text-align:right }
+:where(#om-proofing-overlay) .of-matrix .of-td-total, :where(#om-proofing-overlay).of-matrix .of-td-total { text-align:center;font-weight:800;background:var(--cream);min-width:44px }
+:where(#om-proofing-overlay) .of-matrix .of-td-aksi, :where(#om-proofing-overlay).of-matrix .of-td-aksi { white-space:nowrap;text-align:center;width:1% }
+:where(#om-proofing-overlay) .of-matrix .of-warna-remove, :where(#om-proofing-overlay).of-matrix .of-warna-remove { background:none;border:1px solid var(--line-soft);border-radius:6px;width:26px;height:26px;padding:0;margin:0;cursor:pointer;color:var(--ink-soft);font-size:11px;line-height:1 }
+:where(#om-proofing-overlay) .of-matrix th.of-th-kain, :where(#om-proofing-overlay).of-matrix th.of-th-kain { text-align:left;min-width:86px;max-width:112px;white-space:normal;line-height:1.25;word-break:break-word }
+:where(#om-proofing-overlay) .of-matrix .of-td-kain input, :where(#om-proofing-overlay).of-matrix .of-td-kain input { width:100%;margin:0;padding:7px 7px;min-width:86px }
+:where(#om-proofing-overlay) .of-komposisi-wrap, :where(#om-proofing-overlay).of-komposisi-wrap { margin-top:14px;padding:12px 14px;background:var(--cream);border-radius:10px }
+:where(#om-proofing-overlay) .of-kmp-tabel, :where(#om-proofing-overlay).of-kmp-tabel, :where(#om-proofing-overlay) .of-sc-tabel, :where(#om-proofing-overlay).of-sc-tabel { margin-top:2px }
+:where(#om-proofing-overlay) .of-matrix th.of-th-kmp-kons, :where(#om-proofing-overlay).of-matrix th.of-th-kmp-kons { min-width:78px }
+:where(#om-proofing-overlay) .of-matrix th.of-th-kmp-satuan, :where(#om-proofing-overlay).of-matrix th.of-th-kmp-satuan { min-width:72px }
+:where(#om-proofing-overlay) .of-matrix .of-td-kmp-nama input, :where(#om-proofing-overlay).of-matrix .of-td-kmp-nama input, :where(#om-proofing-overlay) .of-matrix .of-td-sc-nama input, :where(#om-proofing-overlay).of-matrix .of-td-sc-nama input { width:100%;margin:0;padding:7px 9px;min-width:168px }
+:where(#om-proofing-overlay) .of-matrix .of-td-kmp-kons input, :where(#om-proofing-overlay).of-matrix .of-td-kmp-kons input { width:100%;margin:0;padding:7px 6px;text-align:center;min-width:72px }
+:where(#om-proofing-overlay) .of-matrix .of-td-kmp-satuan select, :where(#om-proofing-overlay).of-matrix .of-td-kmp-satuan select { width:100%;margin:0;padding:7px 4px;min-width:68px;font-size:12px }
+:where(#om-proofing-overlay) .of-matrix .of-td-kmp-sz input, :where(#om-proofing-overlay).of-matrix .of-td-kmp-sz input, :where(#om-proofing-overlay) .of-matrix .of-td-sc-nilai input, :where(#om-proofing-overlay).of-matrix .of-td-sc-nilai input { width:100%;margin:0;padding:7px 4px;text-align:center;min-width:48px }
+:where(#om-proofing-overlay) .of-matrix input, :where(#om-proofing-overlay).of-matrix input, :where(#om-proofing-overlay) .of-matrix select, :where(#om-proofing-overlay).of-matrix select { background:var(--white);border:1px solid var(--line-soft);border-radius:7px }
+:where(#om-proofing-overlay) .of-matrix input:focus, :where(#om-proofing-overlay).of-matrix input:focus, :where(#om-proofing-overlay) .of-matrix select:focus, :where(#om-proofing-overlay).of-matrix select:focus { border-color:var(--thread);outline:none;box-shadow:0 0 0 2px rgba(178,58,42,.10) }
+:where(#om-proofing-overlay) .of-matrix input::placeholder, :where(#om-proofing-overlay).of-matrix input::placeholder { color:var(--ink-soft);opacity:.5 }
+:where(#om-proofing-overlay) .of-size-pilih, :where(#om-proofing-overlay).of-size-pilih { margin-bottom:4px }
+:where(#om-proofing-overlay) .of-size-preset, :where(#om-proofing-overlay).of-size-preset { display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px }
+:where(#om-proofing-overlay) .of-size-preset-btn, :where(#om-proofing-overlay).of-size-preset-btn { border:1px solid var(--line);background:var(--white);color:var(--ink);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit }
+:where(#om-proofing-overlay) .of-size-preset-btn:hover, :where(#om-proofing-overlay).of-size-preset-btn:hover { border-color:var(--thread);color:var(--thread) }
+:where(#om-proofing-overlay) .of-size-preset-btn.aktif, :where(#om-proofing-overlay).of-size-preset-btn.aktif { background:var(--ink);color:var(--white);border-color:var(--ink) }
+:where(#om-proofing-overlay) .of-size-cek, :where(#om-proofing-overlay).of-size-cek { display:flex;flex-wrap:wrap;gap:6px }
+:where(#om-proofing-overlay) .of-size-cek-item, :where(#om-proofing-overlay).of-size-cek-item { display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line-soft);border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;background:var(--white);margin:0 }
+:where(#om-proofing-overlay) .of-size-cek-item input, :where(#om-proofing-overlay).of-size-cek-item input { margin:0;width:auto;cursor:pointer }
+:where(#om-proofing-overlay) .of-size-cek-item:has(input:checked), :where(#om-proofing-overlay).of-size-cek-item:has(input:checked) { border-color:var(--thread);background:var(--paper-2);color:var(--thread) }
+:where(#om-proofing-overlay) .of-size-mode-angka, :where(#om-proofing-overlay).of-size-mode-angka { font-size:12px;color:var(--ink-soft);background:var(--cream);border-radius:8px;padding:8px 12px }
+:where(#om-proofing-overlay) .of-size-kembali, :where(#om-proofing-overlay).of-size-kembali { background:none;border:none;color:var(--thread);font-weight:700;cursor:pointer;text-decoration:underline;font-family:inherit;font-size:12px;padding:0 }
+:where(#om-proofing-overlay) .of-pilihartikel-wrap, :where(#om-proofing-overlay).of-pilihartikel-wrap { margin-top:14px;padding:10px 14px;background:var(--cream);border-radius:10px }
+:where(#om-proofing-overlay) .of-pilihartikel-wrap select, :where(#om-proofing-overlay).of-pilihartikel-wrap select { width:100%;margin-top:4px }
+:where(#om-proofing-overlay) .of-pilihartikel-status, :where(#om-proofing-overlay).of-pilihartikel-status { font-size:11px;color:var(--thread);margin-top:5px;font-weight:600 }
+:where(#om-proofing-overlay) .of-komposisi-lbl, :where(#om-proofing-overlay).of-komposisi-lbl { font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:8px }
+:where(#om-proofing-overlay) .of-komposisi-hint, :where(#om-proofing-overlay).of-komposisi-hint { font-size:11px;color:var(--ink-soft);margin-top:6px }
+:where(#om-proofing-overlay) .of-aks-wrap, :where(#om-proofing-overlay).of-aks-wrap { margin-top:14px;padding:12px 14px;background:var(--cream);border-radius:10px }
+:where(#om-proofing-overlay) .of-kaink-baris .of-jadwal-hapus, :where(#om-proofing-overlay).of-kaink-baris .of-jadwal-hapus { flex:0 0 28px }
+:where(#om-proofing-overlay) .of-matrix th.of-th-aks-ket, :where(#om-proofing-overlay).of-matrix th.of-th-aks-ket { text-align:left;min-width:150px }
+:where(#om-proofing-overlay) .of-matrix .of-td-aks-ket input, :where(#om-proofing-overlay).of-matrix .of-td-aks-ket input { width:100%;margin:0;padding:7px 9px;min-width:150px }
+:where(#om-proofing-overlay) .of-warna-wrap, :where(#om-proofing-overlay).of-warna-wrap { background:transparent;border:1px dashed var(--line-soft) }
+:where(#om-proofing-overlay) .of-warna-lbl-baris, :where(#om-proofing-overlay).of-warna-lbl-baris { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap }
+:where(#om-proofing-overlay) .of-toggle-kain, :where(#om-proofing-overlay).of-toggle-kain { background:none;border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:11.5px;font-weight:600;color:var(--ink-soft);cursor:pointer;font-family:inherit;white-space:nowrap }
+:where(#om-proofing-overlay) .of-toggle-kain:hover, :where(#om-proofing-overlay).of-toggle-kain:hover { border-color:var(--thread);color:var(--thread) }
+:where(#om-proofing-overlay) .of-matrix.of-sembunyi-kain .of-th-kain, :where(#om-proofing-overlay).of-matrix.of-sembunyi-kain .of-th-kain, :where(#om-proofing-overlay) .of-matrix.of-sembunyi-kain .of-td-kain, :where(#om-proofing-overlay).of-matrix.of-sembunyi-kain .of-td-kain { display:none }
+:where(#om-proofing-overlay) .of-jadwal-wrap, :where(#om-proofing-overlay).of-jadwal-wrap, :where(#om-proofing-overlay) .of-aks-wrap, :where(#om-proofing-overlay).of-aks-wrap, :where(#om-proofing-overlay) .of-komposisi-wrap, :where(#om-proofing-overlay).of-komposisi-wrap { grid-column:1/-1 }
+:where(#om-proofing-overlay) .of-jadwal-wrap, :where(#om-proofing-overlay).of-jadwal-wrap { margin-top:14px;padding-top:14px;border-top:1px dashed var(--line-soft) }
+:where(#om-proofing-overlay) .of-jadwal-lbl, :where(#om-proofing-overlay).of-jadwal-lbl { font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:8px }
+:where(#om-proofing-overlay) .of-hint-akhir, :where(#om-proofing-overlay).of-hint-akhir { font-size:11px;font-weight:400;color:var(--ink-soft) }
+:where(#om-proofing-overlay) .of-jadwal-baris, :where(#om-proofing-overlay).of-jadwal-baris { display:grid;grid-template-columns:150px 84px 1fr 30px;gap:8px;align-items:center;margin-bottom:8px }
+:where(#om-proofing-overlay) .of-jadwal-baris input, :where(#om-proofing-overlay).of-jadwal-baris input { margin:0;padding:7px 8px }
+:where(#om-proofing-overlay) .of-jadwal-hapus, :where(#om-proofing-overlay).of-jadwal-hapus { background:none;border:1px solid var(--line-soft);border-radius:6px;width:28px;height:28px;padding:0;cursor:pointer;color:var(--ink-soft);font-size:11px;line-height:1 }
+:where(#om-proofing-overlay) .of-jadwal-add, :where(#om-proofing-overlay).of-jadwal-add { width:100%;background:none;border:1px dashed var(--line);border-radius:10px;padding:9px;font-size:12.5px;font-weight:600;color:var(--thread);cursor:pointer;font-family:inherit }
+@media (max-width:640px) {
+  :where(#om-proofing-overlay) .of-jadwal-baris, :where(#om-proofing-overlay).of-jadwal-baris { grid-template-columns:1fr 1fr;gap:6px }
+  :where(#om-proofing-overlay) .of-jadwal-baris .of-f-jadwal-ket, :where(#om-proofing-overlay).of-jadwal-baris .of-f-jadwal-ket { grid-column:1/-1 }
+}
+:where(#om-proofing-overlay) .of-item-detail, :where(#om-proofing-overlay).of-item-detail { margin-top:14px;padding-top:14px;border-top:1px dashed var(--line-soft) }
+:where(#om-proofing-overlay) .of-warna-blok, :where(#om-proofing-overlay).of-warna-blok { background: var(--cream); border: 1px solid var(--line-soft); border-left: 3px solid var(--terra-light); border-radius: 12px; padding: 13px 15px; }
+:where(#om-proofing-overlay) .of-warna-remove, :where(#om-proofing-overlay).of-warna-remove { background: none; border: none; color: var(--ink-soft); cursor: pointer; font-size: 15px; line-height: 1; padding: 8px; border-radius: 6px; transition: all .15s; flex-shrink: 0; }
+:where(#om-proofing-overlay) .of-warna-remove:hover, :where(#om-proofing-overlay).of-warna-remove:hover { color: #8f2c22; background: #FDECEA; }
+:where(#om-proofing-overlay) .of-add-warna-btn, :where(#om-proofing-overlay).of-add-warna-btn { width: 100%; margin-top: 12px; padding: 9px; border: 1px dashed var(--terra-light); border-radius: 10px; background: none; color: var(--terra); font-family: 'Inter', sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all .18s ease; }
+:where(#om-proofing-overlay) .of-add-warna-btn:hover, :where(#om-proofing-overlay).of-add-warna-btn:hover { background: rgba(189,67,53,.05); border-color: var(--terra); }
+:where(#om-proofing-overlay) .of-add-item-btn, :where(#om-proofing-overlay).of-add-item-btn { width: 100%; padding: 13px; border: 1.5px dashed var(--line); border-radius: 12px; background: none; color: var(--terra); font-weight: 700; font-size: 13px; cursor: pointer; margin-bottom: 14px; font-family: inherit; transition: all .18s ease; }
+:where(#om-proofing-overlay) .of-add-item-btn:hover, :where(#om-proofing-overlay).of-add-item-btn:hover { border-color: var(--terra); background: rgba(189,67,53,.05); }
+:where(#om-proofing-overlay) .of-form-section, :where(#om-proofing-overlay).of-form-section { background: var(--white); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+:where(#om-proofing-overlay) .of-form-section h4, :where(#om-proofing-overlay).of-form-section h4 { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13.5px; margin-bottom: 12px; color: var(--navy); }
+:where(#om-proofing-overlay) .of-form-section label, :where(#om-proofing-overlay).of-form-section label { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+:where(#om-proofing-overlay) .of-form-section input, :where(#om-proofing-overlay).of-form-section input, :where(#om-proofing-overlay) .of-form-section textarea, :where(#om-proofing-overlay).of-form-section textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 5px; font-family: 'Inter', sans-serif; font-size: 13.5px; color: var(--navy); padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--cream); }
+:where(#om-proofing-overlay) .of-form-section input:focus, :where(#om-proofing-overlay).of-form-section input:focus, :where(#om-proofing-overlay) .of-form-section textarea:focus, :where(#om-proofing-overlay).of-form-section textarea:focus { outline: none; border-color: var(--terra); box-shadow: 0 0 0 3px rgba(189,67,53,.10); background: var(--white); }
+:where(#om-proofing-overlay) .of-form-section textarea.rjd-autogrow, :where(#om-proofing-overlay).of-form-section textarea.rjd-autogrow { resize: none; min-height: 60px; overflow-y: hidden; line-height: 1.55; }
+@media (max-width: 640px) {
+  :where(#om-proofing-overlay) .of-item-grid, :where(#om-proofing-overlay).of-item-grid { grid-template-columns: 1fr; }
+}
+:where(#om-proofing-overlay) .of-foto-lama, :where(#om-proofing-overlay).of-foto-lama { margin-top: 10px; padding: 10px 12px; background: var(--white); border: 1px solid var(--line-soft); border-radius: 10px; }
+:where(#om-proofing-overlay) .of-foto-lama-lbl, :where(#om-proofing-overlay).of-foto-lama-lbl { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 6px; }
+:where(#om-proofing-overlay) .of-f-gambar-lbl, :where(#om-proofing-overlay).of-f-gambar-lbl { display: block; }
+:where(#om-proofing-overlay) .lp-edit-overlay, :where(#om-proofing-overlay).lp-edit-overlay { position: fixed; inset: 0; z-index: 100; background: rgba(15,22,35,.55); backdrop-filter: blur(2px); display: flex; align-items: flex-start; justify-content: center; padding: 32px 16px; overflow-y: auto; animation: lpEditFade .2s ease-out; }
+:where(#om-proofing-overlay) .lp-edit-modal, :where(#om-proofing-overlay).lp-edit-modal { background: var(--cream); width: 100%; max-width: min(1100px, 96vw); border-radius: 20px; box-shadow: var(--shadow-lg); animation: lpEditPop .28s cubic-bezier(.34,1.56,.64,1); margin: auto; }
+:where(#om-proofing-overlay) .lp-edit-modal-head, :where(#om-proofing-overlay).lp-edit-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 24px; border-bottom: 1px solid var(--line); }
+:where(#om-proofing-overlay) .lp-edit-modal-title, :where(#om-proofing-overlay).lp-edit-modal-title { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 17px; color: var(--navy); }
+:where(#om-proofing-overlay) .lp-edit-modal-sub, :where(#om-proofing-overlay).lp-edit-modal-sub { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--thread); margin-top: 2px; }
+:where(#om-proofing-overlay) .lp-edit-close, :where(#om-proofing-overlay).lp-edit-close { width: 32px; height: 32px; border-radius: 9999px; flex-shrink: 0; border: 1px solid var(--line); background: var(--white); color: var(--ink-soft); cursor: pointer; font-size: 15px; transition: all .18s ease; }
+:where(#om-proofing-overlay) .lp-edit-close:hover, :where(#om-proofing-overlay).lp-edit-close:hover { color: #8f2c22; border-color: #E8A49C; background: #FDECEA; }
+:where(#om-proofing-overlay) .lp-edit-modal-body, :where(#om-proofing-overlay).lp-edit-modal-body { padding: 20px 24px; }
+:where(#om-proofing-overlay) .lp-edit-label textarea.rjd-autogrow, :where(#om-proofing-overlay).lp-edit-label textarea.rjd-autogrow { resize: none; min-height: 60px; overflow-y: hidden; line-height: 1.55; }
+:where(#om-proofing-overlay) .lp-edit-modal-foot, :where(#om-proofing-overlay).lp-edit-modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 24px; border-top: 1px solid var(--line); }
+:where(#om-proofing-overlay) .lp-edit-cancel, :where(#om-proofing-overlay).lp-edit-cancel { padding: 10px 18px; border-radius: 9999px; border: 1px solid var(--line); background: var(--white); color: var(--ink-soft); cursor: pointer; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; }
+:where(#om-proofing-overlay) .lp-edit-cancel:hover, :where(#om-proofing-overlay).lp-edit-cancel:hover { border-color: var(--ink-soft); }
+:where(#om-proofing-overlay) .lp-edit-save, :where(#om-proofing-overlay).lp-edit-save { padding: 10px 22px; border-radius: 9999px; border: none; background: var(--terra); color: var(--cream); cursor: pointer; font-family: 'Archivo', sans-serif; font-size: 13px; font-weight: 700; box-shadow: 0 4px 12px rgba(189,67,53,.25); }
+:where(#om-proofing-overlay) .lp-edit-save:hover, :where(#om-proofing-overlay).lp-edit-save:hover { opacity: .92; }
+:where(#om-proofing-overlay) .lp-edit-save:disabled, :where(#om-proofing-overlay).lp-edit-save:disabled { opacity: .55; cursor: default; }

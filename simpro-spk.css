@@ -2114,3 +2114,42 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
   .sp-gb-mk { min-width: 235px; }
   .sp-gb-tabel .sp-gb-allow, .sp-gb-tabel .sp-gb-lapis { width: 58px; }
 }
+
+/* ---------- ORDERAN MASUK (v340) ----------
+   Kepala panel mengikuti pola .sp-keluar-kepala yang sudah ada: judul di kiri,
+   tombol di kanan, align-items baseline supaya tombol tidak menaikkan tinggi
+   barisnya. */
+.sp-om-kepala { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.sp-om-kepala .sp-judul { margin: 0; }
+
+/* Lencana angka di tombol FASE. Warna & bentuknya disalin dari .db-tab-badge
+   yang sudah dipakai dashboard berbulan-bulan -- bukan dikarang ulang -- supaya
+   lencana di dua halaman terbaca sebagai benda yang sama.
+
+   DI LUAR ALIRAN TEKS, dan itu bukan pilihan gaya. Versi pertama memasangnya
+   sebagai inline-flex di dalam tombol; TERUKUR, ia menaikkan tinggi tombol dari
+   35px jadi 38px, jadi seluruh deret tab naik-turun 3px setiap antreannya
+   terisi atau kosong. Mengecilkannya TIDAK menyelesaikan: 18/17/16/15/14/13px
+   menambah 3 / 2,1 / 1,6 / 1,1 / 0,6 / 0,1px -- kotak inline selalu menambah
+   leading. Aturan lamanya sudah menulis ini: elemen kondisional harus di luar
+   aliran sejak awal, kalau tidak tinggi wadahnya tidak bisa ditebak.
+
+   `position: relative` pada .sp-tab aman ditambah: computed position tombol
+   fase MAUPUN subtab diukur `static` lebih dulu, jadi tidak ada position dari
+   kelas lain yang dimatikan diam-diam.
+
+   Lencananya ditaruh DI DALAM kotak tombol (right: 8px), bukan menggantung di
+   luarnya: #sp-tabs ber-overflow-x:auto, dan apa pun yang menggantung di luar
+   tombol akan terpotong saat bar itu digulung. */
+.sp-tab { position: relative; }
+/* Spesifisitas SENGAJA (0,2,0) menyamai `.sp-tabs .sp-tab { padding: 9px 15px }`
+   di blok media 600px; `.sp-tab-berlencana` sendiri (0,1,0) akan kalah di HP dan
+   angkanya menimpa teks tombol -- setengah perbaikan yang cuma terlihat di HP. */
+.sp-tabs .sp-tab-berlencana { padding-right: 36px; }
+.sp-tab-lencana {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 10px; background: var(--thread); color: var(--white);
+  font-size: 10.5px; font-weight: 700; font-family: 'IBM Plex Mono', monospace;
+}

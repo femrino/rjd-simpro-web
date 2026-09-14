@@ -726,62 +726,24 @@ function jpRenderAsumsi(){
 }
 
 /* ============================================================
- * NISAN: komponen Order Masuk PINDAH ke simpro-global.js (v339)
+ * NISAN: section Order Masuk DIHAPUS dari dashboard (v340)
  * ============================================================
- * Yang pindah: OM_STATUS_CLASS / OM_STATUS_LABEL / OM_SIZE_KOLOM dan sepuluh
- * fungsi om* (render, modal proofing, verifikasi klien baru, approve, reject,
- * hapus) -- 382 baris.
+ * Pindah TUNTAS ke halaman Produksi, fase Orderan, subtab "Orderan Masuk".
+ * Keputusan Femri 14 Sep 2026, sesudah v339 menaruhnya di sana sebagai pintu
+ * KEDUA dan v340 membuat modal proofingnya bisa dibuka di tempat.
  *
- * KENAPA. Subtab "Orderan Masuk" di halaman Produksi (v339) memakai komponen
- * yang SAMA. Menyalinnya ke simpro-spk.js berarti dua salinan satu barang;
- * simpro-dashboard.js sendiri tidak bisa dimuat di halaman produksi karena
- * berkas ini memasang window.onload di tingkat atas -- onload halaman
- * produksi akan tertimpa.
+ * Yang dihapus dari berkas ini: dbRenderOrderMasuk() (shim pemetaan id) dan
+ * dbBukaOrderMasukDariHash_() (pembaca tautan dalam /p/dashboard.html#ordermasuk=ID,
+ * yang ujung lainnya -- omKlikKartu_ -- juga sudah dibuang di simpro-global.js).
+ * Komponennya sendiri TETAP di simpro-global.js: di sanalah komponen form order
+ * yang dipakainya tinggal.
  *
- * Yang TINGGAL di sini cuma pemetaan id: markup dashboard memakai
- * db-ordermasuk-*, markup produksi memakai sp-om-*.
+ * Markup tab & panelnya dihapus dari TEMPLATE Blogger di rilis yang sama
+ * (template-blogger-rjd-simpro-web-v340.xml, dua blok: tombol data-section
+ * ordermasuk dan div data-panel ordermasuk). Kalau template itu belum ditempel,
+ * tab "Order Masuk" masih terlihat di dashboard dan panelnya KOSONG -- bukan
+ * error, tapi juga bukan keadaan yang boleh dibiarkan lama.
  * ============================================================ */
-function dbRenderOrderMasuk(){
-  omRender_({
-    api: DB_API_URL,
-    token: DB_ID_TOKEN,
-    idList: "db-ordermasuk-list",
-    idSummary: "db-ordermasuk-summary",
-    idBadge: "db-tab-badge-ordermasuk",
-    sesudahRender: dbBukaOrderMasukDariHash_
-  });
-}
-
-/**
- * Tautan dalam dari halaman Produksi: /p/dashboard.html#ordermasuk=OR-001.
- *
- * Subtab "Orderan Masuk" di halaman produksi (v339) menautkan ke sini karena
- * modal proofingnya bergaya dari simpro-dashboard.css -- alasan lengkapnya di
- * omKlikKartu_ (simpro-global.js). Supaya perpindahannya tidak terasa seperti
- * "dibuang ke halaman lain", ia mendarat langsung di modal order yang diklik.
- *
- * Hash DIHAPUS sesudah dipakai: tanpa itu, Refresh atau render ulang sesudah
- * approve akan membuka modal yang sama lagi -- dan pada order yang BARU SAJA
- * disetujui, itu menampilkan keadaan basi. Pemanggilnya (omRender_) menjalankan
- * kail ini di TIAP render, jadi idempotensinya tanggung jawab fungsi ini.
- */
-function dbBukaOrderMasukDariHash_(daftar){
-  const cocok = /^#ordermasuk=(.+)$/.exec(window.location.hash || "");
-  if(!cocok) return;
-  const id = decodeURIComponent(cocok[1]);
-  // Hash dibuang LEBIH DULU, sebelum keberhasilan dicek: id yang tidak ada
-  // (order sudah dihapus, tautan basi) tidak boleh menempel dan mencoba
-  // membuka modal lagi di tiap render berikutnya.
-  try { history.replaceState(null, "", window.location.pathname + window.location.search); }
-  catch(e){ window.location.hash = ""; }
-  dbSwitchTab("ordermasuk");
-  const idx = (daftar || []).findIndex(function(g){ return g.idOrderRequest === id; });
-  if(idx < 0){
-    alert("Order " + id + " tidak ada lagi di daftar Order Masuk. Mungkin sudah disetujui, ditolak, atau dihapus.");
-    return;
-  }
-  omBukaModalProofing(idx);
-}
 
 /**
  * Section BARU Dashboard -- Omset (Fase 1: Order & Invoice). Data mentah (SEMUA
@@ -1768,11 +1730,6 @@ function dbRender(data){
 
   // Section 6: Aging Piutang
   dbRenderAgingPiutang(data);
-
-  // Section 6d: Order Masuk (Form Order Klien) -- fetch TERPISAH lewat action
-  // "getOrderRequests" (bukan bagian dari payload dbFetch() utama), lihat komentar
-  // di definisi dbRenderOrderMasuk().
-  dbRenderOrderMasuk();
 
   // Section 6c: Omset (Fase 1 -- Order & Invoice; Fase 2 -- Produksi per Divisi), per bulan+tahun
   window.DB_OMSET_ORDER = data.omsetOrderTren || [];
