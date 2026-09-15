@@ -157,9 +157,9 @@ tr.sp-recut-target > td:first-child { box-shadow: inset 3px 0 0 #C9972B; }
 /* ============ MODE B: RINGKASAN & DASHBOARD ============ */
 .qc-alat { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 16px; }
 .qc-alat select { flex: 0 1 170px; padding: 9px 12px; background: var(--white);
-  border: 1px solid var(--line-soft); border-radius: 9px; font-size: 12.5px; }
+  border: 1px solid var(--line-soft); border-radius: 9px; font-size: 16px; }
 .qc-alat input { flex: 1 1 200px; padding: 9px 12px; background: var(--white);
-  border: 1px solid var(--line-soft); border-radius: 9px; font-size: 13px; }
+  border: 1px solid var(--line-soft); border-radius: 9px; font-size: 16px; }
 
 .qc-kartu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px; margin-bottom: 22px; }

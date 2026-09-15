@@ -689,7 +689,15 @@ body.sp-siap #sp-hero .lead { display: none; }
 [id^="sp-panel-"] textarea,
 #sp-kartu-po .sp-po-field input {
   padding: 12px 14px;
-  font-size: 15px;
+  /* 16px, BUKAN 15px -- jangan diturunkan (PF-12, v350). Safari iOS memperbesar
+     seluruh halaman tiap kali kotak < 16px difokuskan, dan di lantai itu berarti
+     layar melompat setiap operator menyentuh isian. Angka ini harus di ATURAN
+     LUAS ini, bukan di aturan per-kelas: `.sp-field input` dan `.qc-size-qty`
+     bernilai (0,1,0) dan KALAH dari selektor ini (0,4,1), jadi menaikkan angka
+     di aturan mereka sendiri tidak berpengaruh sama sekali. Ongkosnya diukur
+     (uji/ukur-zoom-panel.py, 4 lebar): 87 kontrol tumbuh 1-3px, NOL nilai
+     terpotong, dua placeholder panjang terpotong di ujungnya. */
+  font-size: 16px;
   font-family: inherit;
   color: var(--ink);
   background: var(--cream);
@@ -1073,7 +1081,12 @@ body.sp-siap #sp-subtabs { visibility: visible; }
 #sp-panel-qc .qc-field select,
 #sp-panel-qc .qc-field textarea {
   padding: 12px 14px;
-  font-size: 15px;
+  /* 16px, alasan & larangan sama dengan aturan luas di :687 (PF-12, v350).
+     Blok ini WAJIB dinaikkan bersama yang itu: `#sp-panel-qc` menyumbang satu ID
+     sehingga nilainya (1,1,1) dan ia mengalahkan APA PUN yang hanya berbasis
+     kelas/atribut -- termasuk override (0,5,1) yang v347 pakai untuk kotak qty.
+     Terukur: memperbaiki hanya :687 meninggalkan SELURUH form QC tetap 15px. */
+  font-size: 16px;
   font-family: inherit;
   color: var(--ink);
   background: var(--cream);
