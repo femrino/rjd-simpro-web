@@ -9803,10 +9803,19 @@ function spSimpanSisaKain(btn) {
 function qcSegarkanBilaBasi_() {
   // v312 (P7 PF-1): dipanggil saat tab QC dibuka. Hanya menembak kalau cache-nya memang sudah dibuang
   // (null), jadi berpindah tab bolak-balik tidak menambah permintaan.
+  //
+  // v351 (PF-1b): `window.` DIBUANG dari keempat nama di bawah. `QC_RINCIAN_PO`, `QC_TERSEDIA` dan
+  // `QC_DITAHAN` dideklarasikan `let` di tingkat atas (:10090, :10122, :10126), jadi mereka BUKAN
+  // properti window -- dan tidak ada satu pun penulis yang menyetel bayangannya. Akibatnya
+  // `window.QC_RINCIAN_PO` selalu `undefined` dan fungsi ini SELALU berhenti di baris pertamanya:
+  // v312 tidak pernah menyegarkan apa pun sejak ditulis. RALAT atas AUDIT-PRODUKSI PF-1b, yang
+  // menyatakan `QC_TERSEDIA`/`QC_DITAHAN` "diselamatkan kebetulan karena fungsi ini membaca
+  // bayangan yang sama" -- tidak, ia tidak pernah sampai ke sana. Jangan menambahkan `window.`
+  // kembali: yang benar nama polos, dan sebelum menulis `window.X` grep dulu deklarasi `X`.
   try {
-    if (!window.QC_RINCIAN_PO) return;
-    if (window.QC_TERSEDIA === null && typeof qcMuatTersedia_ === "function") qcMuatTersedia_();
-    if (window.QC_DITAHAN === null && typeof qcMuatDitahan_ === "function") qcMuatDitahan_();
+    if (!QC_RINCIAN_PO) return;
+    if (QC_TERSEDIA === null && typeof qcMuatTersedia_ === "function") qcMuatTersedia_();
+    if (QC_DITAHAN === null && typeof qcMuatDitahan_ === "function") qcMuatDitahan_();
   } catch (e) { /* pemuat punya penanganan sendiri */ }
 }
 
@@ -9817,9 +9826,13 @@ function spSesudahTulis_(apa) {
   window.SP_SETOR = null;
   window.SP_KELUAR = null;
   if (/setoran|konfirmasi|qc/.test(a)) {
-    window.QC_TERSEDIA = null;
-    window.QC_DITAHAN = null;
-    window.QC_RINGKASAN_DIMUAT = false;
+    // v351 (PF-1b): nama POLOS, bukan `window.*` -- ketiganya `let` tingkat atas, jadi `window.X`
+    // membuat variabel LAIN yang tidak dibaca siapa pun. Yang paling terasa `QC_RINGKASAN_DIMUAT`:
+    // pembacanya (`if (tab === "ringkasan" && !QC_RINGKASAN_DIMUAT)`) memakai nama polos, jadi tab
+    // Ringkasan QC menampilkan angka SEBELUM tulisan sampai halaman dimuat ulang.
+    QC_TERSEDIA = null;
+    QC_DITAHAN = null;
+    QC_RINGKASAN_DIMUAT = false;
   }
   if (/cutting|gelaran|qc|marker/.test(a)) window.SP_CUT = null;
 }
@@ -9957,11 +9970,13 @@ function spKartuTahap_(a, tahap, i) {
     '</div>' +
     '<div class="sp-grid3">' +
       '<label>Jenis<select class="sp-th-sub" data-i="' + i + '" data-tahap="' + tahap + '">' +
+        '<option value="">-- pilih jenis --</option>' +
         subPilihan.map(function (x) {
           return '<option value="' + spEsc_(x) + '">' + spEsc_(x) + '</option>';
         }).join("") +
       '</select></label>' +
       '<label>Status<select class="sp-th-status" data-i="' + i + '" data-tahap="' + tahap + '">' +
+        '<option value="">-- pilih status --</option>' +
         statusPilihan.map(function (x) {
           return '<option value="' + spEsc_(x) + '">' + spEsc_(x) + '</option>';
         }).join("") +
