@@ -2153,3 +2153,36 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
   border-radius: 10px; background: var(--thread); color: var(--white);
   font-size: 10.5px; font-weight: 700; font-family: 'IBM Plex Mono', monospace;
 }
+
+/* ---- v344 (AUDIT-PRODUKSI PF-5): baris pemberitahuan di atas tombol Simpan ----
+   Dua isi, satu kotak: "angka yang tadi kamu ketik dipulihkan" (draft) dan
+   "sesi login tinggal N menit". Sengaja SATU elemen: keduanya berbicara tentang
+   hal yang sama -- apakah yang di layar ini akan sampai ke server -- dan dua
+   kotak bertumpuk di atas tombol Simpan justru membuat keduanya diabaikan.
+
+   Kuning, bukan merah: ini bukan kegagalan, melainkan sesuatu yang harus
+   DIBACA sebelum menekan Simpan. Merah sudah dipakai .sp-pesan.sp-galat untuk
+   hal yang sudah gagal, dan memakai warna yang sama untuk dua arti berbeda
+   membuat operator berhenti membedakannya.
+
+   Elemennya dibuat JS (spStripEl_) dan disisipkan sebelum tombol simpan, jadi
+   tidak ada markup keempat form yang perlu disentuh -- dan form yang dirender
+   ulang otomatis mendapatkannya lagi. */
+.sp-strip-awas {
+  font-size: 12.5px; line-height: 1.45; color: #6B4E16;
+  background: #FFF4D6; border: 1px solid #E8CE8A; border-radius: 9px;
+  padding: 10px 12px; margin: 12px 0 10px;
+}
+.sp-strip-awas b { color: #5A3F0E; }
+/* Tombol Kosongkan: kotak sentuh 32px (bukan 26px seperti .sp-btn-kecil yang
+   jadi temuan PF-7), dan TIDAK destruktif-merah -- yang dihapus cuma isian
+   yang belum terkirim, dan tombolnya harus terbaca sebagai "batalkan pulihan",
+   bukan "hapus data". */
+.sp-strip-btn {
+  display: inline-flex; align-items: center; min-height: 32px;
+  margin-left: 6px; padding: 6px 12px;
+  background: var(--white); color: #6B4E16;
+  border: 1px solid #D9BE7A; border-radius: 8px;
+  font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.sp-strip-btn:hover { background: #FFFBF0; }

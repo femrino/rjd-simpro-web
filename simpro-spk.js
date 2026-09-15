@@ -204,6 +204,272 @@ function spPoFormSah_(idPoForm, apa) {
   return false;
 }
 
+/* v344 (AUDIT-PRODUKSI PF-5) -- SATU PENERJEMAH GALAT KE BAHASA OPERATOR.
+
+   Yang dibaca operator sebelum ini, kata per kata: "SyntaxError: Unexpected
+   token '<', "<!DOCTYPE "... is not valid JSON". Itu jawaban HTML halaman login
+   Google, dan artinya SESI LOGIN HABIS -- bukan aplikasi rusak, bukan data
+   salah. Tidak ada operator yang bisa menyimpulkan itu, jadi yang terjadi di
+   lantai adalah menekan Simpan berulang lalu memanggil orang.
+
+   Tiga kelas yang BISA dibedakan, dan hanya tiga:
+   - ditandai jaringan  -> permintaan tidak sampai. Angkanya masih di layar,
+                           jadi kalimatnya menyuruh coba lagi.
+   - SyntaxError        -> jawaban bukan JSON; hampir selalu halaman login
+                           Google, jadi kalimatnya menyebut login ulang.
+   - TypeError TANPA penanda jaringan -> CACAT KODE di dalam `.then`, bukan
+                           gangguan jaringan. Ini yang dulu paling menipu:
+                           `.catch` di ujung rantai memayungi render juga, dan
+                           melabeli cacat render "Gagal menghubungi server"
+                           membuat operator menekan "coba lagi" berulang untuk
+                           masalah yang tidak ada di jaringan. Kalimatnya harus
+                           menyuruh MUAT ULANG dan melapor, bukan coba lagi.
+   - sisanya            -> pesan yang KITA tulis sendiri (sudah bahasa Indonesia
+                           dan sudah menyebut sebabnya) -- diteruskan apa adanya.
+
+   Pembedaan jaringan TIDAK boleh dari teks pesannya: "Failed to fetch" /
+   "NetworkError when attempting to fetch resource" / "Load failed" berbeda per
+   browser, dan cocok-mencocokkan teks itu cara pembedanya mati diam-diam saat
+   browser diperbarui. Karena itu penandanya dipasang di BATAS fetch
+   (spTandaiJaringan_), tempat satu-satunya yang tahu pasti. */
+function spTandaiJaringan_(e) {
+  // Dipasang sebagai handler REJECT pada .then pertama sesudah fetch(), jadi ia
+  // hanya kena galat fetch itu sendiri -- bukan apa pun yang dilempar .then
+  // sesudahnya.
+  try { if (e && typeof e === "object") e.spJaringan = true; } catch (x) {}
+  throw e;
+}
+
+function spPesanGalat_(e, aksi) {
+  const apa = aksi || "Permintaan";
+  if (e && e.spJaringan) {
+    return apa + " tidak sampai ke server \u2014 sambungan terputus di tengah jalan.\n\n" +
+      "Yang sudah kamu isi masih di layar. Tunggu sebentar, lalu coba lagi.";
+  }
+  if (e instanceof SyntaxError) {
+    return "Jawaban server tidak terbaca, biasanya karena yang terkirim balik " +
+      "halaman login Google.\n\nSesi login kemungkinan sudah habis: login ulang, " +
+      "lalu ulangi " + apa.toLowerCase() + ".";
+  }
+  if (e instanceof TypeError) {
+    return "Ada kesalahan di halaman ini, bukan di jaringan (" +
+      ((e && e.message) || "TypeError") + ").\n\n" +
+      "Menekan Simpan lagi tidak akan menolong \u2014 muat ulang halamannya, dan " +
+      "kalau masih begitu, tunjukkan pesan ini apa adanya.";
+  }
+  return (e && e.message) || String(e || "Gagal.");
+}
+
+/** Handler .catch siap pakai: memulihkan tombol (kalau ada) lalu menerjemahkan. */
+function spGalatAlert_(aksi, pulih) {
+  return function (e) {
+    if (typeof pulih === "function") { try { pulih(); } catch (x) {} }
+    alert(spPesanGalat_(e, aksi));
+  };
+}
+
+/* v344 (PF-5) -- SESI DIPERIKSA SEBELUM SUBMIT, DAN ANGKANYA DISIMPAN DULU.
+
+   Token Google berumur +-1 jam. Skenario yang terukur: login 07.00, isi setoran
+   07.58 selama 3 menit, tekan Simpan 08.01 -> "Login gagal diverifikasi" ->
+   overlay "Sesi login berakhir" -> tombol "Login ulang" = location.reload() ->
+   24 angka per size LENYAP dan harus diketik ulang dari kertas.
+
+   Penjaga sesi global (simpro-global.js) hanya menyadap JAWABAN, jadi ia baru
+   tahu sesudah permintaannya dikirim. Yang hilang bukan permintaannya melainkan
+   isian di layar, jadi pemeriksaannya harus SEBELUM submit. */
+/**
+ * Sisa umur sesi dalam ms, atau `null` kalau TIDAK BISA DINILAI.
+ *
+ * Bedanya penting. `spBacaSesi_()` mengembalikan null untuk dua keadaan yang
+ * sangat berbeda: "token sudah kedaluwarsa" DAN "tidak ada catatan sesi" --
+ * yang kedua terjadi di mode privat, karena `spSimpanSesi_` menelan galat
+ * localStorage sementara SP_ID_TOKEN di memori tetap sah. Memakai spBacaSesi_
+ * sebagai penjaga submit berarti MEMBLOKIR setiap simpan di mode privat, dan
+ * pemeriksa yang menghalangi pekerjaan sah akan dicarikan jalan memutarnya --
+ * sesudah itu ia tidak menjaga apa pun lagi.
+ */
+function spSesiSisaMs_() {
+  try {
+    const raw = localStorage.getItem("db_session");
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (!d || !d.exp) return null;
+    return d.exp * 1000 - Date.now();   // boleh negatif: itu "sudah habis"
+  } catch (e) { return null; }
+}
+
+/* NISAN v344: versi pertama fungsi ini memanggil `spDraftSimpan_(nama)` di sini,
+   "simpan dulu sebelum overlay me-reload" -- persis seperti usulan auditnya. Itu
+   KODE MATI, dan yang membuktikannya sabotase: mencabut baris itu TIDAK membuat
+   satu asersi pun merah. Sebabnya penyimpan draft sudah menempel di pengumpul
+   total, yang jalan pada SETIAP ketikan; begitu ada angka di layar, draftnya
+   sudah tersimpan jauh sebelum tombol Simpan disentuh.
+
+   Dengan alasan yang sama, hook "overlay sesi menyimpan draft sebelum reload"
+   di simpro-global.js juga TIDAK dibuat: ia menjaga hal yang sudah terjaga, dan
+   penjaga kedua yang tidak pernah kena adalah penjaga yang tidak pernah diuji.
+   Satu mekanisme yang jalan pada tiap ketikan malah menutup lebih banyak
+   keadaan: tab ditutup, browser mati, halaman dimuat ulang dari mana pun. */
+function spSesiSiap_() {
+  const sisa = spSesiSisaMs_();
+  if (sisa === null || sisa > 0) return true;   // tidak bisa dinilai -> LOLOSKAN
+  if (typeof window.rjdSesiHabis_ === "function") window.rjdSesiHabis_();
+  else alert("Sesi login berakhir. Login ulang, lalu ulangi langkah terakhirmu.");
+  return false;
+}
+
+/* v344 (PF-5) -- DRAFT ANGKA PER FORM.
+
+   Disimpan di sessionStorage, bukan localStorage: draft yang hidup melewati
+   tutup-tab adalah draft yang suatu hari terpakai untuk PO yang salah, dan
+   "isian otomatis yang salah lebih berbahaya daripada kotak kosong".
+
+   KUNCINYA memuat PO **dan** line. Bukan divalidasi sesudah dibaca -- dijadikan
+   kunci -- supaya ganti line memberi form KOSONG dan kembali ke line semula
+   memberi angkanya lagi, tanpa satu baris perbandingan.
+
+   Cap waktu `t` diperbarui tiap kali pengumpul jalan, dan pengumpul jalan pada
+   SETIAP ketikan dan setiap render. Jadi `t` = kapan terakhir orangnya
+   menyentuh halaman ini, dan draft yang lebih tua dari SP_DRAFT_UMUR_MS
+   diabaikan: tab yang ditinggal menginap tidak menawarkan angka kemarin.
+
+   Yang dipulihkan SELALU diberitahukan di layar berikut tombol Kosongkan.
+   Tanpa itu ia jadi isian otomatis yang tidak bisa dilawan -- dan kotak yang
+   sudah terisi cenderung dibiarkan, itu sebabnya isian otomatis yang salah
+   lebih mahal daripada kotak kosong. */
+const SP_DRAFT_UMUR_MS = 12 * 60 * 60 * 1000;
+const SP_DRAFT_FORM = {
+  bagi:    { inp: ".sp-qty",        btn: "sp-simpan-btn",       data: "SP_PO",      kunci2: "sp-line" },
+  cutting: { inp: ".sp-cut-qty",    btn: "sp-cut-simpan-btn",   data: "SP_CUT",     kunci2: "" },
+  keluar:  { inp: ".sp-keluar-qty", btn: "sp-keluar-simpan",    data: "SP_KELUAR",  kunci2: "" },
+  setoran: { inp: ".sp-setor-qty",  btn: "sp-setor-simpan-btn", data: "SP_SETOR",   kunci2: "sp-setor-line" }
+};
+
+/* PO diambil dari DATA MILIK FORM (SP_PO/SP_CUT/SP_KELUAR/SP_SETOR), bukan dari
+   SP_PO_AKTIF (kartu). Keduanya biasanya sama, tapi saat PO diganti, kartu
+   berubah LEBIH DULU sementara isian di DOM masih milik PO lama -- mengunci
+   draft ke kartu berarti angka PO lama tersimpan di bawah kunci PO baru, lalu
+   dipulihkan ke form yang salah. Payload simpan juga memakai PO dari data yang
+   sama (lihat spPoFormSah_, v343), jadi ini SATU bentuk kunci untuk satu barang,
+   bukan dua. */
+function spDraftKunci_(nama) {
+  const cfg = SP_DRAFT_FORM[nama];
+  const d = window[cfg.data];
+  const idPo = (d && d.idPurchaseOrder) || window.SP_PO_AKTIF || "";
+  const k2 = cfg.kunci2 ? ((document.getElementById(cfg.kunci2) || {}).value || "") : "";
+  return "sp_draft_" + nama + "_" + idPo + "_" + k2;
+}
+
+function spDraftSimpan_(nama) {
+  const cfg = SP_DRAFT_FORM[nama];
+  if (!cfg) return;
+  try {
+    const isi = {};
+    let ada = 0;
+    document.querySelectorAll(cfg.inp).forEach(function (i) {
+      if (String(i.value || "").trim() === "") return;
+      isi[i.dataset.baris + "|" + i.dataset.size] = i.value;
+      ada++;
+    });
+    // Form yang DIKOSONGKAN orangnya harus diingat sebagai kosong, bukan
+    // dibiarkan memegang draft lama yang akan dipulihkan pada render berikutnya.
+    if (!ada) { sessionStorage.removeItem(spDraftKunci_(nama)); return; }
+    sessionStorage.setItem(spDraftKunci_(nama), JSON.stringify({ t: Date.now(), isi: isi }));
+  } catch (e) { /* private mode / kuota penuh: draft memang fitur tambahan */ }
+  // Diperiksa di sini, bukan hanya saat render: orang membuka form pukul 07.58
+  // dengan sisa 50 menit lalu mengetik 24 angka sampai 08.01. Peringatan yang
+  // cuma muncul saat render tidak pernah menyala pada satu-satunya keadaan yang
+  // diciptakannya.
+  spSesiPeringatan_(nama);
+}
+
+function spDraftHapus_(nama) {
+  try { sessionStorage.removeItem(spDraftKunci_(nama)); } catch (e) {}
+  const el = document.getElementById("sp-strip-" + nama);
+  if (el) { el.textContent = ""; el.removeAttribute("data-jenis"); el.classList.add("hidden"); }
+}
+
+/** Baris pemberitahuan di atas tombol simpan; dibuat sekali, dipakai draft & sesi. */
+function spStripEl_(nama) {
+  const cfg = SP_DRAFT_FORM[nama];
+  const btn = cfg && document.getElementById(cfg.btn);
+  if (!btn || !btn.parentNode) return null;
+  let el = document.getElementById("sp-strip-" + nama);
+  if (!el || !el.parentNode) {
+    el = document.createElement("div");
+    el.id = "sp-strip-" + nama;
+    el.className = "sp-strip-awas hidden";
+    btn.parentNode.insertBefore(el, btn);
+  }
+  return el;
+}
+
+/* `jenis` menengahi dua isi yang memperebutkan satu kotak. Aturannya asimetris
+   DAN itu disengaja: peringatan sesi boleh menimpa catatan draft (sesi yang
+   habis lebih mendesak daripada asal-usul angka yang sudah terbaca), tapi
+   catatan draft TIDAK boleh dihapus oleh pemeriksaan sesi yang "aman" -- kalau
+   simetris, ketikan pertama menghapus satu-satunya keterangan kenapa kotaknya
+   sudah terisi, dan isian otomatis tanpa keterangan tidak bisa dilawan. */
+function spStripPesan_(nama, html, jenis) {
+  const el = spStripEl_(nama);
+  if (!el) return;
+  if (!html) {
+    if (jenis === "sesi" && el.getAttribute("data-jenis") === "draft") return;
+    el.innerHTML = ""; el.removeAttribute("data-jenis"); el.classList.add("hidden"); return;
+  }
+  el.innerHTML = html;
+  el.setAttribute("data-jenis", jenis || "draft");
+  el.classList.remove("hidden");
+}
+
+function spDraftKosongkan(nama) {
+  const cfg = SP_DRAFT_FORM[nama];
+  if (!cfg) return;
+  document.querySelectorAll(cfg.inp).forEach(function (i) { i.value = ""; });
+  spDraftHapus_(nama);
+  const hitung = { bagi: "spHitungTotal", cutting: "spHitungTotalCutting",
+    keluar: "spHitungKeluar_", setoran: "spHitungTotalSetor" }[nama];
+  if (typeof window[hitung] === "function") window[hitung]();
+}
+
+function spDraftPulih_(nama) {
+  const cfg = SP_DRAFT_FORM[nama];
+  if (!cfg) return;
+  let d = null;
+  try { d = JSON.parse(sessionStorage.getItem(spDraftKunci_(nama)) || "null"); } catch (e) {}
+  if (!d || !d.isi || !d.t || (Date.now() - d.t) > SP_DRAFT_UMUR_MS) {
+    spSesiPeringatan_(nama); return;
+  }
+  let dipulih = 0;
+  document.querySelectorAll(cfg.inp).forEach(function (i) {
+    const v = d.isi[i.dataset.baris + "|" + i.dataset.size];
+    // Kotak yang SUDAH terisi tidak ditimpa: render ulang di tengah pengetikan
+    // (ganti jenis setoran, muat ulang riwayat) tidak boleh memundurkan angka
+    // yang baru saja diketik.
+    if (v !== undefined && String(i.value || "").trim() === "") { i.value = v; dipulih++; }
+  });
+  if (dipulih) {
+    spStripPesan_(nama, "<b>" + dipulih + " angka yang tadi kamu ketik dipulihkan</b> " +
+      "\u2014 ini BELUM tersimpan. Periksa dulu, lalu tekan Simpan. " +
+      '<button class="sp-strip-btn" onclick="spDraftKosongkan(\'' + nama + "')\" type=\"button\">Kosongkan</button>", "draft");
+  } else {
+    spSesiPeringatan_(nama);
+  }
+}
+
+/** Peringatan kuning kalau sesi tinggal < 5 menit -- sebelum orangnya mengetik 24 angka. */
+function spSesiPeringatan_(nama) {
+  const sisa = spSesiSisaMs_();
+  if (sisa !== null && sisa > 0 && sisa < 5 * 60 * 1000) {
+    spStripPesan_(nama, "<b>Sesi login tinggal " + Math.max(1, Math.round(sisa / 60000)) +
+      " menit.</b> Simpan yang sudah diisi sekarang \u2014 kalau habis di tengah, " +
+      "angkanya disimpan sementara tapi kamu harus login ulang dulu.", "sesi");
+  } else {
+    spStripPesan_(nama, "", "sesi");
+  }
+}
+
 function spMuatDaftarLine_() {
   // v226: snapshot lokal dulu (maks 7 hari), lalu segarkan.
   const snapL = (typeof rjdSnapshotBaca_ === "function") ? rjdSnapshotBaca_("produksi_line", 7 * 24 * 60) : null;
@@ -879,6 +1145,7 @@ function spRenderForm() {
     inp.value = t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") +
       "-" + String(t.getDate()).padStart(2, "0");
   }
+  spDraftPulih_("bagi");   // v344 (PF-5)
   spHitungTotal();
 }
 
@@ -909,12 +1176,14 @@ function spHitungTotal() {
   document.getElementById("sp-total").textContent = total;
   const btn = document.getElementById("sp-simpan-btn");
   if (btn) btn.disabled = (total <= 0);
+  spDraftSimpan_("bagi");   // v344 (PF-5): pengumpul draft = pengumpul total, jadi tiap ketikan tersimpan
 }
 
 function spSimpan() {
   const po = window.SP_PO;
   if (!po) return;
   if (!spPoFormSah_(po.idPurchaseOrder, "Form bagi ke line")) return;   // v343 (PF-3)
+  if (!spSesiSiap_()) return;   // v344 (PF-5): sesi terbukti habis -> jangan kirim
 
   const idLine = document.getElementById("sp-line").value;
   if (!idLine) { alert("Pilih dulu line yang menerima potongan."); return; }
@@ -967,6 +1236,7 @@ function spSimpan() {
       return;
     }
     // Tautan cetak langsung muncul -- itu tujuan seluruh halaman ini.
+    spDraftHapus_("bagi");   // v344 (PF-5): sudah tersimpan -> draft tidak boleh kembali
     const kotak = document.getElementById("sp-sukses");
     kotak.innerHTML =
       '<div class="sp-sukses-isi">' +
@@ -2158,6 +2428,7 @@ function spRenderFormCutting() {
     inp.value = t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") +
       "-" + String(t.getDate()).padStart(2, "0");
   }
+  spDraftPulih_("cutting");   // v344 (PF-5)
   spHitungTotalCutting();
   spTerapkanRecutPending_();   // v183: pemandu re-cut ikut tiap render ulang
 }
@@ -2179,12 +2450,14 @@ function spHitungTotalCutting() {
   document.getElementById("sp-cut-total").textContent = total;
   const btn = document.getElementById("sp-cut-simpan-btn");
   if (btn) btn.disabled = (total === 0);
+  spDraftSimpan_("cutting");   // v344 (PF-5): pengumpul draft = pengumpul total, jadi tiap ketikan tersimpan
 }
 
 function spSimpanCutting() {
   const po = window.SP_CUT;
   if (!po) return;
   if (!spPoFormSah_(po.idPurchaseOrder, "Form hasil potong")) return;   // v343 (PF-3)
+  if (!spSesiSiap_()) return;   // v344 (PF-5)
 
   const perBaris = {};
   document.querySelectorAll(".sp-cut-qty").forEach(function (inp) {
@@ -2225,6 +2498,7 @@ function spSimpanCutting() {
         function (d) { return d.totalPotong; }, sebelum, totalKirim);
     },
     sukses: function (h) {
+      spDraftHapus_("cutting");   // v344 (PF-5)
       const kotak = document.getElementById("sp-cut-sukses");
       kotak.innerHTML = h
         ? '<div class="sp-sukses-isi"><b>' + h.totalQty + ' pcs</b> tersimpan (' + h.jumlahBaris + ' baris warna). Total potong PO ini sekarang <b>' + h.totalPotongKumulatif + ' pcs</b>.</div>'
@@ -2473,6 +2747,7 @@ function spRenderKeluar_() {
   }
   spRenderRiwayatKeluar_();
   spUbahJenisKeluar_();
+  spDraftPulih_("keluar");   // v344 (PF-5)
   spHitungKeluar_();
 }
 
@@ -2552,12 +2827,14 @@ function spHitungKeluar_() {
   if (tot) tot.textContent = total;
   const btn = document.getElementById("sp-keluar-simpan");
   if (btn) btn.disabled = total <= 0;
+  spDraftSimpan_("keluar");   // v344 (PF-5): pengumpul draft = pengumpul total, jadi tiap ketikan tersimpan
 }
 
 function spSimpanKeluar_() {
   const po = window.SP_KELUAR;
   if (!po) return;
   if (!spPoFormSah_(po.idPurchaseOrder, "Form potongan keluar")) return;   // v343 (PF-3)
+  if (!spSesiSiap_()) return;   // v344 (PF-5)
   const jenis = spKeluarJenis_();
   const diambil = (document.getElementById("sp-keluar-diambil") || {}).value || "";
   const komponen = (document.getElementById("sp-keluar-komponen") || {}).value || "";
@@ -2614,11 +2891,12 @@ function spSimpanKeluar_() {
       }
     })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     btn.disabled = false;
     btn.textContent = "Simpan Potongan Keluar";
     if (!d || !d.success) { alert((d && d.error) || "Gagal menyimpan."); return; }
+    spDraftHapus_("keluar");   // v344 (PF-5)
     alert("Tercatat: " + d.totalQty + " pcs keluar.\nNomor surat jalan: " + d.noSuratJalan);
     // PO aktif dimuat ulang: sisa di tab Bagi ke Line ikut berubah, dan
     // membiarkan angka lama di layar adalah cara termudah membuat orang
@@ -2626,11 +2904,10 @@ function spSimpanKeluar_() {
     spSesudahTulis_("keluar");   // v312 (P7 PF-1)
     spMuatKeluar_();
   })
-  .catch(function (e) {
+  .catch(spGalatAlert_("Simpan potongan keluar", function () {
     btn.disabled = false;
     btn.textContent = "Simpan Potongan Keluar";
-    alert(String(e));
-  });
+  }));
 }
 
 function spBatalKeluar_(idKeluar) {
@@ -2641,13 +2918,13 @@ function spBatalKeluar_(idKeluar) {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "batalkanPotonganKeluar", idKeluar: idKeluar })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (!d || !d.success) { alert((d && d.error) || "Gagal membatalkan."); return; }
     spSesudahTulis_("keluar");   // v312 (P7 PF-1)
     spMuatKeluar_();
   })
-  .catch(function (e) { alert(String(e)); });
+  .catch(spGalatAlert_("Pembatalan potongan keluar"));
 }
 
 /**
@@ -3544,7 +3821,7 @@ function spTandaiSiapkan_() {
       payload: { idDistribusi: ids }
     })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     btn.disabled = false;
     btn.textContent = "Tandai sudah disiapkan";
@@ -3554,11 +3831,10 @@ function spTandaiSiapkan_() {
     alert(pesan);
     spMuatSiapkan_();
   })
-  .catch(function (e) {
+  .catch(spGalatAlert_("Tandai sudah disiapkan", function () {
     btn.disabled = false;
     btn.textContent = "Tandai sudah disiapkan";
-    alert(String(e));
-  });
+  }));
 }
 
 function spMuatKonfMode_(jenis) {
@@ -4846,6 +5122,7 @@ function spRenderFormSetoran() {
     inp.value = t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") +
       "-" + String(t.getDate()).padStart(2, "0");
   }
+  spDraftPulih_("setoran");   // v344 (PF-5)
   spHitungTotalSetor();
 }
 
@@ -4870,6 +5147,7 @@ function spHitungTotalSetor() {
   if (elTotal) elTotal.textContent = total;
   const btn = document.getElementById("sp-setor-simpan-btn");
   if (btn) btn.disabled = (total <= 0);
+  spDraftSimpan_("setoran");   // v344 (PF-5): pengumpul draft = pengumpul total, jadi tiap ketikan tersimpan
 }
 
 function spUbahJenisSetoran_() {
@@ -4891,6 +5169,7 @@ function spSimpanSetoran() {
   const po = window.SP_SETOR;
   if (!po) return;
   if (!spPoFormSah_(po.idPurchaseOrder, "Form setoran")) return;   // v343 (PF-3)
+  if (!spSesiSiap_()) return;   // v344 (PF-5)
 
   const perBaris = {};
   document.querySelectorAll(".sp-setor-qty").forEach(function (inp) {
@@ -4927,6 +5206,7 @@ function spSimpanSetoran() {
         function (d) { return kembali ? d.totalDikembalikan : d.totalSudahSetor; }, sebelum, totalKirim);
     },
     sukses: function (h) {
+      spDraftHapus_("setoran");   // v344 (PF-5)
       const kotak = document.getElementById("sp-setor-sukses");
       if (h) {
         // @361 (P13, temuan #19): jembatan @350 (setoran pengembalian -> baris pembalik di
@@ -5237,7 +5517,7 @@ function spMuatMarker() {
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getMarkerPO",
       idPurchaseOrder: idPoMinta })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("spMuatMarker", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal memuat marker.");
@@ -5253,7 +5533,7 @@ function spMuatMarker() {
   .catch(function (e) {
     if (spMuatBasi_("spMuatMarker", urutMuat)) return;   // v343 (PF-3): jawaban basi
     document.getElementById("sp-marker-daftar").innerHTML =
-      '<p class="sp-info">' + (e.message || e) + '</p>';
+      '<p class="sp-info">' + spEsc_(spPesanGalat_(e, "Muat daftar marker")) + '</p>';
   });
 }
 
@@ -5352,7 +5632,7 @@ function spMkbBatalkan(btn) {
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "batalkanMarkerMassal",
       payload: { idMarker: ids } })
   })
-  .then(function (r) { return r.text(); })
+  .then(function (r) { return r.text(); }, spTandaiJaringan_)
   .then(function (t) {
     let d = null;
     try { d = JSON.parse(t); } catch (e) {
@@ -5389,7 +5669,7 @@ function spMkbBatalkan(btn) {
     if (btn) { btn.disabled = false; btn.textContent = "Coba lagi yang tersisa"; }
   })
   .catch(function (e) {
-    if (st) st.innerHTML = '<span class="sp-mkb-galat">' + spEsc_(e.message || e) + '</span>';
+    if (st) st.innerHTML = '<span class="sp-mkb-galat">' + spEsc_(spPesanGalat_(e, "Pembatalan marker massal")) + '</span>';
     if (btn) { btn.disabled = false; btn.textContent = "Coba lagi"; }
   });
 }
@@ -6193,7 +6473,7 @@ function spMkxKirim_(payload) {
   // JSON hampir selalu halaman login Google, bukan cacat data; tanpa terjemahan ini dua belas
   // baris sekaligus menampilkan "Unexpected token <" dan tidak seorang pun tahu artinya
   // "muat ulang halamannya".
-  .then(function (r) { return r.text(); })
+  .then(function (r) { return r.text(); }, spTandaiJaringan_)
   .then(function (t) {
     let d = null;
     try { d = JSON.parse(t); } catch (e) {
@@ -6266,7 +6546,7 @@ async function spMkxSimpan(btn) {
       b.tr.classList.remove("sp-mkx-ok");
       b.tr.classList.add("sp-mkx-gagal");
       if (b.hasil) {
-        b.hasil.innerHTML = '<span class="sp-mkx-gagal-teks">' + spEsc_(e.message || e) + '</span>';
+        b.hasil.innerHTML = '<span class="sp-mkx-gagal-teks">' + spEsc_(spPesanGalat_(e, "Simpan marker")) + '</span>';
       }
     }
   }
@@ -6824,13 +7104,13 @@ async function spSimpanMarker() {
       }
     })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
     alert("Marker tersimpan: " + d.idMarker + " (" + d.pcsPerLapis + " pcs/lapis)");
     spMuatMarker();
   })
-  .catch(function (e) { alert(e.message || e); })
+  .catch(spGalatAlert_("Simpan marker"))
   .then(function () { if (btn) { btn.disabled = false; btn.textContent = "Simpan Marker"; } });
 }
 
@@ -6841,12 +7121,12 @@ function spBatalMarker(idMarker) {
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "batalkanMarker",
       payload: { idMarker: idMarker } })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal membatalkan.");
     spMuatMarker();
   })
-  .catch(function (e) { alert(e.message || e); });
+  .catch(spGalatAlert_("Pembatalan marker"));
 }
 
 /* ============================================================
@@ -7008,16 +7288,16 @@ function spMuatGelaran() {
   Promise.all([
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
       idToken: SP_ID_TOKEN, action: "getMarkerPO", idPurchaseOrder: idPoMinta }) })
-      .then(function (r) { return r.json(); }),
+      .then(function (r) { return r.json(); }, spTandaiJaringan_),
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
       idToken: SP_ID_TOKEN, action: "getRekapKainPO", idPurchaseOrder: idPoMinta }) })
-      .then(function (r) { return r.json(); }),
+      .then(function (r) { return r.json(); }, spTandaiJaringan_),
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
       idToken: SP_ID_TOKEN, action: "getRingkasanGelaranPO", idPurchaseOrder: idPoMinta }) })
-      .then(function (r) { return r.json(); }),
+      .then(function (r) { return r.json(); }, spTandaiJaringan_),
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
       idToken: SP_ID_TOKEN, action: "getRollPO", idPurchaseOrder: idPoMinta }) })
-      .then(function (r) { return r.json(); })
+      .then(function (r) { return r.json(); }, spTandaiJaringan_)
   ])
   .then(function (hasil) {
     if (spMuatBasi_("spMuatGelaran", urutMuat)) return;   // v343 (PF-3): jawaban basi
@@ -7053,7 +7333,7 @@ function spMuatGelaran() {
   .catch(function (e) {
     if (spMuatBasi_("spMuatGelaran", urutMuat)) return;   // v343 (PF-3): jawaban basi
     document.getElementById("sp-gelar-form").innerHTML =
-      '<p class="sp-info">' + (e.message || e) + '</p>';
+      '<p class="sp-info">' + spEsc_(spPesanGalat_(e, "Muat gelaran")) + '</p>';
   });
 }
 
@@ -8156,7 +8436,7 @@ async function spGbSimpan(btn) {
       b.tr.classList.add("sp-gb-gagal");
       // Sebab gagal sebagai TEKS di barisnya, bukan title: tooltip tidak ada di layar sentuh, dan
       // sebab yang tidak terbaca sama saja dengan tidak ada sebab.
-      b.tr.querySelector(".sp-gb-galat").textContent = String(e.message || e);
+      b.tr.querySelector(".sp-gb-galat").textContent = spPesanGalat_(e, "Simpan gelaran");
       // Sidik isi SAAT gagal: pengumpul memakainya untuk tahu kapan sebab ini kedaluwarsa.
       b.tr.setAttribute("data-gagal-sidik", spGbSidik_(b.tr));
     }
@@ -8180,7 +8460,7 @@ function spGbKirim_(payload) {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "simpanGelaran", payload: payload })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
     return d;
@@ -8299,7 +8579,7 @@ function spSimpanGelaran() {
       }
     })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
     alert("Gelaran tersimpan.\n" + d.totalPotongan + " potongan " +
@@ -8313,7 +8593,7 @@ function spSimpanGelaran() {
     }
     spMuatGelaran();
   })
-  .catch(function (e) { alert(e.message || e); })
+  .catch(spGalatAlert_("Simpan gelaran"))
   .then(function () { if (btn) { btn.disabled = false; btn.textContent = "Simpan Gelaran"; } });
 }
 
@@ -8501,13 +8781,13 @@ function spBatalGelaran(idGelaran) {
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "batalkanGelaran",
       payload: { idGelaran: idGelaran, alasan: String(alasan).trim() } })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal membatalkan.");
     if (d.peringatan) alert(d.peringatan);
     spMuatGelaran();
   })
-  .catch(function (e) { alert(e.message || e); });
+  .catch(spGalatAlert_("Pembatalan gelaran"));
 }
 
 function spRenderSetLengkap_() {
@@ -9109,14 +9389,14 @@ function spSimpanRoll(btn) {
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "simpanRollKain",
       payload: { idPurchaseOrder: window.SP_PO_AKTIF, roll: roll } })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
     alert(d.tersimpan + " roll tersimpan" +
       (d.rincianSatuan ? (" (" + d.rincianSatuan + ")") : "") + ".");
     spMuatGelaran();   // tombol dipulihkan oleh render ulang
   })
-  .catch(function (e) { pulih(); alert(e.message || e); });
+  .catch(spGalatAlert_("Simpan roll kain", pulih));
 }
 
 /**
@@ -9153,7 +9433,7 @@ function spKirim_(action, payload, opsi) {
   opsi = opsi || {};
   const pulih = spTombolSibuk_(opsi.btn, opsi.teksSibuk || "Menyimpan...");
   return fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: action, payload: payload }) })
-    .then(function (r) { return r.text(); })
+    .then(function (r) { return r.text(); }, spTandaiJaringan_)
     .then(function (teks) {
       let res;
       try { res = JSON.parse(teks); }
@@ -9165,8 +9445,14 @@ function spKirim_(action, payload, opsi) {
       return opsi.sukses ? opsi.sukses(res) : res;
     })
     .catch(function (e) {
-      if (!(e instanceof TypeError) || typeof opsi.periksa !== "function") {
-        pulih(); alert((e && e.message) || "Gagal menghubungi server."); return null;
+      // v344 (PF-5): syaratnya PENANDA JARINGAN, bukan `e instanceof TypeError`.
+      // Bedanya bukan gaya: `opsi.sukses` berjalan di dalam rantai ini, jadi cacat
+      // render di sana juga TypeError -- dan dengan syarat lama ia masuk ke jalur
+      // periksa(), lalu dilaporkan sebagai "jawaban hilang di jalan". Dua kalimat
+      // yang bisa keluar dari situ dua-duanya salah untuk cacat render: yang satu
+      // menyatakan datanya sudah tersimpan, yang lain menyuruh SIMPAN LAGI.
+      if (!(e && e.spJaringan) || typeof opsi.periksa !== "function") {
+        pulih(); alert(spPesanGalat_(e, "Simpan")); return null;
       }
       if (opsi.btn) opsi.btn.textContent = "Jawaban tidak sampai, memeriksa...";
       return opsi.periksa().then(function (sudah) {
@@ -9269,7 +9555,7 @@ function spSimpanSisaRoll(btn) {
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "simpanSisaRoll",
       payload: { idPurchaseOrder: window.SP_PO_AKTIF, sisa: sisa } })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
     // Daftar dimuat ulang (beberapa detik). Tombol SENGAJA tetap mati sampai
@@ -9278,7 +9564,7 @@ function spSimpanSisaRoll(btn) {
     alert(sisa.length + " roll tersimpan.");
     spMuatGelaran();
   })
-  .catch(function (e) { pulih(); alert(e.message || e); });
+  .catch(spGalatAlert_("Simpan sisa roll", pulih));
 }
 
 function spBatalRoll(idRoll) {
@@ -9288,12 +9574,12 @@ function spBatalRoll(idRoll) {
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "batalkanRollKain",
       payload: { idRoll: idRoll } })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal membatalkan.");
     spMuatGelaran();
   })
-  .catch(function (e) { alert(e.message || e); });
+  .catch(spGalatAlert_("Pembatalan roll"));
 }
 
 function spSimpanSisaKain(btn) {
@@ -9320,13 +9606,13 @@ function spSimpanSisaKain(btn) {
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "simpanSisaKain",
       payload: { idPurchaseOrder: window.SP_PO_AKTIF, sisa: sisa } })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
     alert(sisa.length + " hasil ukur tersimpan.");
     spMuatGelaran();   // tombol dipulihkan oleh render ulang
   })
-  .catch(function (e) { pulih(); alert(e.message || e); });
+  .catch(spGalatAlert_("Simpan sisa kain", pulih));
 }
 
 /** Escape HTML sederhana -- dipakai di seluruh render tab Marker & Gelaran. */
@@ -9393,7 +9679,7 @@ function spMuatTahap(jenis) {
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getProgresTahapPO",
       idPurchaseOrder: window.SP_PO_AKTIF })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("spMuatTahap", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal memuat.");
@@ -9405,7 +9691,7 @@ function spMuatTahap(jenis) {
   })
   .catch(function (e) {
     if (spMuatBasi_("spMuatTahap", urutMuat)) return;   // v343 (PF-3): jawaban basi
-    wadah.innerHTML = '<p class="sp-info">' + spEsc_(e.message || e) + '</p>';
+    wadah.innerHTML = '<p class="sp-info">' + spEsc_(spPesanGalat_(e, "Muat progres tahap")) + '</p>';
   });
 }
 
@@ -9543,12 +9829,12 @@ function spBatalTahap(idProgres) {
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "batalkanProgresTahap",
       payload: { idProgres: idProgres } })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal membatalkan.");
     spMuatTahap(window.SP_TAHAP_AKTIF);
   })
-  .catch(function (e) { alert(e.message || e); });
+  .catch(spGalatAlert_("Pembatalan progres tahap"));
 }
 
 function spCatatTahap(i, tahap) {
@@ -9582,12 +9868,12 @@ function spCatatTahap(i, tahap) {
       }
     })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
     spMuatTahap(tahap);
   })
-  .catch(function (e) { alert(e.message || e); })
+  .catch(spGalatAlert_("Catat progres tahap"))
   .then(function () {
     if (btn) { btn.disabled = false; btn.textContent = "Catat " + (tahap === "pola" ? "Pola" : "Sampel"); }
   });
