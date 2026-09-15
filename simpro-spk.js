@@ -117,6 +117,7 @@ function spMulaiIsi_() {
   spShow("sp-isi");
   const el = document.getElementById("sp-nav-logout");
   if (el) el.classList.remove("hidden");
+  spPasangPengamatOffset_();   // v346 (PF-7): terbitkan tinggi navwrap ke --sp-atas-konten
   if (!window.SP_PREFETCH) { spMuatDaftarPO(); spMuatDaftarLine_(); }   // v226: biasanya sudah berjalan dari spMulai
   window.SP_PREFETCH = false;
 
@@ -7207,6 +7208,41 @@ function spOffsetPintasan_() {
   if (!nav) return 80;
   const top = parseFloat(getComputedStyle(nav).top);
   return (isNaN(top) ? 72 : top) + nav.offsetHeight + 8;
+}
+
+/* v346 (AUDIT-PRODUKSI PF-7) -- TINGGI AREA NAVWRAP DITERBITKAN KE CSS.
+
+   `.sp-konf-grup-head` menempel di `top: 64px` sementara navwrap yang menempel
+   menempati 72..121 px. Terukur 15 Sep 2026 pada render konfirmasi SUNGGUHAN:
+   kepala grup 64..137, jadi 57 px teratasnya DI BALIK navwrap -- dan
+   `document.elementFromPoint` di titik tengah checkbox "seluruh serahan"
+   mengembalikan `#sp-navwrap` pada SEMUA posisi gulir tempat kepalanya menempel
+   (27-29 posisi, di 390/640/1000 px). Jadi centang itu memang tidak bisa
+   disentuh sampai digulir balik, persis seperti laporan lantai.
+
+   Angka yang benar sudah dihitung `spOffsetPintasan_()` sejak v211 --
+   `stickyTop + nav.offsetHeight + 8`. Ia TIDAK diduplikasi jadi konstanta CSS;
+   nilainya diterbitkan dari situ ke `--sp-atas-konten`, karena tinggi navwrap
+   berubah saat bilah tabnya membungkus. Satu barang, satu bentuk kunci.
+
+   Diperbarui pada tiga kejadian: DOM siap, `resize`, dan ResizeObserver pada
+   navwrap-nya sendiri (bilah tab bisa tumbuh tanpa jendela berubah ukuran --
+   mis. lencana antrean muncul). */
+function spTerbitkanOffsetKonten_() {
+  const nav = document.getElementById("sp-navwrap");
+  if (!nav) return;
+  document.documentElement.style.setProperty("--sp-atas-konten", spOffsetPintasan_() + "px");
+}
+
+function spPasangPengamatOffset_() {
+  if (window.__spOffsetDiamati) return;   // sekali per halaman
+  window.__spOffsetDiamati = true;
+  spTerbitkanOffsetKonten_();
+  window.addEventListener("resize", spTerbitkanOffsetKonten_);
+  const nav = document.getElementById("sp-navwrap");
+  if (nav && typeof ResizeObserver === "function") {
+    new ResizeObserver(spTerbitkanOffsetKonten_).observe(nav);
+  }
 }
 
 /** Elemen layak dapat chip: ada, tidak .hidden (sendiri/induk sampai panel), dan punya isi. */

@@ -1737,7 +1737,14 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap; cursor: pointer;
   padding: 9px 12px; margin-bottom: 8px; border-radius: 10px;
   background: var(--paper, #FAF7F2); border: 1px solid var(--line, #E5E0D6);
-  position: sticky; top: 64px; z-index: 5;
+  /* v346 (AUDIT-PRODUKSI PF-7): 64px menaruh kepala grup DI BALIK navwrap yang
+     menempel (72..121 px) -- terukur 57 px tumpang tindih, dan checkbox "seluruh
+     serahan" tidak bisa disentuh di SEMUA posisi gulir tempat kepalanya menempel.
+     `--sp-atas-konten` diterbitkan JS dari spOffsetPintasan_() (stickyTop +
+     tinggi navwrap + 8), jadi ia ikut saat bilah tab membungkus. Cadangannya
+     129px = nilai terukur di 320..1400 px, dipakai kalau JS-nya gagal dimuat --
+     lebih baik terlalu rendah sedikit daripada tersembunyi. */
+  position: sticky; top: var(--sp-atas-konten, 129px); z-index: 5;
 }
 .sp-konf-grup-head input[type="checkbox"] { width: 22px; height: 22px; margin: 0; accent-color: var(--ink, #17212F); cursor: pointer; }
 .sp-konf-grup-line { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 15px; color: var(--ink); }
