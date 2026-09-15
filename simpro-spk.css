@@ -720,9 +720,13 @@ body.sp-siap #sp-hero .lead { display: none; }
   border-radius: 9px;
 }
 /* Qty konfirmasi per size: grid rapat, padding besar merusak barisnya. */
-[id^="sp-panel-"] .sp-konf-qty-input {
+/* v347: kalah dari aturan luas baris 687 dengan cara yang sama seperti
+   kotak qty tabel size -- lihat uraian panjangnya di sana. Spesifisitas
+   dinaikkan ke (0,5,1); terukur ruang teks 49 -> 69 px, dan font 16 px
+   menutup zoom iOS. */
+[id^="sp-panel-"] input.sp-konf-qty-input:not([type="radio"]):not([type="checkbox"]):not([type="file"]) {
   padding: 9px 4px;
-  font-size: 14px;
+  font-size: 16px;
   border-radius: 8px;
 }
 
@@ -927,12 +931,41 @@ body.sp-siap #sp-hero .lead { display: none; }
    Sekalian: spinner number dimatikan untuk SEMUA keluarga kotak angka
    kecil -- di kotak sesempit itu spinner tidak berguna (angka diketik,
    bukan diklik naik-turun) dan cuma menutupi nilai.
+
+   v347: ATURAN INI TIDAK PERNAH BERLAKU SEJAK DITULIS (v109). Selektornya
+   `[id^="sp-panel-"] .sp-qty` bernilai (0,2,0), sementara aturan luas di
+   baris 687 `[id^="sp-panel-"] input:not(...)` bernilai (0,4,1) dan
+   MENGALAHKANNYA -- jadi padding 12px/14px dan font 15px tetap menang, dan
+   gejala yang komentar di atas jelaskan ("angka 0 terpotong") HIDUP terus
+   selama itu. Terukur di form yang sungguh dirender, 360-640 px: kotak 46 px
+   dengan padding 14/14 menyisakan 18 px ruang teks, dan pada 15 px hanya
+   DUA digit yang terlihat -- operator mengetik 200 lalu melihat "20", dan
+   dengan petunjuk "/400" di bawahnya angka itu tampak wajar.
+
+   Perbaikannya menaikkan spesifisitas, bukan !important -- pola yang sudah
+   dipakai .sp-roll-sisa (:1805) dan .sp-gb-tabel (:2068) di berkas ini, dan
+   yang komentarnya sendiri sebut "lebih jujur daripada !important". Dengan
+   `input` + rantai :not() yang sama, selektornya (0,5,1) > (0,4,1).
+
+   Sesudahnya (terukur, empat form, 360/390/640/1000 px): ruang teks 18 -> 38 px,
+   dua digit -> EMPAT digit, dan tinggi barisnya justru TURUN 75,2 -> 71,6 px.
+   Font 16 px sekalian menutup zoom iOS (PF-7 butir 3): Safari memperbesar
+   halaman saat memfokuskan input < 16 px, dan di tabel size itu melempar
+   kolom M-XL keluar layar tiap ketukan.
+
+   .sp-keluar-qty ikut ke sini: aturannya sendiri (:1279, satu kelas) kalah
+   dari baris 687 dengan cara yang sama.
+   .qc-size-qty SENGAJA TIDAK ikut -- kotaknya lebar (grid, 77-87 px seperti
+   .sp-konf-qty-input) jadi tidak memotong, dan halaman /p/qc.html tidak punya
+   pembungkus [id^="sp-panel-"] sama sekali sehingga butuh perubahan aturan
+   dasarnya sendiri; keduanya dicatat di AUDIT-PRODUKSI.md.
    ============================================================ */
-[id^="sp-panel-"] .sp-qty,
-[id^="sp-panel-"] .sp-setor-qty,
-[id^="sp-panel-"] .sp-cut-qty {
+[id^="sp-panel-"] input.sp-qty:not([type="radio"]):not([type="checkbox"]):not([type="file"]),
+[id^="sp-panel-"] input.sp-setor-qty:not([type="radio"]):not([type="checkbox"]):not([type="file"]),
+[id^="sp-panel-"] input.sp-cut-qty:not([type="radio"]):not([type="checkbox"]):not([type="file"]),
+[id^="sp-panel-"] input.sp-keluar-qty:not([type="radio"]):not([type="checkbox"]):not([type="file"]) {
   padding: 9px 4px;
-  font-size: 14px;
+  font-size: 16px;
   text-align: center;
   border-radius: 9px;
 }
