@@ -232,6 +232,39 @@ function spPoFormSah_(idPoForm, apa) {
    browser, dan cocok-mencocokkan teks itu cara pembedanya mati diam-diam saat
    browser diperbarui. Karena itu penandanya dipasang di BATAS fetch
    (spTandaiJaringan_), tempat satu-satunya yang tahu pasti. */
+/* v345 (AUDIT-PRODUKSI PF-9) -- SARAN KOMPONEN: SATU daftar, TIGA datalist ber-id BEDA.
+
+   Sebelum ini tiga kotak Komponen (`sp-mkx-komponen` di matriks marker,
+   `sp-mk-komponen` di form marker, `sp-gl-komponen` di form re-cut gelaran)
+   menunjuk id datalist yang SAMA -- `sp-datalist-komponen` -- sementara dua
+   blok render MASING-MASING memancarkan datalist dengan id itu, dan isinya
+   BERBEDA: form marker memakai daftar bawaan 8 komponen kalau
+   SP_SARAN_KOMPONEN belum ada, form gelaran memakai `|| []`.
+
+   `list=` hanya mengikuti datalist PERTAMA di DOM, dan mana yang pertama
+   bergantung pada tab mana yang sudah pernah dibuka -- datalist form marker
+   baru ADA sesudah spRenderFormMarker_ jalan. Jadi kotak yang sama menawarkan
+   8 saran atau nol saran tergantung urutan kunjungan tab. Diukur 15 Sep 2026:
+   di halaman live `sp-panel-marker` memang mendahului `sp-panel-gelar`, jadi
+   yang menang datalist marker -- TAPI hanya kalau tabnya sudah dibuka.
+
+   Matriks marker bahkan tidak punya datalist sendiri; ia menumpang. Sekarang
+   tiap blok memancarkan datalistnya sendiri dari SATU daftar bawaan. */
+/* v345 (PF-9): peta alias panel ditulis dua kali (spSwitchTab & spRenderSub_) --
+   nilai yang sama, jadi salah satu pasti tertinggal saat tab bermode ditambah. */
+const SP_ALIAS_PANEL = { konfpot: "konf", konfset: "konf", qcring: "qc", qcpot: "qc", qcjahit: "qc" };
+
+const SP_KOMPONEN_BAWAAN = ["Variasi", "Kerah", "Manset", "Kerah, Manset",
+  "Badan", "Lengan", "Saku", "Furing"];
+
+function spDatalistKomponen_(id) {
+  return '<datalist id="' + id + '">' +
+    (window.SP_SARAN_KOMPONEN || SP_KOMPONEN_BAWAAN).map(function (k) {
+      return '<option value="' + spEsc_(k) + '"></option>';
+    }).join("") +
+  '</datalist>';
+}
+
 function spTandaiJaringan_(e) {
   // Dipasang sebagai handler REJECT pada .then pertama sesudah fetch(), jadi ia
   // hanya kena galat fetch itu sendiri -- bukan apa pun yang dilempar .then
@@ -2147,7 +2180,7 @@ function spPasangPanduan_(tab) {
   // kehilangan panduannya: konfpot/konfset sejak v116, siapkan sejak v145,
   // keluar sejak v150 -- tidak ada satu pun yang melempar error, panduannya
   // cuma tidak pernah muncul.
-  const ALIAS = { konfpot: "konf", konfset: "konf", qcring: "qc", qcpot: "qc", qcjahit: "qc" };
+  const ALIAS = SP_ALIAS_PANEL;
   const panel = document.getElementById("sp-panel-" + (ALIAS[tab] || tab));
   if (!panel || panel.querySelector(".sp-panduan")) return;
   const html = spPanduanHtml_(tab);
@@ -2166,7 +2199,7 @@ function spPasangPanduan_(tab) {
 function spSegarkanBaca_(tab) {
   const t = tab || window.SP_TAB;
   if (!t) return;
-  const ALIAS = { konfpot: "konf", konfset: "konf", qcring: "qc", qcpot: "qc", qcjahit: "qc" };
+  const ALIAS = SP_ALIAS_PANEL;
   const panel = document.getElementById("sp-panel-" + (ALIAS[t] || t));
   if (!panel) return;
   spPanelBacaSaja_(panel, t);
@@ -6748,8 +6781,9 @@ function spMkxPanelHtml_() {
           // kain yang sudah terukur mengikuti panel motif dan 0,02 untuk polos.
           '<label>Allowance per lapis (m)<input id="sp-mkx-allow" min="0" placeholder="0.02" ' +
             'step="0.001" type="number" value=""/></label>' +
-          '<label>Komponen<input id="sp-mkx-komponen" list="sp-datalist-komponen" ' +
+          '<label>Komponen<input id="sp-mkx-komponen" list="sp-dl-komponen-mkx" ' +
             'placeholder="kosongkan = semua panel" type="text" value=""/></label>' +
+          spDatalistKomponen_("sp-dl-komponen-mkx") +   // v345 (PF-9): datalist sendiri, bukan menumpang
         '</div>' +
         '<div class="sp-mkx-saran" id="sp-mkx-awas-allow"></div>' +
         '<div class="sp-mkx-saran" id="sp-mkx-saran"></div>' +
@@ -6901,7 +6935,7 @@ function spRenderFormMarker_(asal) {
         (a.allowancePerLapis !== undefined ? a.allowancePerLapis : "0.02") + '"/></label>' +
       '<label>Jenis Kain<input id="sp-mk-kain" list="sp-datalist-kain" placeholder="mis. Polos" value="' +
         spEsc_(a.jenisKain || "") + '"/></label>' +
-      '<label>Komponen<input id="sp-mk-komponen" list="sp-datalist-komponen" ' +
+      '<label>Komponen<input id="sp-mk-komponen" list="sp-dl-komponen-mk" ' +
         'placeholder="kosongkan = semua panel" type="text" value="' +
         spEsc_(a.komponen || "") + '"/></label>' +
     '</div>' +
@@ -6941,12 +6975,7 @@ function spRenderFormMarker_(asal) {
       '<input id="sp-mk-url-layout" type="hidden" value="' + spEsc_(a.urlLayout || "") + '"/>' +
       '<input id="sp-mk-url-file" type="hidden" value="' + spEsc_(a.urlFileMarker || "") + '"/>' +
     '</div>' +
-    '<datalist id="sp-datalist-komponen">' +
-      (window.SP_SARAN_KOMPONEN || ["Variasi", "Kerah", "Manset", "Kerah, Manset",
-        "Badan", "Lengan", "Saku", "Furing"]).map(function (k) {
-        return '<option value="' + spEsc_(k) + '"></option>';
-      }).join("") +
-    '</datalist>' +
+    spDatalistKomponen_("sp-dl-komponen-mk") +
     '<datalist id="sp-datalist-kain">' +
       (window.SP_PO_KAIN || []).map(function (k) {
         return '<option value="' + spEsc_(k) + '"></option>';
@@ -7526,7 +7555,7 @@ function spRenderFormGelaran_() {
     '<div class="sp-recut-blok hidden" id="sp-gl-recut">' +
       '<div class="sp-grid3">' +
         '<label id="sp-gl-lbl-komponen">Komponen yang diganti' +
-          '<input id="sp-gl-komponen" list="sp-datalist-komponen" ' +
+          '<input id="sp-gl-komponen" list="sp-dl-komponen-gl" ' +
             'placeholder="mis. Lengan" type="text"/></label>' +
         '<label id="sp-gl-lbl-alasan">Alasan<input id="sp-gl-alasan" placeholder="mis. kain sobek" type="text"/></label>' +
         '<label>Kain terpakai (m)<input id="sp-gl-kain-manual" min="0" ' +
@@ -7555,11 +7584,7 @@ function spRenderFormGelaran_() {
           '<input type="text" id="sp-gl-recut-qc" placeholder="mis. QC-..." value="' +
             spEsc_((window.SP_RECUT_QC_GELARAN && window.SP_RECUT_QC_GELARAN.idQC) || "") + '"/></label>' +
       '</div>' +
-      '<datalist id="sp-datalist-komponen">' +
-        (window.SP_SARAN_KOMPONEN || []).map(function (k) {
-          return '<option value="' + spEsc_(k) + '"></option>';
-        }).join("") +
-      '</datalist>' +
+      spDatalistKomponen_("sp-dl-komponen-gl") +
       '<p class="sp-info" id="sp-gl-recut-hint">Re-cut TIDAK menambah jumlah baju &#8212; bajunya sudah terhitung ' +
         'waktu dipotong pertama. Yang bertambah cuma pemakaian kain.</p>' +
       // v154: kesalahan paling mahal di alur ini, dicegah dengan satu kalimat.
@@ -9654,9 +9679,11 @@ function spEsc_(v) {
   // string itu -- tombolnya mati diam-diam -- dan nama yang disusun jahat menjalankan kode di sesi
   // siapa pun yang membuka tab itu. Enam pemakaian terakhir dipindah ke data-* di rilis yang sama,
   // jadi ini lapis kedua, bukan satu-satunya.
-  return String(v === null || v === undefined ? "" : v)
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  // v345 (PF-9): SATU implementasi aturannya. Sejak v312 isi spEsc_ identik
+  // dengan rjdEscapeHtml_ (simpro-global.js) -- keduanya escape & < > " ' --
+  // jadi dua salinan hanya menunggu salah satunya diperbaiki sendirian.
+  // Namanya dipertahankan (183 pemakaian) beserta nisan v312 di atas.
+  return rjdEscapeHtml_(v);
 }
 
 /* ============================================================
