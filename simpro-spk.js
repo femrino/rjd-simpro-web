@@ -144,16 +144,78 @@ function spMulaiIsi_() {
 }
 
 /** Daftar line untuk filter di tab Konfirmasi. */
+/* v343 (AUDIT-PRODUKSI PF-3) -- JAWABAN YANG SUDAH BASI DIBUANG.
+
+   Kepala line memilih PO 260804, jawaban lambat (penjaga fetch global v219
+   mengulang baca sampai 3x dengan jeda 1,5 s lalu 3 s), ia sadar salah dan
+   ganti ke PO 260819. Jawaban PO baru tiba duluan, form benar. Empat detik
+   kemudian jawaban PO LAMA tiba dan menimpa: kartu 260819, tabel & payload
+   260804. Setoran tersimpan ke PO yang salah, tanpa satu pun pesan.
+
+   Penandanya URUTAN PER PEMUAT, bukan satu penanda generasi global. Dua alasan,
+   keduanya terukur:
+
+   1. Usulan di AUDIT-PRODUKSI menaikkan penanda global DI DALAM tiap pemuat
+      (`const gen = ++window.SP_GEN`). Sejak v312 (PF-1) tab QC menembakkan
+      qcMuatTersedia_ DAN qcMuatDitahan_ bersamaan untuk PO yang SAMA -- dengan
+      pola itu, yang menjawab lebih dulu dibuang oleh kenaikan yang lain. Jadi
+      usulannya tidak disalin buta.
+   2. Penanda global yang hanya dinaikkan saat PO berganti TIDAK melihat
+      penembakan ulang pemuat yang sama dengan PO yang sama -- padahal di situ
+      balapannya paling sering: ganti pilihan line (sp-setor-line, sp-konf-line,
+      qc-line) dan kotak cari riwayat yang menembak per huruf. Urutan per pemuat
+      menangkap keduanya: ganti PO membuat spPilihPO -> spSwitchTab menembakkan
+      ulang pemuat tab aktif, dan penembakan ulang itu sendiri yang menaikkan
+      urutannya.
+
+   Kuncinya = nama fungsi pemuatnya, jadi tidak mungkin bertabrakan dan
+   terbaca sendiri di tempat pemakaian. Pemuat yang SUDAH punya penjaganya
+   sendiri (spMuatRantaiLine_, qcMuatRiwayatPO_ -- keduanya membandingkan PO
+   yang diminta dengan PO di state) dibiarkan: menambah urutan di sana berarti
+   dua bentuk kunci untuk barang yang sama. */
+const SP_MUAT_URUT = {};
+function spMuatMulai_(kunci) { return (SP_MUAT_URUT[kunci] = (SP_MUAT_URUT[kunci] || 0) + 1); }
+function spMuatBasi_(kunci, urutan) { return SP_MUAT_URUT[kunci] !== urutan; }
+/* v343 (AUDIT-PRODUKSI PF-3) -- SIMPAN HANYA BOLEH KE PO YANG SEDANG DIPEGANG KARTU.
+
+   Lapis kedua di belakang penjaga urutan di atas. Kalau jawaban basi lolos juga
+   (mis. pemuatnya ditembak dari jalur yang belum lewat spMuatMulai_), yang
+   berikutnya terjadi adalah TULISAN ke PO yang salah -- dan itu tidak bisa
+   ditarik balik dari layar.
+
+   Dua bentuk salahnya, keduanya ditutup di sini:
+   - Empat form per-size (spSimpan/spSimpanCutting/spSimpanKeluar_/spSimpanSetoran)
+     mengirim PO DARI DATANYA (SP_PO / SP_CUT / SP_KELUAR / SP_SETOR), jadi data
+     basi = PO salah DAN barang salah.
+   - Form marker & gelaran sebaliknya: mereka mengirim SP_PO_AKTIF (PO benar)
+     tapi daftar marker-nya dari SP_MARKER yang dimuat untuk PO LAMA -- PO benar,
+     barangnya salah. Karena itu SP_MARKER sekarang menyimpan PO-nya sendiri
+     (SP_MARKER_PO) dan dibandingkan di sini juga.
+
+   Pesannya menyebut KEDUA nomor PO, bukan cuma "data kedaluwarsa": yang
+   membuat orang bisa bertindak adalah tahu form ini milik PO mana. */
+function spPoFormSah_(idPoForm, apa) {
+  const aktif = String(window.SP_PO_AKTIF || "");
+  const form = String(idPoForm || "");
+  if (!form || !aktif || form === aktif) return true;
+  alert("Tidak disimpan. " + apa + " ini milik PO " + form + ", sementara kartu di atas PO " + aktif +
+    ".\n\nIni terjadi kalau PO diganti saat data PO sebelumnya masih dimuat. " +
+    "Pilih ulang PO " + aktif + " di kotak pencarian, lalu isi lagi.");
+  return false;
+}
+
 function spMuatDaftarLine_() {
   // v226: snapshot lokal dulu (maks 7 hari), lalu segarkan.
   const snapL = (typeof rjdSnapshotBaca_ === "function") ? rjdSnapshotBaca_("produksi_line", 7 * 24 * 60) : null;
   if (snapL && snapL.data && !window.SP_DAFTAR_LINE) { window.SP_DAFTAR_LINE = snapL.data; spIsiFilterLineKonf_(window.SP_DAFTAR_LINE); }
+  const urutMuat = spMuatMulai_("spMuatDaftarLine_");   // v343 (PF-3)
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getDaftarLine" })
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("spMuatDaftarLine_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (d && d.success) {
       window.SP_DAFTAR_LINE = d.daftar || [];
       if (typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("produksi_line", window.SP_DAFTAR_LINE);
@@ -161,7 +223,7 @@ function spMuatDaftarLine_() {
       spMuatLineSetoran_();
     }
   })
-  .catch(function () { /* filter line opsional -- halaman tetap jalan */ });
+  .catch(function () { /* filter line opsional -- halaman tetap jalan; tidak menulis apa pun, jadi TIDAK butuh penjaga PF-3 */ });
 }
 
 /* ============================================================
@@ -213,12 +275,14 @@ function spMuatDaftarPO() {
   if (window.SP_TAB === "orderan" && typeof spRenderOrderan_ === "function") {
     spRenderOrderan_();
   }
+  const urutMuat = spMuatMulai_("spMuatDaftarPO");   // v343 (PF-3)
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getDaftarPO" })
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("spMuatDaftarPO", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
       window.SP_PO_STATUS = "galat";
       window.SP_PO_GALAT = (d && d.error) || "Gagal memuat daftar PO.";
@@ -262,6 +326,7 @@ function spMuatDaftarPO() {
     }
   })
   .catch(function () {
+    if (spMuatBasi_("spMuatDaftarPO", urutMuat)) return;   // v343 (PF-3): jawaban basi
     // v226: kalau snapshot sudah tampil, biarkan -- jangan ganti dengan pesan galat.
     if (window.SP_PO_STATUS === "snapshot") {
       spPesan_("sp-po-pesan", "Tidak bisa memperbarui dari server. Menampilkan daftar tersimpan pukul " + window.SP_PO_SNAPSHOT_JAM + ".", true);
@@ -381,12 +446,14 @@ function spMuatDistribusi() {
   document.getElementById("sp-form").classList.add("hidden");
   document.getElementById("sp-memuat-po").classList.remove("hidden");
 
+  const urutMuat = spMuatMulai_("spMuatDistribusi");   // v343 (PF-3)
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getPOUntukDistribusi", idPurchaseOrder: idPO })
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("spMuatDistribusi", urutMuat)) return;   // v343 (PF-3): jawaban basi
     document.getElementById("sp-memuat-po").classList.add("hidden");
     if (!d || !d.success) {
       spPesan_("sp-po-pesan", (d && d.error) || "Gagal memuat rincian PO.", true);
@@ -397,6 +464,7 @@ function spMuatDistribusi() {
     document.getElementById("sp-form").classList.remove("hidden");
   })
   .catch(function () {
+    if (spMuatBasi_("spMuatDistribusi", urutMuat)) return;   // v343 (PF-3): jawaban basi
     document.getElementById("sp-memuat-po").classList.add("hidden");
     spPesan_("sp-po-pesan", "Gagal menghubungi server.", true);
   });
@@ -846,6 +914,7 @@ function spHitungTotal() {
 function spSimpan() {
   const po = window.SP_PO;
   if (!po) return;
+  if (!spPoFormSah_(po.idPurchaseOrder, "Form bagi ke line")) return;   // v343 (PF-3)
 
   const idLine = document.getElementById("sp-line").value;
   if (!idLine) { alert("Pilih dulu line yang menerima potongan."); return; }
@@ -1975,6 +2044,7 @@ function spSwitchTab(tab) {
 function spMuatCutting() {
   const wadah = document.getElementById("sp-cut-tabel");
   if (wadah) wadah.innerHTML = spMuatHtml_("Memuat rincian PO...");
+  const urutMuat = spMuatMulai_("spMuatCutting");   // v343 (PF-3)
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({
@@ -1984,6 +2054,7 @@ function spMuatCutting() {
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("spMuatCutting", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
       wadah.innerHTML = '<p class="sp-pesan sp-galat">' +
         rjdEscapeHtml_((d && d.error) || "Gagal memuat rincian PO.") + '</p>';
@@ -1993,6 +2064,7 @@ function spMuatCutting() {
     spRenderFormCutting();
   })
   .catch(function () {
+    if (spMuatBasi_("spMuatCutting", urutMuat)) return;   // v343 (PF-3): jawaban basi
     wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
   });
 }
@@ -2112,6 +2184,7 @@ function spHitungTotalCutting() {
 function spSimpanCutting() {
   const po = window.SP_CUT;
   if (!po) return;
+  if (!spPoFormSah_(po.idPurchaseOrder, "Form hasil potong")) return;   // v343 (PF-3)
 
   const perBaris = {};
   document.querySelectorAll(".sp-cut-qty").forEach(function (inp) {
@@ -2293,12 +2366,14 @@ function spMuatKeluar_() {
   if (!idPO) return;
   const wadah = document.getElementById("sp-keluar-tabel");
   if (wadah) wadah.innerHTML = spMuatHtml_("Memuat rincian PO...");
+  const urutMuat = spMuatMulai_("spMuatKeluar_");   // v343 (PF-3)
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getPOUntukPotonganKeluar", idPurchaseOrder: idPO })
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("spMuatKeluar_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
       wadah.innerHTML = '<p class="sp-pesan sp-galat">' +
         rjdEscapeHtml_((d && d.error) || "Gagal memuat rincian PO.") + '</p>';
@@ -2308,6 +2383,7 @@ function spMuatKeluar_() {
     spRenderKeluar_();
   })
   .catch(function () {
+    if (spMuatBasi_("spMuatKeluar_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
   });
 }
@@ -2481,6 +2557,7 @@ function spHitungKeluar_() {
 function spSimpanKeluar_() {
   const po = window.SP_KELUAR;
   if (!po) return;
+  if (!spPoFormSah_(po.idPurchaseOrder, "Form potongan keluar")) return;   // v343 (PF-3)
   const jenis = spKeluarJenis_();
   const diambil = (document.getElementById("sp-keluar-diambil") || {}).value || "";
   const komponen = (document.getElementById("sp-keluar-komponen") || {}).value || "";
@@ -3022,12 +3099,14 @@ function spMuatDetailOrder_() {
   if (window.SP_DETAIL_PO === idPO && window.SP_DETAIL) { spRenderDetailOrder_(); return; }
 
   panel.innerHTML = '<div class="sp-card">' + spMuatHtml_("Memuat detail order...") + '</div>';
+  const urutMuat = spMuatMulai_("spMuatDetailOrder_");   // v343 (PF-3)
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getSPKCetak", id: idPO })
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("spMuatDetailOrder_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
       panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' +
         rjdEscapeHtml_((d && d.error) || "Gagal memuat detail order.") + '</p></div>';
@@ -3038,6 +3117,7 @@ function spMuatDetailOrder_() {
     spRenderDetailOrder_();
   })
   .catch(function () {
+    if (spMuatBasi_("spMuatDetailOrder_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' +
       'Gagal menghubungi server.</p></div>';
   });
@@ -3239,12 +3319,14 @@ function spMuatSiapkan_() {
   if (!window.SP_SIAPKAN_SEMUA && window.SP_PO_AKTIF) {
     opsi.idPurchaseOrder = window.SP_PO_AKTIF;
   }
+  const urutMuat = spMuatMulai_("spMuatSiapkan_");   // v343 (PF-3)
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getPerluDisiapkan", opsi: opsi })
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("spMuatSiapkan_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
       wadah.innerHTML = '<p class="sp-pesan sp-galat">' +
         rjdEscapeHtml_((d && d.error) || "Gagal memuat daftar.") + '</p>';
@@ -3255,6 +3337,7 @@ function spMuatSiapkan_() {
     spRenderSiapkan_();
   })
   .catch(function () {
+    if (spMuatBasi_("spMuatSiapkan_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
   });
 }
@@ -3505,6 +3588,7 @@ function spMuatKonfirmasi() {
   const idLine = (document.getElementById("sp-konf-line") || {}).value || "";
   const jenis = window.SP_KONF_JENIS || "potongan";
 
+  const urutMuat = spMuatMulai_("spMuatKonfirmasi");   // v343 (PF-3)
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify(jenis === "setoran"
@@ -3513,6 +3597,7 @@ function spMuatKonfirmasi() {
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("spMuatKonfirmasi", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
       wadah.innerHTML = '<p class="sp-pesan sp-galat">' +
         rjdEscapeHtml_((d && d.error) || "Gagal memuat daftar konfirmasi.") + '</p>';
@@ -3523,6 +3608,7 @@ function spMuatKonfirmasi() {
     spTampilSetoranTerkonfirmasi_();   // v296
   })
   .catch(function () {
+    if (spMuatBasi_("spMuatKonfirmasi", urutMuat)) return;   // v343 (PF-3): jawaban basi
     wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
     spTampilSetoranTerkonfirmasi_();
   });
@@ -3556,6 +3642,7 @@ function spTampilSetoranTerkonfirmasi_() {
   const judul = '<div class="sp-konf-terkonfirmasi-judul">Setoran terkonfirmasi' +
     (po ? ' untuk <b>' + rjdEscapeHtml_(po) + '</b>' : ' <small>(semua PO, 40 terakhir)</small>') + '</div>';
   w.innerHTML = judul + spMuatHtml_("Memuat setoran terkonfirmasi...");
+  const urutMuat = spMuatMulai_("spTampilSetoranTerkonfirmasi_");   // v343 (PF-3)
   const minta = [
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getRiwayatSetoran", opsi: { idPurchaseOrder: po, batas: po ? 80 : 40 } }) })
       .then(function (r) { return r.json(); })
@@ -3569,6 +3656,7 @@ function spTampilSetoranTerkonfirmasi_() {
       .then(function (r) { return r.json(); }).catch(function () { return null; }));
   }
   Promise.all(minta).then(function (hasil) {
+    if (spMuatBasi_("spTampilSetoranTerkonfirmasi_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     const d = hasil[0];
     if (!d || !d.success) {
       w.innerHTML = judul + '<p class="sp-pesan sp-galat">' + rjdEscapeHtml_((d && d.error) || "Gagal memuat setoran terkonfirmasi.") + '</p>';
@@ -3621,6 +3709,7 @@ function spTampilSetoranTerkonfirmasi_() {
       '</div>';
     }).join("");
   }).catch(function () {
+    if (spMuatBasi_("spTampilSetoranTerkonfirmasi_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     w.innerHTML = judul + '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
   });
 }
@@ -4096,6 +4185,7 @@ function spMuatRiwayat() {
   if (wadah) wadah.innerHTML = spMuatHtml_("Memuat riwayat...");
 
   const cari = (document.getElementById("sp-riw-cari") || {}).value || "";
+  const urutMuat = spMuatMulai_("spMuatRiwayat");   // v343 (PF-3)
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({
@@ -4107,6 +4197,7 @@ function spMuatRiwayat() {
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("spMuatRiwayat", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
       wadah.innerHTML = '<p class="sp-pesan sp-galat">' +
         rjdEscapeHtml_((d && d.error) || "Gagal memuat riwayat.") + '</p>';
@@ -4116,6 +4207,7 @@ function spMuatRiwayat() {
     spRenderRiwayat();
   })
   .catch(function () {
+    if (spMuatBasi_("spMuatRiwayat", urutMuat)) return;   // v343 (PF-3): jawaban basi
     wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
   });
 }
@@ -4230,6 +4322,7 @@ function spMuatTercatat_(jenis) {
   wadah.innerHTML = '<div class="sp-card">' + spMuatHtml_("Memuat " +
     p.judul.toLowerCase() + "...") + '</div>';
 
+  const urutMuat = spMuatMulai_("spMuatTercatat_");   // v343 (PF-3)
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({
@@ -4239,6 +4332,7 @@ function spMuatTercatat_(jenis) {
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("spMuatTercatat_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
       wadah.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' +
         rjdEscapeHtml_((d && d.error) || "Gagal memuat " + p.judul.toLowerCase() + ".") +
@@ -4250,6 +4344,7 @@ function spMuatTercatat_(jenis) {
     spRenderTercatat_(jenis);
   })
   .catch(function () {
+    if (spMuatBasi_("spMuatTercatat_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     wadah.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' +
       'Gagal menghubungi server.</p></div>';
   });
@@ -4624,6 +4719,7 @@ function spMuatSetoran() {
   }
   if (wadah) wadah.innerHTML = spMuatHtml_("Memuat...");
 
+  const urutMuat = spMuatMulai_("spMuatSetoran");   // v343 (PF-3)
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({
@@ -4633,6 +4729,7 @@ function spMuatSetoran() {
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("spMuatSetoran", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
       wadah.innerHTML = '<p class="sp-pesan sp-galat">' +
         rjdEscapeHtml_((d && d.error) || "Gagal memuat data setoran.") + '</p>';
@@ -4644,6 +4741,7 @@ function spMuatSetoran() {
     spRenderFormSetoran();
   })
   .catch(function () {
+    if (spMuatBasi_("spMuatSetoran", urutMuat)) return;   // v343 (PF-3): jawaban basi
     wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
   });
 }
@@ -4792,6 +4890,7 @@ function spJenisSetoranKembali_() {
 function spSimpanSetoran() {
   const po = window.SP_SETOR;
   if (!po) return;
+  if (!spPoFormSah_(po.idPurchaseOrder, "Form setoran")) return;   // v343 (PF-3)
 
   const perBaris = {};
   document.querySelectorAll(".sp-setor-qty").forEach(function (inp) {
@@ -5128,15 +5227,22 @@ function spMuatMarker() {
     return;
   }
   document.getElementById("sp-marker-daftar").innerHTML = spMuatHtml_("Memuat...");
+  const urutMuat = spMuatMulai_("spMuatMarker");   // v343 (PF-3)
+  // v343 (PF-3): SATU nilai PO untuk permintaan DAN cap SP_MARKER_PO -- kalau
+  // keduanya membaca SP_PO_AKTIF sendiri-sendiri, mereka bisa berbeda tepat
+  // pada kejadian yang sedang dijaga.
+  const idPoMinta = window.SP_PO_AKTIF;
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getMarkerPO",
-      idPurchaseOrder: window.SP_PO_AKTIF })
+      idPurchaseOrder: idPoMinta })
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("spMuatMarker", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal memuat marker.");
     window.SP_MARKER = d.marker || [];
+    window.SP_MARKER_PO = idPoMinta;   // v343 (PF-3): daftar marker tahu PO-nya sendiri
     window.SP_PO_SIZE = d.sizeTersedia || [];
     window.SP_PO_WARNA = d.warna || [];
     window.SP_PO_ITEM = d.item || {};
@@ -5145,6 +5251,7 @@ function spMuatMarker() {
     spRenderMarker_();
   })
   .catch(function (e) {
+    if (spMuatBasi_("spMuatMarker", urutMuat)) return;   // v343 (PF-3): jawaban basi
     document.getElementById("sp-marker-daftar").innerHTML =
       '<p class="sp-info">' + (e.message || e) + '</p>';
   });
@@ -5456,12 +5563,14 @@ function spMuatSemuaMarker_(paksa) {
   if (window.SP_SEMUA_MARKER && !paksa) { spRenderSemuaMarker_(); return; }
   wadah.innerHTML = spMuatHtml_("Memuat daftar semua marker...");
 
+  const urutMuat = spMuatMulai_("spMuatSemuaMarker_");   // v343 (PF-3)
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getDaftarSemuaMarker" })
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("spMuatSemuaMarker_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || d.error) {
       wadah.innerHTML = '<p class="sp-pesan sp-galat">' +
         rjdEscapeHtml_((d && d.error) || "Gagal memuat daftar marker.") + '</p>';
@@ -5471,6 +5580,7 @@ function spMuatSemuaMarker_(paksa) {
     spRenderSemuaMarker_();
   })
   .catch(function () {
+    if (spMuatBasi_("spMuatSemuaMarker_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
   });
 }
@@ -6104,6 +6214,9 @@ function spMkxKirim_(payload) {
  * gagal akan menghapus grid berikut pekerjaan yang belum tersimpan.
  */
 async function spMkxSimpan(btn) {
+  // v343 (PF-3): dijaga di PINTU, bukan di spMkxKirim_/spGbKirim_ yang
+  // dipanggil di dalam loop -- penjaga di sana memunculkan alert per baris.
+  if (!spPoFormSah_(window.SP_MARKER_PO, "Matriks marker")) return;
   const info = spMkxKumpulkan_();
   if (info.galat.length) { spMkxPratinjau(); return; }
   const it = spMkxItem_();
@@ -6642,6 +6755,8 @@ function spRevisiMarker(idMarker) {
 }
 
 async function spSimpanMarker() {
+  // v343 (PF-3): daftar marker/roll yang terender milik PO mana?
+  if (!spPoFormSah_(window.SP_MARKER_PO, "Form marker")) return;
   const susunan = {};
   document.querySelectorAll(".sp-mk-sz").forEach(function (inp) {
     const v = Number(inp.value) || 0;
@@ -6888,22 +7003,26 @@ function spMuatGelaran() {
     return;
   }
   document.getElementById("sp-gelar-form").innerHTML = spMuatHtml_("Memuat...");
+  const urutMuat = spMuatMulai_("spMuatGelaran");   // v343 (PF-3)
+  const idPoMinta = window.SP_PO_AKTIF;   // v343 (PF-3): lihat catatan di spMuatMarker
   Promise.all([
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
-      idToken: SP_ID_TOKEN, action: "getMarkerPO", idPurchaseOrder: window.SP_PO_AKTIF }) })
+      idToken: SP_ID_TOKEN, action: "getMarkerPO", idPurchaseOrder: idPoMinta }) })
       .then(function (r) { return r.json(); }),
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
-      idToken: SP_ID_TOKEN, action: "getRekapKainPO", idPurchaseOrder: window.SP_PO_AKTIF }) })
+      idToken: SP_ID_TOKEN, action: "getRekapKainPO", idPurchaseOrder: idPoMinta }) })
       .then(function (r) { return r.json(); }),
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
-      idToken: SP_ID_TOKEN, action: "getRingkasanGelaranPO", idPurchaseOrder: window.SP_PO_AKTIF }) })
+      idToken: SP_ID_TOKEN, action: "getRingkasanGelaranPO", idPurchaseOrder: idPoMinta }) })
       .then(function (r) { return r.json(); }),
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
-      idToken: SP_ID_TOKEN, action: "getRollPO", idPurchaseOrder: window.SP_PO_AKTIF }) })
+      idToken: SP_ID_TOKEN, action: "getRollPO", idPurchaseOrder: idPoMinta }) })
       .then(function (r) { return r.json(); })
   ])
   .then(function (hasil) {
+    if (spMuatBasi_("spMuatGelaran", urutMuat)) return;   // v343 (PF-3): jawaban basi
     window.SP_MARKER = (hasil[0] && hasil[0].marker) || [];
+    window.SP_MARKER_PO = idPoMinta;   // v343 (PF-3): daftar marker tahu PO-nya sendiri
     window.SP_PO_SIZE = (hasil[0] && hasil[0].sizeTersedia) || [];
     window.SP_PO_WARNA = (hasil[0] && hasil[0].warna) || [];
     window.SP_PO_ITEM = (hasil[0] && hasil[0].item) || {};
@@ -6932,6 +7051,7 @@ function spMuatGelaran() {
     spRenderRoll_();
   })
   .catch(function (e) {
+    if (spMuatBasi_("spMuatGelaran", urutMuat)) return;   // v343 (PF-3): jawaban basi
     document.getElementById("sp-gelar-form").innerHTML =
       '<p class="sp-info">' + (e.message || e) + '</p>';
   });
@@ -7989,6 +8109,9 @@ function spGbBanyakBuat() {
 }
 
 async function spGbSimpan(btn) {
+  // v343 (PF-3): dijaga di PINTU, bukan di spMkxKirim_/spGbKirim_ yang
+  // dipanggil di dalam loop -- penjaga di sana memunculkan alert per baris.
+  if (!spPoFormSah_(window.SP_MARKER_PO, "Daftar bentangan")) return;
   const info = spGbKumpulkan_();
   const salah = info.galat.filter(function (g) { return g.indexOf("__AWAS__") !== 0; });
   if (salah.length) { spGbUbah_(); return; }
@@ -8119,6 +8242,8 @@ function spHitungGelaran_() {
 }
 
 function spSimpanGelaran() {
+  // v343 (PF-3): daftar marker/roll yang terender milik PO mana?
+  if (!spPoFormSah_(window.SP_MARKER_PO, "Form gelaran")) return;
   const sel = document.getElementById("sp-gl-marker");
   const lapis = Number((document.getElementById("sp-gl-lapis") || {}).value) || 0;
   const recut = spModeRecut_();
@@ -8960,6 +9085,8 @@ function spHitungKonversiRoll_(el) {
 }
 
 function spSimpanRoll(btn) {
+  // v343 (PF-3): daftar marker/roll yang terender milik PO mana?
+  if (!spPoFormSah_(window.SP_MARKER_PO, "Form terima roll")) return;
   const roll = [];
   document.querySelectorAll("#sp-roll-baru tr").forEach(function (tr) {
     const jenisKain = (tr.querySelector(".sp-rb-kain").value || "").trim();
@@ -9123,6 +9250,8 @@ function spKonversiSisaRoll_(el) {
 }
 
 function spSimpanSisaRoll(btn) {
+  // v343 (PF-3): daftar marker/roll yang terender milik PO mana?
+  if (!spPoFormSah_(window.SP_MARKER_PO, "Form sisa roll")) return;
   const sisa = [];
   document.querySelectorAll(".sp-roll-sisa").forEach(function (inp) {
     if (inp.value === "") return;
@@ -9168,6 +9297,8 @@ function spBatalRoll(idRoll) {
 }
 
 function spSimpanSisaKain(btn) {
+  // v343 (PF-3): daftar marker/roll yang terender milik PO mana?
+  if (!spPoFormSah_(window.SP_MARKER_PO, "Form sisa kain")) return;
   const sisa = [];
   document.querySelectorAll(".sp-kain-ukur").forEach(function (inp) {
     const v = Number(inp.value);
@@ -9256,6 +9387,7 @@ function spMuatTahap(jenis) {
     return;
   }
   wadah.innerHTML = spMuatHtml_("Memuat...");
+  const urutMuat = spMuatMulai_("spMuatTahap");   // v343 (PF-3)
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getProgresTahapPO",
@@ -9263,6 +9395,7 @@ function spMuatTahap(jenis) {
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("spMuatTahap", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal memuat.");
     window.SP_TAHAP = d.artikel || [];
     window.SP_TAHAP_SUBTIPE = d.subTipe || {};
@@ -9271,6 +9404,7 @@ function spMuatTahap(jenis) {
     spRenderTahap_(t);
   })
   .catch(function (e) {
+    if (spMuatBasi_("spMuatTahap", urutMuat)) return;   // v343 (PF-3): jawaban basi
     wadah.innerHTML = '<p class="sp-info">' + spEsc_(e.message || e) + '</p>';
   });
 }
@@ -9534,17 +9668,19 @@ function qcMuatTersedia_() {
   QC_TERSEDIA = null;
   const po = (QC_PO_TERPILIH && QC_PO_TERPILIH.idPurchaseOrder) || window.SP_PO_AKTIF || "";
   if (!po) { qcTampilTersedia_(); return; }
+  const urutMuat = spMuatMulai_("qcMuatTersedia_");   // v343 (PF-3)
   fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
     idToken: SP_ID_TOKEN, action: "getTersediaQC", idPurchaseOrder: po }) })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("qcMuatTersedia_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d.error) QC_TERSEDIA = d.baris || [];
     qcRenderSetoran_();   // v297
     qcPilihSetoranLine_();
     qcTampilTersedia_();
     qcIsiOtomatis_();   // v296
   })
-  .catch(function () { qcTampilTersedia_(); });
+  .catch(function () { if (spMuatBasi_("qcMuatTersedia_", urutMuat)) return; qcTampilTersedia_(); });   // v343 (PF-3)
 }
 
 /* ============================================================
@@ -9740,14 +9876,16 @@ function qcMuatDitahan_() {
   QC_DITAHAN = null;
   const po = (QC_PO_TERPILIH && QC_PO_TERPILIH.idPurchaseOrder) || window.SP_PO_AKTIF || "";
   if (!po) { qcTampilDitahan_(); return; }
+  const urutMuat = spMuatMulai_("qcMuatDitahan_");   // v343 (PF-3)
   fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
     idToken: SP_ID_TOKEN, action: "getDitahanQC", idPurchaseOrder: po }) })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("qcMuatDitahan_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d.error) QC_DITAHAN = d.baris || [];
     qcTampilDitahan_();
   })
-  .catch(function () { qcTampilDitahan_(); });
+  .catch(function () { if (spMuatBasi_("qcMuatDitahan_", urutMuat)) return; qcTampilDitahan_(); });   // v343 (PF-3)
 }
 
 /** Keranjang terbuka untuk tahap + warna yang sedang dipilih. */
@@ -9940,11 +10078,13 @@ function qcPilihItem() {
 }
 
 function qcMuatMaster_() {
+  const urutMuat = spMuatMulai_("qcMuatMaster_");   // v343 (PF-3)
   Promise.all([
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getMasterQC" }) }).then(function (r) { return r.json(); }),
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getDaftarPO" }) }).then(function (r) { return r.json(); })
   ])
     .then(function (hasil) {
+      if (spMuatBasi_("qcMuatMaster_", urutMuat)) return;   // v343 (PF-3): jawaban basi
       const d = hasil[0], dPO = hasil[1];
       if (!d || !d.success) {
         qcShow("qc-isi");
@@ -9972,6 +10112,7 @@ function qcMuatMaster_() {
       qcShow("qc-isi");
     })
     .catch(function () {
+      if (spMuatBasi_("qcMuatMaster_", urutMuat)) return;   // v343 (PF-3): jawaban basi
       qcShow("qc-isi");
       document.getElementById("qc-panel-input").innerHTML =
         '<p style="font-size:12.5px;color:var(--thread)">Gagal menghubungi server.</p>';
@@ -10056,12 +10197,14 @@ function qcMuatRincianPO_(idPO) {
   if (sel) sel.innerHTML = '<option value="">Memuat warna...</option>';
   qcRenderSizeLolos_();
 
+  const urutMuat = spMuatMulai_("qcMuatRincianPO_");   // v343 (PF-3)
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getPOUntukCutting", idPurchaseOrder: idPO })
   })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("qcMuatRincianPO_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
       if (sel) sel.innerHTML = '<option value="">Gagal memuat warna</option>';
       qcTampilkanError_((d && d.error) || "Gagal memuat rincian warna PO ini.");
@@ -10074,6 +10217,7 @@ function qcMuatRincianPO_(idPO) {
     qcMuatDitahan_();
   })
   .catch(function () {
+    if (spMuatBasi_("qcMuatRincianPO_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (sel) sel.innerHTML = '<option value="">Gagal memuat warna</option>';
     qcTampilkanError_("Gagal menghubungi server saat memuat rincian PO.");
   });
@@ -11036,6 +11180,7 @@ function qcMuatRingkasan() {
   const wadah = document.getElementById("qc-ringkasan-isi");
   wadah.innerHTML = '<p style="font-size:12.5px;color:var(--ink-soft)">Memuat ringkasan...</p>';
 
+  const urutMuat = spMuatMulai_("qcMuatRingkasan");   // v343 (PF-3)
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({
@@ -11050,6 +11195,7 @@ function qcMuatRingkasan() {
   })
     .then(function (r) { return r.json(); })
     .then(function (d) {
+      if (spMuatBasi_("qcMuatRingkasan", urutMuat)) return;   // v343 (PF-3): jawaban basi
       if (!d || !d.success) {
         wadah.innerHTML = '<p style="font-size:12.5px;color:var(--thread)">' + rjdEscapeHtml_((d && d.error) || "Gagal memuat ringkasan.") + '</p>';
         return;
@@ -11057,6 +11203,7 @@ function qcMuatRingkasan() {
       qcRenderRingkasan_(d);
     })
     .catch(function () {
+      if (spMuatBasi_("qcMuatRingkasan", urutMuat)) return;   // v343 (PF-3): jawaban basi
       wadah.innerHTML = '<p style="font-size:12.5px;color:var(--thread)">Gagal menghubungi server.</p>';
     });
 }
@@ -11217,6 +11364,7 @@ function spMuatApproval_() {
     return;
   }
   panel.innerHTML = '<div class="sp-card">' + spMuatHtml_("Memuat approval sampel...") + '</div>';
+  const urutMuat = spMuatMulai_("spMuatApproval_");   // v343 (PF-3)
   Promise.all([
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
       idToken: SP_ID_TOKEN, action: "getPOUntukCutting", idPurchaseOrder: po }) })
@@ -11225,6 +11373,7 @@ function spMuatApproval_() {
       idToken: SP_ID_TOKEN, action: "getStatusApprovalSampel", idPurchaseOrder: po }) })
       .then(function (r) { return r.json(); })
   ]).then(function (hasil) {
+    if (spMuatBasi_("spMuatApproval_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     const rincian = hasil[0], status = hasil[1];
     if (rincian.error || status.error) {
       panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' +
@@ -11241,6 +11390,7 @@ function spMuatApproval_() {
     APS_STATUS = status;
     spRenderApproval_();
   }).catch(function () {
+    if (spMuatBasi_("spMuatApproval_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">Gagal menghubungi server.</p></div>';
   });
 }
@@ -11348,10 +11498,12 @@ function spMuatTerkirim_() {
     return;
   }
   panel.innerHTML = '<div class="sp-card">' + spMuatHtml_("Memuat daftar kiriman...") + '</div>';
+  const urutMuat = spMuatMulai_("spMuatTerkirim_");   // v343 (PF-3)
   fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
     idToken: SP_ID_TOKEN, action: "getStokSiapKirim", idPurchaseOrder: po }) })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("spMuatTerkirim_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (d.error) {
       panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' + rjdEscapeHtml_(d.error) + '</p></div>';
       return;
@@ -11440,6 +11592,7 @@ function spMuatTerkirim_() {
     panel.innerHTML = html;
   })
   .catch(function () {
+    if (spMuatBasi_("spMuatTerkirim_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">Gagal menghubungi server.</p></div>';
   });
 }
@@ -11456,10 +11609,12 @@ function spMuatStok_() {
     return;
   }
   panel.innerHTML = '<div class="sp-card"><p class="sp-info">Menghitung stok siap kirim...</p></div>';
+  const urutMuat = spMuatMulai_("spMuatStok_");   // v343 (PF-3)
   fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
     idToken: SP_ID_TOKEN, action: "getStokSiapKirim", idPurchaseOrder: po }) })
   .then(function (r) { return r.json(); })
   .then(function (d) {
+    if (spMuatBasi_("spMuatStok_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (d.error) {
       panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' + rjdEscapeHtml_(d.error) + '</p></div>';
       return;
@@ -11515,6 +11670,7 @@ function spMuatStok_() {
     panel.innerHTML = html;
   })
   .catch(function () {
+    if (spMuatBasi_("spMuatStok_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">Gagal menghubungi server.</p></div>';
   });
 }
