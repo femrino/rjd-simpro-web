@@ -118,6 +118,7 @@ function spMulaiIsi_() {
   const el = document.getElementById("sp-nav-logout");
   if (el) el.classList.remove("hidden");
   spPasangPengamatOffset_();   // v346 (PF-7): terbitkan tinggi navwrap ke --sp-atas-konten
+  spPasangCariRiwayat_();      // v348 (PF-8): tunda ketikan kotak saring riwayat
   if (!window.SP_PREFETCH) { spMuatDaftarPO(); spMuatDaftarLine_(); }   // v226: biasanya sudah berjalan dari spMulai
   window.SP_PREFETCH = false;
 
@@ -2993,8 +2994,30 @@ function spSisaHari_(iso) {
   return Math.round((t.getTime() - kini.setHours(0, 0, 0, 0)) / 86400000);
 }
 
+/**
+ * v348 (PF-8): ketikan di kotak cari menulis ulang WILAYAH HASIL saja, bukan
+ * seluruh panel.
+ *
+ * Sebelumnya fungsi ini memanggil spRenderOrderan_() -- 197 baris yang menulis
+ * panel.innerHTML PENUH setiap huruf, termasuk kotak carinya sendiri. Kotak itu
+ * ikut dibongkar & dibuat ulang, jadi fokusnya hilang tiap ketukan dan harus
+ * dikembalikan dengan focus() + setSelectionRange. Penyelamat itu dijaga
+ * `if (inp && q)` -- hanya berlaku kalau kotaknya TIDAK kosong -- sehingga
+ * menghapus huruf TERAKHIR membuang fokus keluar dari kotak, dan huruf
+ * berikutnya yang diketik operator tidak masuk ke mana pun.
+ *
+ * Dengan hanya menulis #sp-ord-hasil, kotak carinya TIDAK PERNAH DISENTUH:
+ * fokus & posisi kursor tidak perlu dipulihkan sama sekali, dan cacat `&& q`
+ * di atas hilang alih-alih ditambal. Ringkasan, judul dan bilah alat memang
+ * tidak bergantung pada ketikan -- ringkasannya dihitung dari window.SP_DAFTAR_PO
+ * UTUH (lihat komentarnya di spRenderOrderan_), bukan dari daftar tersaring.
+ */
 function spOrderanCari_() {
-  spRenderOrderan_();
+  const wadah = document.getElementById("sp-ord-hasil");
+  // Panel belum pernah dirender (mis. dipanggil sebelum tab dibuka) -> render
+  // penuh. Tanpa cabang ini ketikan pertama tidak menampilkan apa pun.
+  if (!wadah) { spRenderOrderan_(); return; }
+  wadah.innerHTML = spOrderanHasilHtml_(spOrderanBaris_());
 }
 
 /**
@@ -3220,50 +3243,8 @@ function spRenderOrderan_() {
     .trim().toLowerCase();
   const status = window.SP_ORD_STATUS || "berjalan";
   const urut = window.SP_ORD_URUT || "baru";
-  const batal = window.SP_DAFTAR_PO_BATAL || [];
 
-  const tandai_ = function (arr, kunci) {
-    return arr.map(function (p) {
-      const o = Object.assign({}, p);
-      o[kunci] = true;
-      return o;
-    });
-  };
-  let sumber;
-  if (status === "selesai") sumber = tandai_(selesai, "spSelesai");
-  else if (status === "batal") sumber = tandai_(batal, "spBatal");
-  else if (status === "semua") {
-    sumber = aktif.concat(tandai_(selesai, "spSelesai")).concat(tandai_(batal, "spBatal"));
-  } else sumber = aktif;
-
-  const baris = sumber.filter(function (p) {
-    if (!q) return true;
-    return [p.idPurchaseOrder, p.noSO, p.namaKlien, (p.artikel || []).join(" ")]
-      .join(" ").toLowerCase().indexOf(q) !== -1;
-  });
-
-  // v158: default TERBARU DI ATAS. Yang dicari orang di lantai hampir selalu
-  // order yang baru masuk -- itu yang belum hafal nomornya. Urutan deadline
-  // tetap tersedia karena berguna untuk pertanyaan yang berbeda ("mana yang
-  // harus dikejar duluan"), tapi bukan pertanyaan yang membawa orang ke sini.
-  //
-  // Tanpa tanggal selalu ke BAWAH di kedua mode -- bukan dianggap paling baru
-  // atau paling mendesak hanya karena datanya kosong.
-  baris.sort(function (a, b) {
-    if (urut === "deadline") {
-      const sa = spSisaHari_(a.deadlineIso), sb = spSisaHari_(b.deadlineIso);
-      if (sa === null && sb === null) return 0;
-      if (sa === null) return 1;
-      if (sb === null) return -1;
-      return sa - sb;
-    }
-    const ta = String(a.tanggalPesananIso || ""), tb = String(b.tanggalPesananIso || "");
-    if (!ta && !tb) return 0;
-    if (!ta) return 1;
-    if (!tb) return -1;
-    return tb.localeCompare(ta);   // terbaru dulu
-  });
-
+  const baris = spOrderanBaris_();
   // Ringkasan SELALU dari kelompok berjalan, tidak ikut berubah saat filter
   // digeser ke Selesai/Batal: "berapa yang sedang dikerjakan" adalah angka
   // yang sama sepanjang hari, dan angka ringkasan yang berubah-ubah mengikuti
@@ -3309,7 +3290,79 @@ function spRenderOrderan_() {
         '</select>' +
       '</div>' +
 
-      (baris.length
+      // v348 (PF-8): wadah ber-id supaya mengetik di kotak cari hanya menulis
+      // ulang BAGIAN INI. Wadahnya selalu ada, juga saat hasilnya kosong --
+      // kalau pesan "tidak ada yang cocok" menggantikan wadahnya, ketikan
+      // berikutnya tidak punya tempat menulis dan jalurnya jatuh ke render
+      // penuh diam-diam.
+      '<div id="sp-ord-hasil">' + spOrderanHasilHtml_(baris) + '</div>' +
+    '</div>';
+}
+
+/**
+ * v348 (PF-8): daftar order yang lolos saring + urut. Dipakai DUA jalur --
+ * render penuh dan penulisan ulang wilayah hasil -- jadi aturan saringnya
+ * tidak boleh punya dua salinan.
+ */
+function spOrderanBaris_() {
+  const aktif = window.SP_DAFTAR_PO || [];
+  const selesai = window.SP_DAFTAR_PO_SELESAI || [];
+  const q = String((document.getElementById("sp-ord-cari") || {}).value || "")
+    .trim().toLowerCase();
+  const status = window.SP_ORD_STATUS || "berjalan";
+  const urut = window.SP_ORD_URUT || "baru";
+  const batal = window.SP_DAFTAR_PO_BATAL || [];
+
+  const tandai_ = function (arr, kunci) {
+    return arr.map(function (p) {
+      const o = Object.assign({}, p);
+      o[kunci] = true;
+      return o;
+    });
+  };
+  let sumber;
+  if (status === "selesai") sumber = tandai_(selesai, "spSelesai");
+  else if (status === "batal") sumber = tandai_(batal, "spBatal");
+  else if (status === "semua") {
+    sumber = aktif.concat(tandai_(selesai, "spSelesai")).concat(tandai_(batal, "spBatal"));
+  } else sumber = aktif;
+
+  const baris = sumber.filter(function (p) {
+    if (!q) return true;
+    return [p.idPurchaseOrder, p.noSO, p.namaKlien, (p.artikel || []).join(" ")]
+      .join(" ").toLowerCase().indexOf(q) !== -1;
+  });
+
+  // v158: default TERBARU DI ATAS. Yang dicari orang di lantai hampir selalu
+  // order yang baru masuk -- itu yang belum hafal nomornya. Urutan deadline
+  // tetap tersedia karena berguna untuk pertanyaan yang berbeda ("mana yang
+  // harus dikejar duluan"), tapi bukan pertanyaan yang membawa orang ke sini.
+  //
+  // Tanpa tanggal selalu ke BAWAH di kedua mode -- bukan dianggap paling baru
+  // atau paling mendesak hanya karena datanya kosong.
+  baris.sort(function (a, b) {
+    if (urut === "deadline") {
+      const sa = spSisaHari_(a.deadlineIso), sb = spSisaHari_(b.deadlineIso);
+      if (sa === null && sb === null) return 0;
+      if (sa === null) return 1;
+      if (sb === null) return -1;
+      return sa - sb;
+    }
+    const ta = String(a.tanggalPesananIso || ""), tb = String(b.tanggalPesananIso || "");
+    if (!ta && !tb) return 0;
+    if (!ta) return 1;
+    if (!tb) return -1;
+    return tb.localeCompare(ta);   // terbaru dulu
+  });
+
+  return baris;
+}
+
+/**
+ * v348 (PF-8): isi wilayah hasil -- tabel, atau kalimat "tidak ada yang cocok".
+ */
+function spOrderanHasilHtml_(baris) {
+  return (baris.length
         // v159: sp-tabel-kartu -- di bawah 760px tabel berubah jadi kartu,
         // satu order satu kartu. Enam kolom di HP membuat tiap kolom
         // selebar dua-tiga huruf: "260819/Khoi ro Ummah" terpotong di
@@ -3368,13 +3421,7 @@ function spRenderOrderan_() {
             '</tr>';
           }).join("") +
           '</tbody></table></div>'
-        : '<p class="sp-info">Tidak ada order yang cocok dengan pencarian.</p>') +
-    '</div>';
-
-  // Fokus dikembalikan ke kotak cari supaya mengetik tidak terputus tiap
-  // ketukan -- panel dirender ulang penuh setiap huruf.
-  const inp = document.getElementById("sp-ord-cari");
-  if (inp && q) { inp.focus(); inp.setSelectionRange(q.length, q.length); }
+        : '<p class="sp-info">Tidak ada order yang cocok dengan pencarian.</p>');
 }
 
 /* ============================================================
@@ -4114,6 +4161,10 @@ function spRenderKonfirmasi() {
   // mata harus membaca tanggal di tiap kartu untuk tahu ini kiriman kapan.
   // Sekarang tanggal & line hanya di kepala grup, kartunya cukup PO + warna.
   // Kepala grup punya centangnya sendiri: "seluruh serahan ini cocok".
+  // v348 (PF-8): peta indeks disegarkan tiap render -- SP_KONF bisa sudah
+  // diganti jawaban baru, dan peta lama akan menunjuk objek yang tidak ada lagi.
+  spKonfIndeksBangun_();
+
   const grup = {}, urutGrup = [];
   daftar.forEach(function (k) {
     const iso = k.tanggalSerahIso || k.tanggal || "";
@@ -4177,11 +4228,43 @@ function spKonfCentangGrup_(cb) {
   spKonfTombolMassal_();
 }
 
-function spKonfKartuHtml_(k) {
+/**
+ * v348 (PF-8): peta objek kartu -> indeksnya di window.SP_KONF, dibangun SEKALI
+ * per render.
+ *
+ * Sebelumnya tiap kartu memanggil semua.indexOf(k) -- sapuan linier atas
+ * SP_KONF untuk SETIAP kartu, jadi O(n^2). Aman di puluhan kartu, masalah kalau
+ * kotak masuk lintas-PO mencapai ratusan.
+ *
+ * JANGAN diganti parameter kedua. Kartunya dirender lewat
+ * g.item.map(spKonfKartuHtml_), dan g.item adalah daftar per-GRUP yang sudah
+ * dikelompokkan -- indeks di dalamnya BUKAN indeks di SP_KONF. Array.prototype.map
+ * memanggil callback-nya dengan (elemen, indeks, larik), jadi
+ * `function spKonfKartuHtml_(k, i)` akan menerima indeks grup-LOKAL tanpa satu
+ * pun galat, dan tombol Terima/Selisih membaca window.SP_KONF[i] -> KARTU YANG
+ * SALAH DITERIMA. Grup pertama kebetulan cocok, jadi cacatnya tidak terlihat
+ * di layar pertama.
+ *
+ * `let` tingkat atas, BUKAN window.* -- lihat PF-1b.
+ */
+let SP_KONF_INDEKS = null;
+
+function spKonfIndeksBangun_() {
   const semua = window.SP_KONF || [];
+  SP_KONF_INDEKS = new Map();
+  // indexOf pada objek memakai identitas rujukan, jadi Map berperilaku identik
+  // dan O(1). Kalau satu objek muncul dua kali, indexOf mengembalikan yang
+  // PERTAMA -- Map di sini juga, karena set() berikutnya ditolak.
+  for (let i = 0; i < semua.length; i++) {
+    if (!SP_KONF_INDEKS.has(semua[i])) SP_KONF_INDEKS.set(semua[i], i);
+  }
+}
+
+function spKonfKartuHtml_(k) {
     // indeks HARUS menunjuk ke SP_KONF asli -- tombol Terima/Selisih membaca
     // window.SP_KONF[i]; indeks daftar tersaring akan salah kartu.
-    const i = semua.indexOf(k);
+    if (!SP_KONF_INDEKS) spKonfIndeksBangun_();
+    const i = SP_KONF_INDEKS.has(k) ? SP_KONF_INDEKS.get(k) : -1;
     const sizes = Object.keys(k.sizeQty || {});
     const idK = k.idDistribusi || k.idSetoran || "";
     const dicentang = !!(window.SP_KONF_PILIH || {})[idK];
@@ -4487,6 +4570,38 @@ function spSwitchRiwayat(jenis) {
     b.classList.toggle("active", b.dataset.jenis === jenis);
   });
   spMuatRiwayat();
+}
+
+/**
+ * v348 (PF-8): ketikan di kotak saring riwayat DITUNDA, bukan satu POST per huruf.
+ *
+ * Kotaknya (#sp-riw-cari) hidup di TEMPLATE Blogger dengan
+ * oninput='spMuatRiwayat()' -- di luar repo ini, jadi atributnya tidak bisa
+ * diubah lewat rilis biasa. Menunda spMuatRiwayat() itu sendiri juga salah:
+ * fungsi yang sama dipanggil saat pergantian tab, dan pergantian tab harus
+ * memuat SEKETIKA.
+ *
+ * Jadi yang ditunda cuma jalur KETIKAN: properti .oninput ditimpa dari JS
+ * (menyetel propertinya MENGGANTIKAN handler inline dari atribut), sementara
+ * spMuatRiwayat() sendiri tetap langsung. Sebelum ini, mengetik "260804"
+ * berarti enam POST ke Apps Script, dan penjaga fetch v219 mengulang aksi baca
+ * sampai 3x -- jadi sampai 18 permintaan untuk satu kata.
+ *
+ * Penanda data-tunda mencegah pemasangan ganda (pola spPasangPengamatOffset_,
+ * v346). SP_RIW_TUNDA `let` tingkat atas, BUKAN window.* -- menulis window.X
+ * untuk variabel seperti ini membuat kembaran yang diam (PF-1b).
+ */
+let SP_RIW_TUNDA = null;
+const SP_RIW_TUNDA_MS = 300;
+
+function spPasangCariRiwayat_() {
+  const el = document.getElementById("sp-riw-cari");
+  if (!el || el.dataset.tunda === "1") return;
+  el.dataset.tunda = "1";
+  el.oninput = function () {
+    clearTimeout(SP_RIW_TUNDA);
+    SP_RIW_TUNDA = setTimeout(spMuatRiwayat, SP_RIW_TUNDA_MS);
+  };
 }
 
 function spMuatRiwayat() {
@@ -9957,11 +10072,15 @@ function spCatatTahap(i, tahap) {
    semuanya, dan window.onload kedua justru akan MENIMPA milik produksi.
    QC_API_URL/QC_ID_TOKEN diganti SP_API_URL/SP_ID_TOKEN (sesi produksi).
 
-   Panel QC self-contained: punya picker PO sendiri (qcCariPO/qcPilihPO),
-   TIDAK dikopel ke SP_PO_AKTIF -- kopling menyusul kalau lapangan minta.
+   Panel QC dulu self-contained: punya picker PO sendiri (qcCariPO/qcPilihPO),
+   TIDAK dikopel ke SP_PO_AKTIF. ITU SUDAH TIDAK BENAR dan komentarnya sempat
+   bertahan setelah perilakunya berubah. Sekarang panel QC DIKOPEL ke PO aktif:
+   qcSinkronPOAktif_ menyembunyikan picker-nya tanpa syarat lalu memanggil
+   qcMuatRincianPO_(window.SP_PO_AKTIF). Kode picker-nya dihapus v348 (PF-8);
+   nisannya ada di dekat qcMuatRincianPO_, beserta ketergantungan template yang
+   ikut tertinggal.
    ============================================================ */
 let QC_MASTER = null;
-let QC_DAFTAR_PO = [];
 let QC_PO_TERPILIH = null;
 // Default "Finishing" (v118): tab ini hidup di fase Finishing dan 90%
 // pemakaiannya QC Finishing (sumber stok siap kirim). Potong/Jahit tetap
@@ -10428,13 +10547,16 @@ function qcPilihItem() {
 
 function qcMuatMaster_() {
   const urutMuat = spMuatMulai_("qcMuatMaster_");   // v343 (PF-3)
-  Promise.all([
-    fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getMasterQC" }) }).then(function (r) { return r.json(); }),
-    fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getDaftarPO" }) }).then(function (r) { return r.json(); })
-  ])
-    .then(function (hasil) {
+  // v348 (PF-8): fetch getDaftarPO DIBUANG. Ia hanya mengisi QC_DAFTAR_PO untuk
+  // pemilih PO internal QC (#qc-po), dan pemilih itu disembunyikan TANPA SYARAT
+  // oleh qcSinkronPOAktif_ -- keempat tab QC memanggilnya. Jadi satu fetch besar
+  // ke Apps Script per sesi QC, semata untuk mengisi kotak yang tidak bisa
+  // dilihat maupun disentuh siapa pun. PO aktif datang dari kartu di atas
+  // (window.SP_PO_AKTIF), dan daftar PO-nya sudah ada di window.SP_DAFTAR_PO.
+  fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getMasterQC" }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
       if (spMuatBasi_("qcMuatMaster_", urutMuat)) return;   // v343 (PF-3): jawaban basi
-      const d = hasil[0], dPO = hasil[1];
       if (!d || !d.success) {
         qcShow("qc-isi");
         document.getElementById("qc-panel-input").innerHTML =
@@ -10443,21 +10565,7 @@ function qcMuatMaster_() {
       }
       QC_MASTER = d;
       qcIsiDaftarOperator_();
-    qcIsiDropdownLine_();
-
-      // Daftar PO dipakai kotak cari PO -- kalau gagal dimuat, kotak PO
-      // DIKUNCI (bukan jatuh ke ketik manual). Itu justru sumber masalah
-      // yang mau dihindari: ID PO ketik manual rawan typo, datanya jadi
-      // tidak terkoneksi ke PO asli di SD Purchase Order.
-      const inputPO = document.getElementById("qc-po");
-      if (dPO && dPO.success) {
-        QC_DAFTAR_PO = dPO.daftar || [];
-        if (inputPO) { inputPO.disabled = false; inputPO.placeholder = "Ketik nama klien / artikel / ID PO..."; }
-      } else {
-        QC_DAFTAR_PO = [];
-        if (inputPO) { inputPO.disabled = true; inputPO.placeholder = "Daftar PO gagal dimuat -- coba muat ulang halaman."; }
-      }
-
+      qcIsiDropdownLine_();
       qcShow("qc-isi");
     })
     .catch(function () {
@@ -10476,59 +10584,28 @@ function qcIsiDaftarOperator_() {
   }).join("");
 }
 
-// ============ KOTAK CARI PO (anti-typo -- WAJIB pilih dari daftar, bukan ketik bebas) ============
+/* ============ KOTAK CARI PO INTERNAL QC -- DIHAPUS v348 (PF-8) ============
+   qcCariPO() dan qcPilihPO() ada di sini sampai v347, bersama QC_DAFTAR_PO.
+   Ketiganya TIDAK TERJANGKAU: qcSinkronPOAktif_ menyembunyikan .qc-field
+   pemilih PO TANPA SYARAT ("picker internal selalu disembunyikan di rumah
+   baru"), dan keempat tab QC (qc, qcpot, qcjahit, qcring) memanggilnya. PO
+   aktif datang dari kartu di atas (window.SP_PO_AKTIF) lewat qcSinkronPOAktif_
+   -> qcMuatRincianPO_, bukan dari pemilih ini. Ikut terbuang: fetch
+   getDaftarPO di qcMuatMaster_ -- satu permintaan besar per sesi QC untuk
+   mengisi kotak yang tidak bisa dilihat siapa pun.
 
-function qcCariPO() {
-  const teks = document.getElementById("qc-po").value.trim().toLowerCase();
-  const dropdown = document.getElementById("qc-po-dropdown");
-  if (!teks) { dropdown.classList.add("hidden"); dropdown.innerHTML = ""; return; }
+   KETERGANTUNGAN TEMPLATE, jangan sampai lupa: markup #qc-po di template
+   Blogger /p/produksi.html masih membawa oninput='qcCariPO()'. Hari ini itu
+   aman -- field-nya hidden, jadi tidak ada yang bisa mengetik di situ. Kalau
+   kelak template dibongkar dan field itu ditampilkan lagi, handler-nya HARUS
+   ikut dicabut; kalau tidak ia melempar "qcCariPO is not defined". Elemen
+   terkait yang juga tinggal di template: #qc-po-dropdown, #qc-po-terpilih,
+   #qc-po-terpilih-id, #qc-po-terpilih-sub.
 
-  const cocok = QC_DAFTAR_PO.filter(function (po) {
-    const gabungan = [po.idPurchaseOrder, po.namaKlien, (po.artikel || []).join(" ")].join(" ").toLowerCase();
-    return gabungan.indexOf(teks) !== -1;
-  }).slice(0, 8);
+   /p/qc.html TIDAK relevan di sini: halaman itu tidak merender form QC sama
+   sekali dan tidak ada di daftar rute VERSI.json (terukur 15 Sep 2026).
+   ============================================================ */
 
-  if (!cocok.length) {
-    dropdown.innerHTML = '<div class="qc-po-kosong">Tidak ketemu. Cek ejaan, atau pastikan PO-nya sudah ada di Daftar PO.</div>';
-    dropdown.classList.remove("hidden");
-    return;
-  }
-
-  dropdown.innerHTML = cocok.map(function (po, i) {
-    const artikelTeks = (po.artikel || []).join(", ") || "-";
-    return '<div class="qc-po-opsi" onclick="qcPilihPO(' + i + ')">' +
-      '<div class="qc-po-opsi-id">' + rjdEscapeHtml_(po.idPurchaseOrder) + '</div>' +
-      '<div class="qc-po-opsi-sub">' + rjdEscapeHtml_(po.namaKlien) + ' &middot; ' + rjdEscapeHtml_(artikelTeks) + '</div>' +
-      '</div>';
-  }).join("");
-  dropdown.dataset.hasilCocok = JSON.stringify(cocok.map(function (po) { return po.idPurchaseOrder; }));
-  dropdown.classList.remove("hidden");
-}
-
-function qcPilihPO(indexTampil) {
-  const teks = document.getElementById("qc-po").value.trim().toLowerCase();
-  const cocok = QC_DAFTAR_PO.filter(function (po) {
-    const gabungan = [po.idPurchaseOrder, po.namaKlien, (po.artikel || []).join(" ")].join(" ").toLowerCase();
-    return gabungan.indexOf(teks) !== -1;
-  }).slice(0, 8);
-  const po = cocok[indexTampil];
-  if (!po) return;
-
-  QC_PO_TERPILIH = po;
-  document.getElementById("qc-po-dropdown").classList.add("hidden");
-  document.getElementById("qc-po").value = "";
-  document.getElementById("qc-po").classList.add("hidden");
-  document.getElementById("qc-po-terpilih-id").textContent = po.idPurchaseOrder;
-  document.getElementById("qc-po-terpilih-sub").textContent =
-    po.namaKlien + (po.artikel && po.artikel.length ? " \u00b7 " + po.artikel.join(", ") : "");
-  // Perbaikan v106 (bug WARISAN qc.html): markup chip lahir dengan kelas
-  // "hidden", dan .hidden global memakai !important -- menambah "show" saja
-  // tidak pernah cukup, chip tak pernah tampil & ganti PO mustahil tanpa
-  // refresh. "hidden" harus DILEPAS, bukan dikalahkan.
-  document.getElementById("qc-po-terpilih").classList.remove("hidden");
-  document.getElementById("qc-po-terpilih").classList.add("show");
-  qcMuatRincianPO_(po.idPurchaseOrder);
-}
 
 /**
  * Ambil rincian Warna + Size PO yang dipilih.
