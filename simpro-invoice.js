@@ -130,6 +130,103 @@ function ivPasangKotakRef_(){
     '<input id="iv-bayar-ref" type="text" placeholder="mis. TRF-2609-017 / no. mutasi bank" maxlength="60">';
   wadah.parentNode.insertBefore(div, wadah.nextSibling);
 }
+/* @KP-9 (AUDIT-KEUANGAN K12): kotak Potongan untuk pembayaran TUNGGAL.
+ *
+ * Klien memotong biaya transfer dari nominal kiriman: INV-2609.099 bernilai
+ * 2.772.000, yang masuk rekening 2.769.500 (BI-FAST Rp 2.500). Sebelum kolom ini
+ * tidak ada jalan yang benar -- mengetik nilai invoice membuat buku kas
+ * menunjukkan uang yang tidak pernah masuk, mengetik yang benar-benar masuk
+ * meninggalkan invoice yang TIDAK PERNAH bisa lunas.
+ *
+ * Disuntik dari JS, sesudah kotak No. Referensi -- pola yang sama dengan
+ * ivPasangKotakRef_ (KP-8) dan alasannya sama: markup form ada di template
+ * Blogger yang TIDAK ditempel tiap rilis. Idempoten lewat penjaga id.
+ *
+ * gs >= versi KP-9 (backend menolak potongan > 25.000, potongan tanpa jenis, dan
+ * jenis di luar daftar). Kalau halaman ini hidup LEBIH DULU dari gs-nya, server
+ * akan menelan potongannya tanpa galat -- itu sebabnya urutan rilisnya gs dulu.
+ */
+var IV_JENIS_POTONGAN = ["Biaya transfer bank", "Pembulatan"];
+var IV_POTONGAN_MAKS = 25000;
+
+function ivPasangKotakPotongan_(){
+  if(document.getElementById("iv-bayar-potongan")) return;
+  const ref = document.getElementById("iv-bayar-ref");
+  const jumlah = document.getElementById("iv-bayar-jumlah");
+  // Ditaruh sesudah kotak ref kalau ada, kalau tidak sesudah kotak Jumlah --
+  // urutan pemasangan kedua kotak suntikan ini tidak dijamin.
+  const acuan = (ref && ref.parentNode) || (jumlah && jumlah.parentNode);
+  if(!acuan || !acuan.parentNode) return;
+  const div = document.createElement("div");
+  div.className = "iv-biaya-field";
+  div.innerHTML =
+    '<label for="iv-bayar-potongan">Potongan (biaya transfer/admin)</label>' +
+    '<input id="iv-bayar-potongan" type="number" min="0" step="1" value="0"' +
+      ' max="' + IV_POTONGAN_MAKS + '" oninput="ivPotonganUbah_()"/>' +
+    '<div id="iv-bayar-jenispotongan-wrap" style="display:none;margin-top:8px">' +
+      '<label for="iv-bayar-jenispotongan">Jenis potongan</label>' +
+      '<select id="iv-bayar-jenispotongan" onchange="ivPotonganUbah_()">' +
+        '<option value="">-- pilih --</option>' +
+        IV_JENIS_POTONGAN.map(function(j){
+          return '<option value="' + rjdEscapeHtml_(j) + '">' + rjdEscapeHtml_(j) + '</option>';
+        }).join("") +
+      '</select>' +
+    '</div>' +
+    '<div id="iv-bayar-potongan-ringkas" class="iv-bayar-info-kecil"></div>';
+  acuan.parentNode.insertBefore(div, acuan.nextSibling);
+  ivPotonganUbah_();
+}
+
+/** @KP-9: dropdown jenis hanya muncul saat potongan > 0, dan ringkasan HIDUP
+ *  di bawah kotaknya -- staf harus melihat "menutup berapa" SEBELUM menekan
+ *  Simpan, bukan menebaknya dari dua angka terpisah. */
+function ivPotonganUbah_(){
+  const elPot = document.getElementById("iv-bayar-potongan");
+  const wrap = document.getElementById("iv-bayar-jenispotongan-wrap");
+  const ringkas = document.getElementById("iv-bayar-potongan-ringkas");
+  if(!elPot) return;
+  const pot = Math.round(Number(elPot.value) || 0);
+  if(wrap) wrap.style.display = pot > 0 ? "" : "none";
+  if(!ringkas) return;
+
+  if(pot < 0){
+    ringkas.innerHTML = '<span class="iv-bayar-galat">Potongan tidak boleh negatif.</span>';
+    return;
+  }
+  if(pot > IV_POTONGAN_MAKS){
+    ringkas.innerHTML = '<span class="iv-bayar-galat">Potongan di atas ' +
+      formatRupiah(IV_POTONGAN_MAKS) + ' bukan biaya transfer. Pakai koreksi invoice / ' +
+      'nota kredit, bukan potongan pembayaran.</span>';
+    return;
+  }
+  const dibayar = Math.round(Number((document.getElementById("iv-bayar-jumlah") || {}).value) || 0);
+  if(!pot){ ringkas.innerHTML = ""; return; }
+  const menutup = dibayar + pot;
+  // Sisa dihitung dari tujuan yang SEDANG dipilih, bukan dari angka yang diketik
+  // -- kalau tujuannya belum dipilih, kalimatnya berhenti di "menutup", bukan
+  // menebak sisa yang tidak diketahuinya.
+  const sisaKini = ivSisaTujuanTerpilih_();
+  ringkas.innerHTML = 'Dibayar <b>' + formatRupiah(dibayar) + '</b> + potongan <b>' +
+    formatRupiah(pot) + '</b> = menutup <b>' + formatRupiah(menutup) + '</b>' +
+    (sisaKini === null ? "" : ' &#8594; sisa <b>' + formatRupiah(Math.max(0, sisaKini - menutup)) + '</b>');
+}
+
+/** @KP-9: sisa tagihan tujuan yang sedang dipilih, atau null kalau tidak bisa
+ *  dinilai (tujuan belum dipilih / daftar tujuan belum dimuat). null berarti
+ *  "tidak tahu", BUKAN nol -- ringkasan yang menampilkan "sisa Rp 0" padahal
+ *  tujuannya belum dipilih adalah ringkasan yang berbohong. */
+function ivSisaTujuanTerpilih_(){
+  const pilih = window.IV_PILIH_BAYAR;
+  if(!pilih || !window.IV_TUJUAN) return null;
+  const mode = window.IV_MODE_BAYAR || "invoice";
+  if(mode === "invoice"){
+    const v = (window.IV_TUJUAN.invoice || []).filter(function(x){ return x.id === pilih; })[0];
+    return v ? (Number(v.sisa) || 0) : null;
+  }
+  const v = (window.IV_TUJUAN.order || []).filter(function(x){ return x.idPurchaseOrder === pilih; })[0];
+  return v ? (Number(v.kurangDP) || 0) : null;
+}
+
 var IV_SNAP_WAKTU = null;   // v243: jam snapshot yang sedang TAMPIL; null = yang tampil data segar
 
 function ivMuat(){
@@ -627,6 +724,7 @@ function ivSwitchTab(tab) {
   document.getElementById("iv-panel-bayar").classList.toggle("hidden", tab !== "bayar");
   if (tab === "buat" && !window.IV_PENGIRIMAN) ivMuatPengiriman();
   if (tab === "bayar") ivPasangKotakRef_();   // v305 (KP-8): tab dibuka = kotak ref ada, apa pun keadaan IV_TUJUAN
+  if (tab === "bayar") ivPasangKotakPotongan_();   // @KP-9: idem untuk kotak potongan
   if (tab === "bayar" && !window.IV_TUJUAN) ivMuatPembayaran();
 }
 
@@ -1128,6 +1226,7 @@ window.onload = function(){
 
 function ivMuatPembayaran(){
   ivPasangKotakRef_();   // v305 (KP-8)
+  ivPasangKotakPotongan_();   // @KP-9
   const wadah = document.getElementById("iv-bayar-tujuan");
   if(wadah) wadah.innerHTML = '<p class="iv-buat-info">Memuat daftar tagihan...</p>';
   fetch(IV_API_URL, {
@@ -1181,6 +1280,7 @@ function ivGantiTujuanBayar(mode){
 
 function ivRenderTujuan(){
   ivPasangKotakRef_();   // v305 (KP-8): tab bisa dibuka tanpa memuat ulang dari server
+  ivPasangKotakPotongan_();   // @KP-9
   const wadah = document.getElementById("iv-bayar-tujuan");
   if(!wadah || !window.IV_TUJUAN) return;
   const mode = window.IV_MODE_BAYAR || "invoice";
@@ -1300,6 +1400,9 @@ function ivHitungUlangBayar(){
   // angka dari bukti transfer, menimpanya adalah cara cepat mencatat angka
   // yang salah.
   if(input && !input.value && saran > 0) input.value = saran;
+  // @KP-9: ringkasan potongan menyebut SISA tujuan terpilih, jadi ia harus
+  // disegarkan setiap tujuan berubah -- bukan hanya saat kotak potongan diketik.
+  if(typeof ivPotonganUbah_ === "function") ivPotonganUbah_();
 }
 
 function ivSimpanPembayaran(){
@@ -1321,6 +1424,10 @@ function ivSimpanPembayaran(){
     metodeBayar: document.getElementById("iv-bayar-metode").value || "",
     noReferensi: ((document.getElementById("iv-bayar-ref") || {}).value || "").trim(),   // v305 (KP-8)
     catatan: document.getElementById("iv-bayar-catatan").value || "",
+    // @KP-9: potongan biaya transfer. Backend menutup tagihan dengan
+    // (Jumlah Dibayar + Potongan) tapi memasukkan HANYA Jumlah Dibayar ke buku kas.
+    potongan: Math.round(Number((document.getElementById("iv-bayar-potongan") || {}).value) || 0),
+    jenisPotongan: ((document.getElementById("iv-bayar-jenispotongan") || {}).value || "").trim(),
     kunciKirim: ivKunciKirim_()   // v305 (KP-2), gs >= @338
   };
   if(mode === "invoice") payload.idInvoice = pilih; else payload.idPurchaseOrder = pilih;
@@ -1357,6 +1464,12 @@ function ivSimpanPembayaran(){
     document.getElementById("iv-bayar-jumlah").value = "";
     document.getElementById("iv-bayar-catatan").value = "";
     const refEl = document.getElementById("iv-bayar-ref"); if(refEl) refEl.value = "";
+    // @KP-9: potongan & jenisnya ikut dikosongkan. Potongan yang tertinggal di
+    // kotak akan menempel diam-diam ke pembayaran BERIKUTNYA -- dan pembayaran
+    // berikutnya biasanya tidak kena biaya transfer.
+    const potEl = document.getElementById("iv-bayar-potongan"); if(potEl) potEl.value = "0";
+    const jenEl = document.getElementById("iv-bayar-jenispotongan"); if(jenEl) jenEl.value = "";
+    if(typeof ivPotonganUbah_ === "function") ivPotonganUbah_();
     window.IV_PILIH_BAYAR = null;
     // Daftar tujuan & daftar piutang sama-sama dimuat ulang: angka sisa di
     // keduanya baru saja berubah, dan daftar yang basi di layar keuangan lebih
@@ -1514,6 +1627,7 @@ function ivSplitOtomatis(){
   }
 
   window.IV_ALOKASI = {};
+  window.IV_POTONGAN = {};   // @KP-9: dikosongkan BERSAMA alokasinya -- potongan yang tertinggal akan menempel ke transfer berikutnya
   let sisa = total;
   ((window.IV_TUJUAN && window.IV_TUJUAN.invoice) || []).forEach(function(v){
     if(sisa <= 0) return;
@@ -1568,12 +1682,14 @@ function ivGantiKlienSplit(){
     return;
   }
   window.IV_ALOKASI = {};
+  window.IV_POTONGAN = {};   // @KP-9: dikosongkan BERSAMA alokasinya -- potongan yang tertinggal akan menempel ke transfer berikutnya
   document.getElementById("iv-split-status").textContent = "";
   ivRenderSplit();
 }
 
 function ivSplitKosongkan(){
   window.IV_ALOKASI = {};
+  window.IV_POTONGAN = {};   // @KP-9: dikosongkan BERSAMA alokasinya -- potongan yang tertinggal akan menempel ke transfer berikutnya
   ivRenderSplit();
 }
 
@@ -1662,6 +1778,13 @@ function ivRenderSplit(){
         '</div>' +
         '<input class="iv-split-input" type="number" min="0" step="1" placeholder="0" value="' + nilai + '"' +
           ' oninput="ivSetAlokasi(\'' + ivAttr_(kunci) + '\', this.value)"/>' +
+        // @KP-9: kotak potongan per baris, muncul HANYA setelah barisnya terisi --
+        // kotak potongan pada baris yang belum dialokasikan cuma derau, dan derau
+        // di form uang membuat orang berhenti membaca.
+        (nilai ? '<input class="iv-split-pot" type="number" min="0" step="1" placeholder="pot."' +
+          ' title="Potongan biaya transfer untuk baris ini (maks ' + IV_POTONGAN_MAKS + ')"' +
+          ' max="' + IV_POTONGAN_MAKS + '" value="' + ((window.IV_POTONGAN || {})[kunci] || "") + '"' +
+          ' oninput="ivSetPotongan(\'' + ivAttr_(kunci) + '\', this.value)"/>' : '') +
         '<button class="iv-split-penuh" type="button" title="Isi sebesar sisa tagihan"' +
           ' onclick="ivIsiPenuh(\'' + ivAttr_(kunci) + '\', ' + (Number(v.sisa) || 0) + ')">Sisa</button>' +
       '</div>';
@@ -1694,12 +1817,69 @@ function ivRenderSplit(){
     ((!barisInvoice && !barisOrder) ? '<p class="iv-buat-info">Tidak ada tujuan yang cocok.</p>' : '');
 
   ivHitungSisaSplit();
+  ivSegarkanJenisPotonganSplit_();   // @KP-9: dropdown jenis ikut tiap peta potongan berubah
 }
 
 function ivIsiPenuh(kunci, nilai){
   if(!nilai || nilai <= 0) return;
   if(!window.IV_ALOKASI) window.IV_ALOKASI = {};
   window.IV_ALOKASI[kunci] = nilai;
+  ivRenderSplit();
+}
+
+/* @KP-9: potongan per alokasi split disimpan di peta PARALEL, bukan dengan
+ * mengubah bentuk IV_ALOKASI.
+ *
+ * IV_ALOKASI adalah peta kunci -> ANGKA dan dibaca di 12 tempat (isi-otomatis
+ * proporsional, rekonsiliasi total, render baris, tombol "Sisa"). Mengubahnya
+ * jadi objek {jumlah, potongan} berarti menyentuh kedua belas pembaca itu di
+ * satu form yang memegang uang. Peta terpisah memberi hasil yang sama tanpa
+ * satu pun pembaca lama berubah.
+ *
+ * Total transfer TETAP direkonsiliasi terhadap Σ jumlah SAJA -- sama dengan
+ * pagar KP-6 di backend, karena yang keluar dari bank pengirim adalah jumlah
+ * dibayarnya; potongan tidak pernah lewat sana.
+ */
+/** @KP-9: dropdown "Jenis potongan" untuk mode SPLIT. Field split lain
+ *  (#iv-split-ref dkk) ada di template Blogger, jadi yang ini pun disuntik --
+ *  pola KP-8. Satu dropdown untuk seluruh transfer: satu mutasi bank, satu sebab.
+ *  Idempoten lewat penjaga id. */
+function ivPasangJenisPotonganSplit_(){
+  if(document.getElementById("iv-split-jenispotongan")) return;
+  const ref = document.getElementById("iv-split-ref");
+  const acuan = ref && ref.parentNode;
+  if(!acuan || !acuan.parentNode) return;
+  const div = document.createElement("div");
+  div.className = "iv-biaya-field";
+  div.id = "iv-split-jenispotongan-wrap";
+  div.style.display = "none";
+  div.innerHTML =
+    '<label for="iv-split-jenispotongan">Jenis potongan (untuk baris berpotongan)</label>' +
+    '<select id="iv-split-jenispotongan">' +
+      '<option value="">-- pilih --</option>' +
+      IV_JENIS_POTONGAN.map(function(j){
+        return '<option value="' + rjdEscapeHtml_(j) + '">' + rjdEscapeHtml_(j) + '</option>';
+      }).join("") +
+    '</select>';
+  acuan.parentNode.insertBefore(div, acuan.nextSibling);
+}
+
+/** @KP-9: dropdown split tampil HANYA kalau ada baris berpotongan. Dipanggil
+ *  dari ivRenderSplit, jadi ia ikut setiap kali peta potongan berubah. */
+function ivSegarkanJenisPotonganSplit_(){
+  ivPasangJenisPotonganSplit_();
+  const wrap = document.getElementById("iv-split-jenispotongan-wrap");
+  if(!wrap) return;
+  const ada = Object.keys(window.IV_POTONGAN || {}).some(function(k){
+    return (Number(window.IV_POTONGAN[k]) || 0) > 0;
+  });
+  wrap.style.display = ada ? "" : "none";
+}
+
+function ivSetPotongan(kunci, nilai){
+  const n = Math.round(Number(nilai) || 0);
+  if(!window.IV_POTONGAN) window.IV_POTONGAN = {};
+  if(n > 0) window.IV_POTONGAN[kunci] = n; else delete window.IV_POTONGAN[kunci];
   ivRenderSplit();
 }
 
@@ -1718,10 +1898,32 @@ function ivSimpanSplit(){
       tujuan: isInv ? "invoice" : "order",
       idInvoice: isInv ? k.slice(4) : "",
       idPurchaseOrder: isInv ? "" : k.slice(3),
-      jumlah: Number(alokasi[k]) || 0
+      jumlah: Number(alokasi[k]) || 0,
+      // @KP-9: potongan PER ALOKASI -- satu transfer bisa menutup beberapa
+      // invoice dan hanya sebagian yang kena biaya. Jenisnya sama untuk semua
+      // baris dalam satu transfer (satu mutasi bank, satu sebab).
+      potongan: Number((window.IV_POTONGAN || {})[k]) || 0,
+      jenisPotongan: (Number((window.IV_POTONGAN || {})[k]) || 0) > 0
+        ? (document.getElementById("iv-split-jenispotongan") || {}).value || "" : ""
     };
   });
   if(!daftar.length){ status.textContent = "Belum ada alokasi."; return; }
+  // @KP-9: dijaga di layar SEBELUM dikirim -- backend tetap penjaga terakhirnya,
+  // tapi kalau satu-satunya penolakan datang dari sana, staf sudah menekan
+  // Simpan dan baru melihat kegagalan tanpa tahu baris mana yang menyimpang.
+  const adaPot = daftar.some(function(a){ return (a.potongan || 0) > 0; });
+  if(adaPot && !daftar.every(function(a){ return !(a.potongan > 0) || a.jenisPotongan; })){
+    status.innerHTML = '<span class="iv-bayar-galat">Ada baris berpotongan tapi jenis potongannya ' +
+      'belum dipilih.</span>';
+    return;
+  }
+  const potLebih = daftar.filter(function(a){ return (a.potongan || 0) > IV_POTONGAN_MAKS; });
+  if(potLebih.length){
+    status.innerHTML = '<span class="iv-bayar-galat">Potongan ' +
+      formatRupiah(potLebih[0].potongan) + ' di atas ' + formatRupiah(IV_POTONGAN_MAKS) +
+      ' bukan biaya transfer. Pakai koreksi invoice / nota kredit, bukan potongan pembayaran.</span>';
+    return;
+  }
 
   // Deteksi lintas klien DI SINI juga, bukan cuma di backend. Backend tetap
   // penjaga terakhirnya -- tapi kalau satu-satunya penolakan datang dari sana,
@@ -1795,6 +1997,7 @@ function ivSimpanSplit(){
       rincian + warn;
 
     window.IV_ALOKASI = {};
+    window.IV_POTONGAN = {};   // @KP-9: dikosongkan BERSAMA alokasinya -- potongan yang tertinggal akan menempel ke transfer BERIKUTNYA, dan transfer berikutnya biasanya tidak kena biaya
     document.getElementById("iv-split-total").value = "";
     document.getElementById("iv-split-ref").value = "";
     document.getElementById("iv-split-catatan").value = "";
