@@ -1185,33 +1185,62 @@ function spRenderForm() {
 }
 
 /** Hitung ulang total per baris & keseluruhan tiap ada ketikan. */
-function spHitungTotal() {
-  const po = window.SP_PO;
-  if (!po) return;
+/* ============================================================
+ * MESIN HITUNG TABEL PER-SIZE (v353, AUDIT-PRODUKSI PF-9)
+ * ============================================================
+ * Menggantikan spHitungTotal / spHitungTotalCutting / spHitungKeluar_ /
+ * spHitungTotalSetor yang 92 baris dan 48-88% identik (diukur difflib atas token
+ * ternormalkan, 15 Sep 2026). Yang dipusatkan di sini bukan cuma barisnya: hook
+ * draft PF-5, penanda `sp-lebih`, dan pembaruan total per baris kini SATU tempat,
+ * jadi perbaikan berikutnya tidak perlu diulang empat kali -- itu alasan PF-9 ada.
+ *
+ * KELUARGA RENDER-nya SENGAJA TIDAK disatukan: terukur hanya 30-57% mirip
+ * (rata-rata ~43%), jadi satu mesin di sana berarti percabangan per-form yang
+ * berat -- abstraksi bocor yang membuat perbaikan LEBIH sulit. Lihat
+ * AUDIT-PRODUKSI.md PF-9.
+ *
+ * Tiga medan cfg di bawah ada semata-mata untuk MEMPERTAHANKAN perbedaan yang
+ * sudah ada, bukan karena rancangan. Jangan "dirapikan" tanpa mengukur:
+ *   wajibPo     -- bagi & cutting berhenti kalau state-nya kosong (total TIDAK
+ *                  diperbarui); keluar & setoran tetap memperbarui. Perilaku beda.
+ *   tandaiLebih -- cutting TIDAK menandai `sp-lebih`, dan itu BENAR: kotak
+ *                  `sp-cut-qty` tidak punya atribut `max` karena cutting mencatat
+ *                  berapa yang SUNGGUH dipotong, yang sah melebihi order. Mesin
+ *                  yang selalu menandai akan mencap SETIAP entri cutting "melebihi".
+ *   nolSaja     -- cutting memakai `total === 0`, tiga lainnya `total <= 0`, jadi
+ *                  total NEGATIF masih bisa disimpan di cutting. Ketidakseragaman
+ *                  NYATA, ditandai [UKUR DULU] di AUDIT-PRODUKSI.md -- dipertahankan
+ *                  di sini supaya refactor ini netral perilaku. Gerbang
+ *                  uji/banding-tabelsize.py merekam `tombol.negatif` justru untuk
+ *                  itu: menyeragamkannya akan terlihat sebagai satu sel yang berubah.
+ */
+function spHitungTabelSize_(cfg) {
+  const po = window[cfg.state];
+  if (cfg.wajibPo && !po) return;
   const perBaris = {};
   let total = 0;
-
-  document.querySelectorAll(".sp-qty").forEach(function (inp) {
+  document.querySelectorAll("." + cfg.kelas).forEach(function (inp) {
     const i = inp.dataset.baris;
     const v = Number(inp.value) || 0;
-    const maks = Number(inp.max) || 0;
-    // Tandai kalau melebihi sisa. Backend tetap menolaknya juga (pengaman
-    // berlapis), tapi memberi tahu di layar jauh lebih baik daripada
-    // memberi tahu setelah gagal simpan.
-    inp.classList.toggle("sp-lebih", v > maks);
+    // Ditandai di layar; backend tetap menolak juga (pengaman berlapis).
+    if (cfg.tandaiLebih) inp.classList.toggle("sp-lebih", v > (Number(inp.max) || 0));
     perBaris[i] = (perBaris[i] || 0) + v;
     total += v;
   });
-
-  po.baris.forEach(function (b, i) {
-    const el = document.getElementById("sp-tot-" + i);
+  ((po && po.baris) || []).forEach(function (b, i) {
+    const el = document.getElementById(cfg.awalanTot + i);
     if (el) el.textContent = perBaris[i] || 0;
   });
+  const elTotal = document.getElementById(cfg.idTotal);
+  if (elTotal) elTotal.textContent = total;
+  const btn = document.getElementById(cfg.idBtn);
+  if (btn) btn.disabled = cfg.nolSaja ? (total === 0) : (total <= 0);
+  spDraftSimpan_(cfg.draf);   // v344 (PF-5): pengumpul draft = pengumpul total, jadi tiap ketikan tersimpan
+}
 
-  document.getElementById("sp-total").textContent = total;
-  const btn = document.getElementById("sp-simpan-btn");
-  if (btn) btn.disabled = (total <= 0);
-  spDraftSimpan_("bagi");   // v344 (PF-5): pengumpul draft = pengumpul total, jadi tiap ketikan tersimpan
+function spHitungTotal() {
+  spHitungTabelSize_({ state: "SP_PO", wajibPo: true, kelas: "sp-qty", tandaiLebih: true,
+    awalanTot: "sp-tot-", idTotal: "sp-total", idBtn: "sp-simpan-btn", draf: "bagi" });
 }
 
 function spSimpan() {
@@ -2469,23 +2498,9 @@ function spRenderFormCutting() {
 }
 
 function spHitungTotalCutting() {
-  const po = window.SP_CUT;
-  if (!po) return;
-  const perBaris = {};
-  let total = 0;
-  document.querySelectorAll(".sp-cut-qty").forEach(function (inp) {
-    const v = Number(inp.value) || 0;
-    perBaris[inp.dataset.baris] = (perBaris[inp.dataset.baris] || 0) + v;
-    total += v;
-  });
-  po.baris.forEach(function (b, i) {
-    const el = document.getElementById("sp-cut-tot-" + i);
-    if (el) el.textContent = perBaris[i] || 0;
-  });
-  document.getElementById("sp-cut-total").textContent = total;
-  const btn = document.getElementById("sp-cut-simpan-btn");
-  if (btn) btn.disabled = (total === 0);
-  spDraftSimpan_("cutting");   // v344 (PF-5): pengumpul draft = pengumpul total, jadi tiap ketikan tersimpan
+  spHitungTabelSize_({ state: "SP_CUT", wajibPo: true, kelas: "sp-cut-qty", tandaiLebih: false,
+    awalanTot: "sp-cut-tot-", idTotal: "sp-cut-total", idBtn: "sp-cut-simpan-btn",
+    nolSaja: true, draf: "cutting" });
 }
 
 function spSimpanCutting() {
@@ -2843,26 +2858,9 @@ function spRenderRiwayatKeluar_() {
 }
 
 function spHitungKeluar_() {
-  const perBaris = {};
-  let total = 0;
-  document.querySelectorAll(".sp-keluar-qty").forEach(function (inp) {
-    const i = inp.dataset.baris;
-    const v = Number(inp.value) || 0;
-    const maks = Number(inp.max) || 0;
-    // Ditandai di layar; backend tetap menolak juga (pengaman berlapis).
-    inp.classList.toggle("sp-lebih", v > maks);
-    perBaris[i] = (perBaris[i] || 0) + v;
-    total += v;
-  });
-  ((window.SP_KELUAR && window.SP_KELUAR.baris) || []).forEach(function (b, i) {
-    const el = document.getElementById("sp-keluar-tot-" + i);
-    if (el) el.textContent = perBaris[i] || 0;
-  });
-  const tot = document.getElementById("sp-keluar-total");
-  if (tot) tot.textContent = total;
-  const btn = document.getElementById("sp-keluar-simpan");
-  if (btn) btn.disabled = total <= 0;
-  spDraftSimpan_("keluar");   // v344 (PF-5): pengumpul draft = pengumpul total, jadi tiap ketikan tersimpan
+  spHitungTabelSize_({ state: "SP_KELUAR", kelas: "sp-keluar-qty", tandaiLebih: true,
+    awalanTot: "sp-keluar-tot-", idTotal: "sp-keluar-total", idBtn: "sp-keluar-simpan",
+    draf: "keluar" });
 }
 
 function spSimpanKeluar_() {
@@ -5276,27 +5274,9 @@ function spRenderFormSetoran() {
 }
 
 function spHitungTotalSetor() {
-  const po = window.SP_SETOR;
-  const perBaris = {};
-  let total = 0;
-  document.querySelectorAll(".sp-setor-qty").forEach(function (inp) {
-    const v = Number(inp.value) || 0;
-    const maks = Number(inp.max) || 0;
-    inp.classList.toggle("sp-lebih", v > maks);
-    perBaris[inp.dataset.baris] = (perBaris[inp.dataset.baris] || 0) + v;
-    total += v;
-  });
-  if (po) {
-    po.baris.forEach(function (b, i) {
-      const el = document.getElementById("sp-setor-tot-" + i);
-      if (el) el.textContent = perBaris[i] || 0;
-    });
-  }
-  const elTotal = document.getElementById("sp-setor-total");
-  if (elTotal) elTotal.textContent = total;
-  const btn = document.getElementById("sp-setor-simpan-btn");
-  if (btn) btn.disabled = (total <= 0);
-  spDraftSimpan_("setoran");   // v344 (PF-5): pengumpul draft = pengumpul total, jadi tiap ketikan tersimpan
+  spHitungTabelSize_({ state: "SP_SETOR", kelas: "sp-setor-qty", tandaiLebih: true,
+    awalanTot: "sp-setor-tot-", idTotal: "sp-setor-total", idBtn: "sp-setor-simpan-btn",
+    draf: "setoran" });
 }
 
 function spUbahJenisSetoran_() {
