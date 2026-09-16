@@ -136,7 +136,7 @@ function spMulaiIsi_() {
   if (typeof rjdAmbilPeran_ === "function") {
     rjdAmbilPeran_(SP_API_URL, SP_ID_TOKEN)
       .then(function (d) { spTerapkanBagian_(d); })
-      .catch(function () {
+      .catch(function (e) {
         // Gagal ambil peran -> tampilkan semua tab. Backend tetap menjaga,
         // dan halaman yang tabnya tidak pernah muncul jauh lebih buruk
         // daripada tab yang sesekali kelebihan.
@@ -514,7 +514,7 @@ function spMuatDaftarLine_() {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getDaftarLine" })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("spMuatDaftarLine_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (d && d.success) {
@@ -524,7 +524,7 @@ function spMuatDaftarLine_() {
       spMuatLineSetoran_();
     }
   })
-  .catch(function () { /* filter line opsional -- halaman tetap jalan; tidak menulis apa pun, jadi TIDAK butuh penjaga PF-3 */ });
+  .catch(function (e) { /* filter line opsional -- halaman tetap jalan; tidak menulis apa pun, jadi TIDAK butuh penjaga PF-3 */ });
 }
 
 /* ============================================================
@@ -581,7 +581,7 @@ function spMuatDaftarPO() {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getDaftarPO" })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("spMuatDaftarPO", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
@@ -626,7 +626,7 @@ function spMuatDaftarPO() {
       spRenderOrderan_();
     }
   })
-  .catch(function () {
+  .catch(function (e) {
     if (spMuatBasi_("spMuatDaftarPO", urutMuat)) return;   // v343 (PF-3): jawaban basi
     // v226: kalau snapshot sudah tampil, biarkan -- jangan ganti dengan pesan galat.
     if (window.SP_PO_STATUS === "snapshot") {
@@ -634,7 +634,7 @@ function spMuatDaftarPO() {
       return;
     }
     window.SP_PO_STATUS = "galat";
-    window.SP_PO_GALAT = "Gagal menghubungi server.";
+    window.SP_PO_GALAT = spPesanGalat_(e, "Muat daftar PO");
     spPesan_("sp-po-pesan", window.SP_PO_GALAT, true);
     if (window.SP_TAB === "orderan" && typeof spRenderOrderan_ === "function") {
       spRenderOrderan_();
@@ -752,7 +752,7 @@ function spMuatDistribusi() {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getPOUntukDistribusi", idPurchaseOrder: idPO })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("spMuatDistribusi", urutMuat)) return;   // v343 (PF-3): jawaban basi
     document.getElementById("sp-memuat-po").classList.add("hidden");
@@ -764,10 +764,10 @@ function spMuatDistribusi() {
     spRenderForm();
     document.getElementById("sp-form").classList.remove("hidden");
   })
-  .catch(function () {
+  .catch(function (e) {
     if (spMuatBasi_("spMuatDistribusi", urutMuat)) return;   // v343 (PF-3): jawaban basi
     document.getElementById("sp-memuat-po").classList.add("hidden");
-    spPesan_("sp-po-pesan", "Gagal menghubungi server.", true);
+    spPesan_("sp-po-pesan", spPesanGalat_(e, "Muat distribusi"), true);
   });
 }
 
@@ -907,7 +907,7 @@ function spMuatRantaiLine_(idPO) {
   if (!idPO) return;
   window.SP_RANTAI = { idPurchaseOrder: idPO, memuat: true, perLine: {} };
   fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getRantaiLinePO", idPurchaseOrder: idPO }) })
-    .then(function (r) { return r.json(); })
+    .then(function (r) { return r.json(); }, spTandaiJaringan_)
     .then(function (d) {
       if (!window.SP_RANTAI || window.SP_RANTAI.idPurchaseOrder !== idPO) return;   // PO sudah berganti
       const perLine = {};
@@ -916,9 +916,9 @@ function spMuatRantaiLine_(idPO) {
         error: (d && d.success) ? "" : ((d && d.error) || "Gagal memuat rantai per line.") };
       spRenderDaftarSPK_();
     })
-    .catch(function () {
+    .catch(function (e) {
       if (!window.SP_RANTAI || window.SP_RANTAI.idPurchaseOrder !== idPO) return;
-      window.SP_RANTAI = { idPurchaseOrder: idPO, perLine: {}, total: null, error: "Gagal menghubungi server." };
+      window.SP_RANTAI = { idPurchaseOrder: idPO, perLine: {}, total: null, error: spPesanGalat_(e, "Muat rantai line") };
       spRenderDaftarSPK_();
     });
 }
@@ -1262,7 +1262,7 @@ function spSimpan() {
       }
     })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (h) {
     btn.disabled = false;
     btn.textContent = "Simpan Pembagian";
@@ -1298,10 +1298,10 @@ function spSimpan() {
     spSesudahTulis_("distribusi");   // v312 (P7 PF-1)
     spMuatDistribusi();
   })
-  .catch(function () {
+  .catch(function (e) {
     btn.disabled = false;
     btn.textContent = "Simpan Pembagian";
-    alert("Gagal menghubungi server.");
+    alert(spPesanGalat_(e, "Simpan"));
   });
 }
 
@@ -2357,7 +2357,7 @@ function spMuatCutting() {
       idPurchaseOrder: window.SP_PO_AKTIF
     })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("spMuatCutting", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
@@ -2368,9 +2368,9 @@ function spMuatCutting() {
     window.SP_CUT = d;
     spRenderFormCutting();
   })
-  .catch(function () {
+  .catch(function (e) {
     if (spMuatBasi_("spMuatCutting", urutMuat)) return;   // v343 (PF-3): jawaban basi
-    wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
+    wadah.innerHTML = '<p class="sp-pesan sp-galat">' + spEsc_(spPesanGalat_(e, "Muat cutting")) + '</p>';
   });
 }
 
@@ -2680,7 +2680,7 @@ function spMuatKeluar_() {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getPOUntukPotonganKeluar", idPurchaseOrder: idPO })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("spMuatKeluar_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
@@ -2691,9 +2691,9 @@ function spMuatKeluar_() {
     window.SP_KELUAR = d;
     spRenderKeluar_();
   })
-  .catch(function () {
+  .catch(function (e) {
     if (spMuatBasi_("spMuatKeluar_", urutMuat)) return;   // v343 (PF-3): jawaban basi
-    wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
+    wadah.innerHTML = '<p class="sp-pesan sp-galat">' + spEsc_(spPesanGalat_(e, "Muat potongan keluar")) + '</p>';
   });
 }
 
@@ -3462,7 +3462,7 @@ function spMuatDetailOrder_() {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getSPKCetak", id: idPO })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("spMuatDetailOrder_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
@@ -3474,10 +3474,10 @@ function spMuatDetailOrder_() {
     window.SP_DETAIL_PO = idPO;
     spRenderDetailOrder_();
   })
-  .catch(function () {
+  .catch(function (e) {
     if (spMuatBasi_("spMuatDetailOrder_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' +
-      'Gagal menghubungi server.</p></div>';
+      '' + spEsc_(spPesanGalat_(e, "Muat detail order")) + '</p></div>';
   });
 }
 
@@ -3682,7 +3682,7 @@ function spMuatSiapkan_() {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getPerluDisiapkan", opsi: opsi })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("spMuatSiapkan_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
@@ -3694,9 +3694,9 @@ function spMuatSiapkan_() {
     window.SP_SIAPKAN_PILIH = {};
     spRenderSiapkan_();
   })
-  .catch(function () {
+  .catch(function (e) {
     if (spMuatBasi_("spMuatSiapkan_", urutMuat)) return;   // v343 (PF-3): jawaban basi
-    wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
+    wadah.innerHTML = '<p class="sp-pesan sp-galat">' + spEsc_(spPesanGalat_(e, "Muat siapkan")) + '</p>';
   });
 }
 
@@ -3952,7 +3952,7 @@ function spMuatKonfirmasi() {
       ? { idToken: SP_ID_TOKEN, action: "getSetoranMenunggu", opsi: { idLine: idLine } }
       : { idToken: SP_ID_TOKEN, action: "getMenungguKonfirmasi", idLine: idLine })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("spMuatKonfirmasi", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
@@ -3964,9 +3964,9 @@ function spMuatKonfirmasi() {
     spRenderKonfirmasi();
     spTampilSetoranTerkonfirmasi_();   // v296
   })
-  .catch(function () {
+  .catch(function (e) {
     if (spMuatBasi_("spMuatKonfirmasi", urutMuat)) return;   // v343 (PF-3): jawaban basi
-    wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
+    wadah.innerHTML = '<p class="sp-pesan sp-galat">' + spEsc_(spPesanGalat_(e, "Muat konfirmasi")) + '</p>';
     spTampilSetoranTerkonfirmasi_();
   });
 }
@@ -4002,15 +4002,15 @@ function spTampilSetoranTerkonfirmasi_() {
   const urutMuat = spMuatMulai_("spTampilSetoranTerkonfirmasi_");   // v343 (PF-3)
   const minta = [
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getRiwayatSetoran", opsi: { idPurchaseOrder: po, batas: po ? 80 : 40 } }) })
-      .then(function (r) { return r.json(); })
+      .then(function (r) { return r.json(); }, spTandaiJaringan_)
   ];
   if (po) {
     minta.push(fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getTersediaQC", idPurchaseOrder: po }) })
-      .then(function (r) { return r.json(); }).catch(function () { return null; }));
+      .then(function (r) { return r.json(); }, spTandaiJaringan_).catch(function (e) { return null; }));
   } else {
     // v298 (gs >= @330): tanpa PO aktif / "semua PO" -> daftar belum di-QC LINTAS PO
     minta.push(fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getSetoranBelumQC" }) })
-      .then(function (r) { return r.json(); }).catch(function () { return null; }));
+      .then(function (r) { return r.json(); }, spTandaiJaringan_).catch(function (e) { return null; }));
   }
   Promise.all(minta).then(function (hasil) {
     if (spMuatBasi_("spTampilSetoranTerkonfirmasi_", urutMuat)) return;   // v343 (PF-3): jawaban basi
@@ -4065,9 +4065,9 @@ function spTampilSetoranTerkonfirmasi_() {
         (k.catatan ? '<div class="sp-riw-catatan">' + rjdEscapeHtml_(k.catatan) + '</div>' : '') +
       '</div>';
     }).join("");
-  }).catch(function () {
+  }).catch(function (e) {
     if (spMuatBasi_("spTampilSetoranTerkonfirmasi_", urutMuat)) return;   // v343 (PF-3): jawaban basi
-    w.innerHTML = judul + '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
+    w.innerHTML = judul + '<p class="sp-pesan sp-galat">' + spEsc_(spPesanGalat_(e, "Muat setoran terkonfirmasi")) + '</p>';
   });
 }
 
@@ -4405,7 +4405,7 @@ function spKonfirmasiMassal_() {
       payload: { ids: ids, diterimaOleh: nama }
     })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (h) {
     if (!h || !h.success) {
       alert((h && h.error) || "Gagal menyimpan konfirmasi.");
@@ -4424,7 +4424,7 @@ function spKonfirmasiMassal_() {
     spSesudahTulis_("konfirmasi");   // v312 (P7 PF-1): alokasi & tersedia QC ikut berubah
     spMuatKonfirmasi();
   })
-  .catch(function () { alert("Gagal menghubungi server."); spKonfTombolMassal_(); });
+  .catch(function (e) { alert(spPesanGalat_(e, "Konfirmasi massal")); spKonfTombolMassal_(); });
 }
 
 function spBukaSelisih(i) {
@@ -4529,7 +4529,7 @@ function spKirimKonfirmasi_(payload) {
     method: "POST",
     body: JSON.stringify(badan)
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (h) {
     lepasSibuk_();
     if (!h || !h.success) {
@@ -4542,7 +4542,7 @@ function spKirimKonfirmasi_(payload) {
     if (window.SP_KONF_PILIH) delete window.SP_KONF_PILIH[payload.idDistribusi];   // v198
     spMuatKonfirmasi();
   })
-  .catch(function () { lepasSibuk_(); alert("Gagal menghubungi server."); });
+  .catch(function (e) { lepasSibuk_(); alert(spPesanGalat_(e, "Kirim konfirmasi")); });
 }
 
 /* ============================================================
@@ -4620,7 +4620,7 @@ function spMuatRiwayat() {
       opsi: { idPurchaseOrder: cari.trim() }
     })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("spMuatRiwayat", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
@@ -4631,9 +4631,9 @@ function spMuatRiwayat() {
     window.SP_RIW = d.daftar || [];
     spRenderRiwayat();
   })
-  .catch(function () {
+  .catch(function (e) {
     if (spMuatBasi_("spMuatRiwayat", urutMuat)) return;   // v343 (PF-3): jawaban basi
-    wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
+    wadah.innerHTML = '<p class="sp-pesan sp-galat">' + spEsc_(spPesanGalat_(e, "Muat riwayat")) + '</p>';
   });
 }
 
@@ -4755,7 +4755,7 @@ function spMuatTercatat_(jenis) {
       opsi: { idPurchaseOrder: idPO }
     })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("spMuatTercatat_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
@@ -4768,10 +4768,10 @@ function spMuatTercatat_(jenis) {
     window.SP_TERCATAT[jenis] = d.daftar || d.data || [];
     spRenderTercatat_(jenis);
   })
-  .catch(function () {
+  .catch(function (e) {
     if (spMuatBasi_("spMuatTercatat_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     wadah.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' +
-      'Gagal menghubungi server.</p></div>';
+      '' + spEsc_(spPesanGalat_(e, "Muat tercatat")) + '</p></div>';
   });
 }
 
@@ -4897,13 +4897,13 @@ function spBatalTercatat_(jenis, i) {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: p.aksiBatal, payload: payload })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (!d || !d.success) { alert((d && d.error) || "Gagal membatalkan."); return; }
     spMuatTercatat_(jenis);
     p.segarkan();
   })
-  .catch(function () { alert("Gagal menghubungi server."); });
+  .catch(function (e) { alert(spPesanGalat_(e, "Batalkan tercatat")); });
 }
 
 function spRenderRiwayat() {
@@ -5091,7 +5091,7 @@ function spBatalkanCatatan(i) {
           : { idDistribusi: id, alasan: alasan.trim() })
     })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (h) {
     if (!h || !h.success) { alert((h && h.error) || "Gagal membatalkan."); return; }
     // Pembatalan mengubah angka di tab lain -- cache dikosongkan supaya sisa &
@@ -5099,7 +5099,7 @@ function spBatalkanCatatan(i) {
     spSesudahTulis_("qc");   // v312 (P7 PF-1): pembatalan menyentuh semua turunan
     spMuatRiwayat();
   })
-  .catch(function () { alert("Gagal menghubungi server."); });
+  .catch(function (e) { alert(spPesanGalat_(e, "Batalkan catatan")); });
 }
 
 /* ============================================================
@@ -5152,7 +5152,7 @@ function spMuatSetoran() {
       idPurchaseOrder: window.SP_PO_AKTIF, idLine: idLine
     })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("spMuatSetoran", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
@@ -5165,9 +5165,9 @@ function spMuatSetoran() {
     window.SP_SETOR = d;
     spRenderFormSetoran();
   })
-  .catch(function () {
+  .catch(function (e) {
     if (spMuatBasi_("spMuatSetoran", urutMuat)) return;   // v343 (PF-3): jawaban basi
-    wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
+    wadah.innerHTML = '<p class="sp-pesan sp-galat">' + spEsc_(spPesanGalat_(e, "Muat setoran")) + '</p>';
   });
 }
 
@@ -5997,7 +5997,7 @@ function spMuatSemuaMarker_(paksa) {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getDaftarSemuaMarker" })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("spMuatSemuaMarker_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || d.error) {
@@ -6008,9 +6008,9 @@ function spMuatSemuaMarker_(paksa) {
     window.SP_SEMUA_MARKER = d;
     spRenderSemuaMarker_();
   })
-  .catch(function () {
+  .catch(function (e) {
     if (spMuatBasi_("spMuatSemuaMarker_", urutMuat)) return;   // v343 (PF-3): jawaban basi
-    wadah.innerHTML = '<p class="sp-pesan sp-galat">Gagal menghubungi server.</p>';
+    wadah.innerHTML = '<p class="sp-pesan sp-galat">' + spEsc_(spPesanGalat_(e, "Muat daftar marker")) + '</p>';
   });
 }
 
@@ -9649,7 +9649,7 @@ function spKirim_(action, payload, opsi) {
 /** v304: bandingkan angka kumulatif sebelum/sesudah lewat rute baca -- "sudah masuk?" untuk periksa(). */
 function spPeriksaNaik_(action, badan, ambil, sebelum, tambah) {
   return fetch(SP_API_URL, { method: "POST", body: JSON.stringify(Object.assign({ idToken: SP_ID_TOKEN, action: action }, badan)) })
-    .then(function (r) { return r.json(); })
+    .then(function (r) { return r.json(); }, spTandaiJaringan_)
     .then(function (d) {
       if (!d || !d.success) throw new Error((d && d.error) || "gagal");
       const sesudah = Number(ambil(d)) || 0;
@@ -10154,7 +10154,7 @@ function qcMuatTersedia_() {
   const urutMuat = spMuatMulai_("qcMuatTersedia_");   // v343 (PF-3)
   fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
     idToken: SP_ID_TOKEN, action: "getTersediaQC", idPurchaseOrder: po }) })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("qcMuatTersedia_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d.error) QC_TERSEDIA = d.baris || [];
@@ -10163,7 +10163,7 @@ function qcMuatTersedia_() {
     qcTampilTersedia_();
     qcIsiOtomatis_();   // v296
   })
-  .catch(function () { if (spMuatBasi_("qcMuatTersedia_", urutMuat)) return; qcTampilTersedia_(); });   // v343 (PF-3)
+  .catch(function (e) { if (spMuatBasi_("qcMuatTersedia_", urutMuat)) return; qcTampilTersedia_(); });   // v343 (PF-3)
 }
 
 /* ============================================================
@@ -10362,13 +10362,13 @@ function qcMuatDitahan_() {
   const urutMuat = spMuatMulai_("qcMuatDitahan_");   // v343 (PF-3)
   fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
     idToken: SP_ID_TOKEN, action: "getDitahanQC", idPurchaseOrder: po }) })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("qcMuatDitahan_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d.error) QC_DITAHAN = d.baris || [];
     qcTampilDitahan_();
   })
-  .catch(function () { if (spMuatBasi_("qcMuatDitahan_", urutMuat)) return; qcTampilDitahan_(); });   // v343 (PF-3)
+  .catch(function (e) { if (spMuatBasi_("qcMuatDitahan_", urutMuat)) return; qcTampilDitahan_(); });   // v343 (PF-3)
 }
 
 /** Keranjang terbuka untuk tahap + warna yang sedang dipilih. */
@@ -10569,7 +10569,7 @@ function qcMuatMaster_() {
   // dilihat maupun disentuh siapa pun. PO aktif datang dari kartu di atas
   // (window.SP_PO_AKTIF), dan daftar PO-nya sudah ada di window.SP_DAFTAR_PO.
   fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getMasterQC" }) })
-    .then(function (r) { return r.json(); })
+    .then(function (r) { return r.json(); }, spTandaiJaringan_)
     .then(function (d) {
       if (spMuatBasi_("qcMuatMaster_", urutMuat)) return;   // v343 (PF-3): jawaban basi
       if (!d || !d.success) {
@@ -10583,11 +10583,11 @@ function qcMuatMaster_() {
       qcIsiDropdownLine_();
       qcShow("qc-isi");
     })
-    .catch(function () {
+    .catch(function (e) {
       if (spMuatBasi_("qcMuatMaster_", urutMuat)) return;   // v343 (PF-3): jawaban basi
       qcShow("qc-isi");
       document.getElementById("qc-panel-input").innerHTML =
-        '<p style="font-size:12.5px;color:var(--thread)">Gagal menghubungi server.</p>';
+        '<p style="font-size:12.5px;color:var(--thread)">' + spEsc_(spPesanGalat_(e, "Muat master QC")) + '</p>';
     });
 }
 
@@ -10643,7 +10643,7 @@ function qcMuatRincianPO_(idPO) {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getPOUntukCutting", idPurchaseOrder: idPO })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("qcMuatRincianPO_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (!d || !d.success) {
@@ -10657,10 +10657,10 @@ function qcMuatRincianPO_(idPO) {
     qcMuatTersedia_();
     qcMuatDitahan_();
   })
-  .catch(function () {
+  .catch(function (e) {
     if (spMuatBasi_("qcMuatRincianPO_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (sel) sel.innerHTML = '<option value="">Gagal memuat warna</option>';
-    qcTampilkanError_("Gagal menghubungi server saat memuat rincian PO.");
+    qcTampilkanError_(spPesanGalat_(e, "Muat rincian PO"));
   });
 }
 
@@ -11183,7 +11183,7 @@ function qcSubmitPenyelesaian_() {
       }
     })
   })
-    .then(function (r) { return r.json(); })
+    .then(function (r) { return r.json(); }, spTandaiJaringan_)
     .then(function (d) {
       btn.disabled = false;
       if (!d || !d.success) {
@@ -11200,10 +11200,10 @@ function qcSubmitPenyelesaian_() {
       qcResetForm_();
       qcMuatDitahan_();   // spanduk menyegarkan diri dengan sisa terbaru
     })
-    .catch(function () {
+    .catch(function (e) {
       btn.disabled = false;
       btn.textContent = "Simpan penyelesaian";
-      qcTampilkanError_("Gagal menghubungi server. Coba beberapa saat lagi.");
+      qcTampilkanError_(spPesanGalat_(e, "Simpan penyelesaian"));
     });
 }
 
@@ -11523,7 +11523,7 @@ function qcSubmitInspeksi() {
       }
     })
   })
-    .then(function (r) { return r.json(); })
+    .then(function (r) { return r.json(); }, spTandaiJaringan_)
     .then(function (d) {
       btn.disabled = false;
       btn.textContent = "Simpan inspeksi";
@@ -11607,10 +11607,10 @@ function qcSubmitInspeksi() {
         qcIsiDaftarOperator_();
       }
     })
-    .catch(function () {
+    .catch(function (e) {
       btn.disabled = false;
       btn.textContent = "Simpan inspeksi";
-      qcTampilkanError_("Gagal menghubungi server. Coba beberapa saat lagi.");
+      qcTampilkanError_(spPesanGalat_(e, "Simpan inspeksi"));
     });
 }
 
@@ -11634,7 +11634,7 @@ function qcMuatRingkasan() {
       }
     })
   })
-    .then(function (r) { return r.json(); })
+    .then(function (r) { return r.json(); }, spTandaiJaringan_)
     .then(function (d) {
       if (spMuatBasi_("qcMuatRingkasan", urutMuat)) return;   // v343 (PF-3): jawaban basi
       if (!d || !d.success) {
@@ -11643,9 +11643,9 @@ function qcMuatRingkasan() {
       }
       qcRenderRingkasan_(d);
     })
-    .catch(function () {
+    .catch(function (e) {
       if (spMuatBasi_("qcMuatRingkasan", urutMuat)) return;   // v343 (PF-3): jawaban basi
-      wadah.innerHTML = '<p style="font-size:12.5px;color:var(--thread)">Gagal menghubungi server.</p>';
+      wadah.innerHTML = '<p style="font-size:12.5px;color:var(--thread)">' + spEsc_(spPesanGalat_(e, "Muat ringkasan QC")) + '</p>';
     });
 }
 
@@ -11665,7 +11665,7 @@ function qcMuatRiwayatPO_() {
   if (!po) { w.innerHTML = judul + '<div class="qc-kosong">Pilih PO di kartu atas untuk melihat sesi QC-nya.</div>'; return; }
   w.innerHTML = judul + '<div class="qc-kosong">Memuat sesi QC...</div>';
   fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getRiwayatInspeksiPO", idPurchaseOrder: po }) })
-    .then(function (r) { return r.json(); })
+    .then(function (r) { return r.json(); }, spTandaiJaringan_)
     .then(function (d) {
       if (window.SP_PO_AKTIF !== po) return;   // PO sudah berganti saat jawaban tiba
       if (!d || !d.success) { w.innerHTML = judul + '<div class="qc-kosong">' + rjdEscapeHtml_((d && d.error) || "Gagal memuat sesi QC.") + '</div>'; return; }
@@ -11679,7 +11679,7 @@ function qcMuatRiwayatPO_() {
             '<td>' + x.qtyDiperiksa + '</td><td>' + x.qtyLolos + '</td><td>' + x.qtyCacat + (x.qtyDitahan ? ' <small>(ditahan ' + x.qtyDitahan + ')</small>' : '') + '</td><td>' + rjdEscapeHtml_(x.keputusan || "") + '</td></tr>';
         }).join("") + '</tbody></table></div>';
     })
-    .catch(function () { if (window.SP_PO_AKTIF === po) w.innerHTML = judul + '<div class="qc-kosong">Gagal menghubungi server.</div>'; });
+    .catch(function (e) { if (window.SP_PO_AKTIF === po) w.innerHTML = judul + '<div class="qc-kosong">' + spEsc_(spPesanGalat_(e, "Muat riwayat QC")) + '</div>'; });
 }
 
 function qcKelasBar_(rate) {
@@ -11809,10 +11809,10 @@ function spMuatApproval_() {
   Promise.all([
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
       idToken: SP_ID_TOKEN, action: "getPOUntukCutting", idPurchaseOrder: po }) })
-      .then(function (r) { return r.json(); }),
+      .then(function (r) { return r.json(); }, spTandaiJaringan_),
     fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
       idToken: SP_ID_TOKEN, action: "getStatusApprovalSampel", idPurchaseOrder: po }) })
-      .then(function (r) { return r.json(); })
+      .then(function (r) { return r.json(); }, spTandaiJaringan_)
   ]).then(function (hasil) {
     if (spMuatBasi_("spMuatApproval_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     const rincian = hasil[0], status = hasil[1];
@@ -11830,9 +11830,9 @@ function spMuatApproval_() {
     });
     APS_STATUS = status;
     spRenderApproval_();
-  }).catch(function () {
+  }).catch(function (e) {
     if (spMuatBasi_("spMuatApproval_", urutMuat)) return;   // v343 (PF-3): jawaban basi
-    panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">Gagal menghubungi server.</p></div>';
+    panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' + spEsc_(spPesanGalat_(e, "Muat approval")) + '</p></div>';
   });
 }
 
@@ -11912,14 +11912,14 @@ function apsSimpan_() {
     jenis: APS_JENIS, catatan: catatan,
     tanggal: (document.getElementById("aps-tanggal") || {}).value || ""
   }) })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (d.error) { alert(d.error); if (btn) { btn.disabled = false; btn.textContent = "Simpan Kejadian"; } return; }
     alert("Tercatat: " + d.jenis + " (ronde " + d.ronde + ").");
     spMuatApproval_();     // muat ulang status -- kerangka dirender ulang, aman
   })
-  .catch(function () {
-    alert("Gagal menghubungi server.");
+  .catch(function (e) {
+    alert(spPesanGalat_(e, "Simpan approval"));
     if (btn) { btn.disabled = false; btn.textContent = "Simpan Kejadian"; }
   });
 }
@@ -11942,7 +11942,7 @@ function spMuatTerkirim_() {
   const urutMuat = spMuatMulai_("spMuatTerkirim_");   // v343 (PF-3)
   fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
     idToken: SP_ID_TOKEN, action: "getStokSiapKirim", idPurchaseOrder: po }) })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("spMuatTerkirim_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (d.error) {
@@ -12032,9 +12032,9 @@ function spMuatTerkirim_() {
     html += '</div>';
     panel.innerHTML = html;
   })
-  .catch(function () {
+  .catch(function (e) {
     if (spMuatBasi_("spMuatTerkirim_", urutMuat)) return;   // v343 (PF-3): jawaban basi
-    panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">Gagal menghubungi server.</p></div>';
+    panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' + spEsc_(spPesanGalat_(e, "Muat terkirim")) + '</p></div>';
   });
 }
 
@@ -12053,7 +12053,7 @@ function spMuatStok_() {
   const urutMuat = spMuatMulai_("spMuatStok_");   // v343 (PF-3)
   fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
     idToken: SP_ID_TOKEN, action: "getStokSiapKirim", idPurchaseOrder: po }) })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
     if (spMuatBasi_("spMuatStok_", urutMuat)) return;   // v343 (PF-3): jawaban basi
     if (d.error) {
@@ -12110,9 +12110,9 @@ function spMuatStok_() {
       '</div></div>';
     panel.innerHTML = html;
   })
-  .catch(function () {
+  .catch(function (e) {
     if (spMuatBasi_("spMuatStok_", urutMuat)) return;   // v343 (PF-3): jawaban basi
-    panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">Gagal menghubungi server.</p></div>';
+    panel.innerHTML = '<div class="sp-card"><p class="sp-pesan sp-galat">' + spEsc_(spPesanGalat_(e, "Muat stok")) + '</p></div>';
   });
 }
 
