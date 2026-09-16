@@ -1404,7 +1404,14 @@ body.sp-siap #sp-subtabs { visibility: visible; }
    dipilih lebih dari satu. */
 .sp-ord-alat select {
   padding: 10px 12px; border: 1px solid var(--line, #E5E0D6); border-radius: 10px;
-  font-family: inherit; font-size: 13px; background: #fff; color: var(--ink, #17212F);
+  font-family: inherit;
+  /* 16px, JANGAN diturunkan (PF-13, v354): di bawah 16px Safari iOS
+     memperbesar halaman saat kotaknya disentuh. Aturan ini SERI (0,1,1) dengan
+     aturan luas `[id^="sp-panel-"] select` dan menang semata-mata karena
+     barisnya lebih belakang di berkas yang sama -- jadi menaikkan aturan luas
+     di v350 tidak menjangkaunya. Terukur aman: kotaknya 290 px di 390 px
+     viewport untuk label terpanjang "Deadline terdekat" (107 px). */
+  font-size: 16px; background: #fff; color: var(--ink, #17212F);
   cursor: pointer;
 }
 .sp-ord-alat select:focus { outline: none; border-color: var(--ink, #17212F); }
@@ -1850,11 +1857,17 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
    yang sama. */
 [id^="sp-panel-"] .sp-tabel .sp-roll-sisa-sel .sp-roll-ukur input.sp-roll-sisa {
   flex: 0 0 84px; width: 84px; min-width: 0;
-  padding: 6px 9px; font-size: 13.5px;
+  /* 16px (PF-13, v354). Lebar kotaknya TETAP 84 px, jadi kenaikan font diukur
+     dulu, bukan diasumsikan: ruang teksnya 64 px dan "1234.56" pada 16px butuh
+     60,4 px -- masih muat, sisa 3,6 px. Kalau isinya nanti perlu lebih panjang
+     dari 7 karakter, yang dinaikkan LEBARNYA, bukan fontnya diturunkan lagi. */
+  padding: 6px 9px; font-size: 16px;
 }
 [id^="sp-panel-"] .sp-tabel .sp-roll-sisa-sel select.sp-roll-satuansisa {
   flex: 0 0 auto; width: auto; min-width: 62px;
-  padding: 6px 22px 6px 9px; font-size: 13.5px;
+  /* 16px (PF-13, v354). Isinya cuma "m" dan "yds" (spRenderRoll_:9354), jadi
+     62 px lebih dari cukup -- dugaan "meter/yard/kg" di AUDIT-PRODUKSI salah. */
+  padding: 6px 22px 6px 9px; font-size: 16px;
 }
 .sp-roll-sisa-sel .sp-konversi { font-size: 11px; color: var(--ink-soft, #5F6B7A); margin-top: 3px; }
 .sp-roll-sisa-sel .sp-konversi.lebih { color: var(--thread, #B23B2E); font-weight: 600; }
@@ -1880,7 +1893,39 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
    umum itu, dan cakupannya persis form ini saja -- tidak menyentuh tabel
    roll di bawahnya yang sudah punya aturannya sendiri (v208). */
 #sp-roll-baru input, #sp-roll-baru select {
-  padding: 6px 9px; font-size: 13px;
+  /* 16px (PF-13, v354). Satu ID membuat aturan ini (1,0,1) mengalahkan aturan
+     luas (0,4,1), jadi v350 tidak menjangkaunya.
+     Kenaikan ini AMAN hanya karena form ini ikut dipindah ke MODE KARTU di
+     commit yang sama (spFormTambahRoll_): sebelum itu, tujuh kolom diperas ke
+     lebar HP dan lima dari enam kotak sudah terpotong pada 13px -- menaikkan
+     font saja akan memperburuknya, bukan memperbaiki. Jangan menaikkan font di
+     kotak berlebar keras tanpa mengukur ruang teksnya lebih dulu (PF-11).
+     Padding mendatar 9px -> 6px: +6px ruang teks per kotak, yang menutup dua
+     kotak yang masih 2-6px kurang di 360px. */
+  padding: 6px 6px; font-size: 16px;
+}
+
+/* Form "Tambah roll" punya TUJUH kolom -- lebih banyak daripada tabel lain di
+   halaman ini -- jadi ambang mode kartu 760px terlalu rendah UNTUK FORM INI.
+   Terukur (v354): di 761px mode kartu mati, wadahnya 641px, dan kotak Jenis
+   Kain tinggal 66px ruang teks untuk isi 106px; baru pulih di 1000px. Pita
+   761-990px itu bukan lebar teoretis -- komentar jalan92 mencatat 900px sebagai
+   lebar efektif layar Femri saat ia melaporkan teks terpotong (DevTools makan
+   separuh).
+   Perbaikannya BUKAN menduplikasi 10 aturan mode kartu ke ambang kedua, dan
+   BUKAN menaikkan ambang bersama (itu mengubah tabel kartu di 8 halaman):
+   `.sp-tabelwrap` SUDAH punya `overflow-x: auto` yang tidak pernah aktif karena
+   `.sp-tabel { width: 100% }` memaksa tabel selebar wadahnya -- kolomnya diperas,
+   bukan meluber. Satu `min-width` menghidupkan penggeser itu di dalam pita, dan
+   880px dipilih karena itu lebar tabel di 1000px viewport: jadi di >= 1000px
+   TIDAK ADA penggeser baru yang muncul.
+   DIKURUNG ke atas ambang kartu, dan itu bukan kehati-hatian berlebih: versi
+   tanpa kurung terukur membuat tabel 880px di dalam wadah 536px pada 640px
+   viewport -- di mode kartu `.sp-tabelwrap-kartu` sengaja `overflow-x: visible`,
+   jadi yang terjadi bukan penggeser melainkan isi yang MELUBER keluar halaman.
+   Lebih buruk daripada cacat yang sedang diperbaiki. */
+@media (min-width: 761px) {
+  .sp-roll-tambah .sp-tabel { min-width: 880px; }
 }
 #sp-roll-baru select.sp-rb-satuan {
   padding-right: 24px; min-width: 68px;

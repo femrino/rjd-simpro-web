@@ -9426,7 +9426,14 @@ function spFormTambahRoll_() {
   const warna = window.SP_PO_WARNA || [];
   return '<div class="sp-roll-tambah">' +
     '<div class="sp-lbl">Tambah roll (saat kain datang)</div>' +
-    '<div class="sp-tabelwrap"><table class="sp-tabel"><thead><tr>' +
+    // v354: MODE KARTU disambungkan. `data-label` sudah ditulis di tiap <td>
+    // sejak form ini dibuat dan `simpro-spk.css:382` sudah punya media query
+    // di bawah 760px -- yang kurang hanya kedua kelas ini, jadi tujuh kolom
+    // tetap jadi tabel di layar HP. Terukur di 390 px: kotak Warna 28 px
+    // dengan RUANG TEKS 10 px untuk "Dusty Pink" yang butuh 65 px, dan lima
+    // dari enam kotak terpotong. Tabel DAFTAR roll tepat di bawahnya sudah
+    // memakai kedua kelas ini sejak awal; form inilah yang menyimpang.
+    '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu"><thead><tr>' +
       '<th>Jenis Kain</th><th>Warna</th><th>Kode Kain</th><th>No Roll</th><th>Panjang</th>' +
       '<th>Satuan</th><th></th>' +
     '</tr></thead><tbody id="sp-roll-baru"></tbody></table></div>' +
