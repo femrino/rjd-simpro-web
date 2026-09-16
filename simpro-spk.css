@@ -112,7 +112,14 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 
 @media (max-width: 640px) {
   .sp-wrap { padding: 0 16px 80px; }
-  .sp-qty { width: 48px; }
+  /* PF-17 (v355): `width: 48px` DICABUT dari ketiga kotak qty. Lantai zoom iOS 16px
+     (PF-12/v350) membuat ruang 38px cuma memuat 3 digit, padahal PF-11/v347 ada
+     justru supaya 4 digit terlihat. Terukur 17 Sep 2026: tabelnya SUDAH meluber
+     +174px di 360px dan `overflow-x: auto` SUDAH aktif, jadi penyempitan ini tidak
+     pernah mencegah luber -- ia cuma memperpanjang penggeser 50px sambil membuang
+     satu digit. Pembandingnya `.sp-keluar-qty`, yang memang tidak pernah punya
+     aturan ini dan lolos jalan102 blok B sejak awal. Jangan dipasang lagi tanpa
+     mengukur ulang kedua angkanya: digit yang muat DAN luber tabelnya. */
   .sp-tabel td, .sp-tabel th { padding: 7px 7px; }
   .sp-cetak-btn { margin-left: 0; width: 100%; text-align: center; }
   .sp-ringkas-item { flex-wrap: wrap; }
@@ -149,7 +156,7 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   margin: 6px 0 0; line-height: 1.5; }
 
 @media (max-width: 640px) {
-  .sp-cut-qty { width: 48px; }
+  /* Kotak qty: lihat nisan PF-17 di blok media @media (max-width: 640px) pertama. */
   .sp-kain-row { grid-template-columns: 1fr; }
 }
 
@@ -249,7 +256,7 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   padding: 2px 7px; margin-left: 6px; color: var(--ink-soft); }
 
 @media (max-width: 640px) {
-  .sp-setor-qty { width: 48px; }
+  /* Kotak qty: lihat nisan PF-17 di blok media @media (max-width: 640px) pertama. */
   .sp-tab { flex: 1 1 45%; font-size: 12px; padding: 9px 6px; }
 }
 
