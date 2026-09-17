@@ -23,6 +23,9 @@ let KS_DATA = null;
 let KS_BULAN = null;          // "yyyy-MM" yang sedang dilihat
 let KS_BUKTI = null;          // { base64, mime, nama } foto yang siap dikirim
 let KS_SIBUK = false;
+// @K14: mode koreksi. Berisi {id, bukti, tanggal} baris yang sedang dikoreksi; null = form
+// biasa. `let` tingkat atas, BUKAN window.* -- lihat aturan PF-1b di CLAUDE.md.
+let KS_KOREKSI = null;
 
 const KS_BULAN_NAMA = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 const KS_BULAN_PENDEK = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
@@ -292,7 +295,9 @@ function ksSimpan() {
   if (!data.jumlah) { ksPesan_("Isi jumlah.", true); return; }
   if ((arah === "Masuk" || arah === "Keluar") && !data.kategori) { ksPesan_("Pilih kategori.", true); return; }
   if (arah === "Transfer" && !data.akunTujuan) { ksPesan_("Pilih akun tujuan.", true); return; }
-  if (arah === "Keluar" && !KS_BUKTI && !window.confirm("Tanpa foto bukti? Struk/nota sebaiknya difoto.")) return;
+  // @K14: saat mengoreksi baris yang SUDAH berfoto, fotonya diwariskan server -- jangan tanya lagi.
+  if (arah === "Keluar" && !KS_BUKTI && !(KS_KOREKSI && KS_KOREKSI.bukti) && !window.confirm("Tanpa foto bukti? Struk/nota sebaiknya difoto.")) return;
+  if (KS_KOREKSI) { ksKirimKoreksi_(data); return; }
   ksSibuk_(true); ksPesan_("Menyimpan...");
   ksKirim_("simpanKas", { data: data })
     .then(function (res) {
@@ -311,6 +316,114 @@ function ksSimpan() {
     });
 }
 
+/**
+ * @K14 lapis A -- ubah keterangan / pihak / ref DI TEMPAT, lewat panel kecil di bawah
+ * barisnya. Disuntik dari JS (pola KP-8): markup tabel memang dibangun JS. Hanya kolom
+ * yang BERUBAH yang dikirim, dan kalau tidak ada yang berubah tidak ada permintaan sama
+ * sekali -- servernya idempoten, tapi permintaan kosong tetap permintaan.
+ */
+function ksUbahCatatan(btn) {
+  const id = btn.getAttribute("data-id");
+  const t = (KS_DATA.transaksi || []).filter(function (x) { return x.id === id; })[0];
+  if (!t) return;
+  const lama = document.querySelector("tr.ks-r-ubah"); if (lama) lama.remove();
+  const tr = btn.closest("tr"); if (!tr) return;
+  const kolom = tr.children.length;
+  tr.insertAdjacentHTML("afterend",
+    '<tr class="ks-r-ubah" data-id="' + ksEsc_(id) + '"><td colspan="' + kolom + '"><div class="ks-ubah-panel">' +
+    '<label>Pihak<input id="ks-ub-pihak" type="text" value="' + ksEsc_(t.pihak) + '"></label>' +
+    '<label>Ref<input id="ks-ub-ref" type="text" value="' + ksEsc_(t.ref) + '"></label>' +
+    '<label class="ks-ubah-ket">Keterangan<input id="ks-ub-ket" type="text" value="' + ksEsc_(t.keterangan) + '"></label>' +
+    '<span class="ks-ubah-aksi"><button id="ks-ub-simpan" class="ks-btn ks-btn-utama" type="button" onclick="ksUbahCatatanSimpan(\'' + ksEsc_(id) + '\')">Simpan</button> ' +
+    '<button id="ks-ub-batal" class="ks-btn" type="button" onclick="document.querySelector(\'tr.ks-r-ubah\').remove()">Batal</button></span>' +
+    '<div id="ks-ub-pesan" class="ks-sub"></div></div></td></tr>');
+  const k = document.getElementById("ks-ub-ket"); if (k) k.focus();
+}
+
+function ksUbahCatatanSimpan(id) {
+  const t = (KS_DATA.transaksi || []).filter(function (x) { return x.id === id; })[0];
+  const pesan = document.getElementById("ks-ub-pesan");
+  if (!t) return;
+  const perubahan = {};
+  [["pihak", "ks-ub-pihak"], ["ref", "ks-ub-ref"], ["keterangan", "ks-ub-ket"]].forEach(function (p) {
+    const v = String(document.getElementById(p[1]).value || "").trim();
+    if (v !== String(t[p[0]] || "").trim()) perubahan[p[0]] = v;
+  });
+  if (!Object.keys(perubahan).length) { if (pesan) pesan.textContent = "Tidak ada yang berubah."; return; }
+  const btn = document.getElementById("ks-ub-simpan"); if (btn) btn.disabled = true;
+  if (pesan) pesan.textContent = "Menyimpan...";
+  ksKirim_("ubahCatatanKas", { id: id, perubahan: perubahan })
+    .then(function () { ksMuat(KS_BULAN); })
+    .catch(function (e) { if (btn) btn.disabled = false; if (pesan) pesan.textContent = e.message; });
+}
+
+/**
+ * @K14 lapis B -- KOREKSI: form catat diisi nilai baris lama, orang mengubah yang salah,
+ * lalu Simpan mengirim koreksiKas (pembalik + pengganti di server). Rasanya seperti edit;
+ * baris lama tidak pernah disentuh. Kalau bulannya sudah ditutup, tanggal diisi HARI INI:
+ * server menolak pengganti bertanggal di bulan tertutup (@342), jadi jangan menawarkan
+ * nilai yang pasti ditolak.
+ */
+function ksKoreksi(btn) {
+  const id = btn.getAttribute("data-id");
+  const t = (KS_DATA.transaksi || []).filter(function (x) { return x.id === id; })[0];
+  if (!t) return;
+  const radio = document.querySelector('input[name="ks-arah"][value="' + t.arah + '"]');
+  if (radio) { radio.checked = true; ksFormArahBerubah(); }
+  const isi = function (elId, v) { const el = document.getElementById(elId); if (el) el.value = v; };
+  isi("ks-in-tanggal", KS_DATA.tertutup ? KS_DATA.hariIni : t.tanggal);
+  isi("ks-in-akun", t.akun); isi("ks-in-tujuan", t.akunTujuan || "");
+  isi("ks-in-kategori", t.kategori); isi("ks-in-jumlah", String(t.jumlah));
+  isi("ks-in-ref", t.ref); isi("ks-in-pihak", t.pihak); isi("ks-in-ket", t.keterangan);
+  ksPanduanKategori_();
+  KS_KOREKSI = { id: id, bukti: t.bukti || "", tanggal: t.tanggal };
+  let bar = document.getElementById("ks-koreksi-bar");
+  if (!bar) {
+    const wrap = document.getElementById("ks-form-wrap");
+    if (!wrap) return;
+    bar = document.createElement("div"); bar.id = "ks-koreksi-bar"; bar.className = "ks-koreksi-bar";
+    wrap.insertBefore(bar, wrap.firstChild);
+  }
+  bar.innerHTML = 'Mengoreksi <b class="ks-mono">' + ksEsc_(id) + '</b> -- ubah yang salah, lalu Simpan koreksi. Baris lama dibalik otomatis, tidak dihapus.' +
+    (KS_DATA.tertutup ? " Bulan ini sudah ditutup: koreksinya bertanggal hari ini." : "") +
+    ' <button id="ks-koreksi-batal" class="ks-btn ks-btn-kecil-netral" type="button" onclick="ksBatalKoreksi()">Batalkan koreksi</button>';
+  const simpan = document.getElementById("ks-btn-simpan"); if (simpan) simpan.textContent = "Simpan koreksi";
+  const wrapEl = document.getElementById("ks-form-wrap"); if (wrapEl && wrapEl.scrollIntoView) wrapEl.scrollIntoView({ block: "start" });
+}
+
+function ksBatalKoreksi() {
+  KS_KOREKSI = null;
+  const bar = document.getElementById("ks-koreksi-bar"); if (bar) bar.remove();
+  const simpan = document.getElementById("ks-btn-simpan"); if (simpan) simpan.textContent = "Simpan";
+  ["ks-in-jumlah", "ks-in-ref", "ks-in-pihak", "ks-in-ket"].forEach(function (id) { const el = document.getElementById(id); if (el) el.value = ""; });
+  // Tanggal ikut dikembalikan: terlihat di potret, sesudah koreksi dibatalkan form masih
+  // memegang tanggal baris lama, dan entri manual berikutnya akan diam-diam bertanggal itu.
+  const tglEl = document.getElementById("ks-in-tanggal"); if (tglEl && KS_DATA && KS_DATA.hariIni) tglEl.value = KS_DATA.hariIni;
+  ksPesan_("");
+}
+
+function ksKirimKoreksi_(data) {
+  const alasan = window.prompt("Alasan koreksi (wajib, min. 5 huruf, akan tercatat di baris pembalik):");
+  if (alasan === null) return;
+  if (String(alasan).trim().length < 5) { ksPesan_("Alasan koreksi minimal 5 huruf.", true); return; }
+  const asal = KS_KOREKSI.id, bulanTrx = data.tanggal.slice(0, 7);
+  ksSibuk_(true); ksPesan_("Mengoreksi...");
+  ksKirim_("koreksiKas", { id: asal, data: data, alasan: String(alasan).trim() })
+    .then(function (res) {
+      ksSibuk_(false);
+      ksBatalKoreksi();
+      ksPesan_("Dikoreksi: " + asal + " -> " + res.id + " (pembalik " + res.pembalik + ")");
+      const fb = document.getElementById("ks-in-bukti"); if (fb) fb.value = ""; KS_BUKTI = null;
+      ksMuat(bulanTrx);
+    })
+    .catch(function (e) {
+      ksSibuk_(false);
+      const jaringan = e instanceof TypeError;
+      ksPesan_(jaringan ? "Jawaban server tidak sampai. Daftar dimuat ulang -- periksa apakah koreksinya sudah tercatat sebelum mengulang." : e.message, true);
+      if (jaringan) ksMuat(bulanTrx);
+    });
+}
+
 function ksRenderBulan_() {
   const el = document.getElementById("ks-bulan-judul"); if (el) el.textContent = ksNamaBulan(KS_BULAN);
   const badge = document.getElementById("ks-bulan-status");
@@ -323,6 +436,10 @@ function ksRenderBuku_() {
   const trx = KS_DATA.transaksi || [];
   if (!trx.length) { el.innerHTML = '<div class="ks-kartu"><p class="ks-info">Belum ada transaksi di ' + ksEsc_(ksNamaBulan(KS_BULAN)) + '.</p></div>'; return; }
   let masuk = 0, keluar = 0;
+  // @K14: baris asli yang DIKOREKSI menunjuk penggantinya, supaya labelnya 'dikoreksi'
+  // bukan 'dibatalkan' -- dua kejadian berbeda yang sampai @376 tampil sama.
+  const penggantiDari = {};
+  trx.forEach(function (t) { if (t.koreksiDari) penggantiDari[t.koreksiDari] = t.id; });
   const baris = trx.slice().reverse().map(function (t) {
     const batal = !!t.dibatalkanOleh, pembalik = t.status === "Pembalik";
     if (!batal && !pembalik) { if (t.arah === "Masuk") masuk += t.jumlah; else if (t.arah === "Keluar") keluar += t.jumlah; }
@@ -337,8 +454,16 @@ function ksRenderBuku_() {
       '<td class="ks-mono">' + ksEsc_(t.ref) + '</td>' +
       '<td class="ks-td-rp ' + (t.arah === "Masuk" || t.arah === "Saldo Awal" ? "ks-plus" : (t.arah === "Keluar" ? "ks-min" : "")) + '">' + tanda + ksRp(t.jumlah) + '</td>' +
       '<td class="ks-td-aksi">' + (t.bukti ? '<a href="' + ksEsc_(t.bukti) + '" target="_blank" rel="noopener" title="Lihat bukti">📎</a>' : '') +
+                // @K14 lapis A: pensil untuk SIAPA PUN yang boleh menyimpan kas -- bukan hanya finance.
+        // Kelasnya sendiri (bukan .ks-btn-kecil) supaya hitungan tombol Batalkan di jalan21 tetap benar.
+        (!batal && !pembalik && t.sumber === "kas" ? ' <button class="ks-btn-ubah" data-id="' + ksEsc_(t.id) + '" onclick="ksUbahCatatan(this)" type="button" title="Ubah keterangan / pihak / ref" aria-label="Ubah catatan">&#9998;</button>' : '') +
+        // @K14 lapis B: Koreksi hanya finance, sama dengan Batalkan -- ia memindahkan uang.
+        (KS_DATA.bisaFinance && !batal && !pembalik && t.sumber === "kas" ? ' <button class="ks-btn-koreksi" data-id="' + ksEsc_(t.id) + '" onclick="ksKoreksi(this)" type="button">Koreksi</button>' : '') +
         (KS_DATA.bisaFinance && !batal && !pembalik && t.sumber === "kas" ? ' <button class="ks-btn-kecil" data-id="' + ksEsc_(t.id) + '" onclick="ksBatalkan(this)" type="button">Batalkan</button>' : '') +
-        (batal ? '<span class="ks-sub">dibatalkan</span>' : '') + '</td>' +
+        // @K14: chip pada BARIS SENDIRI (div), bukan menempel di belakang tombol -- terukur di
+        // potret 1400px chip-nya menyentuh tepi tabel. Sel aksi ber-nowrap, div memutus barisnya.
+        (t.koreksiDari ? '<div class="ks-sub ks-koreksi-chip">koreksi dari ' + ksEsc_(t.koreksiDari) + '</div>' : '') +
+        (batal ? '<span class="ks-sub">' + (penggantiDari[t.id] ? 'dikoreksi &rarr; ' + ksEsc_(penggantiDari[t.id]) : 'dibatalkan') + '</span>' : '') + '</td>' +
       '</tr>';
   }).join("");
   el.innerHTML = '<div class="ks-kartu ks-kartu-tabel"><table class="ks-tabel"><thead><tr><th>Tgl</th><th>Arah</th><th>Akun</th><th>Kategori / pihak</th><th>Ref</th><th class="ks-td-rp">Jumlah</th><th></th></tr></thead><tbody>' + baris + '</tbody>' +

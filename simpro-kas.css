@@ -90,6 +90,20 @@
 .ks-otomatis { font-size: 10px; background: #EEF3F8; color: #3B5A80; padding: 1px 6px; border-radius: 999px; }
 .ks-r-batal td { text-decoration: line-through; color: #A39E94; }
 .ks-r-pembalik td { background: #FBF7F0; }
+/* @K14: perbaikan buku kas. Pensil & Koreksi berkelas SENDIRI, bukan .ks-btn-kecil -- itu
+   milik Batalkan dan jalan21 menghitungnya. Warna netral: yang merah tetap hanya Batalkan. */
+.ks-btn-ubah { padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line, #E5E0D6); background: #fff; color: var(--ink-soft, #5F6B7A); font-size: 12px; cursor: pointer; line-height: 1.4; }
+.ks-btn-koreksi { padding: 3px 8px; border-radius: 6px; border: 1px solid #CFD6E4; background: #fff; color: #2F4A7A; font-size: 11px; cursor: pointer; }
+.ks-btn-ubah:hover, .ks-btn-koreksi:hover { background: #F6F3EC; }
+.ks-koreksi-chip { color: #2F4A7A; display: block; margin-top: 4px; text-align: right; }
+.ks-r-ubah td { background: #F6F3EC; }
+.ks-ubah-panel { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; padding: 4px 0; }
+.ks-ubah-panel label { display: flex; flex-direction: column; font-size: 11.5px; color: var(--ink-soft, #5F6B7A); gap: 3px; }
+.ks-ubah-panel input { font-size: 16px; padding: 6px 8px; border: 1px solid var(--line-soft, #E5E0D6); border-radius: 7px; min-width: 140px; }
+.ks-ubah-ket { flex: 1 1 260px; } .ks-ubah-ket input { width: 100%; }
+.ks-ubah-aksi { display: flex; gap: 6px; align-items: center; }
+.ks-koreksi-bar { background: #EEF3FB; border: 1px solid #CFD6E4; border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; font-size: 12.5px; color: #2F4A7A; line-height: 1.6; }
+.ks-btn-kecil-netral { padding: 3px 8px; font-size: 11px; margin-left: 6px; }
 .ks-tabel-arus td:first-child { min-width: 180px; }
 .ks-r-grup td { background: #F6F3EC; font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft, #5F6B7A); }
 .ks-r-total td { font-weight: 700; border-top: 1px solid var(--line, #E5E0D6); }
