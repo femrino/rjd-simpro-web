@@ -185,15 +185,69 @@ function ksFormArahBerubah() {
   if (wKat) wKat.classList.toggle("hidden", !punyaKategori);
   if (wTujuan) wTujuan.classList.toggle("hidden", arah !== "Transfer");
   if (sel && KS_DATA) {
+    ksPasangPanduanKategori_();
     const lama = sel.value;
-    const daftar = (KS_DATA.kategori || []).filter(function (k) { return k.arah === arah && k.kategori !== "Pelunasan klien"; });
+    // @K13 KN-6: SEARAH, aktif saja, lalu URUT kolom Urutan (bukan urutan baris sheet).
+    //
+    // `k.aktif !== false` adalah lapis KEDUA, bukan penjaga utama: getKas_ sudah
+    // menyaring (keuangan-kas.js) dan ksValidasi_ MENOLAK kategori nonaktif saat
+    // simpan. Ia ditulis !== false, bukan === true, supaya server lama yang belum
+    // mengirim medannya tidak diam-diam mengosongkan dropdown.
+    //
+    // Pembanding kedua (nama) bukan hiasan: 43 kategori memakai Urutan kelipatan 10
+    // supaya ada ruang menyisipkan, dan dua baris berurutan sama adalah kesalahan
+    // ketik yang WAJAR. Tanpa pembanding kedua, urutannya jadi milik urutan baris
+    // sheet -- persis hal yang perubahan ini hapus.
+    const daftar = (KS_DATA.kategori || []).filter(function (k) {
+      return k.arah === arah && k.kategori !== "Pelunasan klien" && k.aktif !== false;
+    }).sort(function (a, b) {
+      return (Number(a.urutan) || 0) - (Number(b.urutan) || 0) ||
+        String(a.kategori).localeCompare(String(b.kategori), "id");
+    });
     sel.innerHTML = '<option value="">-- kategori --</option>' + daftar.map(function (k) { return '<option value="' + ksEsc_(k.kategori) + '">' + ksEsc_(k.kategori) + '</option>'; }).join("");
     if (daftar.some(function (k) { return k.kategori === lama; })) sel.value = lama;
+    ksPanduanKategori_();
   }
   const lblAkun = document.getElementById("ks-in-akun-label");
   if (lblAkun) lblAkun.textContent = arah === "Transfer" ? "Dari akun" : (arah === "Masuk" ? "Masuk ke akun" : (arah === "Saldo Awal" ? "Akun" : "Dibayar dari akun"));
   const tglIn = document.getElementById("ks-in-tanggal");
   if (tglIn && arah === "Saldo Awal" && KS_DATA) tglIn.value = KS_DATA.tanggalMulai;
+}
+
+/**
+ * Panduan kategori (@K13 KN-9) -- teks Keterangan dari SD Kategori Kas.
+ *
+ * DISUNTIK DARI JS, mengikuti pola KP-8 (`ivPasangKotakRef_`, v305) dan dengan
+ * alasan yang sama: markup form hidup di template Blogger, dan template TIDAK
+ * ditempel tiap rilis. Kotak baru yang ditaruh di template menuntut satu langkah
+ * manual; yang disuntik dari sini tidak. Brief K13 berbunyi "markup di template,
+ * bukan disuntik JS -- ikuti pola KP-8", dua bagian yang saling bertentangan;
+ * AUDIT-KEUANGAN.md sudah meluruskannya sekali di K12 dan itu yang dipakai.
+ *
+ * Kenapa dua belas Keterangan itu harus sampai ke layar: keputusan "aksesoris ke
+ * 712, bukan 1301" dan "pencairan pinjaman BUKAN pendapatan" hidup di sana.
+ * Panduan yang cuma ada di sheet adalah panduan yang tidak dibaca siapa pun saat
+ * orang sedang mengisi form.
+ */
+function ksPasangPanduanKategori_() {
+  if (document.getElementById("ks-kat-panduan")) return;   // idempoten, seperti KP-8
+  const sel = document.getElementById("ks-in-kategori"); if (!sel || !sel.parentNode) return;
+  const d = document.createElement("div");
+  d.id = "ks-kat-panduan"; d.className = "ks-kat-panduan hidden";
+  sel.parentNode.insertBefore(d, sel.nextSibling);
+  sel.addEventListener("change", ksPanduanKategori_);
+}
+
+function ksPanduanKategori_() {
+  const d = document.getElementById("ks-kat-panduan"); if (!d) return;
+  const sel = document.getElementById("ks-in-kategori");
+  const arah = (document.querySelector('input[name="ks-arah"]:checked') || {}).value || "Keluar";
+  const nama = sel ? sel.value : "";
+  const k = nama ? (KS_DATA && KS_DATA.kategori || []).filter(function (x) {
+    return x.arah === arah && x.kategori === nama; })[0] : null;
+  const teks = k ? String(k.keterangan || "").trim() : "";
+  d.textContent = teks;
+  d.classList.toggle("hidden", !teks);
 }
 
 /** Foto bukti: diperkecil di browser (maks 1280 px, JPEG 0,75) supaya unggahan ringan dari HP. */
@@ -315,9 +369,36 @@ function ksRenderArus_() {
   html += '<tr class="ks-r-grup"><td colspan="' + (arus.length + 1) + '">Keluar</td></tr>';
   Object.keys(kKeluar).sort().forEach(function (k) { html += barisK(k, function (b) { return b.keluar[k]; }); });
   html += barisK("Total keluar", function (b) { return b.totalKeluar; }, "ks-r-total");
+  html += ksBarisKlasifikasi_(arus);
   html += barisK("Bersih (masuk − keluar)", function (b) { return b.totalMasuk - b.totalKeluar; }, "ks-r-total");
   html += '<tr class="ks-r-judul"><td>Saldo akhir</td>' + arus.map(function (b) { return '<td class="ks-td-rp">' + ksRp(b.saldoAkhir) + '</td>'; }).join("") + '</tr>';
   el.innerHTML = '<div class="ks-kartu ks-kartu-tabel"><table class="ks-tabel ks-tabel-arus"><thead><tr><th>Rp</th>' + kolom + '</tr></thead><tbody>' + html + '</tbody></table></div>';
+}
+
+/**
+ * Dua baris kesehatan klasifikasi di bawah Total keluar (@K13 KN-6).
+ *
+ * Mengembalikan STRING KOSONG kalau server belum mengirim medannya (gs < @375).
+ * Itu disengaja dan bukan kehati-hatian berlebih: menggambar "belum diklasifikasi
+ * Rp 0" untuk server yang sama sekali tidak menghitungnya adalah angka yang
+ * BERBOHONG, dan jalur yang tidak bisa memberi tahu kalau ia tidak aktif adalah
+ * jalur yang suatu hari mati tanpa ada yang sadar.
+ *
+ * Ambang 5% menyalin `diagnosaKas` supaya layar dan terminal tidak pernah berbeda
+ * pendapat; kalau salah satunya diubah, ubah keduanya.
+ */
+function ksBarisKlasifikasi_(arus) {
+  if (!arus.some(function (b) { return typeof b.porsiLainLain === "number"; })) return "";
+  const belum = '<tr class="ks-r-klas"><td>· belum diklasifikasi</td>' + arus.map(function (b) {
+    const v = (b.belumDiklasifikasi && b.belumDiklasifikasi.keluar) || 0;
+    return '<td class="ks-td-rp' + (v ? ' ks-awas' : '') + '">' + (v ? ksRp(v) : '<span class="ks-nol">–</span>') + '</td>';
+  }).join("") + '</tr>';
+  const porsi = '<tr class="ks-r-klas"><td>· porsi "Lain-lain"</td>' + arus.map(function (b) {
+    if (!b.totalKeluar) return '<td class="ks-td-rp"><span class="ks-nol">–</span></td>';
+    const p = Number(b.porsiLainLain) || 0;
+    return '<td class="ks-td-rp' + (p > 5 ? ' ks-awas' : '') + '">' + String(p).replace(".", ",") + '%</td>';
+  }).join("") + '</tr>';
+  return belum + porsi;
 }
 
 function ksRenderRekon_() {
