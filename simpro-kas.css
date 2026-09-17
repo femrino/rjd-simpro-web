@@ -102,6 +102,8 @@
 .ks-ubah-panel input { font-size: 16px; padding: 6px 8px; border: 1px solid var(--line-soft, #E5E0D6); border-radius: 7px; min-width: 140px; }
 .ks-ubah-ket { flex: 1 1 260px; } .ks-ubah-ket input { width: 100%; }
 .ks-ubah-aksi { display: flex; gap: 6px; align-items: center; }
+.ks-ubah-foto { flex: 1 1 220px; } .ks-ubah-foto input[type=file] { font-size: 16px; }
+.ks-ubah-foto a { color: #2F4A7A; }
 .ks-koreksi-bar { background: #EEF3FB; border: 1px solid #CFD6E4; border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; font-size: 12.5px; color: #2F4A7A; line-height: 1.6; }
 .ks-btn-kecil-netral { padding: 3px 8px; font-size: 11px; margin-left: 6px; }
 .ks-tabel-arus td:first-child { min-width: 180px; }

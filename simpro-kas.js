@@ -26,6 +26,8 @@ let KS_SIBUK = false;
 // @K14: mode koreksi. Berisi {id, bukti, tanggal} baris yang sedang dikoreksi; null = form
 // biasa. `let` tingkat atas, BUKAN window.* -- lihat aturan PF-1b di CLAUDE.md.
 let KS_KOREKSI = null;
+// @K14b: foto yang dipilih di panel pensil (sudah diperkecil). Direset tiap panel dibuka.
+let KS_UBAH_FOTO = null;
 
 const KS_BULAN_NAMA = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 const KS_BULAN_PENDEK = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
@@ -253,24 +255,48 @@ function ksPanduanKategori_() {
   d.classList.toggle("hidden", !teks);
 }
 
-/** Foto bukti: diperkecil di browser (maks 1280 px, JPEG 0,75) supaya unggahan ringan dari HP. */
+/**
+ * Memperkecil satu File gambar di browser (maks 1280 px, JPEG 0,75) supaya unggahan ringan
+ * dari HP. Mengembalikan Promise {base64, mime, nama}; ditolak kalau berkasnya bukan gambar.
+ * @K14b: dipisah dari ksBuktiDipilih supaya panel pensil memakai JALUR YANG SAMA -- dua
+ * implementasi pengecilan foto adalah cara salah satunya diam-diam mengirim 8 MB.
+ */
+function ksKecilkanFoto_(f) {
+  return new Promise(function (ok, gagal) {
+    const img = new Image(); const url = URL.createObjectURL(f);
+    img.onload = function () {
+      const maks = 1280; let w = img.width, h = img.height;
+      if (w > maks || h > maks) { const r = Math.min(maks / w, maks / h); w = Math.round(w * r); h = Math.round(h * r); }
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      c.getContext("2d").drawImage(img, 0, 0, w, h);
+      const dataUrl = c.toDataURL("image/jpeg", 0.75);
+      URL.revokeObjectURL(url);
+      ok({ base64: dataUrl.split(",")[1], mime: "image/jpeg", nama: f.name, kb: Math.round(dataUrl.length * 0.75 / 1024) });
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); gagal(new Error("File bukan gambar -- lewati atau pilih foto.")); };
+    img.src = url;
+  });
+}
+
+/** Foto bukti form utama. */
 function ksBuktiDipilih(input) {
   const f = input.files && input.files[0]; const info = document.getElementById("ks-bukti-info");
   KS_BUKTI = null;
   if (!f) { if (info) info.textContent = ""; return; }
-  const img = new Image(); const url = URL.createObjectURL(f);
-  img.onload = function () {
-    const maks = 1280; let w = img.width, h = img.height;
-    if (w > maks || h > maks) { const r = Math.min(maks / w, maks / h); w = Math.round(w * r); h = Math.round(h * r); }
-    const c = document.createElement("canvas"); c.width = w; c.height = h;
-    c.getContext("2d").drawImage(img, 0, 0, w, h);
-    const dataUrl = c.toDataURL("image/jpeg", 0.75);
-    KS_BUKTI = { base64: dataUrl.split(",")[1], mime: "image/jpeg", nama: f.name };
-    if (info) info.textContent = "Bukti siap (" + Math.round(dataUrl.length * 0.75 / 1024) + " KB).";
-    URL.revokeObjectURL(url);
-  };
-  img.onerror = function () { if (info) info.textContent = "File bukan gambar -- lewati atau pilih foto."; URL.revokeObjectURL(url); };
-  img.src = url;
+  ksKecilkanFoto_(f)
+    .then(function (b) { KS_BUKTI = { base64: b.base64, mime: b.mime, nama: b.nama }; if (info) info.textContent = "Bukti siap (" + b.kb + " KB)."; })
+    .catch(function (e) { if (info) info.textContent = e.message; });
+}
+
+/** @K14b: foto bukti dari panel pensil. */
+function ksUbahFotoDipilih(input) {
+  const f = input.files && input.files[0]; const info = document.getElementById("ks-ub-bukti-info");
+  KS_UBAH_FOTO = null;
+  if (!f) { if (info) info.textContent = ""; return; }
+  if (info) info.textContent = "Memperkecil foto...";
+  ksKecilkanFoto_(f)
+    .then(function (b) { KS_UBAH_FOTO = { base64: b.base64, mime: b.mime }; if (info) info.textContent = "Foto siap (" + b.kb + " KB) -- tekan Simpan."; })
+    .catch(function (e) { if (info) info.textContent = e.message; });
 }
 
 function ksPesan_(teks, galat) {
@@ -327,6 +353,7 @@ function ksUbahCatatan(btn) {
   const t = (KS_DATA.transaksi || []).filter(function (x) { return x.id === id; })[0];
   if (!t) return;
   const lama = document.querySelector("tr.ks-r-ubah"); if (lama) lama.remove();
+  KS_UBAH_FOTO = null;   // foto milik panel sebelumnya tidak boleh ikut terkirim
   const tr = btn.closest("tr"); if (!tr) return;
   const kolom = tr.children.length;
   tr.insertAdjacentHTML("afterend",
@@ -334,6 +361,9 @@ function ksUbahCatatan(btn) {
     '<label>Pihak<input id="ks-ub-pihak" type="text" value="' + ksEsc_(t.pihak) + '"></label>' +
     '<label>Ref<input id="ks-ub-ref" type="text" value="' + ksEsc_(t.ref) + '"></label>' +
     '<label class="ks-ubah-ket">Keterangan<input id="ks-ub-ket" type="text" value="' + ksEsc_(t.keterangan) + '"></label>' +
+    // @K14b: foto. Kalau baris sudah berfoto, tautannya ditampilkan dan foto baru MENGGANTINYA.
+    '<label class="ks-ubah-foto">' + (t.bukti ? 'Ganti foto (<a href="' + ksEsc_(t.bukti) + '" target="_blank" rel="noopener">lihat yang ada</a>)' : 'Tambah foto bukti') +
+      '<input id="ks-ub-bukti" type="file" accept="image/*" onchange="ksUbahFotoDipilih(this)"><span id="ks-ub-bukti-info" class="ks-sub"></span></label>' +
     '<span class="ks-ubah-aksi"><button id="ks-ub-simpan" class="ks-btn ks-btn-utama" type="button" onclick="ksUbahCatatanSimpan(\'' + ksEsc_(id) + '\')">Simpan</button> ' +
     '<button id="ks-ub-batal" class="ks-btn" type="button" onclick="document.querySelector(\'tr.ks-r-ubah\').remove()">Batal</button></span>' +
     '<div id="ks-ub-pesan" class="ks-sub"></div></div></td></tr>');
@@ -349,6 +379,8 @@ function ksUbahCatatanSimpan(id) {
     const v = String(document.getElementById(p[1]).value || "").trim();
     if (v !== String(t[p[0]] || "").trim()) perubahan[p[0]] = v;
   });
+  // @K14b: foto dihitung sebagai perubahan walau tidak ada teks yang berganti.
+  if (KS_UBAH_FOTO) { perubahan.buktiBase64 = KS_UBAH_FOTO.base64; perubahan.buktiMime = KS_UBAH_FOTO.mime; }
   if (!Object.keys(perubahan).length) { if (pesan) pesan.textContent = "Tidak ada yang berubah."; return; }
   const btn = document.getElementById("ks-ub-simpan"); if (btn) btn.disabled = true;
   if (pesan) pesan.textContent = "Menyimpan...";
