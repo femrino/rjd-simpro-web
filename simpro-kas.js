@@ -40,7 +40,36 @@ function ksEsc_(s) {
   return (typeof rjdEscapeHtml_ === "function") ? rjdEscapeHtml_(s)
     : String(s === null || s === undefined ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
-function ksRp(n) { n = Math.round(Number(n) || 0); return (n < 0 ? "\u2212" : "") + Math.abs(n).toLocaleString("id-ID"); }
+/**
+ * @K16 (v360): rupiah DENGAN sen. Sampai v359 tiga lapis membulatkan ke rupiah utuh, dan
+ * parsernya membuang koma -- "12,34" terkirim sebagai 1234 tanpa peringatan. Sen dibutuhkan
+ * karena saldo rekening bank bersen; tanpa itu selisih rekonsiliasi tidak pernah 0.
+ * Server @385 menyimpan 2 desimal (ksRp_ / ksBulat2_).
+ *
+ * Tiga fungsi, satu format: ksRp untuk TAMPILAN ("1.234,56"; bilangan bulat tanpa ",00"),
+ * ksParseRp_ untuk MEMBACA ketikan format Indonesia (titik = ribuan, koma = desimal),
+ * ksRpIsian_ untuk MENGISI kotak dari angka ("1234,56" -- tanpa titik ribuan, karena
+ * parser membuang titik). Menaruh String(12.34) ke kotak = "12.34" = terbaca 1234.
+ */
+function ksRp(n) {
+  n = Math.round((Number(n) || 0) * 100) / 100;
+  const sen = Math.abs(n) % 1 !== 0;
+  return (n < 0 ? "\u2212" : "") + Math.abs(n).toLocaleString("id-ID", { minimumFractionDigits: sen ? 2 : 0, maximumFractionDigits: 2 });
+}
+function ksParseRp_(v) {
+  const t = String(v === null || v === undefined ? "" : v).trim();
+  if (!t) return 0;
+  const neg = t.charAt(0) === "-";
+  const d = t.replace(/[^0-9,]/g, "");          // "Rp 1.234,56" -> "1234,56"; titik ribuan dibuang
+  const i = d.lastIndexOf(",");
+  // Semua digit sesudah koma ikut, lalu DIBULATKAN ke sen -- bukan dipotong -- supaya "12,345"
+  // jadi 12.35 di sini DAN di server (ksRp_), bukan 12.34 di satu sisi dan 12.35 di sisi lain.
+  const utuh = (i === -1 ? d : d.slice(0, i)).replace(/,/g, ""), sen = i === -1 ? "" : d.slice(i + 1);
+  const n = Number((utuh || "0") + (sen ? "." + sen : ""));
+  if (!isFinite(n)) return 0;
+  return Math.round(n * 100) / 100 * (neg ? -1 : 1);
+}
+function ksRpIsian_(n) { n = Math.round((Number(n) || 0) * 100) / 100; return String(n).replace(".", ","); }
 function ksTgl(iso) { if (!iso) return ""; const p = iso.split("-"); return Number(p[2]) + " " + KS_BULAN_PENDEK[Number(p[1]) - 1]; }
 function ksNamaBulan(b) { const p = b.split("-"); return KS_BULAN_NAMA[Number(p[1]) - 1] + " " + p[0]; }
 function ksGeserBulan(b, n) { const y = Number(b.slice(0, 4)), m = Number(b.slice(5, 7)) - 1 + n; const d = new Date(y, m, 1); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); }
@@ -174,6 +203,9 @@ function ksRenderSaldo_() {
 }
 
 function ksRenderForm_() {
+  // @K16: keyboard HP "numeric" tidak punya tombol koma; atributnya hidup di template, jadi
+  // propertinya yang disetel dari sini (pola oninput #sp-riw-cari, CLAUDE.md).
+  const kJumlah = document.getElementById("ks-in-jumlah"); if (kJumlah) kJumlah.inputMode = "decimal";
   const d = KS_DATA;
   const selAkun = document.getElementById("ks-in-akun"), selTujuan = document.getElementById("ks-in-tujuan");
   const opsiAkun = (d.akun || []).filter(function (a) { return a.aktif; }).map(function (a) { return '<option value="' + ksEsc_(a.kode) + '">' + ksEsc_(a.nama) + '</option>'; }).join("");
@@ -315,7 +347,7 @@ function ksSimpan() {
     tanggal: document.getElementById("ks-in-tanggal").value, arah: arah,
     akun: document.getElementById("ks-in-akun").value, akunTujuan: document.getElementById("ks-in-tujuan").value,
     kategori: document.getElementById("ks-in-kategori").value,
-    jumlah: Number(String(document.getElementById("ks-in-jumlah").value).replace(/[^0-9]/g, "")) || 0,
+    jumlah: ksParseRp_(document.getElementById("ks-in-jumlah").value),   // @K16: "12,34" = 12.34, bukan 1234
     ref: document.getElementById("ks-in-ref").value.trim(), pihak: document.getElementById("ks-in-pihak").value.trim(),
     keterangan: document.getElementById("ks-in-ket").value.trim(),
     buktiBase64: KS_BUKTI ? KS_BUKTI.base64 : "", buktiMime: KS_BUKTI ? KS_BUKTI.mime : ""
@@ -408,7 +440,7 @@ function ksKoreksi(btn) {
   const isi = function (elId, v) { const el = document.getElementById(elId); if (el) el.value = v; };
   isi("ks-in-tanggal", KS_DATA.tertutup ? KS_DATA.hariIni : t.tanggal);
   isi("ks-in-akun", t.akun); isi("ks-in-tujuan", t.akunTujuan || "");
-  isi("ks-in-kategori", t.kategori); isi("ks-in-jumlah", String(t.jumlah));
+  isi("ks-in-kategori", t.kategori); isi("ks-in-jumlah", ksRpIsian_(t.jumlah));   // @K16: koma desimal
   isi("ks-in-ref", t.ref); isi("ks-in-pihak", t.pihak); isi("ks-in-ket", t.keterangan);
   ksPanduanKategori_();
   KS_KOREKSI = { id: id, bukti: t.bukti || "", tanggal: t.tanggal };
@@ -534,7 +566,7 @@ function ksSaringCocok_(t) {
     // Angka (boleh dengan titik/koma ribuan) juga dicocokkan ke jumlah, digit lawan digit --
     // "655.500" dan "655500" sama-sama menemukan Rp 655.500. Teks tetap ikut dicari, supaya
     // ref yang kebetulan angka saja tidak hilang.
-    if (!kena && /^[\d.,]+$/.test(q)) kena = String(Math.round(Number(t.jumlah) || 0)).indexOf(q.replace(/[.,]/g, "")) !== -1;
+    if (!kena && /^[\d.,]+$/.test(q)) kena = ksRp(t.jumlah).replace(/[^0-9]/g, "").indexOf(q.replace(/[.,]/g, "")) !== -1;   // @K16: "12,34" menemukan Rp 12,34
     if (!kena) return false;
   }
   return true;
@@ -691,7 +723,7 @@ function ksRenderRekon_() {
     const r = rekon[a.kode]; const buku = perAkun[a.kode] || 0;
     const cocok = r && r.selisih === 0; if (!cocok) semuaCocok = false;
     return '<tr><td>' + ksEsc_(a.nama) + '</td><td class="ks-td-rp">' + ksRp(buku) + '</td>' +
-      '<td>' + (tutup ? '<span class="ks-td-rp">' + (r ? ksRp(r.saldoBank) : "–") + '</span>' : '<input class="ks-in-rp" data-akun="' + ksEsc_(a.kode) + '" inputmode="numeric" placeholder="saldo menurut ' + ksEsc_(a.jenis === "Bank" ? "rekening" : "hitungan laci") + '" type="text" value="' + (r ? r.saldoBank : "") + '" data-awal="' + (r ? r.saldoBank : "") + '"/>') + '</td>' +
+      '<td>' + (tutup ? '<span class="ks-td-rp">' + (r ? ksRp(r.saldoBank) : "–") + '</span>' : '<input class="ks-in-rp" data-akun="' + ksEsc_(a.kode) + '" inputmode="decimal" placeholder="saldo menurut ' + ksEsc_(a.jenis === "Bank" ? "rekening" : "hitungan laci") + '" type="text" value="' + (r ? ksRpIsian_(r.saldoBank) : "") + '" data-awal="' + (r ? r.saldoBank : "") + '"/>') + '</td>' +
       '<td class="ks-td-rp ' + (r ? (cocok ? "ks-plus" : "ks-min") : "") + '">' + (r ? ksRp(r.selisih) : "–") + '</td>' +
       '<td>' + (r ? '<span class="ks-sub">' + ksEsc_(r.oleh.split("@")[0]) + '</span>' : (tutup ? '' : '<span class="ks-sub">belum</span>')) + '</td></tr>';
   }).join("");
@@ -715,7 +747,7 @@ function ksRekonSimpan() {
   ksTombolRekon_(true);   // v308 (KF-6): klik ganda = baris rekonsiliasi kembar
   let rantai = Promise.resolve();
   isi.forEach(function (i) {
-    rantai = rantai.then(function () { return ksKirim_("rekonsiliasiKas", { data: { bulan: KS_BULAN, akun: i.getAttribute("data-akun"), saldoBank: Number(String(i.value).replace(/[^0-9-]/g, "")) || 0 } }); });
+    rantai = rantai.then(function () { return ksKirim_("rekonsiliasiKas", { data: { bulan: KS_BULAN, akun: i.getAttribute("data-akun"), saldoBank: ksParseRp_(i.value) } }); });
   });
   rantai.then(function () { ksMuat(KS_BULAN); }).catch(function (e) { pesan.textContent = e.message; pesan.classList.add("ks-form-galat"); ksTombolRekon_(false); });
 }
