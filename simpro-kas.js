@@ -28,6 +28,9 @@ let KS_SIBUK = false;
 let KS_KOREKSI = null;
 // @K14b: foto yang dipilih di panel pensil (sudah diperkecil). Direset tiap panel dibuka.
 let KS_UBAH_FOTO = null;
+// @K15: keadaan filter buku kas. `bulan` mencatat bulan yang rentang tanggalnya dipasang,
+// supaya rentang itu dibuang saat bulan berganti (ia terikat bulan yang dibuka).
+let KS_SARING = { q: "", arah: "", akun: "", kat: "", dari: "", sampai: "", sembunyi: false, bulan: null };
 
 const KS_BULAN_NAMA = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 const KS_BULAN_PENDEK = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
@@ -155,7 +158,7 @@ function ksMuat(bulan) {
 
 // ---------- render ----------
 function ksRender() {
-  ksRenderSaldo_(); ksRenderForm_(); ksRenderBulan_(); ksRenderBuku_(); ksRenderArus_(); ksRenderRekon_(); ksRenderPeringatan_();
+  ksRenderSaldo_(); ksRenderForm_(); ksRenderBulan_(); ksPasangSaring_(); ksRenderBuku_(); ksRenderArus_(); ksRenderRekon_(); ksRenderPeringatan_();
 }
 
 function ksRenderSaldo_() {
@@ -463,10 +466,129 @@ function ksRenderBulan_() {
 }
 function ksGeser(n) { ksShow("ks-loading"); ksMuat(ksGeserBulan(KS_BULAN, n)); }
 
+/**
+ * Filter buku kas (@K15, v359): cari bebas, arah, akun, kategori, rentang tanggal,
+ * sembunyikan yang dibatalkan.
+ *
+ * DISUNTIK DARI JS (pola KP-8, sama dengan panduan kategori di atas) dan DI LUAR
+ * #ks-buku: tabelnya dirender ulang tiap ketukan, dan kotak yang ikut dibongkar
+ * kehilangan fokus & isinya. Keadaannya di KS_SARING (`let` tingkat atas, bukan
+ * window.* -- PF-1b), jadi ia bertahan saat daftar dimuat ulang sesudah
+ * simpan / koreksi / ganti bulan. Yang SENGAJA tidak bertahan lintas bulan cuma
+ * rentang tanggal, karena ia terikat bulan yang sedang dibuka.
+ *
+ * Data bulan di KS_DATA tidak disentuh; yang berubah hanya yang TAMPIL, dan tfoot
+ * menyebutnya ("Tersaring N dari M") supaya total yang tersaring tidak terbaca
+ * sebagai total bulan.
+ */
+function ksPasangSaring_() {
+  if (document.getElementById("ks-saring")) return;   // idempoten, seperti KP-8
+  const buku = document.getElementById("ks-buku"); if (!buku || !buku.parentNode) return;
+  const d = document.createElement("div");
+  d.id = "ks-saring"; d.className = "ks-saring";
+  d.innerHTML =
+    '<input type="search" id="ks-sr-q" class="ks-sr-q" placeholder="Cari pihak, keterangan, ref, ID, atau jumlah" oninput="ksSaringUbah()" autocomplete="off" aria-label="Cari transaksi">' +
+    '<select id="ks-sr-arah" onchange="ksSaringUbah()" aria-label="Arah"><option value="">Semua arah</option><option>Masuk</option><option>Keluar</option><option>Transfer</option><option>Saldo Awal</option></select>' +
+    '<select id="ks-sr-akun" onchange="ksSaringUbah()" aria-label="Akun"><option value="">Semua akun</option></select>' +
+    '<select id="ks-sr-kat" onchange="ksSaringUbah()" aria-label="Kategori"><option value="">Semua kategori</option></select>' +
+    '<span class="ks-sr-tgl"><input type="date" id="ks-sr-dari" onchange="ksSaringUbah()" aria-label="Dari tanggal"> &ndash; <input type="date" id="ks-sr-sampai" onchange="ksSaringUbah()" aria-label="Sampai tanggal"></span>' +
+    '<label class="ks-sr-cek"><input type="checkbox" id="ks-sr-sembunyi" onchange="ksSaringUbah()"> sembunyikan yang dibatalkan</label>' +
+    '<span id="ks-sr-info" class="ks-sr-info"></span>' +
+    '<button type="button" id="ks-sr-hapus" class="ks-sr-hapus hidden" onclick="ksSaringHapus()">Hapus filter</button>';
+  buku.parentNode.insertBefore(d, buku);
+}
+
+function ksSaringUbah() {
+  const v = function (id) { const e = document.getElementById(id); return e ? e.value : ""; };
+  KS_SARING.q = v("ks-sr-q").trim(); KS_SARING.arah = v("ks-sr-arah"); KS_SARING.akun = v("ks-sr-akun"); KS_SARING.kat = v("ks-sr-kat");
+  KS_SARING.dari = v("ks-sr-dari"); KS_SARING.sampai = v("ks-sr-sampai");
+  const c = document.getElementById("ks-sr-sembunyi"); KS_SARING.sembunyi = !!(c && c.checked);
+  ksRenderBuku_();
+}
+
+function ksSaringHapus() {
+  KS_SARING = { q: "", arah: "", akun: "", kat: "", dari: "", sampai: "", sembunyi: false, bulan: KS_SARING.bulan };
+  ["ks-sr-q", "ks-sr-arah", "ks-sr-akun", "ks-sr-kat", "ks-sr-dari", "ks-sr-sampai"].forEach(function (id) { const e = document.getElementById(id); if (e) e.value = ""; });
+  const c = document.getElementById("ks-sr-sembunyi"); if (c) c.checked = false;
+  ksRenderBuku_();
+}
+
+function ksSaringAktif_() {
+  const s = KS_SARING; return !!(s.q || s.arah || s.akun || s.kat || s.dari || s.sampai || s.sembunyi);
+}
+
+function ksSaringCocok_(t) {
+  const s = KS_SARING;
+  if (s.arah && t.arah !== s.arah) return false;
+  // Transfer KE akun X ikut muncul saat menyaring akun X -- uangnya sampai ke sana.
+  if (s.akun && t.akun !== s.akun && t.akunTujuan !== s.akun) return false;
+  if (s.kat && t.kategori !== s.kat) return false;
+  if (s.dari && String(t.tanggal) < s.dari) return false;       // ISO yyyy-MM-dd: urutan teks = urutan tanggal
+  if (s.sampai && String(t.tanggal) > s.sampai) return false;
+  if (s.sembunyi && (t.dibatalkanOleh || t.status === "Pembalik")) return false;
+  if (s.q) {
+    const q = s.q.toLowerCase();
+    const tumpukan = [t.pihak, t.keterangan, t.ref, t.id, t.kategori, ksNamaAkun(t.akun), t.akunTujuan ? ksNamaAkun(t.akunTujuan) : ""]
+      .map(function (x) { return String(x === null || x === undefined ? "" : x).toLowerCase(); }).join("\n");
+    let kena = tumpukan.indexOf(q) !== -1;
+    // Angka (boleh dengan titik/koma ribuan) juga dicocokkan ke jumlah, digit lawan digit --
+    // "655.500" dan "655500" sama-sama menemukan Rp 655.500. Teks tetap ikut dicari, supaya
+    // ref yang kebetulan angka saja tidak hilang.
+    if (!kena && /^[\d.,]+$/.test(q)) kena = String(Math.round(Number(t.jumlah) || 0)).indexOf(q.replace(/[.,]/g, "")) !== -1;
+    if (!kena) return false;
+  }
+  return true;
+}
+
+function ksSaringIsiOpsi_(trx) {
+  // Bulan berganti: rentang tanggal milik bulan lama dibuang, min/max mengikuti bulan baru.
+  if (KS_SARING.bulan !== KS_BULAN) {
+    KS_SARING.bulan = KS_BULAN; KS_SARING.dari = ""; KS_SARING.sampai = "";
+    ["ks-sr-dari", "ks-sr-sampai"].forEach(function (id) { const e = document.getElementById(id); if (e) e.value = ""; });
+  }
+  const y = Number(KS_BULAN.slice(0, 4)), m = Number(KS_BULAN.slice(5, 7));
+  const akhir = KS_BULAN + "-" + ("0" + new Date(y, m, 0).getDate()).slice(-2);
+  ["ks-sr-dari", "ks-sr-sampai"].forEach(function (id) { const e = document.getElementById(id); if (e) { e.min = KS_BULAN + "-01"; e.max = akhir; } });
+  const dipakai = {}; trx.forEach(function (t) { dipakai[t.akun] = 1; if (t.akunTujuan) dipakai[t.akunTujuan] = 1; });
+  const akun = (KS_DATA.akun || []).filter(function (a) { return a.aktif || dipakai[a.kode]; })
+    .map(function (a) { return { v: a.kode, t: a.nama }; });
+  const kat = {}; trx.forEach(function (t) { if (t.kategori) kat[t.kategori] = 1; });
+  const daftarKat = Object.keys(kat).sort(function (a, b) { return a.localeCompare(b, "id"); }).map(function (k) { return { v: k, t: k }; });
+  ksSaringIsiSelect_("ks-sr-akun", "Semua akun", akun, KS_SARING.akun);
+  ksSaringIsiSelect_("ks-sr-kat", "Semua kategori", daftarKat, KS_SARING.kat);
+}
+
+function ksSaringIsiSelect_(id, semua, daftar, terpilih) {
+  const sel = document.getElementById(id); if (!sel) return;
+  // Nilai terpilih yang tidak ada di daftar bulan ini TETAP dipasang sebagai opsi: <select>
+  // yang tidak memuat nilainya menampilkannya kosong, sementara filternya terus bekerja
+  // diam-diam -- daftar kosong yang tidak bisa dijelaskan.
+  if (terpilih && !daftar.some(function (o) { return o.v === terpilih; })) daftar = daftar.concat([{ v: terpilih, t: terpilih + " (tidak ada bulan ini)" }]);
+  sel.innerHTML = '<option value="">' + ksEsc_(semua) + '</option>' +
+    daftar.map(function (o) { return '<option value="' + ksEsc_(o.v) + '">' + ksEsc_(o.t) + '</option>'; }).join("");
+  sel.value = terpilih || "";
+}
+
+function ksSaringInfo_(n, m, aktif) {
+  const info = document.getElementById("ks-sr-info"), hapus = document.getElementById("ks-sr-hapus");
+  if (info) info.textContent = aktif ? "tersaring " + n + " dari " + m : "";
+  if (hapus) hapus.classList.toggle("hidden", !aktif);
+}
+
 function ksRenderBuku_() {
   const el = document.getElementById("ks-buku"); if (!el) return;
-  const trx = KS_DATA.transaksi || [];
-  if (!trx.length) { el.innerHTML = '<div class="ks-kartu"><p class="ks-info">Belum ada transaksi di ' + ksEsc_(ksNamaBulan(KS_BULAN)) + '.</p></div>'; return; }
+  const semua = KS_DATA.transaksi || [];
+  ksSaringIsiOpsi_(semua);
+  // @K15: saringan dihitung di sini, bukan di ksMuat -- KS_DATA tetap utuh, yang berubah
+  // hanya yang TAMPIL. Total di tfoot mengikuti yang tampil dan menyebutnya.
+  const trx = semua.filter(ksSaringCocok_), aktif = ksSaringAktif_();
+  ksSaringInfo_(trx.length, semua.length, aktif);
+  if (!semua.length) { el.innerHTML = '<div class="ks-kartu"><p class="ks-info">Belum ada transaksi di ' + ksEsc_(ksNamaBulan(KS_BULAN)) + '.</p></div>'; return; }
+  if (!trx.length) {
+    el.innerHTML = '<div class="ks-kartu"><p class="ks-info">Tidak ada transaksi di ' + ksEsc_(ksNamaBulan(KS_BULAN)) + ' yang cocok dengan filter (' + semua.length +
+      ' disembunyikan). <button type="button" class="ks-sr-hapus" onclick="ksSaringHapus()">Hapus filter</button></p></div>';
+    return;
+  }
   let masuk = 0, keluar = 0;
   // @K14: baris asli yang DIKOREKSI menunjuk penggantinya, supaya labelnya 'dikoreksi'
   // bukan 'dibatalkan' -- dua kejadian berbeda yang sampai @376 tampil sama.
@@ -478,7 +600,7 @@ function ksRenderBuku_() {
     const kelas = "ks-r" + (batal ? " ks-r-batal" : "") + (pembalik ? " ks-r-pembalik" : "");
     const arahTeks = t.arah === "Transfer" ? "Transfer → " + ksEsc_(ksNamaAkun(t.akunTujuan)) : t.arah;
     const tanda = t.arah === "Masuk" || t.arah === "Saldo Awal" ? "+" : (t.arah === "Keluar" ? "\u2212" : "");
-    return '<tr class="' + kelas + '">' +
+    return '<tr class="' + kelas + '" data-id="' + ksEsc_(t.id) + '">' +
       '<td class="ks-td-tgl">' + ksEsc_(ksTgl(t.tanggal)) + '</td>' +
       '<td><span class="ks-arah ks-arah-' + t.arah.replace(/\s/g, "").toLowerCase() + '">' + arahTeks + '</span>' + (t.sumber === "pelunasan" ? ' <span class="ks-otomatis" title="dari SD Pelunasan">auto</span>' : '') + '</td>' +
       '<td>' + ksEsc_(ksNamaAkun(t.akun)) + '</td>' +
@@ -499,7 +621,7 @@ function ksRenderBuku_() {
       '</tr>';
   }).join("");
   el.innerHTML = '<div class="ks-kartu ks-kartu-tabel"><table class="ks-tabel"><thead><tr><th>Tgl</th><th>Arah</th><th>Akun</th><th>Kategori / pihak</th><th>Ref</th><th class="ks-td-rp">Jumlah</th><th></th></tr></thead><tbody>' + baris + '</tbody>' +
-    '<tfoot><tr><td colspan="5">Masuk <b>Rp ' + ksRp(masuk) + '</b> · Keluar <b>Rp ' + ksRp(keluar) + '</b> · Bersih <b>Rp ' + ksRp(masuk - keluar) + '</b></td><td colspan="2"></td></tr></tfoot></table></div>';
+    '<tfoot><tr><td colspan="5">' + (aktif ? 'Tersaring <b>' + trx.length + '</b> dari ' + semua.length + ' &middot; ' : '') + 'Masuk <b>Rp ' + ksRp(masuk) + '</b> · Keluar <b>Rp ' + ksRp(keluar) + '</b> · Bersih <b>Rp ' + ksRp(masuk - keluar) + '</b></td><td colspan="2"></td></tr></tfoot></table></div>';
 }
 
 function ksBatalkan(btn) {

@@ -76,6 +76,20 @@
 .ks-badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: #E6F1E8; color: #2F6B3A; }
 .ks-badge-tutup { background: #EEE9F7; color: #4C3F8C; }
 
+/* @K15 (v359): filter buku kas. Disuntik JS di luar #ks-buku (lihat ksPasangSaring_).
+   Font 16px pada semua kontrol = lantai zoom iOS (PF-12); .ks-sr-hapus berkelas SENDIRI,
+   bukan .ks-btn-kecil -- itu milik Batalkan dan jalan21 menghitungnya. */
+.ks-saring { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 0 0 10px; }
+.ks-saring input, .ks-saring select { font-size: 16px; padding: 5px 8px; min-height: 36px; border: 1px solid var(--line, #E5E0D6); border-radius: 8px; background: #fff; color: var(--ink, #17212F); font-family: inherit; max-width: 100%; }
+.ks-sr-q { flex: 1 1 240px; min-width: 160px; }
+.ks-sr-tgl { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ink-soft, #5F6B7A); }
+.ks-sr-tgl input { width: 150px; }
+.ks-sr-cek { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-soft, #5F6B7A); cursor: pointer; white-space: nowrap; }
+.ks-sr-cek input { min-height: 0; width: 16px; height: 16px; margin: 0; padding: 0; }
+.ks-sr-info { font-size: 12px; font-weight: 600; color: #2F4A7A; }
+.ks-sr-hapus { padding: 3px 8px; border-radius: 6px; border: 1px solid #CFD6E4; background: #fff; color: #2F4A7A; font-size: 11px; cursor: pointer; font-family: inherit; }
+.ks-sr-hapus:hover { background: #F6F3EC; }
+
 /* ---------- tabel ---------- */
 .ks-tabel { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .ks-tabel th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft, #5F6B7A); padding: 10px 12px; border-bottom: 1px solid var(--line, #E5E0D6); background: #F6F3EC; white-space: nowrap; }
@@ -130,7 +144,12 @@
   .ks-tabel { font-size: 12px; }
   .ks-tabel th, .ks-tabel td { padding: 7px 8px; }
   .ks-form-pesan { margin-left: 0; width: 100%; }
+  /* @K15: di HP kotak cari sebaris penuh, dua select berbagi baris, rentang tanggal sebaris penuh. */
+  .ks-sr-q { flex-basis: 100%; }
+  .ks-saring select { flex: 1 1 40%; min-width: 0; }
+  .ks-sr-tgl { flex: 1 1 100%; }
+  .ks-sr-tgl input { flex: 1 1 0; width: auto; min-width: 0; }
 }
 @media print {
-  .db-header, .ks-form-wrap, .bg-canvas, .hero, .ks-bulan button { display: none !important; }
+  .db-header, .ks-form-wrap, .bg-canvas, .hero, .ks-bulan button, .ks-saring { display: none !important; }
 }
