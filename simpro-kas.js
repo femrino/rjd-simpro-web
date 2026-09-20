@@ -56,18 +56,32 @@ function ksRp(n) {
   const sen = Math.abs(n) % 1 !== 0;
   return (n < 0 ? "\u2212" : "") + Math.abs(n).toLocaleString("id-ID", { minimumFractionDigits: sen ? 2 : 0, maximumFractionDigits: 2 });
 }
+/**
+ * @K17 WK-1/2/6 (v361): tata bahasa KETAT -- bentuk yang tidak dikenal DITOLAK (NaN), bukan
+ * ditebak. Parser v360 membuang titik selalu dan membulatkan sen berlebih, jadi tiga ketikan
+ * wajar berubah nilai TANPA pesan: "12.50" (keypad HP ber-locale English cuma punya titik)
+ * -> Rp 1.250; "12,345" (keypad locale Indonesia cuma punya koma) -> Rp 12,35; dan "\u2212500"
+ * -- tanda minus yang dihasilkan ksRp SENDIRI -- -> +500. Yang diterima sekarang:
+ *   a. desimal-titik yang tidak mungkin ribuan: satu titik, 1-2 digit di akhir  ("12.5", "1234.56")
+ *   b. bentuk Indonesia: ribuan bertitik (opsional), sen koma 1-2 digit, atau ",-"  ("2.769.500,50")
+ * Pemanggil WAJIB memeriksa isNaN dan menampilkan ksGalatRp_ -- NaN yang diteruskan ke JSON
+ * menjadi null dan server membacanya 0.
+ */
 function ksParseRp_(v) {
-  const t = String(v === null || v === undefined ? "" : v).trim();
-  if (!t) return 0;
-  const neg = t.charAt(0) === "-";
-  const d = t.replace(/[^0-9,]/g, "");          // "Rp 1.234,56" -> "1234,56"; titik ribuan dibuang
-  const i = d.lastIndexOf(",");
-  // Semua digit sesudah koma ikut, lalu DIBULATKAN ke sen -- bukan dipotong -- supaya "12,345"
-  // jadi 12.35 di sini DAN di server (ksRp_), bukan 12.34 di satu sisi dan 12.35 di sisi lain.
-  const utuh = (i === -1 ? d : d.slice(0, i)).replace(/,/g, ""), sen = i === -1 ? "" : d.slice(i + 1);
-  const n = Number((utuh || "0") + (sen ? "." + sen : ""));
-  if (!isFinite(n)) return 0;
-  return Math.round(n * 100) / 100 * (neg ? -1 : 1);
+  let t = String(v === null || v === undefined ? "" : v).trim().replace(/\u2212/g, "-").replace(/^Rp\s*/i, "").replace(/\s+/g, "");
+  if (t === "") return 0;
+  if (/^-?\d+\.\d{1,2}$/.test(t)) return Math.round(Number(t) * 100) / 100;
+  if (!/^-?(\d{1,3}(\.\d{3})*|\d+)(,\d{1,2}|,-)?$/.test(t)) return NaN;
+  const neg = t.charAt(0) === "-"; if (neg) t = t.slice(1);
+  const bagian = t.replace(/,-$/, "").split(","), utuh = bagian[0].replace(/\./g, ""), sen = (bagian[1] || "").padEnd(2, "0");
+  const n = Number(utuh) + Number(sen) / 100;
+  return Math.round((neg ? -n : n) * 100) / 100;
+}
+/** Pesan untuk ketikan yang ditolak ksParseRp_ -- menyebut ketikannya dan bentuk yang benar. */
+function ksGalatRp_(ketikan) {
+  const k = String(ketikan === null || ketikan === undefined ? "" : ketikan).trim();
+  if (/,\d{3,}$/.test(k)) return "Sen hanya 2 digit. Untuk ribuan pakai titik: 12.345 (yang diketik: '" + k + "').";
+  return "Jumlah '" + k + "' tidak terbaca. Titik untuk ribuan, koma untuk sen: 2.769.500,50";
 }
 function ksRpIsian_(n) { n = Math.round((Number(n) || 0) * 100) / 100; return String(n).replace(".", ","); }
 function ksTgl(iso) { if (!iso) return ""; const p = iso.split("-"); return Number(p[2]) + " " + KS_BULAN_PENDEK[Number(p[1]) - 1]; }
@@ -353,6 +367,9 @@ function ksSimpan() {
     buktiBase64: KS_BUKTI ? KS_BUKTI.base64 : "", buktiMime: KS_BUKTI ? KS_BUKTI.mime : ""
   };
   if (!data.tanggal) { ksPesan_("Isi tanggal.", true); return; }
+  // @K17 WK-1/2: ketikan yang tidak terbaca DITOLAK di sini, dengan pesan -- sebelum "Isi jumlah",
+  // karena NaN juga falsy dan pesannya akan menyesatkan ("isi" padahal sudah diisi).
+  if (isNaN(data.jumlah)) { ksPesan_(ksGalatRp_(document.getElementById("ks-in-jumlah").value), true); return; }
   if (!data.jumlah) { ksPesan_("Isi jumlah.", true); return; }
   if ((arah === "Masuk" || arah === "Keluar") && !data.kategori) { ksPesan_("Pilih kategori.", true); return; }
   if (arah === "Transfer" && !data.akunTujuan) { ksPesan_("Pilih akun tujuan.", true); return; }
@@ -741,9 +758,25 @@ function ksRekonSimpan() {
   const inputs = Array.prototype.slice.call(document.querySelectorAll("#ks-rekon input[data-akun]"));
   // Hanya yang diisi DAN berubah dari nilai tersimpan -- rekonsiliasi yang
   // sama tidak ditulis ulang.
-  const isi = inputs.filter(function (i) { const v = String(i.value).trim(); return v !== "" && String(Number(v.replace(/[^0-9-]/g, "")) || 0) !== String(i.getAttribute("data-awal") || ""); });
+  // @K17 WK-3 (v361): predikat ini dulu membuang koma ("2769500,5" -> 27695005), jadi SETIAP saldo
+  // bersen dianggap berubah dan dikirim ulang tiap klik -- baris kembar di SD Rekonsiliasi Kas, regresi
+  // K16 (parser pengirimnya diganti, predikat ini terlewat). Kini dibandingkan dalam SEN, dengan
+  // parser yang sama. data-awal KOSONG = belum pernah direkonsiliasi, BUKAN nol -- Number("") = 0
+  // akan menelan rekonsiliasi pertama bersaldo 0.
+  const pesan = document.getElementById("ks-rekon-pesan");
+  const takTerbaca = inputs.filter(function (i) { return String(i.value).trim() !== "" && isNaN(ksParseRp_(i.value)); });
+  if (takTerbaca.length) {
+    pesan.classList.remove("hidden"); pesan.classList.add("ks-form-galat");
+    pesan.textContent = ksNamaAkun(takTerbaca[0].getAttribute("data-akun")) + ": " + ksGalatRp_(takTerbaca[0].value);
+    return;
+  }
+  const isi = inputs.filter(function (i) {
+    const v = String(i.value).trim(); if (v === "") return false;
+    const a = i.getAttribute("data-awal"), awal = (a === null || a === "") ? NaN : Number(a);
+    return isNaN(awal) || Math.round(ksParseRp_(v) * 100) !== Math.round(awal * 100);
+  });
   if (!isi.length) { window.alert("Tidak ada saldo baru/berubah untuk disimpan."); return; }
-  const pesan = document.getElementById("ks-rekon-pesan"); pesan.classList.remove("hidden"); pesan.textContent = "Menyimpan...";
+  pesan.classList.remove("hidden"); pesan.classList.remove("ks-form-galat"); pesan.textContent = "Menyimpan...";
   ksTombolRekon_(true);   // v308 (KF-6): klik ganda = baris rekonsiliasi kembar
   let rantai = Promise.resolve();
   isi.forEach(function (i) {
