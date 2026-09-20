@@ -91,7 +91,46 @@
 
 /* ---------- tabel ---------- */
 .up-tabelwrap { overflow-x: auto; }
-.up-tabel { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+/* @PF-21 (21 Sep 2026) -- LEBAR MINIMUM TABEL UPAH.
+   ============================================================
+   `.up-tabelwrap` sudah `overflow-x: auto` sejak awal, tapi `.up-tabel { width: 100% }` membuat
+   tabelnya selalu dipaksa muat -- jadi penggesernya TIDAK PERNAH punya kesempatan jalan
+   (terukur: `scrollWidth - clientWidth` = 0 di SEMUA lebar, 360 sampai 1400 px). Yang mengalah
+   isinya, dan bundel widget Blogger memberi `body { word-break: break-word }`, jadi sel memecah
+   kata di huruf mana pun. Keluarga PF-19 (`.sp-tabel`/`.sop-tabel`) dan pola yang sama dengan
+   nisan `simpro-invoice.css:170` + `simpro-pengiriman.css:225`.
+
+   TERUKUR SEBELUM (uji/ukur-upah-pecah.py, data 4 operator):
+     360 px  11 pecah  -- termasuk nama operator `Kusumawar/dani`
+     390 px  10 pecah  -- `1.00/0` (Pcs), `3.000.0/00` (Upah), `13700123456/78` (rekening Mandiri
+                          13 digit), `12340123456/75340` (16 digit)
+     430-520 px  5 pecah -- `1.00/0` dan rekening 16 digit
+     560 px ke atas  bersih
+   Yang paling merugikan BUKAN rekeningnya melainkan dua kolom angka: nominal upah yang terbelah
+   dua baris bisa dibaca salah, dan halaman ini yang dipakai untuk membayar orang.
+
+   KENAPA 600px, bukan 480px (yang sudah cukup untuk nol pecah): margin kata terpanjang terhadap
+   ruang selnya. 480 -> 1,7 px; 520 -> 3,2; 560 -> 5,2; 600 -> 10,2-13,7. Margin satuan digit
+   bukan keamanan: pada tabel invoice terukur bahwa menaikkan font SATU piksel sudah memecahkan
+   kolom yang sisanya 0,3 px (PF-20/jalan116). 600 px memberi ruang satu karakter penuh, sehingga
+   nama operator yang sedikit lebih panjang daripada fixture tidak langsung memecahkannya lagi.
+
+   ONGKOSNYA, disebut bukan didiamkan: penggeser mendatar di <= 620 px (310 px di 360 px viewport,
+   50 px di 620). Di 760 px ke atas `luber` tetap 0 -- tidak ada penggeser BARU di layar lebar.
+   Itu pertukaran yang sama dengan invoice dan pengiriman: gulir mendatar di tabel empat kolom
+   berisi nomor rekening wajar; nominal upah yang terbelah tidak.
+
+   CATATAN untuk yang menambah kolom nanti: min-width ini harus ikut naik, kalau tidak gejalanya
+   muncul lagi di kolom yang paling lemah (peringatan yang sama ada di nisan pengiriman).
+   Penjaganya `uji/jalan117`, yang menuntut nol kata pecah DAN margin > 0, dan mencetak angkanya
+   tiap jalan supaya penyusutan terlihat sebelum jadi cacat.
+
+   Blok `@media (max-width: 620px)` di bawah mengecilkan font 13,5 -> 12,5 px dan padding 10 -> 8
+   px. Terukur: penyempitan itu TIDAK membuat apa pun muat -- di 390 px tabelnya tetap memecah 10
+   kata. Ia dibiarkan karena sekarang, dengan min-width, ia memang menghemat lebar penggeser;
+   sebelum patch ini ia cuma kerugian sepihak (keluarga PF-17).
+   ============================================================ */
+.up-tabel { width: 100%; min-width: 600px; border-collapse: collapse; font-size: 13.5px; }
 .up-tabel th {
   text-align: left; padding: 9px 10px; background: var(--paper, #FAF7F2);
   font-size: 11px; letter-spacing: .05em; text-transform: uppercase;
