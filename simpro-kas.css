@@ -216,3 +216,10 @@
   tr.ks-r-buka .ks-aksi-isi .ks-btn-ubah, tr.ks-r-buka .ks-aksi-isi .ks-btn-koreksi, tr.ks-r-buka .ks-aksi-isi .ks-btn-kecil { min-height: 32px; padding-left: 10px; padding-right: 10px; }
 }
 @media print { .ks-aksi-buka, .ks-aksi-tutup, .ks-aksi-isi { display: none !important; } }
+
+/* @K19 (v365): bilah penjelas SEGMEN ARSIP. Disuntik JS sebagai saudara #ks-saldo (pola .ks-pra-tulis). */
+.ks-arsip-bilah {
+  margin: 0 0 12px; padding: 10px 12px; border-radius: 8px;
+  background: #EEE9F7; color: #4C3F8C; border: 1px solid #CFC5E8;
+  font-size: 12.5px; line-height: 1.55;
+}

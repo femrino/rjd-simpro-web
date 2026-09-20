@@ -84,9 +84,31 @@ function ksGalatRp_(ketikan) {
   return "Jumlah '" + k + "' tidak terbaca. Titik untuk ribuan, koma untuk sen: 2.769.500,50";
 }
 function ksRpIsian_(n) { n = Math.round((Number(n) || 0) * 100) / 100; return String(n).replace(".", ","); }
+/** Akhir bulan "yyyy-MM" -> "yyyy-MM-dd". Hari 0 bulan berikutnya = hari terakhir bulan ini. */
+function ksAkhirBulan_(b) {
+  const y = Number(b.slice(0, 4)), m = Number(b.slice(5, 7));
+  const d = new Date(y, m, 0);
+  return b + "-" + String(d.getDate()).padStart(2, "0");
+}
 function ksTgl(iso) { if (!iso) return ""; const p = iso.split("-"); return Number(p[2]) + " " + KS_BULAN_PENDEK[Number(p[1]) - 1]; }
 function ksNamaBulan(b) { const p = b.split("-"); return KS_BULAN_NAMA[Number(p[1]) - 1] + " " + p[0]; }
 function ksGeserBulan(b, n) { const y = Number(b.slice(0, 4)), m = Number(b.slice(5, 7)) - 1 + n; const d = new Date(y, m, 1); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); }
+/**
+ * @K19 SEGMEN ARSIP (gs >= @391). Buku kas punya DUA segmen yang berdiri sendiri:
+ *   [tanggalArsip .. tanggalMulai)  = ARSIP  -- Jun-Agu 2026, diisi ulang dari rekening koran
+ *   [tanggalMulai .. seterusnya)    = HIDUP  -- yang berjalan tiap hari
+ * Saldonya TIDAK menyambung sampai lihatSambunganArsipKas() menyatakan sama. Halaman harus mengatakan itu:
+ * tanpa penjelasan, orang melihat Agustus Rp 47 jt dan September Rp 7 jt lalu menyimpulkan sistemnya rusak.
+ * Server tetap penjaga sebenarnya (batas arsip, finance-only, bulan tertutup); yang di sini mencegah salah ketik.
+ */
+function ksArsip_() { return !!(KS_DATA && KS_DATA.arsip); }
+/** Saldo yang BENAR untuk bulan yang sedang dibuka: di segmen arsip = saldo akhir bulan itu (dari arusKas), bukan saldo hari ini. */
+function ksSaldoBulan_() {
+  if (!ksArsip_()) return KS_DATA.saldo || {};
+  const b = (KS_DATA.arusKas || []).filter(function (x) { return x.bulan === KS_BULAN; })[0];
+  return (b && b.perAkunAkhir) || {};
+}
+
 function ksShow(id) {
   ["ks-login-box", "ks-loading", "ks-isi"].forEach(function (x) { const el = document.getElementById(x); if (el) el.classList.add("hidden"); });
   const t = document.getElementById(id); if (t) t.classList.remove("hidden");
@@ -243,12 +265,19 @@ function ksRender() {
 function ksRenderSaldo_() {
   const el = document.getElementById("ks-saldo"); if (!el) return;
   const d = KS_DATA; let total = 0;
+  const saldo = ksSaldoBulan_();   // @K19: di bulan arsip = saldo akhir bulan itu
   el.innerHTML = (d.akun || []).filter(function (a) { return a.aktif; }).map(function (a) {
-    const s = d.saldo[a.kode] || 0; total += s;
+    const s = saldo[a.kode] || 0; total += s;
     return '<div class="ks-saldo-kartu"><div class="ks-saldo-lbl">' + ksEsc_(a.nama) + '</div><div class="ks-saldo-nilai' + (s < 0 ? ' ks-minus' : '') + '">Rp ' + ksRp(s) + '</div></div>';
   }).join("") + '<div class="ks-saldo-kartu ks-saldo-total"><div class="ks-saldo-lbl">Total uang usaha</div><div class="ks-saldo-nilai">Rp ' + ksRp(total) + '</div></div>';
   const info = document.getElementById("ks-saldo-info");
-  if (info) info.innerHTML = d.adaSaldoAwal ? 'Saldo per hari ini, ' + ksEsc_(ksTgl(d.hariIni)) + ' ' + d.hariIni.slice(0, 4) + '.'
+  if (!info) return;
+  if (ksArsip_()) {
+    // Angka di atas milik AKHIR BULAN ARSIP, bukan hari ini -- dan itu harus tertulis, bukan disimpulkan.
+    info.innerHTML = 'Saldo <b>akhir ' + ksEsc_(ksNamaBulan(KS_BULAN)) + '</b> menurut buku <b>arsip</b> &mdash; buku ini berdiri sendiri dan belum menyambung ke buku berjalan.';
+    return;
+  }
+  info.innerHTML = d.adaSaldoAwal ? 'Saldo per hari ini, ' + ksEsc_(ksTgl(d.hariIni)) + ' ' + d.hariIni.slice(0, 4) + '.'
     : '<b>Saldo awal belum diisi.</b> Catat saldo tiap akun per ' + ksEsc_(ksTgl(d.tanggalMulai)) + ' ' + d.tanggalMulai.slice(0, 4) + ' lewat form di bawah (arah "Saldo Awal", hanya owner/finance).';
 }
 
@@ -261,7 +290,21 @@ function ksRenderForm_() {
   const opsiAkun = (d.akun || []).filter(function (a) { return a.aktif; }).map(function (a) { return '<option value="' + ksEsc_(a.kode) + '">' + ksEsc_(a.nama) + '</option>'; }).join("");
   if (selAkun && !selAkun.options.length) selAkun.innerHTML = opsiAkun;
   if (selTujuan && !selTujuan.options.length) selTujuan.innerHTML = '<option value="">-- akun tujuan --</option>' + opsiAkun;
-  const tgl = document.getElementById("ks-in-tanggal"); if (tgl && !tgl.value) tgl.value = d.hariIni;
+  // @K19: di bulan ARSIP tanggal bawaan = tanggal 1 bulan yang DIBUKA, dan kotaknya dibatasi ke bulan itu. Kalau
+  // dibiarkan "hari ini", mencatat pengeluaran Juli dari layar Juli akan tersimpan bertanggal September -- diterima
+  // server (bulan hidup memang terbuka) dan salah bulan diam-diam. Salah tanggal DI DALAM bulan yang benar jauh
+  // lebih murah: ia terlihat saat rekonsiliasi bulan itu.
+  const tgl = document.getElementById("ks-in-tanggal");
+  if (tgl) {
+    if (ksArsip_()) {
+      const awal = KS_BULAN + "-01", akhir = ksAkhirBulan_(KS_BULAN);
+      if (!tgl.value || tgl.value < awal || tgl.value > akhir) tgl.value = awal;
+      tgl.min = awal; tgl.max = akhir;
+    } else {
+      tgl.removeAttribute("min"); tgl.removeAttribute("max");
+      if (!tgl.value) tgl.value = d.hariIni;
+    }
+  }
   const saldoAwal = document.getElementById("ks-arah-saldoawal-wrap"); if (saldoAwal) saldoAwal.classList.toggle("hidden", !d.bisaFinance);
   ksFormArahBerubah();
 }
@@ -305,7 +348,8 @@ function ksFormArahBerubah() {
   const lblAkun = document.getElementById("ks-in-akun-label");
   if (lblAkun) lblAkun.textContent = arah === "Transfer" ? "Dari akun" : (arah === "Masuk" ? "Masuk ke akun" : (arah === "Saldo Awal" ? "Akun" : "Dibayar dari akun"));
   const tglIn = document.getElementById("ks-in-tanggal");
-  if (tglIn && arah === "Saldo Awal" && KS_DATA) tglIn.value = KS_DATA.tanggalMulai;
+  // @K19: "Saldo Awal" di bulan arsip = saldo pembuka BUKU ARSIP (1 Jun, dari neraca 31 Mei), bukan 1 Sep.
+  if (tglIn && arah === "Saldo Awal" && KS_DATA) tglIn.value = ksArsip_() ? (KS_DATA.tanggalArsip || KS_DATA.tanggalMulai) : KS_DATA.tanggalMulai;
 }
 
 /**
@@ -596,8 +640,37 @@ function ksRenderBulan_() {
   const el = document.getElementById("ks-bulan-judul"); if (el) el.textContent = ksNamaBulan(KS_BULAN);
   const badge = document.getElementById("ks-bulan-status");
   if (badge) { badge.textContent = KS_DATA.tertutup ? "Ditutup" : "Terbuka"; badge.classList.toggle("ks-badge-tutup", !!KS_DATA.tertutup); }
+  ksBilahArsip_();
 }
-function ksGeser(n) { ksShow("ks-loading"); ksMuat(ksGeserBulan(KS_BULAN, n)); }
+
+/**
+ * @K19: bilah penjelas segmen arsip. Disuntik JS di ATAS #ks-saldo (pola bilah pra-tulis WK-5) -- markup
+ * halaman hidup di template dan template tidak ditempel tiap rilis. Dicabut begitu kembali ke bulan hidup.
+ */
+function ksBilahArsip_() {
+  const lama = document.getElementById("ks-arsip-bilah"); if (lama) lama.remove();
+  if (!ksArsip_()) return;
+  const saldo = document.getElementById("ks-saldo"); if (!saldo || !saldo.parentNode) return;
+  const bar = document.createElement("div"); bar.id = "ks-arsip-bilah"; bar.className = "ks-arsip-bilah";
+  bar.innerHTML = '<b>Buku ARSIP &mdash; ' + ksEsc_(ksNamaBulan(KS_BULAN)) + '.</b> Bulan ' + ksEsc_(ksTgl(KS_DATA.tanggalArsip)) +
+    ' sampai sebelum ' + ksEsc_(ksTgl(KS_DATA.tanggalMulai)) + ' diisi ulang dari rekening koran, dan <b>berdiri sendiri</b>: ' +
+    'saldonya tidak dijumlahkan ke buku berjalan sampai keduanya terbukti bertemu. ' +
+    'Pelunasan klien bulan ini sudah masuk sendiri dari SD Pelunasan &mdash; yang perlu diketik hanya uang keluar dan uang masuk non-invoice.';
+  saldo.parentNode.insertBefore(bar, saldo);
+}
+function ksGeser(n) {
+  const tujuan = ksGeserBulan(KS_BULAN, n);
+  // @K19: mundur berhenti di batas arsip. Bulan sebelum itu selalu kosong (pelunasan pun tidak dibaca), dan layar
+  // kosong tanpa sebab terbaca seperti data hilang.
+  const batas = (KS_DATA && KS_DATA.tanggalArsip) ? KS_DATA.tanggalArsip.slice(0, 7) : "";
+  if (batas && tujuan < batas) { ksPesan_("Buku kas dimulai " + ksTgl(KS_DATA.tanggalArsip) + " " + KS_DATA.tanggalArsip.slice(0, 4) + " -- tidak ada bulan sebelum itu.", true); return; }
+  // Geser yang BERHASIL mengosongkan pesan form. Ditemukan jalan114 G2: menekan '<' di bulan pertama (ditolak, pesan
+  // merah) lalu '>' memindahkan layar ke bulan berikutnya sementara pesan batasnya tetap menempel -- terbaca seperti
+  // bulan baru itu yang bermasalah. Berlaku untuk pesan apa pun: ganti bulan = layar baru, dan konfirmasi "Tercatat"
+  // milik bulan sebelumnya tidak menerangkan apa yang sedang dilihat.
+  ksPesan_("");
+  ksShow("ks-loading"); ksMuat(tujuan);
+}
 
 /**
  * Filter buku kas (@K15, v359): cari bebas, arah, akun, kategori, rentang tanggal,
