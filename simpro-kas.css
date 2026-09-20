@@ -153,3 +153,12 @@
 @media print {
   .db-header, .ks-form-wrap, .bg-canvas, .hero, .ks-bulan button, .ks-saring { display: none !important; }
 }
+
+/* @K17 WK-5 (v362): bilah "angka di bawah dari SEBELUM perubahan terakhir". Disuntik JS sebagai
+   saudara #ks-saldo (bukan anaknya -- ksRenderSaldo_ menulis ulang isi #ks-saldo). */
+.ks-pra-tulis {
+  margin: 0 0 12px; padding: 10px 12px; border-radius: 8px;
+  background: #FCEBE6; color: #8A2E1B; border: 1px solid #E9B9AB;
+  font-size: 13px; line-height: 1.5;
+}
+.ks-pra-tulis .ks-btn { margin-left: 6px; }

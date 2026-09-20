@@ -128,6 +128,32 @@ function loMapPerBulan(arr, tahun){
   return map;
 }
 
+/**
+ * @K17 OM-3/OM-4 (v362, butuh gs >= @389) -- bahan hitung PPh Final per bulan.
+ * Mengembalikan 12 baris { pphTerbit, pphLunas, buktiTerbit, buktiLunas, batal, usaha, lain, tanpaBlok }.
+ * `usaha`/`lain`/`tanpaBlok` = null untuk bulan SEBELUM buku kas dimulai (dan saat buku kas tidak
+ * terbaca): nol berarti "tidak ada pendapatan tunai", null berarti "tidak tercatat" -- dua hal yang
+ * sangat berbeda di laporan yang dibawa ke konsultan pajak, jadi layar mencetak tanda pisah, bukan 0.
+ */
+function loBahanPph_(tahun){
+  const d = LO_DATA_MENTAH || {}, tunai = d.pendapatanTunaiNonInvoice || null;
+  const tunaiTerbaca = !!tunai && !tunai.galat;
+  const mulai = tunaiTerbaca ? String(tunai.mulaiKas || "").slice(0, 7) : "";
+  const hasil = [];
+  for(let b = 1; b <= 12; b++){
+    const kunci = tahun + "-" + (b < 10 ? "0" : "") + b;
+    const ada = tunaiTerbaca && mulai !== "" && kunci >= mulai;
+    hasil.push({ pphTerbit: 0, pphLunas: 0, buktiTerbit: 0, buktiLunas: 0, batal: 0,
+      usaha: ada ? 0 : null, lain: ada ? 0 : null, tanpaBlok: ada ? 0 : null });
+  }
+  const isi = function(arr, fn){ (arr || []).forEach(function(x){ if(String(x.tahun) === String(tahun) && hasil[x.bulan - 1]) fn(hasil[x.bulan - 1], x); }); };
+  isi(d.omsetInvoice, function(h, x){ h.pphTerbit = Number(x.totalPPhDipotong) || 0; h.buktiTerbit = Number(x.jumlahBuktiPotongBelum) || 0; h.batal = Number(x.jumlahDibatalkan) || 0; });
+  isi(d.omsetLunas, function(h, x){ h.pphLunas = Number(x.totalPPhDipotong) || 0; h.buktiLunas = Number(x.jumlahBuktiPotongBelum) || 0; });
+  if(tunaiTerbaca) isi(tunai.perBulan, function(h, x){ if(h.usaha === null) return; h.usaha = Number(x.usaha) || 0; h.lain = Number(x.lain) || 0; h.tanpaBlok = Number(x.tanpaBlok) || 0; });
+  return { baris: hasil, tunaiTerbaca: tunaiTerbaca, mulai: mulai, galat: tunai ? String(tunai.galat || "") : "server belum mengirim datanya (butuh gs @389 ke atas)",
+    serverBaru: (d.omsetInvoice || []).some(function(x){ return x.totalPPhDipotong !== undefined; }) };
+}
+
 function loRenderLaporan(){
   const tahun = document.getElementById("lo-tahun-selector").value;
   if(!tahun){
@@ -167,6 +193,42 @@ function loRenderLaporan(){
       ' baris data produksi tahun ini belum kehitung penuh ke Omset Produksi (resep produk/Harga Satuan PO belum lengkap) -- angka kolom ini kemungkinan <b>understate</b>, jangan dipakai sebagai basis pelaporan tanpa dicek manual dulu.</div>'
     : '';
 
+  // @K17 OM-3/OM-4: tabel KEDUA. Angkanya SENGAJA tidak dijumlahkan ke kolom omset di atas:
+  // 8xx masuk peredaran bruto PP 55 atau tidak adalah keputusan pajak (konsultan), bukan keputusan layar.
+  const bahan = loBahanPph_(tahun);
+  const totalBatal = bahan.baris.reduce(function(s, h){ return s + h.batal; }, 0);
+  const rpAtauPisah = function(v){ return v === null ? '<span class="lo-pisah">&#8212;</span>' : loFormatRupiahPenuh(v); };
+  let tPphT = 0, tPphL = 0, tUsaha = 0, tLain = 0, tTanpaBlok = 0, tBuktiT = 0;
+  const barisPph = bahan.baris.map(function(h, idx){
+    tPphT += h.pphTerbit; tPphL += h.pphLunas; tBuktiT += h.buktiTerbit;
+    tUsaha += h.usaha || 0; tLain += h.lain || 0; tTanpaBlok += h.tanpaBlok || 0;
+    return '<tr>' +
+      '<td>' + LO_BULAN_NAMA[idx] + '</td>' +
+      '<td>' + loFormatRupiahPenuh(h.pphTerbit) + (h.buktiTerbit ? ' <span class="lo-sub">(' + h.buktiTerbit + ' bukti potong belum diterima)</span>' : '') + '</td>' +
+      '<td>' + loFormatRupiahPenuh(h.pphLunas) + (h.buktiLunas ? ' <span class="lo-sub">(' + h.buktiLunas + ' bukti potong belum diterima)</span>' : '') + '</td>' +
+      '<td>' + rpAtauPisah(h.usaha) + '</td>' +
+      '<td>' + rpAtauPisah(h.lain) + '</td>' +
+    '</tr>';
+  }).join("") +
+    '<tr class="lo-total"><td>Total ' + tahun + '</td><td>' + loFormatRupiahPenuh(tPphT) + '</td><td>' + loFormatRupiahPenuh(tPphL) + '</td>' +
+    '<td>' + (bahan.tunaiTerbaca ? loFormatRupiahPenuh(tUsaha) : rpAtauPisah(null)) + '</td><td>' + (bahan.tunaiTerbaca ? loFormatRupiahPenuh(tLain) : rpAtauPisah(null)) + '</td></tr>';
+  const tabelPph = !bahan.serverBaru ? '' :
+    '<h3 class="lo-judul-pph" id="lo-judul-pph" style="font-size:14px;margin:22px 0 8px">Bahan hitung PPh Final (PP 55/2022, 0,5%)</h3>' +
+    '<table class="lo-tabel" id="lo-tabel-pph"><thead><tr>' +
+      '<th>Bulan</th><th>PPh dipotong klien (invoice terbit)</th><th>PPh dipotong klien (invoice lunas)</th><th>Pendapatan tunai non-invoice: usaha</th><th>Pendapatan tunai non-invoice: lain-lain</th>' +
+    '</tr></thead><tbody>' + barisPph + '</tbody></table>' +
+    '<div class="lo-catatan">' +
+      '<b>Catatan:</b> "PPh dipotong klien" = PPh Final yang SUDAH dipotong pemberi kerja dari invoice bulan itu -- ia mengurangi yang harus disetor sendiri (0,5% &#215; omset &#8722; yang sudah dipotong). ' +
+      'Pilih kolom yang sama basisnya dengan kolom omset yang dipakai. Bukti potong yang belum diterima belum bisa dikreditkan. ' +
+      '"Pendapatan tunai non-invoice" = uang masuk di buku kas yang TIDAK lewat invoice (usaha: jasa print marker dll.; lain-lain: jual sisa kain, bunga, dll.). ' +
+      'Angkanya <b>tidak dijumlahkan</b> ke kolom omset di atas -- masuk peredaran bruto atau tidak ditentukan bersama konsultan pajak. ' +
+      (bahan.tunaiTerbaca
+        ? 'Buku kas dimulai ' + bahan.mulai + '; bulan sebelumnya bertanda &#8212; karena memang tidak tercatat, <b>bukan nol</b>.'
+        : '<span id="lo-tunai-galat">Buku kas tidak terbaca (' + loEsc(bahan.galat) + ') -- kolom pendapatan tunai kosong, bukan nol.</span>') +
+    '</div>' +
+    (tTanpaBlok > 0 ? '<div class="lo-catatan" id="lo-tanpa-blok" style="background:#FCF3E3;color:#8A5D1F;margin-top:10px">&#9888; ' + loFormatRupiahPenuh(tTanpaBlok) +
+      ' uang masuk di buku kas ' + tahun + ' memakai kategori yang belum punya kode akun 4xx/8xx -- belum masuk ke kolom mana pun di tabel ini. Lengkapi kolom Kode Akun di SD Kategori Kas.</div>' : '');
+
   const html =
     '<div class="lo-print-header">' +
       '<div style="font-family:\'Archivo\',sans-serif;font-weight:900;font-size:18px">RJD<span style="color:var(--thread)">.</span>APPAREL</div>' +
@@ -177,12 +239,15 @@ function loRenderLaporan(){
     '</tr></thead><tbody>' + baris.join("") + '</tbody></table>' +
     '<div class="lo-catatan">' +
       '<b>Catatan:</b> "Omset Order Masuk" = nilai order pas dibuat (akrual, dari SD Purchase Order). ' +
-      '"Omset Invoice Diterbitkan" = SEMUA invoice yang terbit di bulan itu, apapun status bayarnya. ' +
-      '"Omset Invoice Lunas" = cuma invoice yang sudah Lunas, dikelompokkan berdasarkan TANGGAL INVOICE terbit ' +
-      '(bukan tanggal pelunasan aktual -- sistem belum mencatat itu terpisah). ' +
+      '"Omset Invoice Diterbitkan" = semua invoice yang terbit di bulan itu, apapun status bayarnya -- KECUALI yang dibatalkan' +
+      (totalBatal > 0 ? ' (<span id="lo-batal-info">' + totalBatal + ' invoice batal di ' + tahun + ' tidak dihitung</span>; penggantinya yang dihitung)' : '') + '. ' +
+      // @K17 OM-7 (v362): kalimat lama berbunyi "dikelompokkan berdasarkan TANGGAL INVOICE ... sistem
+      // belum mencatat itu terpisah" -- BASI sejak gs @343, dan tercetak di laporan untuk konsultan.
+      '"Omset Invoice Lunas" = cuma invoice yang sudah Lunas, dikelompokkan berdasarkan TANGGAL PEMBAYARAN TERAKHIR-nya ' +
+      '(tanggal uang benar-benar masuk, bukan tanggal invoice terbit). ' +
       '"Omset Produksi" = nilai kerja tahap perakitan/penjahitan (output &#215; bobot Cycle Time &#215; Harga Satuan PO), dipakai sebagai representasi omset produksi -- BUKAN basis resmi untuk pelaporan pajak, cuma referensi pembanding internal. ' +
       'Pilih kolom yang sesuai metode pembukuan yang didaftarkan untuk SPT Tahunan.' +
-    '</div>' + peringatanProduksi;
+    '</div>' + peringatanProduksi + tabelPph;
 
   document.getElementById("lo-cetak-area").innerHTML = html;
   document.title = "Laporan Omset " + tahun + " -- RJD Apparel";
@@ -205,6 +270,17 @@ function loExportCsv(){
     baris.push([LO_BULAN_NAMA[b-1], o, p, i, l]);
   }
   baris.push(["Total " + tahun, totalOrder, totalProduksi, totalInvoice, totalLunas]);
+
+  // @K17 OM-3/OM-4 (v362): blok kedua, sama dengan tabel kedua di layar. Sel KOSONG = tidak tercatat
+  // (sebelum buku kas dimulai), bukan nol.
+  const bahan = loBahanPph_(tahun);
+  if(bahan.serverBaru){
+    const ks = function(v){ return v === null ? "" : v; };
+    baris.push([]);
+    baris.push(["Bahan hitung PPh Final (PP 55/2022) -- TIDAK dijumlahkan ke omset di atas"]);
+    baris.push(["Bulan","PPh dipotong klien (invoice terbit)","Bukti potong belum diterima (terbit)","PPh dipotong klien (invoice lunas)","Bukti potong belum diterima (lunas)","Pendapatan tunai non-invoice: usaha","Pendapatan tunai non-invoice: lain-lain","Invoice batal (tidak dihitung)"]);
+    bahan.baris.forEach(function(h, idx){ baris.push([LO_BULAN_NAMA[idx], h.pphTerbit, h.buktiTerbit, h.pphLunas, h.buktiLunas, ks(h.usaha), ks(h.lain), h.batal]); });
+  }
 
   const csv = baris.map(function(row){
     return row.map(function(cell){

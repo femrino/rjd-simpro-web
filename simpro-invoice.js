@@ -1412,7 +1412,9 @@ function ivSimpanPembayaran(){
   const btn = document.getElementById("iv-bayar-simpan");
   if(!pilih){ status.textContent = "Pilih tujuan pembayaran dulu."; return; }
 
-  const jumlah = Number(document.getElementById("iv-bayar-jumlah").value) || 0;
+  // @K17 PB-5 (v362): dibulatkan ke SEN di sini juga -- server (gs >= @386) membulatkan sebelum
+  // membandingkan dengan sisa tagihan, dan layar tidak boleh mengirim 0,1+0,2.
+  const jumlah = Math.round((Number(document.getElementById("iv-bayar-jumlah").value) || 0) * 100) / 100;
   const tanggal = document.getElementById("iv-bayar-tanggal").value;
   if(jumlah <= 0){ status.textContent = "Jumlah dibayar harus lebih besar dari nol."; return; }
   if(!tanggal){ status.textContent = "Tanggal bayar wajib diisi."; return; }
@@ -1527,7 +1529,11 @@ function ivMuatRiwayat(){
           '<td class="iv-nomor">' + rjdEscapeHtml_(v.idPelunasan || "-") + '</td>' +
           '<td class="iv-tgl">' + rjdEscapeHtml_(v.tanggal || "-") + '</td>' +
           '<td>' + tujuan + '</td>' +
-          '<td class="num' + (v.jumlah < 0 ? ' iv-negatif' : '') + '">' + formatRupiah(v.jumlah) + '</td>' +
+          // @K17 PB-8 (v362, gs >= @389): potongan (biaya transfer) ikut tampil. Dulu Rp 9.947.500
+          // untuk tagihan Rp 9.950.000 tampil tanpa penjelasan, dan invoice-nya "Lunas".
+          '<td class="num' + (v.jumlah < 0 ? ' iv-negatif' : '') + '">' + formatRupiah(v.jumlah) +
+            (Number(v.potongan) ? '<div class="iv-sub iv-riw-potongan">' + (Number(v.potongan) < 0 ? '&#8722; ' : '+ ') + 'potongan ' + formatRupiah(Math.abs(Number(v.potongan))) +
+              (v.jenisPotongan ? ' (' + rjdEscapeHtml_(v.jenisPotongan) + ')' : '') + '</div>' : '') + '</td>' +
           '<td>' + rjdEscapeHtml_(v.metode || "-") +
           (v.noReferensi ? '<div class="iv-sub">' + rjdEscapeHtml_(v.noReferensi) + '</div>' : '') +
           (v.pembalik ? '<div class="iv-sub">' + rjdEscapeHtml_(v.catatan || "pembalik") + '</div>' : '') + '</td>' +
@@ -1559,7 +1565,10 @@ function ivHapusPembayaran(id){
     "Baris PEMBALIK bernilai negatif akan dicatat; baris aslinya tetap ada sebagai jejak. " +
     "Total Dibayar akan TURUN sebesar jumlah ini, dan status invoice terkait bisa " +
     "berubah dari Lunas kembali jadi belum lunas.\n\nLakukan hanya untuk memperbaiki salah input.")) return;
-  const alasan = window.prompt("Alasan koreksi (dicatat di baris pembalik):", "salah input") || "";
+  const alasanMentah = window.prompt("Alasan koreksi (wajib, min. 5 huruf, dicatat di baris pembalik):", "salah input");
+  if(alasanMentah === null) return;   // @K17 RA-7 (v362): Batal di kotak alasan = batal, bukan "lanjut tanpa alasan"
+  const alasan = String(alasanMentah).trim();
+  if(alasan.length < 5){ window.alert("Alasan koreksi minimal 5 huruf -- koreksi dibatalkan, tidak ada yang berubah."); return; }
 
   ivKirimTulis_({ action: "hapusPembayaran", idPelunasan: id, alasan: alasan })   // v308 (KF-3)
   .then(function(d){

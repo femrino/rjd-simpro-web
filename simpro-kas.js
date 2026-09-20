@@ -176,20 +176,51 @@ function ksMuatPertama_() {
   return ksMuat(bulanDiminta);
 }
 
-function ksMuat(bulan) {
+/* @K17 WK-5 (v362) -- DUA cacat di jalur baca-ulang SESUDAH tulis:
+   (1) dua transaksi berurutan cepat = dua getKas berlomba, dan jawaban PERTAMA bisa datang
+       TERAKHIR lalu menimpa KS_DATA dengan keadaan yang lebih tua. Tiap permintaan diberi nomor
+       urut; jawaban yang bukan milik permintaan terbaru DIBUANG (sukses maupun gagal).
+   (2) tulis sukses lalu getKas gagal 3x: kartu saldo, arus kas dan rekonsiliasi tetap memajang
+       angka SEBELUM transaksi tanpa tanda apa pun (bilah snapshot tidak dipasang karena
+       KS_SNAP_WAKTU sudah null sejak pemuatan segar pertama). KS_PRA_TULIS menyala begitu ada
+       baca-ulang sesudah tulis dan baru padam oleh pemuatan yang BERHASIL -- bulan mana pun,
+       karena jawaban segar mana pun sudah memuat transaksinya.
+   Keduanya `let` tingkat atas: BUKAN properti window (lihat PF-1b), dibaca dengan nama polos. */
+let KS_MUAT_URUT = 0;
+let KS_PRA_TULIS = false;
+
+function ksBilahPraTulis_(pasang) {
+  let bar = document.getElementById("ks-pra-tulis");
+  if (!pasang) { if (bar) bar.remove(); return; }
+  // Di LUAR #ks-saldo: ksRenderSaldo_ menulis ulang isinya, bilah ini tidak boleh ikut hilang.
+  const saldo = document.getElementById("ks-saldo"); if (!saldo || !saldo.parentNode) return;
+  if (!bar) { bar = document.createElement("div"); bar.id = "ks-pra-tulis"; bar.className = "ks-pra-tulis"; saldo.parentNode.insertBefore(bar, saldo); }
+  // Kalimatnya sengaja TIDAK berkata "sudah tercatat": jalur jawaban-hilang juga lewat sini, dan di
+  // sana belum diketahui apakah servernya menulis. Yang pasti cuma: angka di bawah belum disegarkan.
+  bar.innerHTML = '<b>Daftar gagal dimuat ulang sesudah perubahan terakhir.</b> Saldo, arus kas dan rekonsiliasi di bawah ini angka dari SEBELUM-nya -- jangan mencatat ulang sebelum memuat ulang. ' +
+    '<button id="ks-pra-tulis-muat" class="ks-btn ks-btn-kecil-netral" type="button" onclick="ksMuat(KS_BULAN, { sesudahTulis: true })">Muat ulang</button>';
+}
+
+function ksMuat(bulan, opsi) {
+  const urut = ++KS_MUAT_URUT;
+  if (opsi && opsi.sesudahTulis) KS_PRA_TULIS = true;
   // v229r2: `null` EKSPLISIT = jangan pakai KS_BULAN, biar server memilih bulan
   // berjalan. Dibutuhkan karena snapshot sudah mengisi KS_BULAN dengan bulan
   // terakhir yang dilihat, dan itu belum tentu bulan sekarang. Pemanggil lama
   // (ksMuat(), ksMuat(KS_BULAN), ksMuat(ksGeserBulan(...))) tidak berubah.
   return ksKirim_("getKas", { bulan: (bulan === null ? undefined : (bulan || KS_BULAN || undefined)) })
     .then(function (d) {
+      if (urut !== KS_MUAT_URUT) return;   // @K17 WK-5: jawaban permintaan yang sudah disusul
       KS_DATA = d; KS_BULAN = d.bulan; ksShow("ks-isi"); ksRender();
       KS_SUDAH_SEGAR = true; KS_SNAP_WAKTU = null;
+      KS_PRA_TULIS = false; ksBilahPraTulis_(false);
       if (typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("kas_terakhir", d);
       if (typeof rjdSnapshotBarHapus_ === "function") rjdSnapshotBarHapus_("ks-saldo");
     })
     .catch(function (e) {
+      if (urut !== KS_MUAT_URUT) return;   // @K17 WK-5
       ksShow("ks-isi");
+      if (KS_PRA_TULIS) ksBilahPraTulis_(true);
       document.getElementById("ks-buku").innerHTML = '<div class="ks-kartu"><p class="ks-galat">' + ksEsc_(e.message || "Gagal memuat.") + '</p></div>';
       // v229: kalau yang tampil di atas adalah SALDO TERSIMPAN, katakan begitu.
       // ksRender menulis ulang #ks-saldo, jadi bilahnya dipasang SESUDAH ini.
@@ -253,7 +284,11 @@ function ksFormArahBerubah() {
     // ketik yang WAJAR. Tanpa pembanding kedua, urutannya jadi milik urutan baris
     // sheet -- persis hal yang perubahan ini hapus.
     const daftar = (KS_DATA.kategori || []).filter(function (k) {
-      return k.arah === arah && k.kategori !== "Pelunasan klien" && k.aktif !== false;
+      // @K17 OM-8 (v362, gs >= @389): server MENANDAI kategori virtual (`virtual: true`); dulu cuma
+      // "Pelunasan klien" yang disaring lewat nama hafalan, jadi "Uang muka order (DP)" (@382)
+      // ditawarkan lalu ditolak server. Nama lama dipertahankan sebagai lapis kedua untuk server
+      // yang belum mengirim medannya.
+      return k.arah === arah && k.virtual !== true && k.kategori !== "Pelunasan klien" && k.aktif !== false;
     }).sort(function (a, b) {
       return (Number(a.urutan) || 0) - (Number(b.urutan) || 0) ||
         String(a.kategori).localeCompare(String(b.kategori), "id");
@@ -314,13 +349,22 @@ function ksKecilkanFoto_(f) {
   return new Promise(function (ok, gagal) {
     const img = new Image(); const url = URL.createObjectURL(f);
     img.onload = function () {
-      const maks = 1280; let w = img.width, h = img.height;
-      if (w > maks || h > maks) { const r = Math.min(maks / w, maks / h); w = Math.round(w * r); h = Math.round(h * r); }
-      const c = document.createElement("canvas"); c.width = w; c.height = h;
-      c.getContext("2d").drawImage(img, 0, 0, w, h);
-      const dataUrl = c.toDataURL("image/jpeg", 0.75);
-      URL.revokeObjectURL(url);
-      ok({ base64: dataUrl.split(",")[1], mime: "image/jpeg", nama: f.name, kb: Math.round(dataUrl.length * 0.75 / 1024) });
+      // @K17 WK-D1 (v362): galat di dalam onload TIDAK menolak promise-nya -- kanvas yang gagal
+      // (gambar raksasa, memori HP habis) dulu berarti "Memperkecil foto..." selamanya.
+      try {
+        const maks = 1280; let w = img.width, h = img.height;
+        if (w > maks || h > maks) { const r = Math.min(maks / w, maks / h); w = Math.round(w * r); h = Math.round(h * r); }
+        const c = document.createElement("canvas"); c.width = w; c.height = h;
+        c.getContext("2d").drawImage(img, 0, 0, w, h);
+        const dataUrl = c.toDataURL("image/jpeg", 0.75);
+        const base64 = dataUrl.split(",")[1];
+        if (!base64) throw new Error("kanvas kosong");
+        URL.revokeObjectURL(url);
+        ok({ base64: base64, mime: "image/jpeg", nama: f.name, kb: Math.round(dataUrl.length * 0.75 / 1024) });
+      } catch (eK) {
+        URL.revokeObjectURL(url);
+        gagal(new Error("Foto tidak bisa diperkecil di perangkat ini -- coba foto lain atau ukuran lebih kecil."));
+      }
     };
     img.onerror = function () { URL.revokeObjectURL(url); gagal(new Error("File bukan gambar -- lewati atau pilih foto.")); };
     img.src = url;
@@ -352,6 +396,10 @@ function ksPesan_(teks, galat) {
   const el = document.getElementById("ks-form-pesan"); if (!el) return;
   el.textContent = teks || ""; el.classList.toggle("ks-form-galat", !!galat); el.classList.toggle("hidden", !teks);
 }
+/** @K17 WK-8 (v362): kategori dinonaktifkan di sheet sementara tab ini masih terbuka -- server
+ *  menolak, tapi dropdown tetap menawarkannya sampai halaman dimuat ulang. Galat keluarga ini =
+ *  daftar kategori di tab BASI, jadi dimuat ulang (ksRenderForm_ tidak mengosongkan isian). */
+function ksGalatKategori_(e) { return /nonaktif|tidak ada untuk arah/i.test(String((e && e.message) || "")); }
 function ksSibuk_(v) { KS_SIBUK = v; const b = document.getElementById("ks-btn-simpan"); if (b) b.disabled = v; }
 
 function ksSimpan() {
@@ -379,18 +427,23 @@ function ksSimpan() {
   ksSibuk_(true); ksPesan_("Menyimpan...");
   ksKirim_("simpanKas", { data: data })
     .then(function (res) {
-      ksSibuk_(false);
-      ksPesan_(res.kembar ? "Transaksi yang sama persis baru saja dicatat -- tidak digandakan." : "Tercatat: " + arah + " Rp " + ksRp(data.jumlah) + (data.kategori ? " (" + data.kategori + ")" : "") + (res.bukti ? " · bukti tersimpan" : ""));
+      // @K17 WK-9: foto DIKIRIM tapi jawaban tidak membawa tautannya. gs >= @387 menolak sebelum
+      // menulis, jadi ini lapis kedua -- tapi dulu bedanya cuma tiga kata yang hilang dari pesan sukses.
+      const fotoHilang = !!data.buktiBase64 && !res.bukti && !res.kembar;
+      ksPesan_(fotoHilang ? "Tercatat, TAPI foto bukti GAGAL tersimpan -- unggah ulang lewat tombol pensil di barisnya."
+        : (res.kembar ? "Transaksi yang sama persis baru saja dicatat -- tidak digandakan." : "Tercatat: " + arah + " Rp " + ksRp(data.jumlah) + (data.kategori ? " (" + data.kategori + ")" : "") + (res.bukti ? " · bukti tersimpan" : "")), fotoHilang);
       ["ks-in-jumlah", "ks-in-ref", "ks-in-pihak", "ks-in-ket"].forEach(function (id) { document.getElementById(id).value = ""; });
       const fb = document.getElementById("ks-in-bukti"); if (fb) fb.value = ""; KS_BUKTI = null; const bi = document.getElementById("ks-bukti-info"); if (bi) bi.textContent = "";
       const bulanTrx = data.tanggal.slice(0, 7);
-      ksMuat(bulanTrx);
+      // @K17 WK-5: tombol Simpan baru hidup SESUDAH baca-ulang selesai (ksMuat tidak pernah menolak).
+      return ksMuat(bulanTrx, { sesudahTulis: true }).then(function () { ksSibuk_(false); });
     })
     .catch(function (e) {
-      ksSibuk_(false);
       const jaringan = e instanceof TypeError;
       ksPesan_(jaringan ? "Jawaban server tidak sampai. Daftar dimuat ulang -- periksa apakah transaksinya sudah ada sebelum mencatat lagi." : e.message, true);
-      if (jaringan) ksMuat(data.tanggal.slice(0, 7));
+      if (jaringan) { ksMuat(data.tanggal.slice(0, 7), { sesudahTulis: true }).then(function () { ksSibuk_(false); }); return; }
+      ksSibuk_(false);
+      if (ksGalatKategori_(e)) ksMuat(KS_BULAN);   // @K17 WK-8
     });
 }
 
@@ -437,8 +490,24 @@ function ksUbahCatatanSimpan(id) {
   const btn = document.getElementById("ks-ub-simpan"); if (btn) btn.disabled = true;
   if (pesan) pesan.textContent = "Menyimpan...";
   ksKirim_("ubahCatatanKas", { id: id, perubahan: perubahan })
-    .then(function () { ksMuat(KS_BULAN); })
-    .catch(function (e) { if (btn) btn.disabled = false; if (pesan) pesan.textContent = e.message; });
+    .then(function (res) {
+      const fotoHilang = !!perubahan.buktiBase64 && !(res && res.bukti);   // @K17 WK-9
+      KS_UBAH_FOTO = null;
+      return ksMuat(KS_BULAN, { sesudahTulis: true }).then(function () {
+        if (fotoHilang) window.alert("Catatan tersimpan, TAPI foto TIDAK tersimpan -- coba unggah lagi lewat pensil.");
+      });
+    })
+    .catch(function (e) {
+      // @K17 WK-4 (v362): jawaban hilang (TypeError) = server MUNGKIN sudah menulis. Dulu tombolnya
+      // dinyalakan lagi dengan pesan mentah "Failed to fetch"; klik ulang dengan foto = berkas Drive
+      // kedua + baris Log Bukti kedua. Sekarang sama dengan ksSimpan: beri tahu, lalu BACA ULANG.
+      // Tombolnya sengaja TIDAK dihidupkan -- panelnya hilang bersama render ulang tabel.
+      if (e instanceof TypeError) {
+        window.alert("Jawaban server tidak sampai. Daftar dimuat ulang -- periksa barisnya dulu sebelum menyimpan lagi.");
+        ksMuat(KS_BULAN, { sesudahTulis: true }); return;
+      }
+      if (btn) btn.disabled = false; if (pesan) pesan.textContent = e.message;
+    });
 }
 
 /**
@@ -449,6 +518,9 @@ function ksUbahCatatanSimpan(id) {
  * nilai yang pasti ditolak.
  */
 function ksKoreksi(btn) {
+  // @K17 WK-D4 (v362): selama kirim berjalan form TIDAK boleh ditimpa -- `.then` koreksi yang
+  // sedang berjalan memanggil ksBatalKoreksi() dan akan menghapus keadaan koreksi yang baru.
+  if (KS_SIBUK) return;
   const id = btn.getAttribute("data-id");
   const t = (KS_DATA.transaksi || []).filter(function (x) { return x.id === id; })[0];
   if (!t) return;
@@ -460,6 +532,10 @@ function ksKoreksi(btn) {
   isi("ks-in-kategori", t.kategori); isi("ks-in-jumlah", ksRpIsian_(t.jumlah));   // @K16: koma desimal
   isi("ks-in-ref", t.ref); isi("ks-in-pihak", t.pihak); isi("ks-in-ket", t.keterangan);
   ksPanduanKategori_();
+  // @K17 WK-8: nilai yang dipasang ke <select> yang tidak memuatnya hilang DIAM-DIAM (select
+  // kosong terbaca "belum diisi"). Kategori lama yang sudah nonaktif disebut namanya.
+  const selKat = document.getElementById("ks-in-kategori");
+  const katHilang = !!t.kategori && (t.arah === "Masuk" || t.arah === "Keluar") && !!selKat && selKat.value !== t.kategori;
   KS_KOREKSI = { id: id, bukti: t.bukti || "", tanggal: t.tanggal };
   let bar = document.getElementById("ks-koreksi-bar");
   if (!bar) {
@@ -470,6 +546,7 @@ function ksKoreksi(btn) {
   }
   bar.innerHTML = 'Mengoreksi <b class="ks-mono">' + ksEsc_(id) + '</b> -- ubah yang salah, lalu Simpan koreksi. Baris lama dibalik otomatis, tidak dihapus.' +
     (KS_DATA.tertutup ? " Bulan ini sudah ditutup: koreksinya bertanggal hari ini." : "") +
+    (katHilang ? ' <b id="ks-koreksi-kat-hilang">Kategori lama "' + ksEsc_(t.kategori) + '" sudah tidak aktif -- pilih penggantinya.</b>' : "") +
     ' <button id="ks-koreksi-batal" class="ks-btn ks-btn-kecil-netral" type="button" onclick="ksBatalKoreksi()">Batalkan koreksi</button>';
   const simpan = document.getElementById("ks-btn-simpan"); if (simpan) simpan.textContent = "Simpan koreksi";
   const wrapEl = document.getElementById("ks-form-wrap"); if (wrapEl && wrapEl.scrollIntoView) wrapEl.scrollIntoView({ block: "start" });
@@ -494,17 +571,17 @@ function ksKirimKoreksi_(data) {
   ksSibuk_(true); ksPesan_("Mengoreksi...");
   ksKirim_("koreksiKas", { id: asal, data: data, alasan: String(alasan).trim() })
     .then(function (res) {
-      ksSibuk_(false);
       ksBatalKoreksi();
       ksPesan_("Dikoreksi: " + asal + " -> " + res.id + " (pembalik " + res.pembalik + ")");
       const fb = document.getElementById("ks-in-bukti"); if (fb) fb.value = ""; KS_BUKTI = null;
-      ksMuat(bulanTrx);
+      return ksMuat(bulanTrx, { sesudahTulis: true }).then(function () { ksSibuk_(false); });   // @K17 WK-5
     })
     .catch(function (e) {
-      ksSibuk_(false);
       const jaringan = e instanceof TypeError;
       ksPesan_(jaringan ? "Jawaban server tidak sampai. Daftar dimuat ulang -- periksa apakah koreksinya sudah tercatat sebelum mengulang." : e.message, true);
-      if (jaringan) ksMuat(bulanTrx);
+      if (jaringan) { ksMuat(bulanTrx, { sesudahTulis: true }).then(function () { ksSibuk_(false); }); return; }
+      ksSibuk_(false);
+      if (ksGalatKategori_(e)) ksMuat(KS_BULAN);   // @K17 WK-8
     });
 }
 
@@ -583,7 +660,14 @@ function ksSaringCocok_(t) {
     // Angka (boleh dengan titik/koma ribuan) juga dicocokkan ke jumlah, digit lawan digit --
     // "655.500" dan "655500" sama-sama menemukan Rp 655.500. Teks tetap ikut dicari, supaya
     // ref yang kebetulan angka saja tidak hilang.
-    if (!kena && /^[\d.,]+$/.test(q)) kena = ksRp(t.jumlah).replace(/[^0-9]/g, "").indexOf(q.replace(/[.,]/g, "")) !== -1;   // @K16: "12,34" menemukan Rp 12,34
+    // @K17 WK-7 (v362): ketikan BERKOMA = orang menyebut jumlah sampai sen-nya, jadi dicocokkan
+    // PERSIS dalam sen lewat parser yang sama dengan form. Dulu digit-lawan-digit: "12,34" ikut
+    // menemukan Rp 1.212,34 / 12.340 / 1.234, dan "1234,00" TIDAK menemukan Rp 1.234 (ksRp tidak
+    // mencetak ",00"). Tanpa koma tetap substring -- "655" menemukan 655.500 memang berguna.
+    if (!kena && /^[\d.,]+$/.test(q)) {
+      if (q.indexOf(",") !== -1) { const n = ksParseRp_(q); kena = !isNaN(n) && Math.round(n * 100) === Math.round(Math.abs(Number(t.jumlah) || 0) * 100); }
+      else kena = ksRp(t.jumlah).replace(/[^0-9]/g, "").indexOf(q.replace(/[.,]/g, "")) !== -1;
+    }
     if (!kena) return false;
   }
   return true;
@@ -679,8 +763,16 @@ function ksBatalkan(btn) {
   if (alasan === null) return;
   btn.disabled = true;
   ksKirim_("batalkanKas", { id: id, alasan: alasan })
-    .then(function () { ksMuat(KS_BULAN); })
-    .catch(function (e) { btn.disabled = false; window.alert(e.message); });
+    .then(function () { return ksMuat(KS_BULAN, { sesudahTulis: true }); })
+    .catch(function (e) {
+      // @K17 WK-4 (v362): lihat ksUbahCatatanSimpan. Dulu klik ulang ditolak server ("sudah
+      // dibatalkan") sementara tabel masih menampilkan barisnya aktif.
+      if (e instanceof TypeError) {
+        window.alert("Jawaban server tidak sampai. Daftar dimuat ulang -- periksa apakah " + id + " sudah dibatalkan sebelum mengulang.");
+        ksMuat(KS_BULAN, { sesudahTulis: true }); return;
+      }
+      btn.disabled = false; window.alert(e.message);
+    });
 }
 
 function ksRenderArus_() {
@@ -778,11 +870,26 @@ function ksRekonSimpan() {
   if (!isi.length) { window.alert("Tidak ada saldo baru/berubah untuk disimpan."); return; }
   pesan.classList.remove("hidden"); pesan.classList.remove("ks-form-galat"); pesan.textContent = "Menyimpan...";
   ksTombolRekon_(true);   // v308 (KF-6): klik ganda = baris rekonsiliasi kembar
-  let rantai = Promise.resolve();
+  let rantai = Promise.resolve(), terkirim = 0;
   isi.forEach(function (i) {
-    rantai = rantai.then(function () { return ksKirim_("rekonsiliasiKas", { data: { bulan: KS_BULAN, akun: i.getAttribute("data-akun"), saldoBank: ksParseRp_(i.value) } }); });
+    rantai = rantai.then(function () { return ksKirim_("rekonsiliasiKas", { data: { bulan: KS_BULAN, akun: i.getAttribute("data-akun"), saldoBank: ksParseRp_(i.value) } }); })
+      .then(function () { terkirim++; });
   });
-  rantai.then(function () { ksMuat(KS_BULAN); }).catch(function (e) { pesan.textContent = e.message; pesan.classList.add("ks-form-galat"); ksTombolRekon_(false); });
+  rantai.then(function () { return ksMuat(KS_BULAN, { sesudahTulis: true }); }).catch(function (e) {
+    // @K17 WK-D6 (v362): akun ke-1 tertulis, ke-2 gagal -> dulu TANPA baca-ulang, jadi data-awal
+    // akun ke-1 basi dan Simpan berikutnya mengirimnya LAGI (baris rekonsiliasi kembar). Baca
+    // ulang begitu ada yang sudah tertulis ATAU jawabannya hilang. Kalau belum ada satu pun yang
+    // tertulis dan server menolak dengan alasan, ketikan di kotak lain JANGAN dibuang.
+    const jaringan = e instanceof TypeError;
+    const teks = jaringan ? "Jawaban server tidak sampai -- tabel dimuat ulang, periksa akun mana yang sudah tersimpan sebelum menyimpan lagi."
+      : (terkirim ? terkirim + " akun tersimpan, lalu: " : "") + e.message;
+    const tampil = function () {
+      const p = document.getElementById("ks-rekon-pesan");
+      if (p) { p.classList.remove("hidden"); p.classList.add("ks-form-galat"); p.textContent = teks; }
+      ksTombolRekon_(false);   // tombol hasil render ulang tidak punya penanda sibuk -> tidak tersentuh
+    };
+    if (terkirim || jaringan) ksMuat(KS_BULAN, { sesudahTulis: true }).then(tampil); else tampil();
+  });
 }
 /** v308 (KF-6): matikan/hidupkan tombol rekonsiliasi & tutup bulan selama permintaan berjalan. */
 function ksTombolRekon_(sibuk) {
