@@ -61,6 +61,17 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 .sp-tabelwrap { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: 12px;
   background: var(--white); margin-bottom: 16px; }
 .sp-tabel { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+/* @PF-19 (20 Sep 2026) -- word-break: normal, pola yang sama dengan `.ks-tabel` (v364/PF-18 keluarga).
+   Bundel widget Blogger memberi `body { word-break: break-word }`, yang menurunkan lebar MINIMUM sel
+   tabel sampai satu huruf. Akibatnya tabel yang sesak tidak pernah MELUBER -- ia memeras kolomnya dan
+   memecah kata di tengah, sehingga `overflow-x: auto` pada pembungkusnya (yang SUDAH ADA di berkas ini)
+   tidak pernah aktif. Terukur di 900 px: nama kain "Chantily" pecah jadi "Chantil/y" di kolom selebar 69 px (tabel 808 px di pembungkus 810 px -- muat, jadi tidak menggulir).
+   Dengan `word-break: normal`, lebar minimum kembali = kata terpanjang, tabel melebar, dan penggeser
+   yang sudah disediakan itu bekerja. `overflow-wrap` dibiarkan break-word supaya satu kata raksasa
+   tetap tidak meluberkan halaman. Ditemukan sapuan AUDIT bersama atas DATA NYATA fixture harness
+   (UJI_KATA_PECAH=1), bukan mata -- markup template saja tidak memuat nama kain/artikel. */
+.sp-tabel th, .sp-tabel td { word-break: normal; }
+
 .sp-tabel th { background: var(--cream); border-bottom: 1.5px solid var(--line); padding: 9px 11px;
   text-align: left; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft);
   font-weight: 700; white-space: nowrap; }

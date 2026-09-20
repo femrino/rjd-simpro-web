@@ -107,6 +107,17 @@
 }
 .sop-tabelwrap { overflow-x: auto; }
 .sop-tabel { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+/* @PF-19 (20 Sep 2026) -- word-break: normal, pola yang sama dengan `.ks-tabel` (v364/PF-18 keluarga).
+   Bundel widget Blogger memberi `body { word-break: break-word }`, yang menurunkan lebar MINIMUM sel
+   tabel sampai satu huruf. Akibatnya tabel yang sesak tidak pernah MELUBER -- ia memeras kolomnya dan
+   memecah kata di tengah, sehingga `overflow-x: auto` pada pembungkusnya (yang SUDAH ADA di berkas ini)
+   tidak pernah aktif. Terukur di 900 px: "BAJU" pecah jadi "BAJ/U" di sel tabel langkah SOP.
+   Dengan `word-break: normal`, lebar minimum kembali = kata terpanjang, tabel melebar, dan penggeser
+   yang sudah disediakan itu bekerja. `overflow-wrap` dibiarkan break-word supaya satu kata raksasa
+   tetap tidak meluberkan halaman. Ditemukan sapuan AUDIT bersama atas DATA NYATA fixture harness
+   (UJI_KATA_PECAH=1), bukan mata -- markup template saja tidak memuat nama kain/artikel. */
+.sop-tabel th, .sop-tabel td { word-break: normal; }
+
 .sop-tabel th {
   text-align: left; padding: 8px 10px; background: var(--paper, #FAF7F2);
   font-size: 11px; letter-spacing: .05em; text-transform: uppercase;
