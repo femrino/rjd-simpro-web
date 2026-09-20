@@ -463,6 +463,7 @@ function ksUbahCatatan(btn) {
   const t = (KS_DATA.transaksi || []).filter(function (x) { return x.id === id; })[0];
   if (!t) return;
   const lama = document.querySelector("tr.ks-r-ubah"); if (lama) lama.remove();
+  ksAksiTutup_();   // v364
   KS_UBAH_FOTO = null;   // foto milik panel sebelumnya tidak boleh ikut terkirim
   const tr = btn.closest("tr"); if (!tr) return;
   const kolom = tr.children.length;
@@ -526,6 +527,7 @@ function ksKoreksi(btn) {
   // @K17 WK-D4 (v362): selama kirim berjalan form TIDAK boleh ditimpa -- `.then` koreksi yang
   // sedang berjalan memanggil ksBatalKoreksi() dan akan menghapus keadaan koreksi yang baru.
   if (KS_SIBUK) return;
+  ksAksiTutup_();   // v364
   const id = btn.getAttribute("data-id");
   const t = (KS_DATA.transaksi || []).filter(function (x) { return x.id === id; })[0];
   if (!t) return;
@@ -743,15 +745,22 @@ function ksRenderBuku_() {
       '<td><span class="ks-arah ks-arah-' + t.arah.replace(/\s/g, "").toLowerCase() + '">' + arahTeks + '</span>' + (t.sumber === "pelunasan" ? ' <span class="ks-otomatis" title="dari SD Pelunasan">auto</span>' : '') + '</td>' +
       '<td>' + ksEsc_(ksNamaAkun(t.akun)) + '</td>' +
       '<td>' + ksEsc_(t.kategori) + (t.pihak ? '<div class="ks-sub">' + ksEsc_(t.pihak) + '</div>' : '') + (t.keterangan ? '<div class="ks-sub">' + ksEsc_(t.keterangan) + '</div>' : '') + '</td>' +
-      '<td class="ks-mono">' + ksEsc_(t.ref) + '</td>' +
+      '<td class="ks-mono ks-td-ref">' + ksEsc_(t.ref) + '</td>' +
       '<td class="ks-td-rp ' + (t.arah === "Masuk" || t.arah === "Saldo Awal" ? "ks-plus" : (t.arah === "Keluar" ? "ks-min" : "")) + '">' + tanda + ksRp(t.jumlah) + '</td>' +
-      '<td class="ks-td-aksi">' + (t.bukti ? '<a href="' + ksEsc_(t.bukti) + '" target="_blank" rel="noopener" title="Lihat bukti">📎</a>' : '') +
+      // v364: tombol aksi dibungkus .ks-aksi-isi. Di layar <= 1100 px bungkusnya tersembunyi di balik tombol
+      // titik-tiga dan, saat dibuka, MENIMPA sisi kanan barisnya sendiri (position:absolute di dalam td) --
+      // bukan menu melayang (terpotong overflow-x:auto kartu) dan bukan baris baru (tabel melompat). Di desktop
+      // tampil langsung seperti dulu. Tombolnya TETAP di DOM & di sel yang sama: hak akses per peran tidak berubah.
+      // Lampiran bukti dan chip 'koreksi dari'/'dibatalkan' di LUAR bungkus -- itu informasi, bukan tindakan.
+      '<td class="ks-td-aksi">' + (t.bukti ? '<a class="ks-bukti-link" href="' + ksEsc_(t.bukti) + '" target="_blank" rel="noopener" title="Lihat bukti" aria-label="Lihat foto bukti">📎</a>' : '') +
+        (!batal && !pembalik && t.sumber === "kas" ? ' <button class="ks-aksi-buka" type="button" onclick="ksAksiBuka(this)" aria-expanded="false" aria-label="Tindakan untuk ' + ksEsc_(t.id) + '"><span aria-hidden="true">&#8943;</span></button><span class="ks-aksi-isi">' : '') +
                 // @K14 lapis A: pensil untuk SIAPA PUN yang boleh menyimpan kas -- bukan hanya finance.
         // Kelasnya sendiri (bukan .ks-btn-kecil) supaya hitungan tombol Batalkan di jalan21 tetap benar.
         (!batal && !pembalik && t.sumber === "kas" ? ' <button class="ks-btn-ubah" data-id="' + ksEsc_(t.id) + '" onclick="ksUbahCatatan(this)" type="button" title="Ubah keterangan / pihak / ref" aria-label="Ubah catatan">&#9998;</button>' : '') +
         // @K14 lapis B: Koreksi hanya finance, sama dengan Batalkan -- ia memindahkan uang.
         (KS_DATA.bisaFinance && !batal && !pembalik && t.sumber === "kas" ? ' <button class="ks-btn-koreksi" data-id="' + ksEsc_(t.id) + '" onclick="ksKoreksi(this)" type="button">Koreksi</button>' : '') +
         (KS_DATA.bisaFinance && !batal && !pembalik && t.sumber === "kas" ? ' <button class="ks-btn-kecil" data-id="' + ksEsc_(t.id) + '" onclick="ksBatalkan(this)" type="button">Batalkan</button>' : '') +
+        (!batal && !pembalik && t.sumber === "kas" ? ' <button class="ks-aksi-tutup" type="button" onclick="ksAksiBuka(this)" aria-label="Tutup tindakan"><span aria-hidden="true">&#10005;</span></button></span>' : '') +
         // @K14: chip pada BARIS SENDIRI (div), bukan menempel di belakang tombol -- terukur di
         // potret 1400px chip-nya menyentuh tepi tabel. Sel aksi ber-nowrap, div memutus barisnya.
         (t.koreksiDari ? '<div class="ks-sub ks-koreksi-chip">koreksi dari ' + ksEsc_(t.koreksiDari) + '</div>' : '') +
@@ -762,9 +771,26 @@ function ksRenderBuku_() {
     '<tfoot><tr><td colspan="5">' + (aktif ? 'Tersaring <b>' + trx.length + '</b> dari ' + semua.length + ' &middot; ' : '') + 'Masuk <b>Rp ' + ksRp(masuk) + '</b> · Keluar <b>Rp ' + ksRp(keluar) + '</b> · Bersih <b>Rp ' + ksRp(masuk - keluar) + '</b></td><td colspan="2"></td></tr></tfoot></table></div>';
 }
 
+/** v364: buka/tutup bilah tindakan satu baris (layar sempit). Hanya SATU baris terbuka pada satu waktu. */
+function ksAksiBuka(btn) {
+  const tr = btn.closest("tr"); if (!tr) return;
+  const buka = !tr.classList.contains("ks-r-buka");
+  ksAksiTutup_();
+  if (buka) { tr.classList.add("ks-r-buka"); const b = tr.querySelector(".ks-aksi-buka"); if (b) b.setAttribute("aria-expanded", "true"); }
+}
+function ksAksiTutup_() {
+  Array.prototype.forEach.call(document.querySelectorAll("#ks-buku tr.ks-r-buka"), function (tr) {
+    tr.classList.remove("ks-r-buka"); const b = tr.querySelector(".ks-aksi-buka"); if (b) b.setAttribute("aria-expanded", "false");
+  });
+}
+
 function ksBatalkan(btn) {
   const id = btn.getAttribute("data-id");
-  const alasan = window.prompt("Alasan pembatalan (wajib, akan tercatat):");
+  // v364: kotak alasan MENYEBUT barisnya. Di layar sempit bilah tindakan menimpa kolom Jumlah baris itu, jadi
+  // tanpa ini orang membatalkan tanpa melihat angkanya; di desktop pun ini yang membedakan dua baris bertetangga.
+  const tB = ((KS_DATA && KS_DATA.transaksi) || []).filter(function (x) { return x.id === id; })[0];
+  const sebut = tB ? tB.arah + " Rp " + ksRp(tB.jumlah) + (tB.kategori ? " -- " + tB.kategori : "") + ", " + ksTgl(tB.tanggal) + " (" + id + ")" : id;
+  const alasan = window.prompt("Batalkan " + sebut + "?" + String.fromCharCode(10, 10) + "Alasan pembatalan (wajib, akan tercatat):");
   if (alasan === null) return;
   btn.disabled = true;
   ksKirim_("batalkanKas", { id: id, alasan: alasan })

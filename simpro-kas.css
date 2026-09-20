@@ -177,3 +177,42 @@
 .ks-jt-asumsi { margin-top: 12px; font-size: 11.5px; color: var(--ink-soft, #5F6B7A); line-height: 1.55; }
 .ks-jt-asumsi ul { margin: 4px 0 0 18px; padding: 0; }
 @media print { #ks-jurnal .ks-aksi { display: none; } }
+
+/* ============================================================
+ * v364 -- kata TERPECAH di tengah ("Kelua/r", "Opera/sional", "INV/-26/09./103") & tombol aksi
+ * ============================================================
+ * SEBABNYA BUKAN DI REPO INI: bundel CSS bawaan Blogger (css_bundle_v2.css, dimuat tiap halaman SEBELUM CSS kita)
+ * berisi `body{overflow-wrap:break-word;word-break:break-word}`. `word-break:break-word` menurunkan lebar
+ * MINIMUM sel tabel sampai satu huruf, jadi tabel yang sesak tidak menggulir -- ia memecah kata di huruf mana pun.
+ * Fixture uji tidak pernah memuat bundel itu, jadi tidak ada harness yang bisa melihatnya (uji/ukur-buku-kas.py
+ * dan jalan113 kini menirunya). `word-break:normal` mengembalikan lebar minimum = kata terpanjang; `overflow-wrap`
+ * dibiarkan break-word supaya SATU kata raksasa tetap tidak meluberkan halaman.
+ */
+.ks-tabel th, .ks-tabel td { word-break: normal; }
+/* NISAN (v364, sebelum rilis): dua aturan nowrap (.ks-td-ref, .ks-td-tgl) sempat ditulis di sini lalu DIHAPUS.
+   Sabotase yang mencabut .ks-td-ref tetap HIJAU di tujuh lebar; diukur sampai 440 px, "INV-2608.097" dan
+   "260725/Denara" memang tidak pernah patah begitu word-break kembali normal (Chrome tidak memecah tanda hubung
+   yang diikuti angka). .ks-td-tgl sudah nowrap sejak aturan aslinya di atas. Aturan yang tidak bisa dibuat merah
+   bukan penjaga -- ia dekorasi yang suatu hari dipercaya orang. Kelas ks-td-ref di markup dibiarkan: pengait, bukan gaya. */
+
+/* Tombol aksi. Desktop: tampil langsung, tombol titik-tiga & silang disembunyikan. */
+.ks-aksi-buka, .ks-aksi-tutup { display: none; }
+.ks-aksi-isi { display: inline; }
+.ks-bukti-link { text-decoration: none; }
+@media (max-width: 1100px) {
+  /* 186-195 px kolom aksi adalah yang menjepit kolom lain (terukur: 625 px -> Arah 54, Akun 52, Ref 41). */
+  .ks-tabel td.ks-td-aksi { position: relative; }
+  .ks-aksi-buka { display: inline-flex; align-items: center; justify-content: center; min-width: 38px; height: 32px; padding: 0 8px;
+    border: 1px solid var(--line, #E5E0D6); border-radius: 8px; background: #fff; color: var(--ink-soft, #5F6B7A);
+    font-size: 18px; line-height: 1; cursor: pointer; vertical-align: middle; }
+  .ks-aksi-isi { display: none; }
+  /* TERBUKA: bilah menimpa sisi kanan BARISNYA SENDIRI. Tinggi baris tidak berubah, tabel tidak melompat, dan karena
+     ia tumbuh ke KIRI dari tepi kanan sel terakhir ia tidak pernah keluar dari kartu yang ber-overflow-x:auto. */
+  tr.ks-r-buka .ks-aksi-isi { display: flex; align-items: center; justify-content: flex-end; gap: 6px; position: absolute; top: 0; bottom: 0; right: 0;
+    padding: 0 8px 0 18px; white-space: nowrap; z-index: 2;
+    background: linear-gradient(to right, rgba(255,255,255,0) 0, #fff 16px); }
+  tr.ks-r-buka .ks-aksi-tutup { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 32px;
+    border: 1px solid var(--line, #E5E0D6); border-radius: 8px; background: #fff; color: var(--ink-soft, #5F6B7A); font-size: 13px; cursor: pointer; }
+  tr.ks-r-buka .ks-aksi-isi .ks-btn-ubah, tr.ks-r-buka .ks-aksi-isi .ks-btn-koreksi, tr.ks-r-buka .ks-aksi-isi .ks-btn-kecil { min-height: 32px; padding-left: 10px; padding-right: 10px; }
+}
+@media print { .ks-aksi-buka, .ks-aksi-tutup, .ks-aksi-isi { display: none !important; } }
