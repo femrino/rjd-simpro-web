@@ -162,3 +162,18 @@
   font-size: 13px; line-height: 1.5;
 }
 .ks-pra-tulis .ks-btn { margin-left: 6px; }
+
+/* @K18 tahap 1b (v363): panel Jurnal turunan. Wadah #ks-jurnal disuntik JS sesudah #ks-rekon. */
+.ks-jt-cocok { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #E6F1E8; color: #2F6B3A; white-space: nowrap; }
+.ks-jt-beda { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #FCEBE6; color: #8A2E1B; white-space: nowrap; }
+.ks-jt-awas { margin: 0 0 12px; padding: 10px 12px; border-radius: 8px; background: #FCF3E3; color: #8A5D1F; border: 1px solid #EBD9B4; font-size: 12.5px; line-height: 1.55; }
+.ks-jt-awas ul { margin: 6px 0 6px 18px; padding: 0; }
+.ks-jt-rinci { margin-top: 6px; font-size: 11.5px; color: #8A2E1B; line-height: 1.6; }
+.ks-jt-subjudul { margin-top: 16px; }
+.ks-jt-blok td { background: #F6F3EC; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft, #5F6B7A); }
+.ks-jt-999 td { background: #FCEBE6; }
+.ks-jt-kredit { padding-left: 28px !important; }
+.ks-jt-entri-awal td { border-top: 2px solid #EDE9E1; }
+.ks-jt-asumsi { margin-top: 12px; font-size: 11.5px; color: var(--ink-soft, #5F6B7A); line-height: 1.55; }
+.ks-jt-asumsi ul { margin: 4px 0 0 18px; padding: 0; }
+@media print { #ks-jurnal .ks-aksi { display: none; } }

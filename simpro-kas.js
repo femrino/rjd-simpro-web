@@ -214,6 +214,11 @@ function ksMuat(bulan, opsi) {
       KS_DATA = d; KS_BULAN = d.bulan; ksShow("ks-isi"); ksRender();
       KS_SUDAH_SEGAR = true; KS_SNAP_WAKTU = null;
       KS_PRA_TULIS = false; ksBilahPraTulis_(false);
+      // @K18: tiap pemuatan buku kas yang BERHASIL membuang jurnal yang sedang tampil -- ia diturunkan dari data
+      // yang baru saja (mungkin) berubah. Jurnal basi di sebelah saldo segar adalah dua angka yang saling membantah.
+      // STATUS ikut dikosongkan: permintaan jurnal yang masih terbang dibuang lewat KS_JURNAL_URUT, dan tanpa ini
+      // tombolnya tertinggal "Menyusun jurnal..." + mati SELAMANYA (jawabannya tidak akan pernah diterima). Ketemu jalan112 F.
+      KS_JURNAL = null; KS_JURNAL_STATUS = ""; KS_JURNAL_URUT++; ksRenderJurnal_();
       if (typeof rjdSnapshotSimpan_ === "function") rjdSnapshotSimpan_("kas_terakhir", d);
       if (typeof rjdSnapshotBarHapus_ === "function") rjdSnapshotBarHapus_("ks-saldo");
     })
@@ -232,7 +237,7 @@ function ksMuat(bulan, opsi) {
 
 // ---------- render ----------
 function ksRender() {
-  ksRenderSaldo_(); ksRenderForm_(); ksRenderBulan_(); ksPasangSaring_(); ksRenderBuku_(); ksRenderArus_(); ksRenderRekon_(); ksRenderPeringatan_();
+  ksRenderSaldo_(); ksRenderForm_(); ksRenderBulan_(); ksPasangSaring_(); ksRenderBuku_(); ksRenderArus_(); ksRenderRekon_(); ksRenderJurnal_(); ksRenderPeringatan_();
 }
 
 function ksRenderSaldo_() {
@@ -902,6 +907,122 @@ function ksTutupBulan() {
   if (!window.confirm("Tutup " + ksNamaBulan(KS_BULAN) + "? Setelah ditutup, transaksi bertanggal di bulan ini tidak bisa ditambah; koreksi dicatat di bulan berjalan.")) return;
   ksTombolRekon_(true);   // v308 (KF-6)
   ksKirim_("tutupBulanKas", { bulan: KS_BULAN }).then(function () { ksMuat(KS_BULAN); }).catch(function (e) { window.alert(e.message); ksTombolRekon_(false); });
+}
+
+/* ============================================================
+ * @K18 tahap 1b -- JURNAL TURUNAN (butuh gs >= @390, action getJurnalTurunan)
+ * ============================================================
+ * Double-entry yang DITURUNKAN server dari buku pembantu (jurnal-turunan.gs); halaman ini hanya MENAMPILKAN.
+ * Tidak ada form jurnal, dan itu disengaja.
+ *
+ * - Wadahnya disuntik JS sesudah #ks-rekon (pola KP-8: markup halaman hidup di template, tidak ditempel tiap rilis).
+ * - Finance/owner saja (KS_DATA.bisaFinance) -- server menjaganya lagi.
+ * - DIMUAT ATAS PERMINTAAN, bukan bersama getKas: ia membaca SD Invoice + SD Pelunasan utuh (~5 detik),
+ *   dan kasir yang membuka halaman untuk mencatat nota tidak perlu menunggunya.
+ * - Urutan tampil DISENGAJA: yang belum terpetakan dan predikat yang BEDA di ATAS, bukan sesudah tabel.
+ * - `let` tingkat atas BUKAN properti window (PF-1b): dibaca dengan nama polos.
+ */
+let KS_JURNAL = null;        // jawaban getJurnalTurunan untuk KS_BULAN; null = belum dimuat / sudah dibuang
+let KS_JURNAL_URUT = 0;      // jawaban permintaan yang sudah disusul (bulan berganti, buku kas dimuat ulang) dibuang
+let KS_JURNAL_STATUS = "";   // "" | "memuat" | pesan galat
+let KS_JURNAL_ENTRI = false; // sakelar "tampilkan entri"
+
+function ksJurnalWadah_() {
+  let el = document.getElementById("ks-jurnal");
+  if (el) return el;
+  const rekon = document.getElementById("ks-rekon"); if (!rekon || !rekon.parentNode) return null;
+  el = document.createElement("div"); el.id = "ks-jurnal";
+  rekon.parentNode.insertBefore(el, rekon.nextSibling);
+  return el;
+}
+
+function ksJurnalMuat() {
+  if (!KS_DATA || !KS_DATA.bisaFinance) return;
+  const urut = ++KS_JURNAL_URUT, bulan = KS_BULAN;
+  KS_JURNAL = null; KS_JURNAL_STATUS = "memuat"; ksRenderJurnal_();
+  ksKirim_("getJurnalTurunan", { bulan: bulan })
+    .then(function (j) {
+      if (urut !== KS_JURNAL_URUT) return;
+      KS_JURNAL = j; KS_JURNAL_STATUS = ""; ksRenderJurnal_();
+    })
+    .catch(function (e) {
+      if (urut !== KS_JURNAL_URUT) return;
+      // TypeError = jawaban tidak sampai (CORS Google / sambungan); selain itu pesan server apa adanya.
+      KS_JURNAL = null;
+      KS_JURNAL_STATUS = (e instanceof TypeError) ? "Jawaban server tidak sampai -- jurnal belum termuat. Tidak ada yang berubah; coba lagi." : String((e && e.message) || "Gagal memuat jurnal.");
+      ksRenderJurnal_();
+    });
+}
+function ksJurnalSakelarEntri() { KS_JURNAL_ENTRI = !KS_JURNAL_ENTRI; ksRenderJurnal_(); }
+
+function ksRenderJurnal_() {
+  const el = ksJurnalWadah_(); if (!el) return;
+  if (!KS_DATA || !KS_DATA.bisaFinance) { el.innerHTML = ""; return; }
+  const judul = '<div class="ks-kartu-judul">Jurnal turunan ' + ksEsc_(ksNamaBulan(KS_BULAN)) + '</div>';
+  const info = '<p class="ks-info">Double-entry yang <b>diturunkan</b> dari buku kas, invoice dan pelunasan -- tidak ada yang diketik di sini, dan tidak ada yang ditulis. Tiap baris di bawah membandingkan buku besar dengan buku pembantunya; yang BEDA berarti ada kejadian yang belum punya aturan.</p>';
+  if (!KS_JURNAL) {
+    const memuat = KS_JURNAL_STATUS === "memuat";
+    el.innerHTML = '<div class="ks-kartu">' + judul + info +
+      (KS_JURNAL_STATUS && !memuat ? '<p class="ks-galat" id="ks-jt-galat">' + ksEsc_(KS_JURNAL_STATUS) + '</p>' : '') +
+      '<div class="ks-aksi"><button id="ks-jt-muat" class="ks-btn" type="button" onclick="ksJurnalMuat()"' + (memuat ? ' disabled="disabled"' : '') + '>' +
+      (memuat ? "Menyusun jurnal..." : (KS_JURNAL_STATUS ? "Coba lagi" : "Susun jurnal " + ksEsc_(ksNamaBulan(KS_BULAN)))) + '</button></div></div>';
+    return;
+  }
+  const j = KS_JURNAL, p = j.predikat || {}, nama = j.namaAkun || {};
+  const lencana = function (cocok, beda) { return cocok ? '<span class="ks-jt-cocok">COCOK</span>' : '<span class="ks-jt-beda">BEDA ' + ksRp(beda) + '</span>'; };
+
+  // --- 1. yang belum terpetakan: PALING ATAS ---
+  const belum = (j.belumTerpetakan || []);
+  const htmlBelum = belum.length ? '<div class="ks-jt-awas" id="ks-jt-belum"><b>' + belum.length + ' kunci belum terpetakan -- masuk akun 999:</b><ul>' +
+    belum.map(function (b) { return '<li><span class="ks-mono">' + ksEsc_(b.kunci) + '</span> -- ' + b.baris + ' baris, Rp ' + ksRp(b.jumlah) + '</li>'; }).join("") +
+    '</ul>Isi kolom <b>Akun Buku</b> di SD Akun Kas / SD Kategori Kas; riwayatnya ikut terbetulkan.</div>' : '';
+
+  // --- 2. predikat GL == buku pembantu ---
+  const baris = [];
+  baris.push(['Dr = Cr (seluruh entri)', '', '', lencana(!!p.seimbang, j.selisih)]);
+  Object.keys(p.kas || {}).forEach(function (kode) { const x = p.kas[kode]; baris.push(['Kas &amp; bank: ' + ksEsc_(ksNamaAkun(kode)), ksRp(x.gl), ksRp(x.buku), lencana(x.beda === 0, x.beda)]); });
+  const rinci = function (x) {
+    const r = (x && x.rinci) || []; if (!r.length) return "";
+    return '<div class="ks-jt-rinci">' + r.slice(0, 20).map(function (b) { return '<div><span class="ks-mono">' + ksEsc_(b.id) + '</span> buku besar ' + ksRp(b.gl) + ' · buku pembantu ' + ksRp(b.buku) + ' · beda ' + ksRp(b.beda) + '</div>'; }).join("") +
+      (r.length > 20 ? '<div class="ks-sub">+' + (r.length - 20) + ' identitas lagi -- lihat lengkapnya lewat lihatJurnalTurunan</div>' : '') + '</div>';
+  };
+  if (p.piutang) baris.push(['Piutang usaha (121), bruto per invoice' + rinci(p.piutang), ksRp(p.piutang.gl), ksRp(p.piutang.buku), lencana(p.piutang.beda === 0 && !(p.piutang.rinci || []).length, p.piutang.beda)]);
+  if (p.uangMuka) baris.push(['Uang muka order (219), per PO' + rinci(p.uangMuka), ksRp(p.uangMuka.gl), ksRp(p.uangMuka.buku), lencana(p.uangMuka.beda === 0 && !(p.uangMuka.rinci || []).length, p.uangMuka.beda)]);
+  if (p.kasbon) baris.push(['Kasbon karyawan (' + ksEsc_(p.kasbon.akun) + ')', ksRp(p.kasbon.gl), ksRp(p.kasbon.buku), lencana(p.kasbon.beda === 0, p.kasbon.beda)]);
+  const htmlPredikat = '<div class="ks-gulir"><table class="ks-tabel" id="ks-jt-predikat"><thead><tr><th>Pemeriksaan</th><th class="ks-td-rp">Buku besar</th><th class="ks-td-rp">Buku pembantu</th><th></th></tr></thead><tbody>' +
+    baris.map(function (b) { return '<tr><td>' + b[0] + '</td><td class="ks-td-rp">' + b[1] + '</td><td class="ks-td-rp">' + b[2] + '</td><td>' + b[3] + '</td></tr>'; }).join("") + '</tbody></table></div>';
+
+  // --- 3. neraca saldo, dikelompokkan per blok (digit pertama kode akun) ---
+  const BLOK = { "1": "Aktiva", "2": "Kewajiban", "3": "Ekuitas", "4": "Pendapatan", "5": "HPP", "6": "Penyusutan", "7": "Biaya operasional", "8": "Pendapatan lain", "9": "Lain-lain / belum terpetakan" };
+  const ns = j.neracaSaldo || {}; let blokKini = "", tDr = 0, tCr = 0;
+  const saldo = function (v) { return v === 0 ? '<span class="ks-sub">0</span>' : (v > 0 ? ksRp(v) : ksRp(-v) + ' K'); };
+  const htmlNs = Object.keys(ns).sort().map(function (kode) {
+    const s = ns[kode], b = String(kode).charAt(0); let kepala = "";
+    if (b !== blokKini) { blokKini = b; kepala = '<tr class="ks-jt-blok"><td colspan="5">' + ksEsc_(b + "xx " + (BLOK[b] || "")) + '</td></tr>'; }
+    tDr += s.dr; tCr += s.cr;
+    return kepala + '<tr' + (kode === "999" ? ' class="ks-jt-999"' : '') + ' data-akun="' + ksEsc_(kode) + '"><td><span class="ks-mono">' + ksEsc_(kode) + '</span> ' + ksEsc_(nama[kode] || "") + '</td>' +
+      '<td class="ks-td-rp">' + saldo(s.awal) + '</td><td class="ks-td-rp">' + (s.dr ? ksRp(s.dr) : "") + '</td><td class="ks-td-rp">' + (s.cr ? ksRp(s.cr) : "") + '</td><td class="ks-td-rp">' + saldo(s.akhir) + '</td></tr>';
+  }).join("");
+  const htmlNeraca = '<div class="ks-kartu-judul ks-jt-subjudul">Neraca saldo</div><div class="ks-gulir"><table class="ks-tabel" id="ks-jt-neraca"><thead><tr><th>Akun</th><th class="ks-td-rp">Saldo awal</th><th class="ks-td-rp">Debit</th><th class="ks-td-rp">Kredit</th><th class="ks-td-rp">Saldo akhir</th></tr></thead><tbody>' +
+    htmlNs + '</tbody><tfoot><tr><td>Mutasi ' + ksEsc_(ksNamaBulan(j.bulan)) + '</td><td></td><td class="ks-td-rp">' + ksRp(tDr) + '</td><td class="ks-td-rp">' + ksRp(tCr) + '</td><td></td></tr></tfoot></table></div>' +
+    '<p class="ks-sub">Saldo tanpa tanda = debit; bertanda <b>K</b> = kredit.</p>';
+
+  // --- 4. entri (sakelar) ---
+  const entri = j.entri || [];
+  const htmlEntri = '<div class="ks-aksi"><button id="ks-jt-sakelar" class="ks-btn ks-btn-kecil-netral" type="button" onclick="ksJurnalSakelarEntri()">' + (KS_JURNAL_ENTRI ? "Sembunyikan" : "Tampilkan") + ' ' + entri.length + ' entri</button>' +
+    '<button id="ks-jt-ulang" class="ks-btn ks-btn-kecil-netral" type="button" onclick="ksJurnalMuat()">Susun ulang</button></div>' +
+    (KS_JURNAL_ENTRI ? '<div class="ks-gulir"><table class="ks-tabel" id="ks-jt-entri"><thead><tr><th>Tanggal</th><th>Akun</th><th class="ks-td-rp">Debit</th><th class="ks-td-rp">Kredit</th><th>Keterangan</th></tr></thead><tbody>' +
+      entri.map(function (e) {
+        return e.baris.map(function (l, i) {
+          return '<tr' + (i === 0 ? ' class="ks-jt-entri-awal"' : '') + '><td>' + (i === 0 ? ksEsc_(ksTgl(e.tanggal)) : "") + '</td><td' + (l.cr ? ' class="ks-jt-kredit"' : '') + '><span class="ks-mono">' + ksEsc_(l.akun) + '</span> ' + ksEsc_(nama[l.akun] || "") + '</td>' +
+            '<td class="ks-td-rp">' + (l.dr ? ksRp(l.dr) : "") + '</td><td class="ks-td-rp">' + (l.cr ? ksRp(l.cr) : "") + '</td><td>' + (i === 0 ? ksEsc_(e.keterangan) + ' <span class="ks-sub ks-mono">' + ksEsc_(e.id) + '</span>' : "") + '</td></tr>';
+        }).join("");
+      }).join("") + '</tbody></table></div>' : '');
+
+  const htmlAsumsi = '<div class="ks-jt-asumsi"><b>Asumsi &amp; batas</b><ul>' + (j.asumsi || []).map(function (a) { return '<li>' + ksEsc_(a) + '</li>'; }).join("") + '</ul></div>';
+  const htmlPeringatan = (j.peringatan || []).length ? '<div class="ks-jt-asumsi"><b>' + j.peringatan.length + ' peringatan</b><ul>' + j.peringatan.slice(0, 10).map(function (x) { return '<li><span class="ks-mono">' + ksEsc_(x.id) + '</span>: ' + ksEsc_(x.pesan) + '</li>'; }).join("") + '</ul></div>' : '';
+  el.innerHTML = '<div class="ks-kartu">' + judul + info + (j.catatan ? '<div class="ks-jt-awas" id="ks-jt-catatan">' + ksEsc_(j.catatan) + '</div>' : '') +
+    htmlBelum + htmlPredikat + htmlNeraca + htmlEntri + htmlAsumsi + htmlPeringatan + '</div>';
 }
 
 function ksRenderPeringatan_() {
