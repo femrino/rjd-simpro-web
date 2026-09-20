@@ -204,7 +204,26 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 .sp-ringkas-target.kosong { color: #8A5D1F; font-style: italic; }
 
 /* ============ TAB RIWAYAT & KOREKSI ============ */
-.sp-riw-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+/* @PF-18 (20 Sep 2026): di <= 360 px deret ini tidak muat, dan karena bundel widget Blogger memberi
+   `word-break: break-word` pada body, flex MENYUSUTKAN tombolnya sampai katanya pecah di tengah huruf --
+   terukur "Loadin/g" di 360 px dan "Loadi/ng" di 320 px, bar setinggi 46 px alih-alih 32 px. Gejala yang
+   sama keluarganya dengan laporan Femri tentang tabel buku kas (v364); ditemukan sapuan uji/ukur-kata-pecah.py.
+
+   MEMBUNGKUS, bukan menggulir. Dua pola ada di berkas ini: `.sp-tab` (tab utama) membungkus
+   `flex: 1 1 45%` di <= 640 px, `.sp-pintasan` menggulir `overflow-x: auto`. Ini SAKLAR TAB, bukan
+   pintasan -- tab yang tergulir keluar layar adalah fitur yang tidak ditemukan orang, dan berkas ini
+   sendiri sudah membayar pelajaran itu (lihat "orang yang tabnya tinggal dua akan mengira fiturnya
+   hilang" di blok keterangan bagian). `flex-wrap: wrap` membuat tombolnya TIDAK menyusut: yang tidak
+   muat turun baris utuh, dan tekanan yang memecah katanya hilang.
+
+   NISAN: patch ini sempat juga memasang `white-space: nowrap` pada `.sp-riw-tab` "supaya nama tab
+   tetap utuh kalau suatu saat ada yang lebih panjang". Sabotase membuktikannya REDUNDAN -- mencabut
+   nowrap saja membuat SELURUH jalan115 tetap hijau (nol kata pecah, nol luber), karena dengan wrap
+   flex tidak pernah menyusutkan tombolnya. Ia baru berpengaruh kalau SATU tab lebih lebar daripada
+   layarnya, dan di keadaan itu nowrap justru membuat barnya meluber -- cacat lain, bukan perlindungan.
+   Aturan yang tidak bisa dibuat merah adalah dekorasi yang suatu hari dipercaya orang (pelajaran yang
+   sama dengan `.ks-td-ref` di simpro-kas.css, v364). */
+.sp-riw-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
 .sp-riw-tab { padding: 8px 14px; border-radius: 8px; font-size: 12.5px; font-weight: 600;
   color: var(--ink-soft); background: var(--cream); border: 1px solid transparent; cursor: pointer; }
 .sp-riw-tab.active { background: var(--white); color: var(--ink); border-color: var(--line-soft); }
