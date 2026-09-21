@@ -2812,6 +2812,26 @@ function rjdKunciKirimBaru_(){
   try{ if(window.crypto && typeof crypto.randomUUID === "function") return crypto.randomUUID(); }catch(e){}
   return "k" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
+/* @P18-A (v373, butuh gs >= @397) -- kunci kiriman untuk form TULIS lantai produksi & surat jalan.
+   Kuncinya terikat ke ISIAN: selama isian sama, kunci sama (kiriman ulang sesudah jawaban hilang
+   dijawab server dengan catatan yang sudah ada, bukan catatan kedua); isian berubah = kunci baru
+   (itu kejadian lain -- dua gelaran identik berjarak menit bisa sah, jadi penahannya bukan isi).
+   Dilepas saat server MENJAWAB (berhasil atau menolak); disimpan hanya saat jawabannya tidak
+   sampai -- satu-satunya keadaan yang tidak diketahui. Beda dengan form order v371, yang kuncinya
+   bertahan walau isian diubah: di sana satu pengisian form = satu order, apa pun isinya. */
+function rjdKunciIsian_(nama, isian){
+  const peta = window.RJD_KUNCI_ISIAN || (window.RJD_KUNCI_ISIAN = {});
+  let sidik = "";
+  try{ sidik = JSON.stringify(isian); }catch(e){ sidik = String(Math.random()); }
+  const ada = peta[nama];
+  if(ada && ada.sidik === sidik) return ada.kunci;
+  const kunci = rjdKunciKirimBaru_();
+  peta[nama] = { sidik: sidik, kunci: kunci };
+  return kunci;
+}
+function rjdKunciLepas_(nama){
+  if(window.RJD_KUNCI_ISIAN) delete window.RJD_KUNCI_ISIAN[nama];
+}
 /* Kiriman ulang yang ternyata sudah tercatat. Kalimatnya jujur tentang satu hal: kalau isian
    sempat diubah sesudah kiriman pertama, perubahan itu TIDAK ikut -- server menjawab dengan
    pengajuan yang lama, bukan menyimpan yang baru. */

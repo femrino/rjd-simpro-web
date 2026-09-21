@@ -663,11 +663,7 @@ function krSimpanPengiriman() {
   btn.disabled = true;
   btn.textContent = "Menyimpan...";
 
-  fetch(KR_API_URL, {
-    method: "POST",
-    body: JSON.stringify({
-      idToken: KR_ID_TOKEN, action: "simpanPengiriman",
-      payload: {
+  const payloadSJ = {
         idPurchaseOrder: d.idPurchaseOrder,
         tanggal: (document.getElementById("kr-buat-tanggal") || {}).value || "",
         jenisPengiriman: (document.getElementById("kr-buat-jenis") || {}).value || "Produksi",
@@ -681,19 +677,31 @@ function krSimpanPengiriman() {
         izinkanLebihDariOrder: !!(document.getElementById("kr-buat-izin-lebih") || {}).checked,
         alasanLebihDariOrder: (document.getElementById("kr-buat-alasan-lebih") || {}).value || "",
         baris: baris
-      }
+      };
+  // @P18-A (v373, butuh gs >= @397): kunci kiriman terikat isian. Dulu jawaban yang hilang + Simpan lagi =
+  // SURAT JALAN KEDUA: stok siap kirim berkurang dua kali, detailnya dasar invoice ganda.
+  payloadSJ.idPermintaan = rjdKunciIsian_("suratjalan", payloadSJ);
+  let jawabanTiba = false;
+  fetch(KR_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: KR_ID_TOKEN, action: "simpanPengiriman",
+      payload: payloadSJ
     })
   })
-  .then(function (r) { return r.json(); })
+  .then(function (r) { jawabanTiba = true; return r.json(); })
   .then(function (h) {
+    rjdKunciLepas_("suratjalan");
     btn.disabled = false;
     btn.textContent = "Simpan Surat Jalan";
     if (!h || !h.success) { alert((h && h.error) || "Gagal menyimpan surat jalan."); return; }
 
     document.getElementById("kr-buat-sukses").innerHTML =
       '<div class="kr-sukses-isi">' +
-        '<b>' + rjdEscapeHtml_(h.idPengiriman) + '</b> tersimpan &#183; ' +
-        h.totalQty + ' pcs (' + h.jumlahBaris + ' baris). Sisa kirim: <b>' + h.sisaSetelahIni + '</b>.' +
+        (h.sudahTercatat
+          ? '<b>' + rjdEscapeHtml_(h.idPengiriman) + '</b> SUDAH tersimpan sebelumnya &#8212; kiriman tadi tidak membuat surat jalan kedua.'
+          : '<b>' + rjdEscapeHtml_(h.idPengiriman) + '</b> tersimpan &#183; ' +
+            h.totalQty + ' pcs (' + h.jumlahBaris + ' baris). Sisa kirim: <b>' + h.sisaSetelahIni + '</b>.') +
         (h.barisTanpaIdDetailOrder
           ? '<div class="kr-sukses-catat">' + h.barisTanpaIdDetailOrder +
             ' baris tidak punya ID Detail Order &#8212; harga di invoice nanti perlu diisi manual.</div>'
@@ -710,7 +718,11 @@ function krSimpanPengiriman() {
   .catch(function () {
     btn.disabled = false;
     btn.textContent = "Simpan Surat Jalan";
-    alert("Gagal menghubungi server.");
+    // @P18-A: sebelum jawaban tiba keadaannya TIDAK DIKETAHUI -- permintaannya bisa sudah tercatat. Kuncinya
+    // disimpan, jadi Simpan lagi dengan isian sama aman. Jawaban yang tiba tapi rusak (bukan JSON) juga belum pasti.
+    alert((jawabanTiba ? "Jawaban server tidak terbaca" : "Jawaban server tidak sampai") +
+      " -- surat jalan BELUM PASTI tersimpan.\n\n" +
+      "Tekan Simpan lagi tanpa mengubah isian: kiriman ulang dari isian yang sama tidak membuat surat jalan kedua.");
   });
 }
 

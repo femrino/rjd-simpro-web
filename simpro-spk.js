@@ -275,6 +275,26 @@ function spTandaiJaringan_(e) {
   throw e;
 }
 
+/* @P18-A (v373, butuh gs >= @397): pesan untuk jalur TULIS yang kehilangan jawaban. spPesanGalat_ berbunyi
+   "tidak sampai ke server" -- untuk tulisan itu sering SALAH: permintaannya sampai & tercatat, yang hilang
+   hanya jawabannya. Dulu operator disuruh "coba lagi" dan barangnya tercatat dua kali (terukur: 4 pasangan
+   gelaran, 2 pasangan roll). Sekarang server menahan kiriman ulang ber-idPermintaan sama, jadi menekan Simpan
+   lagi JUSTRU jalan yang aman -- dan pesannya harus mengatakan itu, bukan menyuruh menebak. */
+/* @P18-A: tempel idPermintaan (terikat isian, rjdKunciIsian_) ke payload yang sudah jadi. Sidiknya dihitung
+   SEBELUM kunci ditempel, jadi kunci lama tidak ikut mengubah sidik. */
+function spPayloadKunci_(nama, payload) {
+  payload.idPermintaan = rjdKunciIsian_(nama, payload);
+  return payload;
+}
+
+function spPesanGalatTulis_(e, aksi) {
+  if (e && e.spJaringan) {
+    return "Jawaban server tidak sampai -- " + (aksi || "penyimpanan") + " BELUM PASTI tersimpan.\n\n" +
+      "Tekan Simpan lagi tanpa mengubah isian: kiriman ulang dari isian yang sama tidak akan tercatat dua kali.";
+  }
+  return spPesanGalat_(e, aksi);
+}
+
 function spPesanGalat_(e, aksi) {
   const apa = aksi || "Permintaan";
   if (e && e.spJaringan) {
@@ -2912,7 +2932,7 @@ function spSimpanKeluar_() {
     method: "POST",
     body: JSON.stringify({
       idToken: SP_ID_TOKEN, action: "simpanPotonganKeluar",
-      payload: {
+      payload: spPayloadKunci_("keluar", {
         idPurchaseOrder: po.idPurchaseOrder,
         jenisKeluar: jenis,
         komponen: komponen,
@@ -2921,26 +2941,30 @@ function spSimpanKeluar_() {
         tanggal: (document.getElementById("sp-keluar-tanggal") || {}).value || "",
         catatan: (document.getElementById("sp-keluar-catatan") || {}).value || "",
         baris: baris
-      }
+      })
     })
   })
   .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
+    rjdKunciLepas_("keluar");   // @P18-A
     btn.disabled = false;
     btn.textContent = "Simpan Potongan Keluar";
     if (!d || !d.success) { alert((d && d.error) || "Gagal menyimpan."); return; }
     spDraftHapus_("keluar");   // v344 (PF-5)
-    alert("Tercatat: " + d.totalQty + " pcs keluar.\nNomor surat jalan: " + d.noSuratJalan);
+    alert(d.sudahTercatat
+      ? "Potongan keluar ini SUDAH tercatat sebelumnya -- kiriman tadi tidak dicatat dua kali.\nNomor surat jalan: " + d.noSuratJalan
+      : "Tercatat: " + d.totalQty + " pcs keluar.\nNomor surat jalan: " + d.noSuratJalan);
     // PO aktif dimuat ulang: sisa di tab Bagi ke Line ikut berubah, dan
     // membiarkan angka lama di layar adalah cara termudah membuat orang
     // membagi barang yang sudah tidak ada.
     spSesudahTulis_("keluar");   // v312 (P7 PF-1)
     spMuatKeluar_();
   })
-  .catch(spGalatAlert_("Simpan potongan keluar", function () {
+  .catch(function (e) {   // @P18-A
     btn.disabled = false;
     btn.textContent = "Simpan Potongan Keluar";
-  }));
+    alert(spPesanGalatTulis_(e, "potongan keluar ini"));
+  });
 }
 
 function spBatalKeluar_(idKeluar) {
@@ -8393,8 +8417,13 @@ function spGbKumpulkan_() {
     }
     dipakai[kunci] = i + 1;
 
+    // @P18-A: SATU idPermintaan per baris, bertahan melewati percobaan SELAMA isi barisnya sama -- kiriman
+    // ulang baris yang jawabannya hilang dijawab server dengan gelaran yang sudah tercatat, bukan baris
+    // kedua. Isi baris berubah = kunci baru (lihat rjdKunciIsian_).
+    const sidikIdp = [idMk, warna, kain, lapis, tr.querySelector(".sp-gb-allow").value, tr.querySelector(".sp-gb-kode").value].join("|");
+    if (!tr.dataset.idp || tr.dataset.idpSidik !== sidikIdp) { tr.dataset.idp = rjdKunciKirimBaru_(); tr.dataset.idpSidik = sidikIdp; }
     out.baris.push({
-      tr: tr, marker: m, idMarker: idMk, warna: warna, kain: kain, lapis: lapis,
+      tr: tr, marker: m, idMarker: idMk, warna: warna, kain: kain, lapis: lapis, idPermintaan: tr.dataset.idp,
       allow: String(tr.querySelector(".sp-gb-allow").value || "0.02").trim().replace(",", "."),
       kodeKain: String(tr.querySelector(".sp-gb-kode").value || "").trim()
     });
@@ -8573,14 +8602,17 @@ async function spGbSimpan(btn) {
         jumlahLapis: b.lapis, allowancePerLapis: b.allow,
         tanggalPotong: tgl, catatan: catatan, kodeKain: b.kodeKain,
         noSO: item.noSO || "", brand: item.brand || "",
-        artikel: item.artikel || "", style: item.style || ""
+        artikel: item.artikel || "", style: item.style || "",
+        idPermintaan: b.idPermintaan   // @P18-A
       });
       ok++;
       b.tr.classList.remove("sp-gb-gagal");
       b.tr.classList.add("sp-gb-ok");
       b.tr.querySelector(".sp-gb-galat").textContent = "";
       const hs = b.tr.querySelector(".sp-gb-hasil-teks");
-      if (hs) hs.textContent = (d.totalPotongan || "") + " pcs · " + (d.kainTerpakai || "") + " m";
+      // @P18-A: angka dari SERVER (untuk kiriman ulang: yang benar-benar tercatat pertama kali, bukan isian layar).
+      if (hs) hs.textContent = (d.totalPotongan || "") + " pcs · " + (d.kainTerpakai || "") + " m" +
+        (d.sudahTercatat ? " (sudah tersimpan sebelumnya)" : "");
       // Baris yang berhasil DIKUNCI, bukan dihapus: operator perlu melihat apa yang barusan
       // tersimpan, dan mengunci membuat tekan-ulang tidak mengirimnya dua kali.
       Array.prototype.forEach.call(b.tr.querySelectorAll("input, select, button"), function (el) {
@@ -8592,7 +8624,7 @@ async function spGbSimpan(btn) {
       b.tr.classList.add("sp-gb-gagal");
       // Sebab gagal sebagai TEKS di barisnya, bukan title: tooltip tidak ada di layar sentuh, dan
       // sebab yang tidak terbaca sama saja dengan tidak ada sebab.
-      b.tr.querySelector(".sp-gb-galat").textContent = spPesanGalat_(e, "Simpan gelaran");
+      b.tr.querySelector(".sp-gb-galat").textContent = spPesanGalatTulis_(e, "gelaran ini");   // @P18-A
       // Sidik isi SAAT gagal: pengumpul memakainya untuk tahu kapan sebab ini kedaluwarsa.
       b.tr.setAttribute("data-gagal-sidik", spGbSidik_(b.tr));
     }
@@ -8706,11 +8738,7 @@ function spSimpanGelaran() {
   const btn = event && event.target ? event.target : null;
   if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
 
-  fetch(SP_API_URL, {
-    method: "POST",
-    body: JSON.stringify({
-      idToken: SP_ID_TOKEN, action: "simpanGelaran",
-      payload: {
+  const payloadGl = {
         idPurchaseOrder: window.SP_PO_AKTIF,
         idMarker: sel.value,
         warna: warna,
@@ -8732,13 +8760,23 @@ function spSimpanGelaran() {
         kodeKain: (document.getElementById("sp-gl-kodekain") || {}).value || "",
         noSO: item.noSO || "", brand: item.brand || "",
         artikel: item.artikel || "", style: item.style || ""
-      }
+      };
+  // @P18-A: kunci kiriman terikat isian (rjdKunciIsian_) -- Simpan lagi sesudah jawaban hilang tidak mencatat dua kali.
+  payloadGl.idPermintaan = rjdKunciIsian_("gelaran", payloadGl);
+  fetch(SP_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      idToken: SP_ID_TOKEN, action: "simpanGelaran",
+      payload: payloadGl
     })
   })
   .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
+    rjdKunciLepas_("gelaran");   // server MENJAWAB: berhasil atau menolak, keadaannya diketahui
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
-    alert("Gelaran tersimpan.\n" + d.totalPotongan + " potongan " +
+    alert((d.sudahTercatat
+      ? "Gelaran ini SUDAH tersimpan sebelumnya (" + (d.idGelaran || "") + ") -- kiriman tadi tidak dicatat dua kali.\n"
+      : "Gelaran tersimpan.\n") + d.totalPotongan + " potongan " +
       (document.getElementById("sp-gl-kain") || {}).value + ", kain " +
       d.kainTerpakai + " " + d.satuanKain);
     // v185: satu prefill untuk satu gelaran re-cut. Kalau dibiarkan, gelaran
@@ -8749,7 +8787,7 @@ function spSimpanGelaran() {
     }
     spMuatGelaran();
   })
-  .catch(spGalatAlert_("Simpan gelaran"))
+  .catch(function (e) { alert(spPesanGalatTulis_(e, "gelaran ini")); })   // @P18-A
   .then(function () { if (btn) { btn.disabled = false; btn.textContent = "Simpan Gelaran"; } });
 }
 
@@ -9550,16 +9588,19 @@ function spSimpanRoll(btn) {
   fetch(SP_API_URL, {
     method: "POST",
     body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "simpanRollKain",
-      payload: { idPurchaseOrder: window.SP_PO_AKTIF, roll: roll } })
+      payload: spPayloadKunci_("roll", { idPurchaseOrder: window.SP_PO_AKTIF, roll: roll }) })
   })
   .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
+    rjdKunciLepas_("roll");   // @P18-A
     if (!d || !d.success) throw new Error((d && d.error) || "Gagal menyimpan.");
-    alert(d.tersimpan + " roll tersimpan" +
+    alert(d.sudahTercatat
+      ? "Roll ini SUDAH tersimpan sebelumnya -- kiriman tadi tidak dicatat dua kali. Periksa daftar roll di bawah."
+      : d.tersimpan + " roll tersimpan" +
       (d.rincianSatuan ? (" (" + d.rincianSatuan + ")") : "") + ".");
     spMuatGelaran();   // tombol dipulihkan oleh render ulang
   })
-  .catch(spGalatAlert_("Simpan roll kain", pulih));
+  .catch(function (e) { try { pulih(); } catch (x) {} alert(spPesanGalatTulis_(e, "roll ini")); });   // @P18-A
 }
 
 /**
@@ -11892,21 +11933,27 @@ function apsSimpan_() {
   }
   const btn = document.getElementById("aps-simpan");
   if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
-  fetch(SP_API_URL, { method: "POST", body: JSON.stringify({
+  const isiAps = {
     idToken: SP_ID_TOKEN, action: "catatApprovalSampel",
     idPurchaseOrder: window.SP_PO_AKTIF,
     brand: it.brand, artikel: it.artikel, style: it.style,
     jenis: APS_JENIS, catatan: catatan,
     tanggal: (document.getElementById("aps-tanggal") || {}).value || ""
-  }) })
+  };
+  // @P18-A: medan approval dikirim di TINGKAT ATAS body (rutenya meneruskan body utuh), kuncinya ikut di sana.
+  // Tanpa kunci, 'Kirim' yang dikirim ulang menaikkan ronde (1 -> 2) dan 'ACC' ulang ditolak "respon hanya sah setelah Kirim".
+  isiAps.idPermintaan = rjdKunciIsian_("approval", [window.SP_PO_AKTIF, it.brand, it.artikel, it.style, APS_JENIS, catatan, isiAps.tanggal]);
+  fetch(SP_API_URL, { method: "POST", body: JSON.stringify(isiAps) })
   .then(function (r) { return r.json(); }, spTandaiJaringan_)
   .then(function (d) {
+    rjdKunciLepas_("approval");
     if (d.error) { alert(d.error); if (btn) { btn.disabled = false; btn.textContent = "Simpan Kejadian"; } return; }
-    alert("Tercatat: " + d.jenis + " (ronde " + d.ronde + ").");
+    alert((d.sudahTercatat ? "SUDAH tercatat sebelumnya (kiriman tadi tidak dicatat dua kali): " : "Tercatat: ") +
+      d.jenis + " (ronde " + d.ronde + ").");
     spMuatApproval_();     // muat ulang status -- kerangka dirender ulang, aman
   })
   .catch(function (e) {
-    alert(spPesanGalat_(e, "Simpan approval"));
+    alert(spPesanGalatTulis_(e, "kejadian approval ini"));   // @P18-A
     if (btn) { btn.disabled = false; btn.textContent = "Simpan Kejadian"; }
   });
 }
