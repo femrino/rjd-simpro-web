@@ -376,6 +376,9 @@ function dbBukaEditPO(idPO){
   document.body.appendChild(overlay);
   document.body.style.overflow = "hidden";
   window.OL_EDITPO_ID = idPO;
+  // @P16-C OR-4 (butuh gs >= @396): SATU kunci kirim per pembukaan form -- dipakai ulang di setiap Simpan
+  // sampai sukses. Server @395 menjawab kiriman kedua berkunci sama dengan hasil yang lama, tanpa menulis.
+  window.OL_EDITPO_KUNCI = "";
 
   fetch(OL_API_URL, {
     method: "POST",
@@ -795,7 +798,9 @@ function dbRenderEditPO(d){
         return '<td class="of-td-size"><input class="dbep-qty" data-size="' + rjdEscapeHtml_(sz) +
           '" min="0" oninput="dbHitungTotalBarisPO(this)" type="number" value="' + v + '"/></td>';
       }).join("");
-      return '<tr class="dbep-baris" data-baris="' + w.nomorBaris + '">' +
+      // @P16-C OR-4: No SO + warna ikut di baris -- identitas yang diverifikasi server; nomor baris saja bisa BASI.
+      return '<tr class="dbep-baris" data-baris="' + w.nomorBaris + '" data-noso="' + rjdEscapeHtml_(w.noSO || "") +
+        '" data-warna="' + rjdEscapeHtml_(w.warna || "") + '">' +
         '<th class="of-th-warna" style="text-align:left;font-weight:600">' + rjdEscapeHtml_(w.warna) + '</th>' +
         kain + selSize +
         '<td class="of-td-total dbep-total">' + (w.qty || 0) + '</td>' +
@@ -1145,6 +1150,7 @@ function dbTambahWarnaPO(btn, idxItem){
   // Artikel, Style, ID Artikel) -- supaya warna baru masuk ke item yang SAMA,
   // bukan bikin item baru gara-gara beda satu huruf.
   const contoh = (it.warnaList && it.warnaList[0]) ? it.warnaList[0].nomorBaris : 0;
+  const contohId = (it.warnaList && it.warnaList[0]) ? it.warnaList[0] : {};   // @P16-C OR-4: identitas baris contoh
   if(!contoh){ alert("Tidak bisa menambah warna: item ini belum punya baris acuan."); return; }
 
   const slot = it.slotKain || [];
@@ -1153,6 +1159,7 @@ function dbTambahWarnaPO(btn, idxItem){
   tr.className = "dbep-baris dbep-baru";
   tr.dataset.baru = "1";
   tr.dataset.contoh = contoh;
+  if(contohId.noSO){ tr.dataset.contohNoso = contohId.noSO; tr.dataset.contohWarna = contohId.warna || ""; }
   tr.innerHTML =
     '<th class="of-th-warna" style="text-align:left"><input class="dbep-warna" placeholder="nama warna" type="text"/></th>' +
     slot.map(function(nm){
@@ -1355,6 +1362,9 @@ async function dbSimpanEditPO(){
       const idn = gid ? identitas.filter(function(x){ return x.item === gid.item; })[0] : null;
       return {
         nomorBaris: Number(tr.dataset.baris) || 0,
+        // @P16-C OR-4: identitas (undefined kalau data form lama tanpa noSO -> server memakai nomor apa adanya)
+        noSO: tr.dataset.noso ? tr.dataset.noso : undefined,
+        warna: tr.dataset.noso ? tr.dataset.warna : undefined,
         brand: idn ? idn.brand : undefined,
         artikel: idn ? idn.artikel : undefined,
         style: idn ? idn.style : undefined,
@@ -1367,13 +1377,19 @@ async function dbSimpanEditPO(){
     });
   const hapusBaris = semua
     .filter(function(tr){ return tr.classList.contains("dbep-dihapus") && tr.dataset.baru !== "1"; })
-    .map(function(tr){ return Number(tr.dataset.baris) || 0; });
+    // @P16-C OR-4: kirim identitas -- warna yang sudah terhapus (kirim ulang) DILEWATI server, bukan tetangganya.
+    .map(function(tr){
+      const n = Number(tr.dataset.baris) || 0;
+      return tr.dataset.noso ? { nomorBaris: n, noSO: tr.dataset.noso, warna: tr.dataset.warna } : n;
+    });
   const warnaBaru = semua
     .filter(function(tr){ return tr.dataset.baru === "1"; })
     .map(function(tr){
       return {
         warna: (tr.querySelector(".dbep-warna").value || "").trim(),
         contohBaris: Number(tr.dataset.contoh) || 0,
+        contohNoSO: tr.dataset.contohNoso ? tr.dataset.contohNoso : undefined,
+        contohWarna: tr.dataset.contohNoso ? tr.dataset.contohWarna : undefined,
         harga: Number(tr.querySelector(".dbep-harga").value) || 0,
         sizeQty: bacaSize(tr),
         bahan: bacaKain(tr)
@@ -1401,7 +1417,8 @@ async function dbSimpanEditPO(){
         baris: baris,
         hapusBaris: hapusBaris,
         warnaBaru: warnaBaru,
-        artikel: artikel
+        artikel: artikel,
+        kunciKirim: window.OL_EDITPO_KUNCI || (window.OL_EDITPO_KUNCI = rjdKunciKirimBaru_())
       }
     })
   })
@@ -1409,7 +1426,11 @@ async function dbSimpanEditPO(){
   .then(function(d){
     btn.disabled = false;
     if(d && d.success){
-      statusEl.textContent = "Tersimpan.";
+      window.OL_EDITPO_KUNCI = "";
+      // @P16-C OR-4: kiriman ulang yang ternyata sudah tersimpan -- katakan begitu, bukan "Tersimpan." polos.
+      statusEl.textContent = d.sudahTercatat
+        ? "Sudah tersimpan sebelumnya (jawaban pertama tidak sampai ke layar). Tidak ada yang disimpan dua kali."
+        : "Tersimpan.";
       // Daftar PO dimuat ulang supaya angka & deadline di tabel ikut segar.
       window.OL_DAFTAR_PO = null;
       dbMuatDaftarPO();
@@ -1420,7 +1441,9 @@ async function dbSimpanEditPO(){
   })
   .catch(function(){
     btn.disabled = false;
-    statusEl.textContent = "Gagal menghubungi server.";
+    // @P16-C OR-4: kunci DIPERTAHANKAN -- tekan Simpan lagi aman (server mengenali kiriman yang sama).
+    statusEl.textContent = "Jawaban server tidak sampai ke layar -- perubahan MUNGKIN sudah tersimpan. " +
+      "Tekan Simpan lagi tanpa menutup form: kiriman ulang dari form yang sama tidak disimpan dua kali.";
   });
 }
 
