@@ -231,6 +231,21 @@ h1,h2,h3,h4,h5,h6 { font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif
   border-bottom: 1px solid var(--line-soft);
   font-variant-numeric: tabular-nums;
 }
+/* @PF-20 (v370): bundel CSS Blogger memasang body{word-break:break-word} di tiap halaman live,
+   dan di sel tabel itu menurunkan lebar MINIMUM kolom sampai satu huruf. Terukur (21 Sep 2026,
+   uji/ukur-omset-pecah.py, data persis jalan111 blok L): tabel PPh memecah nama bulan di SETIAP
+   lebar di atas 600 px -- "Septembe/r" di 1300 px desktop, empat bulan di KERTAS 760 px, padahal
+   laporan ini dicetak untuk konsultan pajak -- dan di 601 px TOTAL rupiah tabel omset terbelah
+   di tengah angka ("2.329.852.0/86").
+   Perlindungan yang sudah ada (nowrap + display:block + overflow-x:auto) hidup HANYA di
+   @media (max-width: 600px), dan <= 600 px memang bersih. Di atasnya tabel ini TIDAK punya
+   penggulir (overflow:hidden itu untuk sudut bulat), jadi jawabannya bukan nowrap: word-break
+   normal cukup, karena kolom-kolomnya muat utuh sejak 609 px.
+   SISA YANG DITERIMA, TERUKUR: di 601-608 px tabel pertama (lebar minimum 561 px dengan total
+   miliaran) menjorok <= 8 px ke padding #lo-app -- tanpa luber halaman, tanpa terpotong. Itu
+   menggantikan angka yang terbelah di lebar yang sama; menyeragamkan pitanya berarti memindah
+   ambang 600 yang juga mengatur header & kartu login. Penjaga: uji/jalan120. */
+.lo-tabel th, .lo-tabel td { word-break: normal; }
 .lo-tabel tbody tr { transition: background .15s; animation: loItemIn 0.35s ease-out backwards; }
 .lo-tabel tbody tr:hover { background: var(--cream); }
 @keyframes loItemIn {
