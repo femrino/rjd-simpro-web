@@ -279,9 +279,9 @@ function dbRenderKontrolData(){
       }
       return '<div class="db-attention-card">' +
         '<div>' +
-          '<span style="font-family:monospace;font-size:11px;color:var(--thread)">' + o.kodeOrder + '</span>' +
+          '<span style="font-family:monospace;font-size:11px;color:var(--thread)">' + rjdEscapeHtml_(o.kodeOrder) + '</span>' +
           (o.jumlah ? '<span style="font-size:10px;color:var(--ink-soft);margin-left:8px">' + o.jumlah + ' pcs</span>' : '') +
-          '<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">' + o.tanggalPesanan + ' &#183; Status: ' + (o.status || "-") + ' &#183; Tahap: ' + o.tahap + '</div>' +
+          '<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">' + rjdEscapeHtml_(o.tanggalPesanan) + ' &#183; Status: ' + rjdEscapeHtml_(o.status || "-") + ' &#183; Tahap: ' + rjdEscapeHtml_(o.tahap) + '</div>' +
         '</div>' +
         (badges ? '<div style="display:flex;gap:4px;flex-wrap:wrap">' + badges + '</div>' : '') +
       '</div>';
@@ -338,8 +338,8 @@ function dbRenderKontrolData(){
       return '<div class="db-attention-card"' +
           (bahaya ? ' style="border-left:3px solid var(--thread)"' : '') + '>' +
         '<div>' +
-          '<span style="font-family:monospace;font-size:11px;color:var(--thread)">' + o.kodeOrder + '</span>' +
-          '<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">' + o.tanggalPesanan + ' &#183; Status: ' + (o.status || "-") + '</div>' +
+          '<span style="font-family:monospace;font-size:11px;color:var(--thread)">' + rjdEscapeHtml_(o.kodeOrder) + '</span>' +
+          '<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">' + rjdEscapeHtml_(o.tanggalPesanan) + ' &#183; Status: ' + rjdEscapeHtml_(o.status || "-") + '</div>' +
           (bahaya ? '<div style="font-size:11px;color:var(--thread);font-weight:700;margin-top:3px">Dikirim ' +
             (o.qtyDikirim - o.qtySiapKirim) + ' pcs lebih banyak dari yang lolos QC</div>' : '') +
         '</div>' +
@@ -462,22 +462,22 @@ function dbShowTahapDetail(tahap){
 
   if(!list.length){
     detailEl.innerHTML =
-      '<div style="font-size:13px;font-weight:700;color:var(--navy)">Order di tahap "' + tahap + '"</div>' +
+      '<div style="font-size:13px;font-weight:700;color:var(--navy)">Order di tahap "' + rjdEscapeHtml_(tahap) + '"</div>' +
       '<div class="db-panel-frame" style="margin-top:8px;flex:1;min-height:120px;display:flex"><div class="db-panel-scroll" style="flex:1;min-height:0;height:auto"><p style="color:var(--ink-soft);font-size:13px;margin:0">Tidak ada rincian order di tahap ini.</p></div></div>';
     dbSyncTahapHeight();
     return;
   }
 
   detailEl.innerHTML =
-    '<div style="font-size:13px;font-weight:700;color:var(--navy)">Order di tahap "' + tahap + '" (' + list.length + ')</div>' +
+    '<div style="font-size:13px;font-weight:700;color:var(--navy)">Order di tahap "' + rjdEscapeHtml_(tahap) + '" (' + list.length + ')</div>' +
     '<div class="db-panel-frame" style="margin-top:8px;flex:1;min-height:180px;display:flex"><div class="db-panel-scroll" style="flex:1;min-height:0;height:auto">' +
       list.map(function(o){
         return '<div class="db-attention-card">' +
           '<div>' +
-            '<span style="font-family:monospace;font-size:11px;color:var(--thread)">' + o.kodeOrder + '</span>' +
+            '<span style="font-family:monospace;font-size:11px;color:var(--thread)">' + rjdEscapeHtml_(o.kodeOrder) + '</span>' +
             '<span style="font-size:10px;color:var(--ink);margin-left:8px">' + (o.jumlah ? o.jumlah + ' pcs' : '') + '</span>' +
           '</div>' +
-          (o.deadline ? '<span style="font-size:10px;color:var(--ink-soft)">Deadline: ' + o.deadline + '</span>' : '') +
+          (o.deadline ? '<span style="font-size:10px;color:var(--ink-soft)">Deadline: ' + rjdEscapeHtml_(o.deadline) + '</span>' : '') +
         '</div>';
       }).join("") +
     '</div></div>';
@@ -1036,9 +1036,9 @@ function dbRenderAgingList(list, filter){
     const warna = DB_AGING_WARNA[p.bucket];
     return '<div class="db-attention-card">' +
       '<div>' +
-        '<span style="font-family:monospace;font-size:11px;color:var(--thread)">' + p.idInvoice + '</span>' +
-        '<span style="font-size:10px;color:var(--ink-soft);margin-left:8px">' + p.kodeOrder + '</span>' +
-        '<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">' + p.namaKlien + ' &#183; ' + p.tanggal + '</div>' +
+        '<span style="font-family:monospace;font-size:11px;color:var(--thread)">' + rjdEscapeHtml_(p.idInvoice) + '</span>' +
+        '<span style="font-size:10px;color:var(--ink-soft);margin-left:8px">' + rjdEscapeHtml_(p.kodeOrder) + '</span>' +
+        '<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">' + rjdEscapeHtml_(p.namaKlien) + ' &#183; ' + rjdEscapeHtml_(p.tanggal) + '</div>' +
       '</div>' +
       '<div style="text-align:right">' +
         '<span class="db-attention-badge" style="background:' + warna.bg + ';color:' + warna.teks + '">' + p.hari + ' HARI</span>' +
@@ -1110,10 +1110,10 @@ function dbRenderPerhatian(perlu, filter){
     }).join(" ");
     return '<div class="db-attention-card">' +
       '<div>' +
-        '<span style="font-family:monospace;font-size:11px;color:var(--thread)">' + p.kodeOrder + '</span>' +
+        '<span style="font-family:monospace;font-size:11px;color:var(--thread)">' + rjdEscapeHtml_(p.kodeOrder) + '</span>' +
         (p.jumlah ? '<span style="font-size:10px;color:var(--ink-soft);margin-left:8px">' + p.jumlah + ' pcs</span>' : '') +
         (adaTerlambat
-          ? '<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">Nyangkut di tahap: <b>' + p.tahap + '</b></div>'
+          ? '<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">Nyangkut di tahap: <b>' + rjdEscapeHtml_(p.tahap) + '</b></div>'
           : '') +
       '</div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">' + badgesHtml + '</div>' +
@@ -1525,9 +1525,9 @@ function dbRenderTop3Urgent(perlu){
     terlambat.map(function(p){
       const sub = p.tahap ? ("Nyangkut: " + p.tahap) : (p.jumlah ? (p.jumlah + " pcs") : "");
       return '<div class="db-urgent-cell" onclick="dbGoToTab(\'perhatian\');dbSelectPerhatianFilter(\'terlambat\')">' +
-        '<div class="db-urgent-kode">' + p.kodeOrder + '</div>' +
+        '<div class="db-urgent-kode">' + rjdEscapeHtml_(p.kodeOrder) + '</div>' +
         '<div class="db-urgent-hari">Telat ' + hariTerlambat(p) + ' hari</div>' +
-        '<div class="db-urgent-tahap">' + sub + '</div>' +
+        '<div class="db-urgent-tahap">' + rjdEscapeHtml_(sub) + '</div>' +
       '</div>';
     }).join("") +
     '</div>';
@@ -1574,7 +1574,7 @@ function dbRenderConcentrationAlert(ringkasanKlien, totalOutstanding, agingData)
   el.setAttribute("title", "Klik untuk lihat rincian umur piutang (aging)");
   el.innerHTML =
     '<span class="db-conc-icon">\u26A0</span>' +
-    '<span class="db-conc-text">Konsentrasi piutang tinggi \u2014 <b>' + top.namaKlien + '</b> menahan <b>' +
+    '<span class="db-conc-text">Konsentrasi piutang tinggi \u2014 <b>' + rjdEscapeHtml_(top.namaKlien) + '</b> menahan <b>' +
       dbFormatRupiahRingkas(top.outstanding) + '</b> (<b>' + persen + '%</b> dari total outstanding)' + macetHtml +
       '. Risiko kas numpuk di satu nama.</span>' +
     '<span class="db-conc-cta">Lihat aging \u203A</span>';
@@ -1704,9 +1704,8 @@ function dbRender(data){
           // Klik baris -> langsung lompat ke tab "Detail Klien" dengan klien ini
           // udah kepilih -- shortcut, bukan satu-satunya jalan (dropdown di tab Detail
           // Klien nyakup SEMUA klien termasuk yang lagi nggak aktif, baris ini nggak).
-          const safeId = String(k.idKlien).replace(/'/g, "\\'");
-          return '<div class="db-client-row" style="cursor:pointer" onclick="dbOpenDetailKlien(\'' + safeId + '\')" title="Buka detail klien ini di Portal Klien (tab baru)">' +
-            '<div>' + k.namaKlien + '</div>' +
+          return '<div class="db-client-row" style="cursor:pointer" onclick="dbOpenDetailKlien(\'' + rjdAttrJs_(k.idKlien) + '\')" title="Buka detail klien ini di Portal Klien (tab baru)">' +
+            '<div>' + rjdEscapeHtml_(k.namaKlien) + '</div>' +
             '<div style="text-align:center">' + k.orderAktif + '</div>' +
             '<div style="text-align:right;font-weight:700">' + (k.outstanding > 0 ? dbFormatRupiah(k.outstanding) : '&#8212;') + '</div>' +
           '</div>';

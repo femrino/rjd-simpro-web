@@ -199,11 +199,11 @@ function ckPihakHtml(d, labelKananJudul, labelKananIsi){
   return '<div class="ck-dok-pihak">' +
     '<div>' +
       '<div class="lbl">Kepada</div>' +
-      '<div class="nama">' + d.klien.nama + '</div>' +
+      '<div class="nama">' + rjdEscapeHtml_(d.klien.nama) + '</div>' +
       '<div class="detail">' +
-        (d.klien.alamat ? d.klien.alamat + '<br/>' : '') +
-        (d.klien.kontakPerson ? 'PIC: ' + d.klien.kontakPerson + '<br/>' : '') +
-        (d.klien.telepon ? d.klien.telepon : '') +
+        (d.klien.alamat ? rjdEscapeHtml_(d.klien.alamat) + '<br/>' : '') +
+        (d.klien.kontakPerson ? 'PIC: ' + rjdEscapeHtml_(d.klien.kontakPerson) + '<br/>' : '') +
+        (d.klien.telepon ? rjdEscapeHtml_(d.klien.telepon) : '') +
       '</div>' +
     '</div>' +
     '<div>' +
@@ -321,7 +321,7 @@ function ckRenderInvoice(d){
         '<th class="num">Qty</th><th class="num">Harga Satuan</th><th class="num">Subtotal</th>' +
       '</tr></thead><tbody>' +
       m.lain.map(function(it){
-        return '<tr><td>' + it.deskripsi + '</td>' +
+        return '<tr><td>' + rjdEscapeHtml_(it.deskripsi) + '</td>' +
           '<td class="num">' + it.jumlah + '</td>' +
           '<td class="num">' + formatRupiah(it.hargaSatuan) + '</td>' +
           '<td class="num">' + formatRupiah(it.subtotal) + '</td></tr>';
@@ -406,8 +406,8 @@ function ckRenderInvoice(d){
   const html =
     '<div class="ck-dok">' +
       ckHeaderHtml("INVOICE", d.idInvoice, d.tanggal) +
-      ckPihakHtml(d, "Referensi Order", "Kode Order: " + d.kodeOrder + '<br/>Produk: ' + d.namaProduk +
-        '<br/>Status: <span class="ck-badge-status ' + statusClass + '">' + d.status + '</span>') +
+      ckPihakHtml(d, "Referensi Order", "Kode Order: " + rjdEscapeHtml_(d.kodeOrder) + '<br/>Produk: ' + rjdEscapeHtml_(d.namaProduk) +
+        '<br/>Status: <span class="ck-badge-status ' + statusClass + '">' + rjdEscapeHtml_(d.status) + '</span>') +
       // barisItem SUDAH berisi tabel lengkap (satu per kelompok harga), jadi
       // tidak dibungkus <table> lagi -- membungkusnya menghasilkan tabel
       // bersarang yang rusak di sebagian browser dan berantakan saat dicetak.
@@ -429,7 +429,7 @@ function ckRenderInvoice(d){
       '</div>' +
       '<div class="ck-dok-ttd">' +
         '<div class="kolom">Hormat kami,<div class="garis"></div><div class="nama-ttd">RJD Apparel</div></div>' +
-        '<div class="kolom">Diterima oleh,<div class="garis"></div><div class="nama-ttd">' + d.klien.nama + '</div></div>' +
+        '<div class="kolom">Diterima oleh,<div class="garis"></div><div class="nama-ttd">' + rjdEscapeHtml_(d.klien.nama) + '</div></div>' +
       '</div>' +
     '</div>';
 
@@ -526,15 +526,15 @@ function ckRenderSuratJalan(d){
   const html =
     '<div class="ck-dok">' +
       ckHeaderHtml("SURAT JALAN", d.idPengiriman, d.tanggal) +
-      ckPihakHtml(d, "Detail Pengiriman", "Kode Order: " + d.kodeOrder + '<br/>Produk: ' + d.namaProduk +
-        '<br/>Jenis: ' + d.jenisPengiriman + '<br/>Metode: ' + d.metode +
-        (d.noResi ? '<br/>No. Resi: ' + d.noResi : '')) +
+      ckPihakHtml(d, "Detail Pengiriman", "Kode Order: " + rjdEscapeHtml_(d.kodeOrder) + '<br/>Produk: ' + rjdEscapeHtml_(d.namaProduk) +
+        '<br/>Jenis: ' + rjdEscapeHtml_(d.jenisPengiriman) + '<br/>Metode: ' + rjdEscapeHtml_(d.metode) +
+        (d.noResi ? '<br/>No. Resi: ' + rjdEscapeHtml_(d.noResi) : '')) +
       blokProduk +
       '<div style="text-align:right;font-weight:700;font-size:14px;margin-bottom:20px">Total Dikirim: ' + d.jumlah + ' pcs</div>' +
-      (d.catatan ? '<div class="ck-dok-catatan"><b>Catatan:</b> ' + d.catatan + '</div>' : '') +
+      (d.catatan ? '<div class="ck-dok-catatan"><b>Catatan:</b> ' + rjdEscapeHtml_(d.catatan) + '</div>' : '') +
       '<div class="ck-dok-ttd">' +
         '<div class="kolom">Dikirim oleh,<div class="garis"></div><div class="nama-ttd">RJD Apparel</div></div>' +
-        '<div class="kolom">Diterima oleh,<div class="garis"></div><div class="nama-ttd">' + d.klien.nama + '</div></div>' +
+        '<div class="kolom">Diterima oleh,<div class="garis"></div><div class="nama-ttd">' + rjdEscapeHtml_(d.klien.nama) + '</div></div>' +
       '</div>' +
     '</div>';
 
@@ -852,7 +852,7 @@ function ckRenderKonfirmasiOrder(d){
       catatanHtml +
       '<div class="ck-dok-ttd">' +
         '<div class="kolom">Dikonfirmasi oleh,<div class="garis"></div><div class="nama-ttd">RJD Apparel</div></div>' +
-        '<div class="kolom">Disetujui oleh,<div class="garis"></div><div class="nama-ttd">' + d.klien.nama + '</div></div>' +
+        '<div class="kolom">Disetujui oleh,<div class="garis"></div><div class="nama-ttd">' + rjdEscapeHtml_(d.klien.nama) + '</div></div>' +
       '</div>' +
     '</div>';
 
@@ -1662,7 +1662,7 @@ function ckRenderSPK(){
       catatanHtml +
       ckChecklistQCHtml_(d.checklistQC) +
       '<div class="ck-dok-ttd">' +
-        '<div class="kolom">Dibuat oleh,<div class="garis"></div><div class="nama-ttd">' + d.dicetakOleh + '</div></div>' +
+        '<div class="kolom">Dibuat oleh,<div class="garis"></div><div class="nama-ttd">' + rjdEscapeHtml_(d.dicetakOleh) + '</div></div>' +
         '<div class="kolom">Diterima Produksi,<div class="garis"></div><div class="nama-ttd">(&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;)</div></div>' +
       '</div>' +
     '</div>';

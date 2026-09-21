@@ -219,7 +219,7 @@ function renderInternalKlienPicker(data){
   const selector = document.getElementById("lp-klien-selector");
   selector.innerHTML = "<option value=''>— Pilih klien untuk dilihat —</option>" +
     data.daftarKlien.map(function(k){
-      return "<option value='" + k.id + "'>" + k.nama + "</option>";
+      return "<option value='" + rjdEscapeHtml_(k.id) + "'>" + rjdEscapeHtml_(k.nama) + "</option>";   // P18-B PA-3
     }).join("");
 
   selector.onchange = function(){
@@ -276,7 +276,7 @@ function renderOrders(data){
 
     const selector = document.getElementById("lp-klien-selector");
     selector.innerHTML = data.daftarKlien.map(function(k){
-      return "<option value='" + k.id + "'" + (k.id === data.klienIdAktif ? " selected" : "") + ">" + k.nama + "</option>";
+      return "<option value='" + rjdEscapeHtml_(k.id) + "'" + (k.id === data.klienIdAktif ? " selected" : "") + ">" + rjdEscapeHtml_(k.nama) + "</option>";   // P18-B PA-3
     }).join("");
     selector.onchange = function(){
       if(!selector.value) return;

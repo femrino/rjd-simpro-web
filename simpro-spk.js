@@ -3415,7 +3415,7 @@ function spOrderanHasilHtml_(baris) {
                 (daftarArt.length - 2) + ' lainnya</span>' : '');
             return '<tr class="sp-ord-baris' +
               (p.spSelesai || p.spBatal ? ' sp-ord-selesai' : '') + '" ' +
-              'onclick="spOrderanPilih_(\'' + rjdEscapeHtml_(p.idPurchaseOrder) + '\')">' +
+              'onclick="spOrderanPilih_(\'' + rjdAttrJs_(p.idPurchaseOrder) + '\')">' +
               '<td data-label="Order"><b>' + rjdEscapeHtml_(p.idPurchaseOrder) + '</b>' +
                 (p.spSelesai ? ' <span class="sp-riw-kunci">Selesai</span>' : '') +
                 (p.spBatal ? ' <span class="sp-tag-batal">DIBATALKAN</span>' : '') +
@@ -3850,7 +3850,7 @@ function spRenderSiapkan_() {
     return '<div class="sp-siap-grup">' +
       '<div class="sp-siap-kepala">' +
         '<label class="sp-siap-ceksemua">' +
-          '<input onchange="spSiapkanPilihLine_(\'' + rjdEscapeHtml_(idLine) + '\', this)" type="checkbox"/>' +
+          '<input onchange="spSiapkanPilihLine_(\'' + rjdAttrJs_(idLine) + '\', this)" type="checkbox"/>' +
           '<span><b>' + rjdEscapeHtml_(g.nama) + '</b>' +
             (g.lokasi ? ' <small>' + rjdEscapeHtml_(g.lokasi) + '</small>' : '') + '</span>' +
         '</label>' +
@@ -3885,7 +3885,7 @@ function spRenderSiapkan_() {
         const dipilih = !!(window.SP_SIAPKAN_PILIH || {})[b.idDistribusi];
         return '<label class="sp-siap-baris">' +
           '<input id="sp-siap-cek-' + rjdEscapeHtml_(b.idDistribusi) + '" ' + (dipilih ? 'checked ' : '') +
-            'onchange="spSiapkanToggle_(\'' + rjdEscapeHtml_(b.idDistribusi) + '\', this)" type="checkbox"/>' +
+            'onchange="spSiapkanToggle_(\'' + rjdAttrJs_(b.idDistribusi) + '\', this)" type="checkbox"/>' +
           '<span class="sp-siap-isi">' +
             '<span class="sp-siap-judul">' + rjdEscapeHtml_(b.warna || "-") +
               ' <small>' + rjdEscapeHtml_([b.artikel, b.style].filter(String).join(" / ")) + '</small></span>' +
@@ -8519,11 +8519,12 @@ function spGbBanyakBuka() {
     '<div class="sp-gb-gulung"><table class="sp-gb-kisi"><thead><tr><th>Marker</th>' +
     warna.map(function (w) {
       return '<th>' + spEsc_(w) + '<br/><button class="sp-mkx-catatan-btn" type="button" ' +
-        'onclick="spGbKisiKolom(\'' + spEsc_(w).replace(/'/g, "") + '\')">semua</button></th>';
+        // P18-B WJ-5: warna dari form klien -> data-*, bukan string JS (spEsc_ tidak melindungi konteks itu).
+        'data-warna="' + spEsc_(w) + '" onclick="spGbKisiKolom(this.dataset.warna)">semua</button></th>';
     }).join("") + '</tr></thead><tbody>' +
     marker.map(function (m) {
       return '<tr><td class="sp-gb-mk"><b>' + spEsc_(m.kodeMarker || m.idMarker) + '</b>' +
-        '<small>' + (m.jenisKain || "(belum berjenis kain)") + '</small></td>' +
+        '<small>' + spEsc_(m.jenisKain || "(belum berjenis kain)") + '</small></td>' +   // P18-B WJ-5
         warna.map(function (w) {
           const s = sudah[m.idMarker + "|" + w];
           return '<td class="sp-gb-kisi-sel"><label><input class="sp-gb-centang" type="checkbox" ' +
@@ -8536,7 +8537,8 @@ function spGbBanyakBuka() {
 }
 
 function spGbKisiKolom(warna) {
-  const kotak = document.querySelectorAll('.sp-gb-centang[data-warna="' + warna + '"]');
+  // P18-B WJ-5: disaring lewat dataset, bukan selektor rakitan -- warna ber-" melempar SyntaxError di selektor.
+  const kotak = Array.prototype.filter.call(document.querySelectorAll('.sp-gb-centang'), function (c) { return c.dataset.warna === warna; });
   const semua = Array.prototype.every.call(kotak, function (c) { return c.checked; });
   Array.prototype.forEach.call(kotak, function (c) { c.checked = !semua; });
 }
@@ -8949,7 +8951,7 @@ function spRenderDaftarGelaran_() {
                     "Surat Jalan Potongan", g.idGelaran) + ' '
                 : '') +
               '<button class="sp-btn-kecil" onclick="spBatalGelaran(\'' +
-              spEsc_(g.idGelaran) + '\')" type="button">Batalkan</button>')) + '</td>' +
+              rjdAttrJs_(g.idGelaran) + '\')" type="button">Batalkan</button>')) + '</td>' +
         '</tr>';
       }).join("") +
     '</tbody></table></div>' +
@@ -9406,7 +9408,7 @@ function spRenderRoll_() {
             (diukur ? r.sisaTerukur : null), satuanSisa, keM(r.panjangAwal, satuanRoll))) +
           '</span></td>' +
         '<td data-label=""><button class="sp-btn-kecil" onclick="spBatalRoll(\'' +
-          spEsc_(r.idRoll) + '\')" type="button">Batal</button></td></tr>';
+          rjdAttrJs_(r.idRoll) + '\')" type="button">Batal</button></td></tr>';
     }).join("");
 
     // Rincian utuh vs potongan: ini yang membuat sisa bisa dijelaskan ke klien.
@@ -10035,7 +10037,7 @@ function spRiwayatTahap_(riwayat) {
         (x.catatan ? '<i>' + spEsc_(x.catatan) + '</i>' : '') +
         (x.idProgres
           ? '<button class="sp-btn-kecil" onclick="spBatalTahap(\'' +
-            spEsc_(x.idProgres) + '\')" type="button">Batalkan</button>' : '') +
+            rjdAttrJs_(x.idProgres) + '\')" type="button">Batalkan</button>' : '') +
       '</div>';
     }).join("") +
   '</details>';

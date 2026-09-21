@@ -58,6 +58,16 @@ function rjdEscapeHtml_(s){
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
+/* P18-B (WJ-5/WJ-7) -- nilai untuk ARGUMEN STRING JS di dalam handler atribut: onclick="f('<di sini>')".
+   rjdEscapeHtml_ SAJA tidak cukup: parser HTML mengembalikan &#39; jadi ' SEBELUM JS berjalan, jadi warna
+   x');alert(1);(' tetap memutus string (terukur probe audit: XSS jalan). Urutannya wajib: escape string-JS dulu
+   (backslash, apostrof, pemisah baris), BARU escape HTML. Pola ini sudah benar di simpro-invoice.js (ivAttr_);
+   sekarang satu implementasi bersama. Untuk data baru lebih baik lagi: data-* + this.dataset (tanpa string JS). */
+function rjdAttrJs_(v){
+  return rjdEscapeHtml_(String(v === null || v === undefined ? "" : v)
+    .replace(/\\/g, "\\\\").replace(/'/g, "\\'")
+    .replace(/\r?\n|\r|\u2028|\u2029/g, " "));
+}
 
 function rjdDriveFileId_(url){
   if(!url) return "";
@@ -349,11 +359,11 @@ function renderOrderList(orders, filter){
 
     card.innerHTML =
       '<div class="lp-order-head">' +
-        '<div><div class="lp-order-code">' + order.kodeOrder + '</div>' +
-        '<div class="lp-order-produk">' + order.produk + ' &#183; ' + order.qty + ' pcs</div>' +
+        '<div><div class="lp-order-code">' + rjdEscapeHtml_(order.kodeOrder) + '</div>' +
+        '<div class="lp-order-produk">' + rjdEscapeHtml_(order.produk) + ' &#183; ' + order.qty + ' pcs</div>' +
         badgeHtml +
         '</div>' +
-        '<div class="lp-order-est">Estimasi selesai<br/><b>' + (order.estimasi || '-') + '</b></div>' +
+        '<div class="lp-order-est">Estimasi selesai<br/><b>' + rjdEscapeHtml_(order.estimasi || '-') + '</b></div>' +
       '</div>' +
       '<div class="lp-stepper">' + stepsHtml + '</div>' +
       buildWarnaSizeSectionHtml(order);
@@ -514,12 +524,12 @@ function renderShipments(shipments, filter){
     card.className = "lp-shipment-card";
     card.innerHTML =
       '<div class="lp-shipment-head">' +
-        '<span class="lp-shipment-code">' + s.idPengiriman + ' &#183; ' + s.tanggal + '</span>' +
-        '<span class="lp-shipment-tag">' + s.jenisPengiriman + '</span>' +
+        '<span class="lp-shipment-code">' + rjdEscapeHtml_(s.idPengiriman) + ' &#183; ' + rjdEscapeHtml_(s.tanggal) + '</span>' +
+        '<span class="lp-shipment-tag">' + rjdEscapeHtml_(s.jenisPengiriman) + '</span>' +
       '</div>' +
-      '<div class="lp-shipment-meta">Order <b>' + s.kodeOrder + '</b> &#183; ' + s.jumlah + ' pcs</div>' +
-      '<div class="lp-shipment-meta">Metode: <b>' + s.metode + '</b>' + (s.noResi ? ' &#183; Resi: ' + s.noResi : '') + '</div>' +
-      (s.catatan ? '<div class="lp-shipment-meta" style="margin-top:4px;font-style:italic">' + s.catatan + '</div>' : '') +
+      '<div class="lp-shipment-meta">Order <b>' + rjdEscapeHtml_(s.kodeOrder) + '</b> &#183; ' + s.jumlah + ' pcs</div>' +
+      '<div class="lp-shipment-meta">Metode: <b>' + rjdEscapeHtml_(s.metode) + '</b>' + (s.noResi ? ' &#183; Resi: ' + rjdEscapeHtml_(s.noResi) : '') + '</div>' +
+      (s.catatan ? '<div class="lp-shipment-meta" style="margin-top:4px;font-style:italic">' + rjdEscapeHtml_(s.catatan) + '</div>' : '') +
       '<a class="lp-cetak-link" href="/p/cetak.html?jenis=suratjalan&id=' + encodeURIComponent(s.idPengiriman) + '" target="_blank">&#128424; Cetak Surat Jalan</a>';
     listEl.appendChild(card);
   });
@@ -2640,12 +2650,12 @@ function renderOrderanList(daftar, filter){
       else if(hargaUnik.length === 1) hargaTeks = formatRupiah(hargaUnik[0]) + '/pcs';
       else hargaTeks = formatRupiah(hargaUnik[0]) + ' - ' + formatRupiah(hargaUnik[hargaUnik.length - 1]) + '/pcs';
 
-      const subJudul = [grup.brand, grup.style].filter(Boolean).join(" &#183; ");
+      const subJudul = [grup.brand, grup.style].filter(Boolean).map(rjdEscapeHtml_).join(" &#183; ");
       return '<div class="lp-orderan-item">' +
         '<div class="lp-oi-head">' +
           '<div>' +
             '<div class="lp-oi-nomor">ITEM #' + (gi + 1) + '</div>' +
-            '<b class="lp-oi-artikel">' + (grup.artikel || "-") + '</b>' +
+            '<b class="lp-oi-artikel">' + rjdEscapeHtml_(grup.artikel || "-") + '</b>' +
             (subJudul ? '<div class="lp-oi-sub">' + subJudul + '</div>' : '') +
           '</div>' +
           '<span class="lp-oi-jml-warna">' + grup.warnaList.length + ' warna</span>' +
@@ -2660,20 +2670,20 @@ function renderOrderanList(daftar, filter){
     // Kartu bisa diklik -> modal preview dokumen Konfirmasi Order. Tombol Edit &
     // link Cetak di dalamnya dilindungi stopPropagation supaya tidak ikut
     // membuka modal preview.
-    return '<div class="lp-orderan-card lp-orderan-klik" onclick="lpBukaPreviewOrder(\'' + g.idOrderRequest + '\')" title="Klik untuk lihat rincian lengkap">' +
+    return '<div class="lp-orderan-card lp-orderan-klik" onclick="lpBukaPreviewOrder(\'' + rjdAttrJs_(g.idOrderRequest) + '\')" title="Klik untuk lihat rincian lengkap">' +
       '<div class="lp-order-head">' +
-        '<div><div class="lp-order-code">' + g.idOrderRequest + '</div>' +
-        '<div class="lp-order-produk">' + totalQty + ' pcs &#183; Target kirim: ' + (g.targetTanggalKirim || "-") + '</div></div>' +
-        '<span class="lp-badge ' + badgeClass + '">' + g.status + '</span>' +
+        '<div><div class="lp-order-code">' + rjdEscapeHtml_(g.idOrderRequest) + '</div>' +
+        '<div class="lp-order-produk">' + totalQty + ' pcs &#183; Target kirim: ' + rjdEscapeHtml_(g.targetTanggalKirim || "-") + '</div></div>' +
+        '<span class="lp-badge ' + badgeClass + '">' + rjdEscapeHtml_(g.status) + '</span>' +
       '</div>' +
-      (g.status === "Disetujui" && g.idPurchaseOrderHasil ? '<p class="lp-orderan-note lp-orderan-note-ok">&#10003; Sudah jadi PO: <b>' + g.idPurchaseOrderHasil + '</b></p>' : '') +
-      (g.status === "Ditolak" && g.catatanAdmin ? '<p class="lp-orderan-note lp-orderan-note-tolak">Alasan ditolak: ' + g.catatanAdmin + '</p>' : '') +
+      (g.status === "Disetujui" && g.idPurchaseOrderHasil ? '<p class="lp-orderan-note lp-orderan-note-ok">&#10003; Sudah jadi PO: <b>' + rjdEscapeHtml_(g.idPurchaseOrderHasil) + '</b></p>' : '') +
+      (g.status === "Ditolak" && g.catatanAdmin ? '<p class="lp-orderan-note lp-orderan-note-tolak">Alasan ditolak: ' + rjdEscapeHtml_(g.catatanAdmin) + '</p>' : '') +
       '<div class="lp-orderan-items">' + itemsHtml + '</div>' +
       '<div style="margin-top:10px" onclick="event.stopPropagation()">' +
         '<a class="lp-cetak-link" href="/p/cetak.html?jenis=konfirmasiorder&id=' + encodeURIComponent(g.idOrderRequest) + '" target="_blank">&#128424; Cetak Konfirmasi Order</a>' +
         '<span class="lp-orderan-hint-klik">&#183; klik kartu untuk lihat rincian</span>' +
       '</div>' +
-      (g.status === "Pending" ? '<div class="lp-orderan-actions" onclick="event.stopPropagation()"><button class="lp-edit-btn" onclick="lpBukaEditOrder(\'' + g.idOrderRequest + '\')" type="button">&#9998; Edit Order</button><span class="lp-edit-hint">Bisa diedit selama masih Pending</span></div>' : '') +
+      (g.status === "Pending" ? '<div class="lp-orderan-actions" onclick="event.stopPropagation()"><button class="lp-edit-btn" onclick="lpBukaEditOrder(\'' + rjdAttrJs_(g.idOrderRequest) + '\')" type="button">&#9998; Edit Order</button><span class="lp-edit-hint">Bisa diedit selama masih Pending</span></div>' : '') +
     '</div>';
   }).join("");
 }
@@ -3008,7 +3018,7 @@ function lpBukaEditOrder(idOrderRequest){
       '</div>' +
       '<div class="lp-edit-modal-foot">' +
         '<button class="lp-edit-cancel" onclick="lpTutupEditOrder()" type="button">Batal</button>' +
-        '<button class="lp-edit-save" id="lp-edit-save-btn" onclick="lpSimpanEditOrder(\'' + g.idOrderRequest + '\')" type="button">Simpan Perubahan</button>' +
+        '<button class="lp-edit-save" id="lp-edit-save-btn" onclick="lpSimpanEditOrder(\'' + rjdAttrJs_(g.idOrderRequest) + '\')" type="button">Simpan Perubahan</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(overlay);
@@ -3299,7 +3309,7 @@ function omRenderList(daftar){
       '<div class="om-group-head" onclick="omBukaModalProofing(' + idx + ')" title="Buka proofing order ini">' +
         '<div>' +
           '<span class="om-group-nama">' + (g.namaKlien || g.namaPerusahaanBaru || "(tanpa nama)") + '</span>' +
-          '<div class="om-group-meta">' + labelIsi + ' &#183; Target kirim: ' + (g.targetTanggalKirim || "-") + '</div>' +
+          '<div class="om-group-meta">' + labelIsi + ' &#183; Target kirim: ' + rjdEscapeHtml_(g.targetTanggalKirim || "-") + '</div>' +
           '<div class="om-group-meta">Diajukan: ' + (g.diajukanOleh || "-") + '</div>' +
         '</div>' +
         '<span class="om-status-badge ' + statusClass + '">' + (OM_STATUS_LABEL[g.status] || g.status) + '</span>' +
@@ -3379,19 +3389,19 @@ function omBukaModalProofing(idx){
   var aksiHtml;
   if(klienBaruBelumVerif){
     aksiHtml =
-      '<button class="om-btn om-btn-success" onclick="omVerifikasiKlien(\'' + g.idOrderRequest + '\', ' + idx + ', true)" type="button">Terima &amp; Buat Client ID</button>' +
-      '<button class="om-btn om-btn-danger" onclick="omVerifikasiKlien(\'' + g.idOrderRequest + '\', ' + idx + ', false)" type="button">Tolak Pengajuan</button>' +
-      '<button class="om-btn" onclick="omHapus(\'' + g.idOrderRequest + '\')" style="color:#8f2c22" type="button">Hapus</button>';
+      '<button class="om-btn om-btn-success" onclick="omVerifikasiKlien(\'' + rjdAttrJs_(g.idOrderRequest) + '\', ' + idx + ', true)" type="button">Terima &amp; Buat Client ID</button>' +
+      '<button class="om-btn om-btn-danger" onclick="omVerifikasiKlien(\'' + rjdAttrJs_(g.idOrderRequest) + '\', ' + idx + ', false)" type="button">Tolak Pengajuan</button>' +
+      '<button class="om-btn" onclick="omHapus(\'' + rjdAttrJs_(g.idOrderRequest) + '\')" style="color:#8f2c22" type="button">Hapus</button>';
   } else if(g.status === "Pending"){
     aksiHtml =
-      '<button class="lp-edit-save" id="om-simpan-btn" onclick="omSimpanProofing(\'' + g.idOrderRequest + '\')" type="button">Simpan Perubahan</button>' +
-      '<button class="om-btn om-btn-success" onclick="omApprove(\'' + g.idOrderRequest + '\')" type="button">Setujui Order</button>' +
-      '<button class="om-btn om-btn-danger" onclick="omReject(\'' + g.idOrderRequest + '\')" type="button">Tolak</button>' +
-      '<button class="om-btn" onclick="omHapus(\'' + g.idOrderRequest + '\')" style="color:#8f2c22" type="button">Hapus</button>';
+      '<button class="lp-edit-save" id="om-simpan-btn" onclick="omSimpanProofing(\'' + rjdAttrJs_(g.idOrderRequest) + '\')" type="button">Simpan Perubahan</button>' +
+      '<button class="om-btn om-btn-success" onclick="omApprove(\'' + rjdAttrJs_(g.idOrderRequest) + '\')" type="button">Setujui Order</button>' +
+      '<button class="om-btn om-btn-danger" onclick="omReject(\'' + rjdAttrJs_(g.idOrderRequest) + '\')" type="button">Tolak</button>' +
+      '<button class="om-btn" onclick="omHapus(\'' + rjdAttrJs_(g.idOrderRequest) + '\')" style="color:#8f2c22" type="button">Hapus</button>';
   } else if(g.status === "Disetujui"){
     aksiHtml = '<span class="om-status-final">&#10003; Sudah jadi PO: <b>' + (g.idPurchaseOrderHasil || "-") + '</b></span>';
   } else {
-    aksiHtml = '<button class="om-btn" onclick="omHapus(\'' + g.idOrderRequest + '\')" style="color:#8f2c22" type="button">Hapus</button>';
+    aksiHtml = '<button class="om-btn" onclick="omHapus(\'' + rjdAttrJs_(g.idOrderRequest) + '\')" style="color:#8f2c22" type="button">Hapus</button>';
   }
 
   var overlay = document.createElement("div");

@@ -272,7 +272,7 @@ function dbRenderDaftarPO(){
         proforma = '<span class="db-po-kosong" title="Isi dulu rincian warna &amp; size di SD Rincian Sales Order">-</span>';
       } else if (!p.idProforma) {
         proforma = '<a href="#" class="db-po-terbit rjd-aksi-keuangan" onclick="olTerbitkanProforma(\'' +
-          rjdEscapeHtml_(p.idPurchaseOrder).replace(/'/g, "") + '\', false); return false;">Terbitkan</a>';
+          rjdAttrJs_(p.idPurchaseOrder) + '\', false); return false;">Terbitkan</a>';
       } else {
         // TIDAK menampilkan indikator "nilai berubah" di sini, walau datanya
         // menggoda untuk ditambahkan. Perbandingannya butuh nilai order
@@ -289,7 +289,7 @@ function dbRenderDaftarPO(){
             (p.versiProforma > 1 ? ' v' + p.versiProforma : '') +
           '</div>' +
           ' &#183; <a href="#" class="db-po-terbit rjd-aksi-keuangan" onclick="olTerbitkanProforma(\'' +
-            rjdEscapeHtml_(p.idPurchaseOrder).replace(/'/g, "") + '\', true); return false;">Revisi</a>';
+            rjdAttrJs_(p.idPurchaseOrder) + '\', true); return false;">Revisi</a>';
       }
       return '<tr>' +
         // ID PO sering berbentuk "260731/Pashmina Oval Bandana" -- nomor lalu
@@ -320,7 +320,7 @@ function dbRenderDaftarPO(){
             // kolom Cetak dibuka lagi untuk staf produksi (supaya bisa cetak
             // SPK dari sini), tautan Edit-nya tetap tertutup tanpa perlu
             // diingat lagi.
-            ? ' &#183; <a class="rjd-aksi-keuangan" href="#" onclick="dbBukaEditPO(\'' + rjdEscapeHtml_(p.idPurchaseOrder).replace(/'/g, "") + '\'); return false;">Edit</a>'
+            ? ' &#183; <a class="rjd-aksi-keuangan" href="#" onclick="dbBukaEditPO(\'' + rjdAttrJs_(p.idPurchaseOrder) + '\'); return false;">Edit</a>'
             : '') + '</td>' +
       '</tr>';
     }).join("") +
