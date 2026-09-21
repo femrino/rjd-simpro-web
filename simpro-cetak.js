@@ -1493,7 +1493,10 @@ function ckRenderRekapLine(d){
   if(!d.daftar.length){
     isi = '<p class="ck-rl-kosong">Line ini belum memegang order apa pun.</p>';
   } else {
-    isi = '<table class="ck-rl-tabel"><thead><tr>' +
+    // @PF-23: pembungkus penggulir untuk LAYAR sempit -- header nowrap membuat lebar minimum
+    // tabel 451 px, dan tanpa ini ia TERPOTONG (bukan tergeser) di bawah lebar itu.
+    // Di @media print pembungkusnya dikembalikan `overflow: visible`.
+    isi = '<div class="ck-rl-gulir"><table class="ck-rl-tabel"><thead><tr>' +
         '<th>Purchase Order</th><th>Artikel &#183; Warna</th>' +
         '<th class="num">Jatah</th><th>Setor &#183; QC</th><th>Deadline</th>' +
       '</tr></thead><tbody>' +
@@ -1532,7 +1535,7 @@ function ckRenderRekapLine(d){
             (ket ? '<div class="ck-rl-ket ' + kelas + '">' + ket + '</div>' : '') + '</td>' +
         '</tr>';
       }).join("") +
-      '</tbody></table>';
+      '</tbody></table></div>';
   }
 
   document.getElementById("ck-isi").innerHTML =

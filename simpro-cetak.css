@@ -272,6 +272,9 @@ body:has(nav) { padding-top: 0; }
 }
 
 @media print{
+  /* @PF-23: penggeser itu untuk LAYAR. Di kertas tidak ada yang bisa digeser, dan
+     `overflow: auto` di media cetak bisa MEMOTONG isi alih-alih melimpahkannya. */
+  .ck-rl-gulir{overflow:visible !important}
   .ck-no-print,nav,footer{display:none !important}
   body{padding-top:0 !important;background:var(--white) !important}
   #ck-app{margin:0 !important;padding:0 !important;max-width:100% !important}
@@ -350,9 +353,43 @@ body:has(nav) { padding-top: 0; }
   text-transform: uppercase; letter-spacing: .06em; }
 
 .ck-rl-tabel { width: 100%; border-collapse: collapse; font-size: 12px; }
+/* @PF-23 (21 Sep 2026) -- HEADER TIDAK BOLEH PECAH, DAN TABELNYA MENGGULIR DI LAYAR SEMPIT.
+   ============================================================
+   `white-space: nowrap` pada `th` bukan pilihan gaya melainkan MENYAMAKAN tabel ini dengan
+   seluruh sistem: `.iv-tabel th`, `.ks-tabel th`, `.sp-tabel th`, `.up-tabel th`, `.sop-tabel th`
+   dan `.kr-tabel th` semuanya sudah nowrap -- `.ck-rl-tabel` satu-satunya yang tidak, dan itu
+   anomali, bukan keputusan.
+
+   TERUKUR SEBELUM (uji/ukur-cetak-pecah.py, data berbentuk nyata, bundel CSS Blogger dimuat
+   seperti halaman live):
+     KERTAS 760 px   header `Deadli/ne` PECAH -- dan kertas tidak bisa digulir
+     LAYAR  360 px   39 kata pecah: header `Purcha/se` `Artike/l` `Jata/h`, nomor PO
+                     `26081/1/Khiban`, nama klien `Bahag/ia`, label artikel `Kemej/a` `Lenga/n`,
+                     dan TANGGAL terbelah jadi `1/0` `S/ep` `2/026`
+     LAYAR  620-800  header `Deadl/ine` masih pecah
+   Halaman ini DICETAK dan ditempel di dinding line (lihat komentar di kepala berkas ini), jadi
+   yang terpotong di kertas tidak bisa diperbaiki pembacanya dengan menggeser.
+
+   KENAPA NOWRAP SAJA TIDAK CUKUP, dan kenapa keduanya dirilis bersama: dengan header nowrap
+   lebar minimum tabel jadi 451 px, jadi di 360-430 px ia MELUBER 89/59/19 px -- dan tanpa
+   pembungkus penggulir itu berarti TERPOTONG, bukan tergeser. Itu menukar "pecah tapi terbaca"
+   dengan "tidak terbaca sama sekali"; lebih buruk daripada cacat yang diperbaiki. Pola yang
+   sama dengan PF-16 (`min-width` yang WAJIB dikurung) dan PF-21 (`.up-tabelwrap` yang sudah ada
+   tapi tidak pernah aktif).
+
+   `.ck-rl-gulir` karena itu ditambahkan BERSAMA aturan ini (markupnya di simpro-cetak.js), dan
+   di `@media print` ia dikembalikan `visible`: kertas tidak punya penggeser, dan `overflow: auto`
+   di media cetak bisa MEMOTONG isi alih-alih melimpahkannya ke halaman berikutnya.
+   ============================================================ */
+.ck-rl-gulir { overflow-x: auto; }
+/* Sel: `word-break: normal` -- pola yang sama dengan `.ks-tabel` (v364), `.sp-tabel`/`.sop-tabel`
+   (v367). Aman DI SINI justru karena `.ck-rl-gulir` di atas baru ditambahkan: tabel yang melebar
+   (503 px di 360 px viewport) MENGGULIR, bukan terpotong. Tanpa pembungkus itu aturan ini akan
+   meluberkan halaman -- urutan kedua patch ini bukan kebetulan. */
+.ck-rl-tabel th, .ck-rl-tabel td { word-break: normal; }
 .ck-rl-tabel th { background: var(--cream, #F9F7F2); border-bottom: 1.5px solid var(--line, #E5E0D6);
   padding: 8px 10px; text-align: left; font-family: 'IBM Plex Mono', monospace; font-size: 9.5px;
-  color: var(--ink-soft, #6B7280); font-weight: 700; text-transform: uppercase; }
+  color: var(--ink-soft, #6B7280); font-weight: 700; text-transform: uppercase; white-space: nowrap; }
 .ck-rl-tabel th.num, .ck-rl-tabel td.num { text-align: right; }
 .ck-rl-tabel td { border-bottom: 1px solid var(--line-soft, #E5E0D6); padding: 9px 10px;
   vertical-align: top; }
