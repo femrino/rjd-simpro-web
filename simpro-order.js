@@ -77,6 +77,11 @@ function ofHandleGoogleLogin(response){
 
 // Kalau pengaju staff, tampilkan banner MODE STAFF + dropdown pilih klien.
 // Klien biasa: nggak terjadi apa-apa (dropdown tetap tersembunyi).
+// @P16-B OR-7 (butuh gs >= @394): satu kunci kirim per isian form -- dipakai ulang di setiap percobaan
+// Kirim, dibuang sesudah sukses. Server menjawab kiriman kedua berkunci sama dengan pengajuan yang lama.
+// Halaman ini tidak punya jalan ke order kedua tanpa muat ulang, jadi satu kunci per muatan halaman.
+// Pembuatnya bersama: rjdKunciKirimBaru_ di simpro-global.js.
+var OF_KUNCI_KIRIM = "";
 var OF_IS_STAFF = false;
 var OF_ID_KLIEN_DIPILIH = "";
 function ofCekStaff_(){
@@ -221,6 +226,8 @@ async function ofSubmitOrder(){
   }
 
   btn.textContent = "Mengirim...";
+  if(!OF_KUNCI_KIRIM) OF_KUNCI_KIRIM = rjdKunciKirimBaru_();
+  payload.kunciKirim = OF_KUNCI_KIRIM;
 
   fetch(OF_API_URL, {
     method: "POST",
@@ -234,7 +241,20 @@ async function ofSubmitOrder(){
       btn.textContent = "Kirim Order";
       return;
     }
+    OF_KUNCI_KIRIM = "";
     document.getElementById("of-sukses-id").textContent = data.idOrderRequest;
+    if(data.sudahTercatat){
+      // Kiriman ulang yang ternyata sudah sampai: katakan begitu, termasuk bahwa perubahan isian
+      // sesudah kiriman pertama TIDAK ikut. Satu elemen saja walau tombolnya ditekan lagi.
+      let cat = document.getElementById("of-sukses-sudah-tercatat");
+      if(!cat){
+        cat = document.createElement("p");
+        cat.id = "of-sukses-sudah-tercatat";
+        cat.style.whiteSpace = "pre-line";
+        document.getElementById("of-sukses").appendChild(cat);
+      }
+      cat.textContent = rjdPesanOrderSudahTercatat_(data.idOrderRequest);
+    }
     document.getElementById("of-app").querySelectorAll(":scope > div:not(#of-sukses)").forEach(function(el){
       el.classList.add("hidden");
     });
@@ -243,7 +263,7 @@ async function ofSubmitOrder(){
     if(hero) hero.style.display = "none";
   })
   .catch(function(){
-    ofTampilkanError("Gagal menghubungi server. Coba beberapa saat lagi.");
+    ofTampilkanError(RJD_PESAN_ORDER_TIDAK_SAMPAI);   // @P16-B: kirim ulang dari form yang sama aman
     btn.disabled = false;
     btn.textContent = "Kirim Order";
   });

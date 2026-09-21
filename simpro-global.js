@@ -2803,6 +2803,30 @@ function lpTutupFormOrderBaru(){
   document.body.style.overflow = "";
 }
 
+/* @P16-B OR-7 (web, butuh gs >= @394): KUNCI KIRIM order. Server (submitOrderRequest_) menjawab
+   kiriman kedua berkunci SAMA dengan nomor pengajuan yang lama (sudahTercatat) tanpa menulis & tanpa
+   mengunggah lagi, selama 10 menit. Dulu tombol Kirim yang ditekan ulang sesudah jaringan putus
+   melahirkan dua REQ + dua set unggahan, dan admin bisa menyetujui keduanya jadi dua PO.
+   Kuncinya SATU per isian form -- dipakai ulang di setiap percobaan, dibuang sesudah sukses. */
+function rjdKunciKirimBaru_(){
+  try{ if(window.crypto && typeof crypto.randomUUID === "function") return crypto.randomUUID(); }catch(e){}
+  return "k" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+}
+/* Kiriman ulang yang ternyata sudah tercatat. Kalimatnya jujur tentang satu hal: kalau isian
+   sempat diubah sesudah kiriman pertama, perubahan itu TIDAK ikut -- server menjawab dengan
+   pengajuan yang lama, bukan menyimpan yang baru. */
+function rjdPesanOrderSudahTercatat_(id){
+  return "Order ini SUDAH tercatat dengan nomor " + id + " -- kiriman sebelumnya ternyata sampai ke server " +
+    "walau jawabannya tidak sampai ke layar. Tidak ada order kedua yang dibuat.\n\n" +
+    "Kalau Anda sempat mengubah isian sesudah kiriman pertama, perubahan itu BELUM ikut tersimpan -- " +
+    "ubah lewat daftar Orderan atau hubungi admin.";
+}
+/* Jaringan putus: pesan yang menyuruh KIRIM LAGI, bukan "periksa dulu" -- dengan kunci kirim,
+   kiriman ulang dari form yang sama justru jalan yang aman (plafon kuncinya 10 menit di server). */
+var RJD_PESAN_ORDER_TIDAK_SAMPAI = "Jawaban server tidak sampai ke layar -- order MUNGKIN sudah tercatat. " +
+  "Tekan Kirim Order lagi tanpa menutup halaman/form ini: kiriman ulang dari isian yang sama dalam 10 menit " +
+  "tidak akan tercatat dua kali.";
+
 function lpOrderBaruError_(pesan){
   var el = document.getElementById("lp-order-error");
   if(!el) return;
@@ -2875,6 +2899,11 @@ async function lpKirimOrderBaru(){
   // sedang dibuka. Backend cuma menghormati field ini kalau pengirimnya
   // TERVERIFIKASI staff -- klien biasa nggak bisa menyamar (gerbangnya di
   // doPost submitOrderRequest, sama dengan mode staff di /p/order.html).
+  // @P16-B: kunci diikat ke OVERLAY modal -- lahir saat modal dibuka pertama kali dikirim, ikut
+  // lenyap saat modal ditutup. Tanpa variabel global yang bisa terbawa ke order berikutnya.
+  var ovKunci = document.getElementById("lp-order-overlay");
+  if(ovKunci && !ovKunci.dataset.kunciKirim) ovKunci.dataset.kunciKirim = rjdKunciKirimBaru_();
+  if(ovKunci) payload.kunciKirim = ovKunci.dataset.kunciKirim;
   var bodyKirim = { idToken: lpIdTokenUniversal_(), action: "submitOrderRequest", payload: payload };
   if(window.LP_ROLE === "internal" && window.LP_PROFIL_ID_KLIEN_SAAT_INI){
     bodyKirim.idKlienDipilih = window.LP_PROFIL_ID_KLIEN_SAAT_INI;
@@ -2888,8 +2917,9 @@ async function lpKirimOrderBaru(){
   .then(function(data){
     if(data.success){
       lpTutupFormOrderBaru();
-      alert("Order berhasil dikirim.\nNomor pengajuan: " + data.idOrderRequest +
-        "\n\nTim kami akan meninjau pengajuan ini dan menghubungi Anda lewat WhatsApp.");
+      alert(data.sudahTercatat ? rjdPesanOrderSudahTercatat_(data.idOrderRequest)
+        : "Order berhasil dikirim.\nNomor pengajuan: " + data.idOrderRequest +
+          "\n\nTim kami akan meninjau pengajuan ini dan menghubungi Anda lewat WhatsApp.");
       if(typeof lpFetchProfilDanOrderan === "function"){
         lpFetchProfilDanOrderan(window.LP_PROFIL_ID_KLIEN_SAAT_INI || null);
       }
@@ -2899,7 +2929,7 @@ async function lpKirimOrderBaru(){
     }
   })
   .catch(function(){
-    lpOrderBaruError_("Gagal menghubungi server. Coba lagi.");
+    lpOrderBaruError_(RJD_PESAN_ORDER_TIDAK_SAMPAI);   // @P16-B: kirim ulang dari form yang sama aman
     btn.disabled = false; btn.textContent = "Kirim Order";
   });
 }
