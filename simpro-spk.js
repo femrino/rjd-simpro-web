@@ -1326,6 +1326,9 @@ function spSimpan() {
       '<div class="sp-sukses-isi">' +
         '<b>' + h.totalQty + ' pcs</b> tersimpan untuk <b>' + rjdEscapeHtml_(h.namaLine) + '</b>' +
         ' (' + h.jumlahBaris + ' baris warna).' +
+        // P17 PX-2 (butuh gs >= @401): server kini menjawab kembar HANYA untuk kiriman ulang dengan ISI yang sama --
+        // layar harus mengatakannya, bukan 'tersimpan' seolah pembagian baru (pola setoran :5387).
+        (h.kembar ? ' <i>(sudah tersimpan sebelumnya -- tidak dicatat dua kali)</i>' : '') +
         // v186: tautan utama = SPK BATCH INI (yang barusan disimpan). Kertas
         // yang ikut ke tumpukan potongan harus memuat tumpukan itu saja.
         // v193: pratinjau di dalam halaman -- sesudah menyimpan, orang masih
