@@ -479,7 +479,10 @@ function loRenderHPP() {
         [["Upah Borongan Bulanan","lo-kal-upah"],["Biaya Tetap Bulanan Min","lo-kal-tmin"],
          ["Biaya Tetap Bulanan Max","lo-kal-tmax"],["Margin Target Persen","lo-kal-margin"]]
         .map(function(f){
-          const nilaiKini = r[f[0]] !== undefined ? r[f[0]] : "";
+          // K21-C HG-9: ringkasan cache menulis margin sebagai "Margin Target" (hpp-cache.js), nama baris kalibrasinya
+          // "Margin Target Persen" -- dulu kotak margin SELALU kosong di produksi (fixture jalan70 memakai nama karangan).
+          const nilaiKini = r[f[0]] !== undefined ? r[f[0]]
+            : (f[0] === "Margin Target Persen" && r["Margin Target"] !== undefined ? r["Margin Target"] : "");
           return '<label style="font-size:12.5px;color:var(--ink-soft)">' + f[0] +
             '<input id="' + f[1] + '" inputmode="numeric" style="width:100%;margin-top:4px" ' +
               'type="text" value="' + nilaiKini + '"/></label>';
@@ -518,7 +521,9 @@ function loRenderHPPHarga() {
     '<div class="lo-hpp-blok-judul">Harga minimum per artikel</div>' +
     '<div class="lo-hpp-blok-sub">' + tertinggal.length + ' dari ' + semua.length +
       ' artikel harganya belum menutup margin target. Jarak besar bukan berarti harga ' +
-      'harus naik sebesar itu &#8212; mengurangi proses juga menutupnya.</div>' +
+      'harus naik sebesar itu &#8212; mengurangi proses juga menutupnya. ' +
+      '<b>Harga min di sini TANPA kain</b> (upah + overhead + aksesoris) &#8212; untuk order Maklon tambahkan harga kain, ' +
+      'dan &quot;Pernah dijual&quot; order Maklon sudah termasuk kain.</div>' +
     '<div class="lo-hpp-tabelwrap"><table class="lo-hpp-tabel">' +
     '<thead><tr><th>Artikel</th><th class="lo-hpp-num">SMV / Proses</th>' +
     '<th class="lo-hpp-num">Harga min</th><th class="lo-hpp-num">Pernah dijual</th>' +
@@ -532,6 +537,15 @@ function loRenderHPPHarga() {
 
 function loRenderHPPOrder() {
   const rugi = (LO_HPP_DATA.order || []).filter(function (o) { return o["Status"] === "Rugi"; });
+  const rR = (LO_HPP_DATA && LO_HPP_DATA.ringkasan) || {};
+  // K21-C HG-13 (butuh gs >= @407): kalau sheet cache Order gagal ditulis, daftar kosong BUKAN 'tidak ada yang rugi'.
+  // Tanda: ringkasan menyebut 'Sheet Gagal', atau menghitung Order Rugi > 0 sementara daftarnya kosong.
+  if (!rugi.length && (rR["Sheet Gagal"] || Number(rR["Order Rugi"]) > 0)) {
+    return '<div class="lo-hpp-blok"><div class="lo-hpp-blok-judul">Order yang merugi</div>' +
+      '<div class="lo-hpp-kosong">Daftar order TIDAK bisa dipercaya: cache ' + loEsc(rR["Sheet Gagal"] || "Order") +
+      ' gagal ditulis pada perhitungan terakhir (ringkasan menghitung ' + (Number(rR["Order Rugi"]) || 0) + ' order rugi). ' +
+      'Jalankan ulang updateCacheHPP.</div></div>';
+  }
   if (!rugi.length) {
     return '<div class="lo-hpp-blok"><div class="lo-hpp-blok-judul">Order yang merugi</div>' +
       '<div class="lo-hpp-kosong">Tidak ada order yang rugi pada kedua ujung rentang.</div></div>';
