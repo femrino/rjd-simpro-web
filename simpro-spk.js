@@ -6457,7 +6457,7 @@ function spMkxAwasAllowance_() {
   // v326: penanda "panel" didahulukan -- ia menyebut nilai yang SEHARUSNYA, sedangkan peringatan
   // ganti-kain cuma menyebut bahwa sesuatu perlu diperiksa. Menampilkan keduanya sekaligus
   // membuat yang lebih berguna tenggelam.
-  if (spKodePanel_(elP && elP.value) && Number(elA.value) !== 0) {
+  if (spKodePanel_(elP && elP.value) && spParseDesimal_(elA.value) !== 0) {
     if (lbl) lbl.classList.add("sp-mkx-awas");
     wadah.innerHTML = spSaranAllowancePanelHtml_("sp-mkx-panel-nol", "spMkxPakaiAllowanceNol()");
     return;
@@ -6480,6 +6480,13 @@ function spMkxAwasAllowance_() {
 function spMkxKumpulkan_() {
   const galat = [];
   const baris = [];
+  // @P18-C WJ-4: lebar & allowance medan BERSAMA -- divalidasi di sini supaya pratinjau menyebutnya sebelum Simpan.
+  const lebarTeks = (document.getElementById("sp-mkx-lebar") || {}).value || "";
+  const allowTeks = (document.getElementById("sp-mkx-allow") || {}).value || "";
+  const gLebar = spGalatDesimal_("Lebar kain", lebarTeks, SP_BATAS_DESIMAL.lebar, "cm");
+  const gAllow = spGalatDesimal_("Allowance per lapis", allowTeks, SP_BATAS_DESIMAL.allowance, "m");
+  if (gLebar) galat.push(gLebar);
+  if (gAllow) galat.push(gAllow);
   const pola = (document.getElementById("sp-mkx-pola") || {}).value || "";
   const trs = [];
   document.querySelectorAll("#sp-mkx-tabel tbody tr").forEach(function (tr) { trs.push(tr); });
@@ -6491,14 +6498,17 @@ function spMkxKumpulkan_() {
     const susun = spMkxSusunBaris_(tr);
     const daftarSz = Object.keys(susun);
     const sz = daftarSz.join(" ") || "(kosong)";
-    const panjang = Number((tr.querySelector(".sp-mkx-panjang") || {}).value) || 0;
+    const panjangTeks = String((tr.querySelector(".sp-mkx-panjang") || {}).value || "").trim();
+    const panjang = spParseDesimal_(panjangTeks);   // @P18-C WJ-4
     const kode = daftarSz.length ? spMkxKode_(pola, daftarSz) : "";
     if (!daftarSz.length) {
       galat.push("Baris ke-" + (baris.length + 1) + ": belum ada size yang diisi pola/lapisnya. " +
         "Isi minimal satu kotak di kolom Pola/lapis, atau lepas centangnya.");
     } else {
       if (!kode) galat.push("Size " + sz + ": kode marker kosong. Isi Pola Kode di atas.");
-      if (panjang <= 0) galat.push("Size " + sz + ": panjang marker belum diisi.");
+      const gPanjang = spGalatDesimal_("Size " + sz + ": panjang marker", panjangTeks, SP_BATAS_DESIMAL.panjangMarker, "m");
+      if (gPanjang) galat.push(gPanjang);
+      else if (!(panjang > 0)) galat.push("Size " + sz + ": panjang marker belum diisi.");
     }
     // Dua size yang menghasilkan kode SAMA berarti pola tidak memuat {size}: baris kedua dan
     // seterusnya akan ditolak server sebagai kembar. Dikumpulkan dulu, dilaporkan SEKALI di bawah.
@@ -6514,7 +6524,12 @@ function spMkxKumpulkan_() {
       if (dipakai[kode]) { if (bentrok.indexOf(kode) === -1) bentrok.push(kode); }
       else dipakai[kode] = sz;
     }
-    baris.push({ tr: tr, cb: cb, sz: sz, kode: kode, panjang: panjang, susun: susun,
+    // @P18-C WJ-10: SATU idPermintaan per baris, bertahan selama isinya sama -- 'Simpan ulang yang gagal' sesudah
+    // jawaban hilang (berapa menit pun) dijawab server dengan marker yang sudah tercatat. Pola daftar bentangan.
+    const sidikIdp = [kode, panjangTeks, JSON.stringify(susun), lebarTeks, allowTeks,
+      (document.getElementById("sp-mkx-kain") || {}).value || "", (document.getElementById("sp-mkx-komponen") || {}).value || ""].join("|");
+    if (!tr.dataset.idp || tr.dataset.idpSidik !== sidikIdp) { tr.dataset.idp = rjdKunciKirimBaru_(); tr.dataset.idpSidik = sidikIdp; }
+    baris.push({ tr: tr, cb: cb, sz: sz, kode: kode, panjang: panjang, susun: susun, idPermintaan: tr.dataset.idp,
       catatan: String((tr.querySelector(".sp-mkx-catatan-isi") || {}).value || "").trim(),
       qty: daftarSz.reduce(function (a, k) { return a + susun[k]; }, 0),
       sudahAda: spMkxKodeSudahAda_(kode),
@@ -6657,8 +6672,9 @@ async function spMkxSimpan(btn) {
   if (info.galat.length) { spMkxPratinjau(); return; }
   const it = spMkxItem_();
   const kain = (document.getElementById("sp-mkx-kain") || {}).value || "";
-  const lebar = Number((document.getElementById("sp-mkx-lebar") || {}).value) || 0;
-  const allow = (document.getElementById("sp-mkx-allow") || {}).value;
+  const lebar = spParseDesimal_((document.getElementById("sp-mkx-lebar") || {}).value) || 0;   // @P18-C WJ-4
+  const allowTeks = String((document.getElementById("sp-mkx-allow") || {}).value || "").trim();
+  const allow = allowTeks === "" ? "" : spParseDesimal_(allowTeks);   // kosong -> bawaan server; sah sudah diperiksa spMkxKumpulkan_
   const komponen = (document.getElementById("sp-mkx-komponen") || {}).value || "";
   const st = document.getElementById("sp-mkx-status");
   if (btn) { btn.disabled = true; btn.textContent = "Menyimpan..."; }
@@ -6687,7 +6703,8 @@ async function spMkxSimpan(btn) {
         allowancePerLapis: allow, komponen: komponen, jenisKain: kain,
         satuanPanjang: "m", susunanSize: susunan, status: "Final", idMarkerAsal: "",
         catatan: b.catatan || "", urlLayout: "", urlFileMarker: "",
-        fileLayout: fileLayout, fileMarker: fileMarker
+        fileLayout: fileLayout, fileMarker: fileMarker,
+        idPermintaan: b.idPermintaan   // @P18-C WJ-10
       });
       ok++;
       b.cb.checked = false;
@@ -6746,7 +6763,7 @@ function spMkxBarisSatuHtml_(sizes, sizeTerisi, dariOrder) {
     '<td class="sp-mkx-sz" data-label="Size">&#183;</td>' +
     '<td class="sp-mkx-kode" data-label="Kode">&#183;</td>' +
     '<td data-label="Panjang"><input class="sp-mkx-panjang" min="0" placeholder="1.207" ' +
-      'step="0.001" type="number"/></td>' +
+      'inputmode="decimal" type="text"/></td>' +
     '<td class="sp-mkx-susun" data-label="Pola/lapis"><div class="sp-mkx-szgrid">' +
       sizes.map(function (sz) {
         return '<label><span>' + spEsc_(sz) + '</span>' +
@@ -6893,8 +6910,8 @@ function spMkxPanelHtml_() {
             'placeholder="mis. Polos" value=""/></label>' +
         '</div>' +
         '<div class="sp-grid3">' +
-          '<label>Lebar Kain (cm)<input id="sp-mkx-lebar" min="0" placeholder="150" step="0.5" ' +
-            'type="number" value=""/></label>' +
+          '<label>Lebar Kain (cm)<input id="sp-mkx-lebar" min="0" placeholder="150" ' +
+            'inputmode="decimal" type="text" value=""/></label>' +
           // v325: value KOSONG, 0.02 tinggal jadi placeholder. Sebelumnya kotak ini dirender
           // value="0.02", dan karena salinan medan bersama hanya mengisi kotak yang MASIH KOSONG,
           // salinan allowance TIDAK PERNAH berjalan -- padahal catatan di layar menjanjikan
@@ -6903,7 +6920,7 @@ function spMkxPanelHtml_() {
           // Berbahaya sejak allowance berhenti jadi konstanta: 11 Sep 2026 Femri memakai 0 untuk
           // kain yang sudah terukur mengikuti panel motif dan 0,02 untuk polos.
           '<label>Allowance per lapis (m)<input id="sp-mkx-allow" min="0" placeholder="0.02" ' +
-            'step="0.001" type="number" value=""/></label>' +
+            'inputmode="decimal" type="text" value=""/></label>' +
           '<label>Komponen<input id="sp-mkx-komponen" list="sp-dl-komponen-mkx" ' +
             'placeholder="kosongkan = semua panel" type="text" value=""/></label>' +
           spDatalistKomponen_("sp-dl-komponen-mkx") +   // v345 (PF-9): datalist sendiri, bukan menumpang
@@ -7684,9 +7701,9 @@ function spRenderFormGelaran_() {
       '<label>Jumlah Lapis<input id="sp-gl-lapis" min="1" oninput="spHitungGelaran_()" ' +
         'placeholder="0" type="number"/></label>' +
       '<label>Tanggal<input id="sp-gl-tanggal" type="date" value="' +
-        new Date().toISOString().slice(0, 10) + '"/></label>' +
-      '<label>Allowance/lapis (m)<input id="sp-gl-allow" min="0" oninput="spHitungGelaran_()" ' +
-        'step="0.001" type="number"/></label>' +
+        spHariIniLokal_() + '"/></label>' +
+      '<label>Allowance/lapis (m)<input id="sp-gl-allow" inputmode="decimal" oninput="spHitungGelaran_()" ' +
+        'type="text"/></label>' +
     '</div>' +
     '<div class="sp-grid3">' +
       // v143: KODE kain yang benar-benar digelar. "Jenis Kain" di atas itu
@@ -7717,7 +7734,7 @@ function spRenderFormGelaran_() {
             'placeholder="mis. Lengan" type="text"/></label>' +
         '<label id="sp-gl-lbl-alasan">Alasan<input id="sp-gl-alasan" placeholder="mis. kain sobek" type="text"/></label>' +
         '<label>Kain terpakai (m)<input id="sp-gl-kain-manual" min="0" ' +
-          'oninput="spHitungGelaran_()" placeholder="0" step="0.01" type="number"/></label>' +
+          'inputmode="decimal" oninput="spHitungGelaran_()" placeholder="0" type="text"/></label>' +
       '</div>' +
       // v154: kotak "Untuk Line" -- OPSIONAL. Gunanya menjawab pertanyaan yang
       // sekarang tidak bisa dijawab sama sekali: panel apa yang paling sering
@@ -8073,7 +8090,7 @@ function spGbPanelHtml_(marker, warna, kain) {
     'Tambah baris sebanyak yang digelar &#8212; yang tidak digelar tidak perlu ada di sini.</p>' +
     '<div class="sp-grid3">' +
       '<label>Tanggal<input id="sp-gb-tanggal" type="date" value="' +
-        new Date().toISOString().slice(0, 10) + '"/></label>' +
+        spHariIniLokal_() + '"/></label>' +
       '<label>Catatan (untuk semua)<input id="sp-gb-catatan" placeholder="opsional" type="text"/></label>' +
     '</div>' +
     '<div class="sp-gb-gulung">' +
@@ -8404,8 +8421,9 @@ function spGbKumpulkan_() {
       out.galat.push(nomor + " (" + nama + "): marker ini belum punya Jenis Kain, pilih kainnya");
       tr.classList.add("sp-gb-salah"); return;
     }
-    const lapis = Number(lapisTeks.replace(",", "."));
-    if (!lapisTeks || !isFinite(lapis) || lapis <= 0 || Math.floor(lapis) !== lapis) {
+    // @P18-C WJ-11: lapis = digit saja. Dulu Number('1.000') = 1 dan Number('1,000'.replace) = 1 lolos diam-diam.
+    const lapis = /^\d+$/.test(lapisTeks) ? Number(lapisTeks) : NaN;
+    if (!lapisTeks || !isFinite(lapis) || lapis <= 0) {
       out.galat.push(nomor + " (" + nama + " × " + warna +
         "): jumlah lapis harus bilangan bulat lebih dari 0" + (lapisTeks ? " (terbaca \"" + lapisTeks + "\")" : ""));
       tr.classList.add("sp-gb-salah"); return;
@@ -8419,6 +8437,10 @@ function spGbKumpulkan_() {
         "): pasangan ini sudah ada di baris " + dipakai[kunci] + " daftar ini. Disimpan sebagai dua gelaran terpisah.");
     }
     dipakai[kunci] = i + 1;
+    // @P18-C WJ-11: allowance lewat pembaca bersama. '0,0,2' dulu terkirim '0.0,2' (server 0), '-0.02' mengurangi kain.
+    const allowTeksGb = String(tr.querySelector(".sp-gb-allow").value || "").trim();
+    const gAllowGb = spGalatDesimal_(nomor + " (" + nama + "): allowance", allowTeksGb, SP_BATAS_DESIMAL.allowance, "m");
+    if (gAllowGb) { out.galat.push(gAllowGb); tr.classList.add("sp-gb-salah"); return; }
 
     // @P18-A: SATU idPermintaan per baris, bertahan melewati percobaan SELAMA isi barisnya sama -- kiriman
     // ulang baris yang jawabannya hilang dijawab server dengan gelaran yang sudah tercatat, bukan baris
@@ -8427,7 +8449,8 @@ function spGbKumpulkan_() {
     if (!tr.dataset.idp || tr.dataset.idpSidik !== sidikIdp) { tr.dataset.idp = rjdKunciKirimBaru_(); tr.dataset.idpSidik = sidikIdp; }
     out.baris.push({
       tr: tr, marker: m, idMarker: idMk, warna: warna, kain: kain, lapis: lapis, idPermintaan: tr.dataset.idp,
-      allow: String(tr.querySelector(".sp-gb-allow").value || "0.02").trim().replace(",", "."),
+      // Kosong dikirim "" -> server memakai allowance MARKER-nya (dulu dipaksa 0.02, menimpa marker ber-allowance 0).
+      allow: allowTeksGb === "" ? "" : spParseDesimal_(allowTeksGb),
       kodeKain: String(tr.querySelector(".sp-gb-kode").value || "").trim()
     });
   });
@@ -8447,7 +8470,8 @@ function spGbUbah_() {
     const pcs = Object.keys(susun).reduce(function (a, sz) {
       return a + (Number(susun[sz]) || 0) * b.lapis;
     }, 0);
-    const kain = Math.round(((Number(b.marker.panjangMarker) || 0) + (Number(b.allow) || 0)) * b.lapis * 100) / 100;
+    const allowPakai = b.allow === "" ? (Number(b.marker.allowancePerLapis) || 0) : b.allow;   // @P18-C
+    const kain = Math.round(((Number(b.marker.panjangMarker) || 0) + allowPakai) * b.lapis * 100) / 100;
     totPcs += pcs; totKain += kain;
     if (!perWarna[b.warna]) perWarna[b.warna] = { pcs: 0, kain: 0 };
     perWarna[b.warna].pcs += pcs;
@@ -8670,7 +8694,7 @@ function spHitungGelaran_() {
 
   // Re-cut tanpa marker: kain diisi manual, output tidak dihitung sama sekali.
   if (recut && !sel.value) {
-    const kainManual = Number((document.getElementById("sp-gl-kain-manual") || {}).value) || 0;
+    const kainManual = spParseDesimal_((document.getElementById("sp-gl-kain-manual") || {}).value) || 0;   // @P18-C
     el.innerHTML = kainManual > 0
       ? '<div class="sp-hitung-baris"><span>Kain terpakai</span><div><b class="sp-hitung-total">' +
           kainManual + ' m</b> <small>(diisi manual)</small></div></div>' +
@@ -8687,7 +8711,7 @@ function spHitungGelaran_() {
   if (inpAllow && inpAllow.value === "") {
     inpAllow.value = opt.dataset.allow || "0.02";
   }
-  const allow = inpAllow ? (Number(inpAllow.value) || 0) : 0.02;
+  const allow = inpAllow ? (spParseDesimal_(inpAllow.value) || 0) : 0.02;   // @P18-C WJ-4
 
   const lapis = Number((document.getElementById("sp-gl-lapis") || {}).value) || 0;
   const panjang = Number(opt.dataset.panjang) || 0;
@@ -8728,7 +8752,7 @@ function spSimpanGelaran() {
         ? "Panel yang diserahkan wajib diisi.\n\nMisal: Badan Depan, Lengan."
         : "Komponen yang diganti wajib diisi.\n\nMisal: Lengan, Badan Depan."); return;
     }
-    if (!sel.value && !Number((document.getElementById("sp-gl-kain-manual") || {}).value)) {
+    if (!sel.value && !(spParseDesimal_((document.getElementById("sp-gl-kain-manual") || {}).value) > 0)) {
       alert((panel ? "Panel klien" : "Re-cut") + " tanpa marker: isi kain terpakai."); return;
     }
   } else {
@@ -8737,6 +8761,12 @@ function spSimpanGelaran() {
   }
   const warna = (document.getElementById("sp-gl-warna") || {}).value || "";
   if (!warna) { alert("Warna wajib dipilih."); return; }
+  // @P18-C WJ-4: kotak desimal diperiksa sebelum kirim -- ketikan tak terbaca tidak boleh jadi 0 diam-diam.
+  const glAllowTeks = String((document.getElementById("sp-gl-allow") || {}).value || "").trim();
+  const glKainTeks = String((document.getElementById("sp-gl-kain-manual") || {}).value || "").trim();
+  const glGalat = spGalatDesimal_("Allowance/lapis", glAllowTeks, SP_BATAS_DESIMAL.allowance, "m") ||
+    spGalatDesimal_("Kain terpakai", glKainTeks, null, "m");
+  if (glGalat) { alert(glGalat); return; }
 
   // Item terpilih; kalau PO cuma punya satu, pakai yang itu.
   const item = spItemGelaranTerpilih_();
@@ -8757,9 +8787,9 @@ function spSimpanGelaran() {
         alasan: (document.getElementById("sp-gl-alasan") || {}).value || "",
         untukLine: (document.getElementById("sp-gl-untukline") || {}).value || "",
         recutDariQC: (document.getElementById("sp-gl-recut-qc") || {}).value || "",   // v185
-        kainTerpakai: (document.getElementById("sp-gl-kain-manual") || {}).value || "",
+        kainTerpakai: glKainTeks === "" ? "" : spParseDesimal_(glKainTeks),
         jumlahLapis: lapis,
-        allowancePerLapis: (document.getElementById("sp-gl-allow") || {}).value,
+        allowancePerLapis: glAllowTeks === "" ? "" : spParseDesimal_(glAllowTeks),
         tanggalPotong: (document.getElementById("sp-gl-tanggal") || {}).value || "",
         catatan: (document.getElementById("sp-gl-catatan") || {}).value || "",
         kodeKain: (document.getElementById("sp-gl-kodekain") || {}).value || "",
@@ -9265,7 +9295,7 @@ function spRenderRekapKain_() {
                   : (k.sisaTerukur === null
                       ? '<input class="sp-kain-ukur" data-jenis="' + spEsc_(k.jenis) +
                         '" data-warna="' + spEsc_(k.warna === "(semua warna)" ? "" : (k.warna || "")) +
-                        '" placeholder="ukur" step="0.01" type="number"/>'
+                        '" inputmode="decimal" placeholder="ukur" type="text"/>'
                       : k.sisaTerukur))) + '</td>' +
           '<td data-label="Selisih">' + (k.selisih === null ? "-"
             : (k.selisih + " (" + k.persenSelisih + "%) " + k.tanda)) + '</td></tr>' +
@@ -9391,8 +9421,8 @@ function spRenderRoll_() {
         '<td data-label="Sisa terukur" class="sp-roll-sisa-sel">' +
           '<div class="sp-roll-ukur">' +
             '<input class="sp-roll-sisa" data-id="' + spEsc_(r.idRoll) +
-              '" min="0" placeholder="ukur" step="0.01" oninput="spKonversiSisaRoll_(this)" ' +
-              'type="number" value="' + (diukur ? r.sisaTerukur : "") + '"/>' +
+              '" inputmode="decimal" placeholder="ukur" oninput="spKonversiSisaRoll_(this)" ' +
+              'type="text" value="' + (diukur ? r.sisaTerukur : "") + '"/>' +
             '<select class="sp-roll-satuansisa" data-id="' + spEsc_(r.idRoll) +
               '" onchange="spKonversiSisaRoll_(this)">' +
               ["m", "yds"].map(function (u) {
@@ -9520,7 +9550,7 @@ function spTambahBarisRoll() {
         'style="text-transform:uppercase"/></td>' +
       '<td data-label="No Roll"><input class="sp-rb-no" placeholder="mis. R-01" type="text"/></td>' +
       '<td data-label="Panjang"><input class="sp-rb-panjang" min="0" ' +
-        'oninput="spHitungKonversiRoll_(this)" placeholder="0" step="0.01" type="number"/>' +
+        'inputmode="decimal" oninput="spHitungKonversiRoll_(this)" placeholder="0" type="text"/>' +
         '<div class="sp-konversi"></div></td>' +
       // Satuan DIPILIH, tidak diasumsikan. Backend sebelumnya memasang "m"
       // diam-diam -- dan roll 60 yard yang diketik "60" akan salah 12% tanpa
@@ -9563,7 +9593,7 @@ function spHitungKonversiRoll_(el) {
   if (!tr) return;
   const wadah = tr.querySelector(".sp-konversi");
   if (!wadah) return;
-  const nilai = Number((tr.querySelector(".sp-rb-panjang") || {}).value) || 0;
+  const nilai = spParseDesimal_((tr.querySelector(".sp-rb-panjang") || {}).value) || 0;   // @P18-C
   const satuan = (tr.querySelector(".sp-rb-satuan") || {}).value || "m";
   if (!nilai || satuan === "m") { wadah.textContent = ""; return; }
   // 1 yard = 0.9144 m -- angka yang sama dengan METER_PER_YARD di backend.
@@ -9573,11 +9603,15 @@ function spHitungKonversiRoll_(el) {
 function spSimpanRoll(btn) {
   // v343 (PF-3): daftar marker/roll yang terender milik PO mana?
   if (!spPoFormSah_(window.SP_MARKER_PO, "Form terima roll")) return;
-  const roll = [];
+  const roll = [], galatRoll = [];
   document.querySelectorAll("#sp-roll-baru tr").forEach(function (tr) {
     const jenisKain = (tr.querySelector(".sp-rb-kain").value || "").trim();
-    const panjang = Number(tr.querySelector(".sp-rb-panjang").value) || 0;
-    if (!jenisKain || panjang <= 0) return;
+    // @P18-C WJ-4: '50,5' dulu jadi 505 (browser Inggris) atau baris hilang diam-diam (NaN).
+    const panjangTeks = String(tr.querySelector(".sp-rb-panjang").value || "").trim();
+    const gRoll = spGalatDesimal_("Panjang roll " + (jenisKain || ""), panjangTeks, SP_BATAS_DESIMAL.roll, "");
+    if (gRoll) { galatRoll.push(gRoll); return; }
+    const panjang = spParseDesimal_(panjangTeks);
+    if (!jenisKain || !(panjang > 0)) return;
     roll.push({
       jenisKain: jenisKain,
       warna: (tr.querySelector(".sp-rb-warna").value || "").trim(),
@@ -9587,6 +9621,7 @@ function spSimpanRoll(btn) {
       satuan: (tr.querySelector(".sp-rb-satuan") || {}).value || "m"
     });
   });
+  if (galatRoll.length) { alert(galatRoll.join("\n")); return; }
   if (!roll.length) { alert("Isi minimal satu roll: jenis kain dan panjangnya."); return; }
   const pulih = spTombolSibuk_(btn, "Menyimpan " + roll.length + " roll...");
 
@@ -9722,8 +9757,8 @@ function spKonversiSisaRoll_(el) {
   if (!td) return;
   const wadah = td.querySelector(".sp-konversi");
   if (!wadah) return;
-  const mentah = (td.querySelector(".sp-roll-sisa") || {}).value;
-  const nilai = Number(mentah);
+  const mentah = String((td.querySelector(".sp-roll-sisa") || {}).value || "").trim();
+  const nilai = spParseDesimal_(mentah);   // @P18-C
   const satuan = (td.querySelector(".sp-roll-satuansisa") || {}).value || "m";
   const awalM = Number(wadah.dataset.awalM) || 0;
 
@@ -9747,15 +9782,18 @@ function spKonversiSisaRoll_(el) {
 function spSimpanSisaRoll(btn) {
   // v343 (PF-3): daftar marker/roll yang terender milik PO mana?
   if (!spPoFormSah_(window.SP_MARKER_PO, "Form sisa roll")) return;
-  const sisa = [];
+  const sisa = [], galatSisa = [];
   document.querySelectorAll(".sp-roll-sisa").forEach(function (inp) {
-    if (inp.value === "") return;
-    const v = Number(inp.value);
-    if (isNaN(v)) return;
+    if (String(inp.value || "").trim() === "") return;
+    // @P18-C WJ-4: dulu yang tak terbaca DILEWATI diam-diam -- 'N roll tersimpan' tanpa menyebut yang hilang.
+    const gS = spGalatDesimal_("Sisa roll " + inp.dataset.id, inp.value, SP_BATAS_DESIMAL.roll, "");
+    if (gS) { galatSisa.push(gS); return; }
+    const v = spParseDesimal_(inp.value);
     const selSat = document.querySelector('.sp-roll-satuansisa[data-id="' + inp.dataset.id + '"]');
     // v206: kondisi tidak dikirim lagi -- backend menurunkannya dari angka.
     sisa.push({ idRoll: inp.dataset.id, sisa: v, satuan: selSat ? selSat.value : "m" });
   });
+  if (galatSisa.length) { alert(galatSisa.join("\n")); return; }
   if (!sisa.length) { alert("Belum ada sisa roll yang diisi."); return; }
   const pulih = spTombolSibuk_(btn, "Menyimpan " + sisa.length + " roll...");
 
@@ -9794,10 +9832,12 @@ function spBatalRoll(idRoll) {
 function spSimpanSisaKain(btn) {
   // v343 (PF-3): daftar marker/roll yang terender milik PO mana?
   if (!spPoFormSah_(window.SP_MARKER_PO, "Form sisa kain")) return;
-  const sisa = [];
+  const sisa = [], galatUkur = [];
   document.querySelectorAll(".sp-kain-ukur").forEach(function (inp) {
-    const v = Number(inp.value);
-    if (inp.value !== "" && !isNaN(v)) {
+    const gU = spGalatDesimal_("Ukur " + (inp.dataset.jenis || "kain") + (inp.dataset.warna ? " " + inp.dataset.warna : ""), inp.value, null, "m");   // @P18-C
+    if (gU) { galatUkur.push(gU); return; }
+    const v = spParseDesimal_(inp.value);
+    if (String(inp.value || "").trim() !== "" && !isNaN(v)) {
       // Warna ikut dikirim: hasil ukur milik satu (kain, warna), bukan seluruh
       // jenis kain. Kosong = penerimaan lama yang belum punya warna.
       sisa.push({
@@ -9807,6 +9847,7 @@ function spSimpanSisaKain(btn) {
       });
     }
   });
+  if (galatUkur.length) { alert(galatUkur.join("\n")); return; }
   if (!sisa.length) { alert("Belum ada hasil ukur yang diisi."); return; }
   const pulih = spTombolSibuk_(btn, "Menyimpan " + sisa.length + " baris...");
 
@@ -9868,6 +9909,35 @@ function spSesudahTulis_(apa) {
     QC_RINGKASAN_DIMUAT = false;
   }
   if (/cutting|gelaran|qc|marker/.test(a)) window.SP_CUT = null;
+}
+
+/* @P18-C WJ-4/WJ-11: kotak desimal (panjang/lebar/allowance marker, allowance & kain gelaran, roll, sisa roll,
+   ukur kain) kini type=text inputmode=decimal dan dibaca SATU pembaca. Dulu type=number: di browser berbahasa
+   Inggris koma DIBUANG ('1,207' -> 1207 m, '0,02' -> 2 m), dan Number('0,02') = NaN -> 0 diam-diam. Satu
+   pemisah saja, koma = titik. Kosong = 0 (pemanggil yang membedakan kosong dari nol memeriksa teksnya sendiri);
+   tak terbaca = NaN, dan pemanggil MENOLAK dengan nama kotaknya. Batas wajar sama dengan server (gs @406,
+   BATAS_* di konstanta-bersama.js; diturunkan dari data hidup 22 Sep 2026). */
+const SP_BATAS_DESIMAL = { panjangMarker: 15, allowance: 0.5, lebar: 400, roll: 1000 };
+function spParseDesimal_(v) {
+  const t = String(v === null || v === undefined ? "" : v).trim().replace(/\s/g, "");
+  if (t === "") return 0;
+  if (!/^\d+([.,]\d+)?$/.test(t)) return NaN;
+  return Number(t.replace(",", "."));
+}
+/** Pesan galat untuk satu kotak desimal, atau "" kalau sah. Kosong dianggap sah (pemanggil yang mewajibkan). */
+function spGalatDesimal_(label, teks, maks, satuan) {
+  const t = String(teks === null || teks === undefined ? "" : teks).trim();
+  if (t === "") return "";
+  const n = spParseDesimal_(t);
+  if (isNaN(n)) return label + " '" + t + "' tidak terbaca -- pakai titik atau koma sekali saja (1.207 atau 1,207).";
+  if (maks != null && n > maks) return label + " " + n + " " + satuan + " di luar batas wajar (maks " + maks + " " + satuan + ") -- periksa komanya.";
+  return "";
+}
+/* @P18-C WJ-8: tanggal bawaan kotak Tanggal = hari LOKAL. toISOString() memberi tanggal UTC: dibuka sebelum
+   07.00 WIB, gelaran/progres/approval tercatat KEMARIN. Pola yang sama dengan cutting & setoran. */
+function spHariIniLokal_() {
+  const t = new Date();
+  return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0");
 }
 
 function spEsc_(v) {
@@ -9999,7 +10069,7 @@ function spKartuTahap_(a, tahap, i) {
       '<label>Durasi (jam)<input class="sp-th-durasi" data-i="' + i + '" data-tahap="' + tahap +
         '" max="24" min="0" placeholder="mis. 3.5" step="0.25" type="number"/></label>' +
       '<label>Tanggal<input class="sp-th-tgl" data-i="' + i + '" data-tahap="' + tahap +
-        '" type="date" value="' + new Date().toISOString().slice(0, 10) + '"/></label>' +
+        '" type="date" value="' + spHariIniLokal_() + '"/></label>' +
     '</div>' +
     '<div class="sp-grid3">' +
       '<label>Jenis<select class="sp-th-sub" data-i="' + i + '" data-tahap="' + tahap + '">' +
@@ -11894,7 +11964,7 @@ function spRenderApproval_() {
           [it.artikel, it.style].filter(Boolean).join(" \u00b7 ") || "(tanpa nama)") + '</option>';
       }).join("") + '</select></label>' +
     '<label>Tanggal<input id="aps-tanggal" type="date" value="' +
-      new Date().toISOString().slice(0, 10) + '"/></label>' +
+      spHariIniLokal_() + '"/></label>' +
     '</div>' +
     '<div class="sp-lbl">Jenis kejadian</div>' +
     '<div style="display:flex;gap:8px">' + jenisBtn + '</div>' +

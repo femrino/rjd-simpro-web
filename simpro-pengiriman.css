@@ -26,10 +26,11 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 .kr-kartu-label { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
 
 .kr-alat { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 14px; }
+/* @P18-C WJ-9: kontrol form >= 16px -- di bawahnya Safari iOS memperbesar halaman saat kotak disentuh (PF-12/13 hanya menutup produksi). */
 .kr-alat input { flex: 1 1 260px; margin: 0; padding: 8px 12px; background: var(--white);
-  border: 1px solid var(--line-soft); border-radius: 9px; }
+  border: 1px solid var(--line-soft); border-radius: 9px; font-size: 16px; }
 .kr-alat select { flex: 0 1 200px; margin: 0; padding: 8px 10px; background: var(--white);
-  border: 1px solid var(--line-soft); border-radius: 9px; font-size: 12.5px; }
+  border: 1px solid var(--line-soft); border-radius: 9px; font-size: 16px; }
 
 .kr-tabelwrap { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--white); }
 .kr-tabel { width: 100%; border-collapse: collapse; font-size: 12.5px; }
@@ -106,7 +107,7 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 .kr-po-field { position: relative; }
 .kr-po-field input { width: 100%; padding: 11px 13px; background: var(--white);
   border: 1px solid var(--line-soft); border-radius: 9px; font-family: 'Inter', sans-serif;
-  font-size: 14px; color: var(--ink); }
+  font-size: 16px; color: var(--ink); }
 #kr-buat-dropdown { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; right: 0;
   background: var(--white); border: 1px solid var(--line-soft); border-radius: 10px;
   box-shadow: var(--shadow-md); max-height: 280px; overflow-y: auto; }
@@ -138,7 +139,7 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .kr-buat-bypass input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; }
 .kr-buat-bypass-ket { font-size: 11px; color: #7A7A72; margin-top: 5px; padding-left: 23px; }
-.kr-buat-alasan { width: 100%; margin-top: 8px; padding: 7px 10px; font-size: 12.5px;
+.kr-buat-alasan { width: 100%; margin-top: 8px; padding: 7px 10px; font-size: 16px;
   border: 1px solid #D8C9A8; border-radius: 6px; background: #fff; }
 .kr-buat-alasan:focus { outline: none; border-color: #8A5D1F; }
 
@@ -148,8 +149,9 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
 .kr-habis td { opacity: .5; }
 .kr-buat-kosong { font-size: 11px; color: var(--ink-soft); font-style: italic; }
 
-.kr-kirim-qty { width: 66px; padding: 6px 6px; border: 1px solid var(--line-soft); border-radius: 7px;
-  font-family: 'Inter', sans-serif; font-size: 13px; text-align: center; color: var(--ink); }
+/* @P18-C WJ-9: 16px + lebar 72px supaya 4 digit tetap terlihat (pelajaran PF-17: lantai zoom bertemu kotak sempit). */
+.kr-kirim-qty { width: 72px; padding: 6px 6px; border: 1px solid var(--line-soft); border-radius: 7px;
+  font-family: 'Inter', sans-serif; font-size: 16px; text-align: center; color: var(--ink); }
 .kr-kirim-qty:focus { outline: none; border-color: var(--ink); }
 .kr-kirim-qty.kr-lebih { border-color: var(--thread); background: #FDECEA; color: #8F2C22; }
 
@@ -159,7 +161,7 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   margin-bottom: 5px; }
 .kr-buat-field2 input, .kr-buat-field2 select { width: 100%; padding: 9px 11px; background: var(--white);
   border: 1px solid var(--line-soft); border-radius: 9px; font-family: 'Inter', sans-serif;
-  font-size: 13px; color: var(--ink); }
+  font-size: 16px; color: var(--ink); }
 
 .kr-buat-total-kotak { display: flex; justify-content: space-between; align-items: center;
   background: var(--cream); border-radius: 10px; padding: 12px 16px; margin-top: 16px; }
