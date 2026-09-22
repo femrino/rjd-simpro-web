@@ -127,6 +127,7 @@ function khAutoHitung_(){
   }
   const p = khSusunPayload_();
   const smv3 = (p.smvCutting || 0) + (p.smvSewing || 0) + (p.smvFinishing || 0);
+  if (KH_GALAT_ANGKA.length) { khFormError_("Angka tidak terbaca: " + KH_GALAT_ANGKA.join(", ")); return; }   // K21-A HG-3: jangan hitung diam-diam
   if (!(p.qty > 0) || (!(smv3 > 0) && !p.artikel)) return;   // belum layak: diam
   khHitung();
 }
@@ -343,6 +344,26 @@ function khNilai_(id){
   return el ? String(el.value || "").trim() : "";
 }
 
+/* K21-A HG-3: medan RUPIAH (dan qty/kapasitas) dibaca dengan tata bahasa buku kas (ksParseRp_, v361): titik = ribuan,
+   koma = sen. Dulu parseFloat membaca '25.000' sebagai 25 -- harga kain Rp 25.000/pcs jadi Rp 25 TANPA peringatan,
+   harga tawar turun Rp 36.985/pcs (probe audit: Rp 18,5 jt per order 500 pcs). Ketikan yang tidak terbaca DITOLAK
+   dengan nama medannya, bukan dianggap nol. Medan menit & persen tetap desimal biasa (12,5 = 12.5). */
+var KH_GALAT_ANGKA = [];
+function khParseRp_(v){
+  var t = String(v === null || v === undefined ? "" : v).trim().replace(/^Rp\s*/i, "").replace(/\s+/g, "");
+  if (t === "") return 0;
+  if (/^\d+\.\d{1,2}$/.test(t)) return Math.round(Number(t) * 100) / 100;
+  if (!/^(\d{1,3}(\.\d{3})*|\d+)(,\d{1,2})?$/.test(t)) return NaN;
+  var bagian = t.split(","), utuh = bagian[0].replace(/\./g, ""), sen = (bagian[1] || "");
+  while (sen.length < 2) sen += "0";
+  return Math.round((Number(utuh) + Number(sen) / 100) * 100) / 100;
+}
+function khRp_(id, label){
+  var mentah = khNilai_(id), n = khParseRp_(mentah);
+  if (!isFinite(n)) { KH_GALAT_ANGKA.push((label || id) + " '" + mentah + "'"); return 0; }
+  return n > 0 ? n : 0;
+}
+
 function khAngka_(id){
   var n = parseFloat(String(khNilai_(id)).replace(",", "."));
   return isFinite(n) && n > 0 ? n : 0;
@@ -360,27 +381,28 @@ function khFormError_(pesan){
 }
 
 function khSusunPayload_(){
+  KH_GALAT_ANGKA = [];
   return {
     action: "hitungHargaPenawaran",
     idToken: KH_ID_TOKEN,
     brand: khNilai_("kh-brand"),
     artikel: khNilai_("kh-artikel"),
     style: khNilai_("kh-style"),
-    qty: khAngka_("kh-qty"),
+    qty: khRp_("kh-qty", "Qty"),
     jenisOrder: khNilai_("kh-jenis") || "CMT",
     smvCutting: khAngka_("kh-smv-cut"),
     smvSewing: khAngka_("kh-smv-sew"),
     smvFinishing: khAngka_("kh-smv-fin"),
-    kainPerPcs: khAngka_("kh-kain"),
-    aksesorisManualPerPcs: khAngka_("kh-aks"),
-    jasaLuarPerPcs: khAngka_("kh-jasa"),
-    setupSample: khAngka_("kh-set-sample"),
-    setupMarker: khAngka_("kh-set-marker"),
-    setupLini: khAngka_("kh-set-lini"),
-    setupAdmin: khAngka_("kh-set-admin"),
-    asumsiUpahBulanan: khAngka_("kh-upah-bulan"),
-    asumsiBiayaTetapBulanan: khAngka_("kh-tetap-bulan"),
-    asumsiKapasitasMenit: khAngka_("kh-kapasitas"),
+    kainPerPcs: khRp_("kh-kain", "Kain"),
+    aksesorisManualPerPcs: khRp_("kh-aks", "Aksesoris"),
+    jasaLuarPerPcs: khRp_("kh-jasa", "Jasa luar"),
+    setupSample: khRp_("kh-set-sample", "Setup sample"),
+    setupMarker: khRp_("kh-set-marker", "Setup marker"),
+    setupLini: khRp_("kh-set-lini", "Setup lini"),
+    setupAdmin: khRp_("kh-set-admin", "Setup admin"),
+    asumsiUpahBulanan: khRp_("kh-upah-bulan", "Upah bulanan"),
+    asumsiBiayaTetapBulanan: khRp_("kh-tetap-bulan", "Biaya tetap bulanan"),
+    asumsiKapasitasMenit: khRp_("kh-kapasitas", "Kapasitas menit"),
     asumsiEfisiensiPersen: khAngka_("kh-efisiensi"),
     asumsiBungaPersen: khAngka_("kh-bunga"),
     marginPersen: khAngka_("kh-margin"),
@@ -400,6 +422,8 @@ function khHitung(){
   khFormError_("");
 
   var p = khSusunPayload_();
+  if (KH_GALAT_ANGKA.length) { khFormError_("Angka tidak terbaca: " + KH_GALAT_ANGKA.join(", ") +
+    ". Titik untuk ribuan, koma untuk sen -- 25.000 atau 25000 (bukan 25.00.0)."); return; }   // K21-A HG-3
   if (!(p.qty > 0)) { khFormError_("Qty wajib diisi."); return; }
   // v129: payload v3 mengirim SMV per divisi, bukan smvManual tunggal.
   var smv3 = (p.smvCutting || 0) + (p.smvSewing || 0) + (p.smvFinishing || 0);
