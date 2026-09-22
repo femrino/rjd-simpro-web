@@ -1460,3 +1460,43 @@ body[data-bagian~="lintas"] .rjd-bagian-lain { display: none; }
 :where(#om-proofing-overlay) .lp-edit-save, :where(#om-proofing-overlay).lp-edit-save { padding: 10px 22px; border-radius: 9999px; border: none; background: var(--terra); color: var(--cream); cursor: pointer; font-family: 'Archivo', sans-serif; font-size: 13px; font-weight: 700; box-shadow: 0 4px 12px rgba(189,67,53,.25); }
 :where(#om-proofing-overlay) .lp-edit-save:hover, :where(#om-proofing-overlay).lp-edit-save:hover { opacity: .92; }
 :where(#om-proofing-overlay) .lp-edit-save:disabled, :where(#om-proofing-overlay).lp-edit-save:disabled { opacity: .55; cursor: default; }
+
+
+/* ==========================================================================
+   ROADMAP-ERP Tahap 1 sub-rilis C (v379) -- LAYAR MASTER (rjdMasterPasang di simpro-global.js).
+   Dipakai di halaman produksi (warna/size/kain) dan kas (supplier); dua konteks CSS berbeda, jadi
+   semua aturan berawalan .rjd-master- dan tidak menyentuh kelas halaman mana pun. Kontrol 16px = lantai
+   zoom iOS (v350). Tabel: pembungkus menggulir + min-width supaya kolom tidak diperas sampai memecah
+   kata (PF-19/PF-20: word-break dari bundel Blogger); mode kartu SENGAJA tidak dibuat -- master dibaca
+   sesekali di meja, bukan di lantai produksi.
+   ========================================================================== */
+.rjd-master { font-family: 'Inter', system-ui, sans-serif; color: var(--ink); }
+.rjd-master-info { font-size: 13px; color: var(--ink-soft); line-height: 1.55; margin: 0 0 12px; }
+.rjd-master-status { font-size: 13px; color: var(--ink-soft); margin: 8px 0; }
+.rjd-master-galat { font-size: 13px; color: #8f2c22; background: #FDECEA; border: 1px solid #E8A49C; border-radius: 8px; padding: 8px 10px; margin: 10px 0 0; line-height: 1.5; }
+.rjd-master-aksi { margin-top: 8px; }
+.rjd-master-alat { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 10px; }
+.rjd-master-cari { flex: 1 1 220px; min-width: 160px; font-size: 16px; padding: 8px 10px; border: 1px solid var(--line, #d9d4c8); border-radius: 8px; background: var(--white, #fff); color: inherit; }
+.rjd-master-sakelar { font-size: 13px; color: var(--ink-soft); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.rjd-master-sakelar input { width: 16px; height: 16px; }
+.rjd-master-hitung { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--ink-soft); white-space: nowrap; margin-left: auto; }
+.rjd-master-tabelwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line-soft, #e6e1d6); border-radius: 10px; }
+.rjd-master-tabel { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 13px; }
+.rjd-master-tabel th, .rjd-master-tabel td { padding: 8px 10px; border-bottom: 1px solid var(--line-soft, #e6e1d6); text-align: left; vertical-align: top; word-break: normal; overflow-wrap: normal; }
+.rjd-master-tabel th { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); background: var(--cream, #f6f3ec); white-space: nowrap; position: sticky; top: 0; }
+.rjd-master-tabel tbody tr:last-child td { border-bottom: none; }
+.rjd-master-kode { font-family: 'IBM Plex Mono', monospace; white-space: nowrap; }
+.rjd-master-catatan { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rjd-master-nonaktif td { color: var(--ink-soft); text-decoration: line-through; text-decoration-color: rgba(0,0,0,.25); }
+.rjd-master-nonaktif td:last-child { text-decoration: none; }
+.rjd-master-kosong { color: var(--ink-soft); text-align: center; padding: 18px 10px; }
+.rjd-master-ubah { padding: 4px 10px; font-size: 12px; }
+.rjd-master-modal { max-width: 720px; }
+.rjd-master-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.rjd-master-field { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--ink-soft); min-width: 0; }
+.rjd-master-field-lebar { grid-column: 1 / -1; }
+.rjd-master-field input, .rjd-master-field select { font-size: 16px; padding: 8px 10px; border: 1px solid var(--line, #d9d4c8); border-radius: 8px; background: var(--white, #fff); color: var(--ink); width: 100%; min-width: 0; box-sizing: border-box; }
+@media (max-width: 640px) {
+  .rjd-master-form { grid-template-columns: 1fr; }
+  .rjd-master-hitung { margin-left: 0; flex-basis: 100%; }
+}

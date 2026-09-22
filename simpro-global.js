@@ -4659,3 +4659,249 @@ function rjdJamPendek_(d) { return String(d.getHours()).padStart(2, "0") + "." +
     return p;
   };
 })();
+
+/* ============================================================================
+ * ROADMAP-ERP Tahap 1 sub-rilis C (v379) -- LAYAR MASTER DATA BERKODE.
+ *
+ * Satu komponen untuk empat master (warna / size / kain di halaman produksi, supplier di halaman kas),
+ * memakai rute yang dirilis gs @410: getMasterERP/simpanMasterERP (area produksi) dan
+ * getMasterSupplier/simpanMasterSupplier (area keuangan). Sampai v378 master hanya bisa disunting di
+ * Sheets -- sama seperti Master Harga Kain -- jadi kolom Alias (yang menentukan Kode Warna tiap baris
+ * transaksi sejak gs @411) tidak pernah dilihat orang yang mengetik warnanya.
+ *
+ * Yang SENGAJA tidak ada di sini, karena servernya menolak: hapus baris (nonaktif saja) dan ganti
+ * kode. Dua-duanya bukan kekurangan layar; kode yang sudah dirujuk 4.654 baris transaksi tidak boleh
+ * bergeser dari layar mana pun.
+ *
+ * Siapa boleh mengubah ditentukan SERVER (erpBolehUbah_: warna/size/kain = full+admin, supplier =
+ * full+finance). Halaman hanya mencerminkannya lewat cfg.bolehUbah supaya tombol yang pasti ditolak
+ * tidak ditawarkan; null = peran belum diketahui, tombol tetap tampil dan server yang memutuskan.
+ *
+ * Handler tombol dipasang lewat addEventListener + dataset, bukan onclick berstring: nama warna
+ * datang dari form order publik (P18-B), dan cara termurah supaya apostrof di dalamnya tidak pernah
+ * jadi kode adalah tidak menaruhnya di atribut kode sama sekali.
+ * ========================================================================== */
+const RJD_MASTER_SKEMA = {
+  warna: { judul: "Master Warna", aksiBaca: "getMasterERP", aksiSimpan: "simpanMasterERP", kunci: "Kode Warna", nama: "Nama",
+    medan: [["Nama", "teks"], ["Alias", "alias"], ["Aktif", "aktif"], ["Catatan", "teks"]],
+    info: "Nama kanonik + Alias (dipisah titik koma) menentukan Kode Warna tiap baris transaksi. Menggabungkan dua ejaan = isi Alias di satu baris, nonaktifkan yang lain." },
+  size: { judul: "Master Size", aksiBaca: "getMasterERP", aksiSimpan: "simpanMasterERP", kunci: "Kode Size", nama: "Label",
+    medan: [["Label", "teks"], ["Urutan", "angka"], ["Aktif", "aktif"], ["Catatan", "teks"]],
+    info: "Urutan menentukan susunan kolom size di tabel per-size." },
+  kain: { judul: "Master Kain", aksiBaca: "getMasterERP", aksiSimpan: "simpanMasterERP", kunci: "Kode Kain", nama: "Nama",
+    medan: [["Nama", "teks"], ["Jenis", "teks"], ["Gramasi", "angka"], ["Lebar (cm)", "angka"], ["Satuan Beli", "pilih", ["m", "yd", "kg", "roll"]],
+      ["Faktor ke Meter", "angka"], ["Supplier Utama", "teks"], ["Aktif", "aktif"], ["Catatan", "teks"]],
+    info: "Satu baris = satu barang fisik (Kode Kain gelaran/roll). Jenis adalah slot penyusun style (Polos, Motif), bukan barangnya." },
+  supplier: { judul: "Master Supplier", aksiBaca: "getMasterSupplier", aksiSimpan: "simpanMasterSupplier", kunci: "ID Supplier", nama: "Nama",
+    medan: [["Nama", "teks"], ["Jenis", "pilih", ["kain", "aksesoris", "subkon", "jasa"]], ["Kontak", "teks"], ["Rekening", "teks"],
+      ["Termin Bayar", "angka"], ["PKP", "yatidak"], ["Aktif", "aktif"], ["Catatan", "teks"]],
+    info: "Dipakai Tahap 2 (pembelian & utang). Termin Bayar dalam hari; PKP menentukan PPN di faktur pembelian." }
+};
+const RJD_MASTER_ = {};   // keadaan per jenis: { wadah, cfg, baris, kolom, status, urut, cari, semua }
+
+function rjdMasterAngka_(v) {
+  const t = String(v === null || v === undefined ? "" : v).trim().replace(/\s/g, "");
+  if (t === "") return 0;
+  if (!/^-?\d+([.,]\d+)?$/.test(t)) return NaN;
+  return Number(t.replace(",", "."));
+}
+function rjdMasterAktif_(v) { const t = String(v === null || v === undefined ? "" : v).trim().toLowerCase(); return t === "" || t === "ya" || t === "true" || t === "1" || t === "aktif"; }
+function rjdMasterE_(s) { return rjdEscapeHtml_(s === null || s === undefined ? "" : String(s)); }
+
+/**
+ * Pasang komponen ke sebuah wadah. cfg = { apiUrl, idToken (nilai atau fungsi), bolehUbah: fn -> true/false/null }.
+ * Idempoten per wadah+jenis: pemanggil yang merender ulang halamannya (ksRender tiap muat kas) tidak
+ * memicu fetch kedua; yang memuat ulang hanya tombol Muat ulang dan sukses simpan.
+ */
+function rjdMasterPasang(wadah, jenis, cfg) {
+  if (!wadah || !RJD_MASTER_SKEMA[jenis]) return;
+  const ada = RJD_MASTER_[jenis];
+  if (ada && ada.wadah === wadah && wadah.dataset.rjdMaster === jenis) { rjdMasterRender_(jenis); return; }
+  wadah.dataset.rjdMaster = jenis;
+  RJD_MASTER_[jenis] = { wadah: wadah, cfg: cfg || {}, baris: null, kolom: [], status: "", urut: 0, cari: "", semua: false };
+  rjdMasterMuat_(jenis);
+}
+
+function rjdMasterMuat_(jenis) {
+  const st = RJD_MASTER_[jenis]; if (!st) return;
+  const sk = RJD_MASTER_SKEMA[jenis], urut = ++st.urut;
+  st.status = "memuat"; rjdMasterRender_(jenis);
+  const badan = { idToken: rjdMasterToken_(st), action: sk.aksiBaca };
+  if (sk.aksiBaca === "getMasterERP") badan.jenis = jenis;   // rute membaca body.jenis di tingkat atas, bukan payload
+  return fetch(st.cfg.apiUrl, { method: "POST", body: JSON.stringify(badan) })
+    .then(function (r) { return r.text(); })
+    .then(function (teks) {
+      let d; try { d = JSON.parse(teks); } catch (e) { throw new Error("Jawaban server tidak terbaca: " + String(teks || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 60)); }
+      if (!d || !d.success) throw new Error((d && d.error) || "Permintaan ditolak server.");
+      // Jawaban yang disusul (orang sudah pindah tab lalu kembali) dibuang -- pola PF-3/v343.
+      if (urut !== st.urut) return;
+      st.baris = Array.isArray(d.baris) ? d.baris : []; st.kolom = Array.isArray(d.kolom) ? d.kolom : []; st.status = "";
+      rjdMasterRender_(jenis);
+    })
+    .catch(function (e) {
+      if (urut !== st.urut) return;
+      st.status = (e && /Failed to fetch|NetworkError|jaringan/i.test(String(e.message || e)))
+        ? "Master tidak sampai ke server -- sambungan terputus di tengah jalan. Coba lagi."
+        : "Gagal memuat master: " + String((e && e.message) || e);
+      rjdMasterRender_(jenis);
+    });
+}
+
+/** Token dibaca SAAT fetch, bukan saat pasang: SP_ID_TOKEN/KS_ID_TOKEN adalah `let` halaman yang berganti
+ *  sesudah login ulang, dan komponen ini hidup lebih lama dari satu sesi Google (~1 jam). */
+function rjdMasterToken_(st) { const t = st.cfg.idToken; return typeof t === "function" ? t() : t; }
+function rjdMasterBolehUbah_(st) {
+  const b = typeof st.cfg.bolehUbah === "function" ? st.cfg.bolehUbah() : st.cfg.bolehUbah;
+  return b === null || b === undefined ? null : !!b;
+}
+
+function rjdMasterRender_(jenis) {
+  const st = RJD_MASTER_[jenis]; if (!st || !st.wadah) return;
+  const sk = RJD_MASTER_SKEMA[jenis], W = st.wadah;
+  const boleh = rjdMasterBolehUbah_(st);
+  let h = '<div class="rjd-master" data-jenis="' + jenis + '">';
+  h += '<p class="rjd-master-info">' + rjdMasterE_(sk.info) + (boleh === false ? ' <b>Peran Anda hanya membaca master ini.</b>' : '') + '</p>';
+  if (st.status) {
+    const memuat = st.status === "memuat";
+    h += '<p class="rjd-master-status' + (memuat ? '' : ' rjd-master-galat') + '">' + rjdMasterE_(memuat ? "Memuat " + sk.judul.toLowerCase() + "..." : st.status) + '</p>';
+    if (!memuat) h += '<div class="rjd-master-aksi"><button type="button" class="rjd-btn" data-aksi="muat">Coba lagi</button></div>';
+    W.innerHTML = h + '</div>'; rjdMasterSambung_(jenis); return;
+  }
+  const baris = st.baris || [];
+  const nonaktif = baris.filter(function (o) { return !rjdMasterAktif_(o.Aktif); }).length;
+  h += '<div class="rjd-master-alat">' +
+    '<input type="search" class="rjd-master-cari" placeholder="Cari kode / nama / alias" value="' + rjdMasterE_(st.cari) + '" aria-label="Cari">' +
+    '<label class="rjd-master-sakelar"><input type="checkbox" data-aksi="semua"' + (st.semua ? ' checked' : '') + '> Tampilkan nonaktif (' + nonaktif + ')</label>' +
+    (boleh !== false ? '<button type="button" class="rjd-btn rjd-btn-primary" data-aksi="tambah">+ Tambah</button>' : '') +
+    '<button type="button" class="rjd-btn" data-aksi="muat" title="Muat ulang dari server">Muat ulang</button>' +
+    '<span class="rjd-master-hitung"></span></div>';   // diisi rjdMasterRenderTabel_
+  h += '<div class="rjd-master-tabelwrap"></div></div>';
+  W.innerHTML = h; rjdMasterRenderTabel_(jenis); rjdMasterSambung_(jenis);
+}
+
+/** Hanya TABEL (+ hitungnya) yang digambar ulang tiap ketikan; bilah alat dan kotak cari tidak dibongkar
+ *  (aturan v351: fokus & kursor tetap di tempatnya tanpa focus()/setSelectionRange). */
+function rjdMasterRenderTabel_(jenis) {
+  const st = RJD_MASTER_[jenis], sk = RJD_MASTER_SKEMA[jenis], W = st.wadah;
+  const wrap = W.querySelector(".rjd-master-tabelwrap"); if (!wrap) return;
+  const boleh = rjdMasterBolehUbah_(st);
+  const baris = st.baris || [], q = st.cari.trim().toLowerCase();
+  const tampil = baris.filter(function (o) {
+    if (!st.semua && !rjdMasterAktif_(o.Aktif)) return false;
+    if (!q) return true;
+    return [o[sk.kunci], o[sk.nama], o.Alias, o.Jenis, o.Kontak].some(function (v) { return String(v || "").toLowerCase().indexOf(q) !== -1; });
+  });
+  const hitung = W.querySelector(".rjd-master-hitung");
+  if (hitung) hitung.textContent = (q || !st.semua) ? "Tersaring " + tampil.length + " dari " + baris.length : baris.length + " baris";
+  const kolomTabel = [sk.kunci].concat(sk.medan.map(function (m) { return m[0]; }));
+  let h = '<table class="rjd-master-tabel"><thead><tr>' +
+    kolomTabel.map(function (k) { return '<th>' + rjdMasterE_(k) + '</th>'; }).join("") + (boleh !== false ? '<th></th>' : '') + '</tr></thead><tbody>';
+  if (!tampil.length) h += '<tr><td colspan="' + (kolomTabel.length + 1) + '" class="rjd-master-kosong">' + (baris.length ? "Tidak ada yang cocok." : "Master masih kosong.") + '</td></tr>';
+  tampil.forEach(function (o) {
+    const aktif = rjdMasterAktif_(o.Aktif);
+    h += '<tr data-kode="' + rjdMasterE_(o[sk.kunci]) + '"' + (aktif ? '' : ' class="rjd-master-nonaktif"') + '>' +
+      kolomTabel.map(function (k, i) {
+        const v = k === "Aktif" ? (aktif ? "Ya" : "Tidak") : (o[k] === null || o[k] === undefined ? "" : o[k]);
+        return '<td' + (i === 0 ? ' class="rjd-master-kode"' : (k === "Catatan" ? ' class="rjd-master-catatan"' : '')) + '>' + rjdMasterE_(v) + '</td>';
+      }).join("") +
+      (boleh !== false ? '<td><button type="button" class="rjd-btn rjd-master-ubah" data-aksi="ubah" data-kode="' + rjdMasterE_(o[sk.kunci]) + '">Ubah</button></td>' : '') + '</tr>';
+  });
+  wrap.innerHTML = h + '</tbody></table>';
+  wrap.querySelectorAll('[data-aksi="ubah"]').forEach(function (b) { b.addEventListener("click", function () { rjdMasterBuka_(jenis, b.dataset.kode); }); });
+}
+
+function rjdMasterSambung_(jenis) {
+  const st = RJD_MASTER_[jenis], W = st.wadah;
+  W.querySelectorAll("[data-aksi]").forEach(function (el) {
+    const aksi = el.dataset.aksi;
+    if (aksi === "ubah") return;   // disambung rjdMasterRenderTabel_ (tabelnya digambar ulang tiap ketikan)
+    if (aksi === "semua") { el.addEventListener("change", function () { st.semua = el.checked; rjdMasterRenderTabel_(jenis); }); return; }
+    el.addEventListener("click", function () {
+      if (aksi === "muat") rjdMasterMuat_(jenis);
+      else if (aksi === "tambah") rjdMasterBuka_(jenis, "");
+    });
+  });
+  const cari = W.querySelector(".rjd-master-cari");
+  if (cari) cari.addEventListener("input", function () { st.cari = cari.value; rjdMasterRenderTabel_(jenis); });
+}
+
+/** Modal form: kode kosong = baris baru. Nilai lama diambil dari keadaan, bukan dari sel tabel. */
+function rjdMasterBuka_(jenis, kode) {
+  const st = RJD_MASTER_[jenis], sk = RJD_MASTER_SKEMA[jenis]; if (!st) return;
+  rjdMasterTutup_();
+  const lama = kode ? (st.baris || []).filter(function (o) { return String(o[sk.kunci]) === String(kode); })[0] : null;
+  if (kode && !lama) { alert("Kode " + kode + " tidak ada di daftar -- muat ulang dulu."); return; }
+  const ov = document.createElement("div"); ov.className = "rjd-modal-overlay rjd-master-overlay"; ov.id = "rjd-master-modal";
+  let h = '<div class="rjd-modal rjd-master-modal" role="dialog" aria-modal="true"><div class="rjd-modal-head"><div>' +
+    '<div class="rjd-modal-title">' + (lama ? "Ubah " : "Tambah ") + rjdMasterE_(sk.judul.replace("Master ", "").toLowerCase()) + '</div>' +
+    '<div class="rjd-modal-sub">' + (lama ? rjdMasterE_(sk.kunci + " " + lama[sk.kunci]) + " -- kode tidak bisa diganti" : "Kode dibuat server saat disimpan") + '</div></div>' +
+    '<button type="button" class="rjd-modal-close" data-aksi="tutup" aria-label="Tutup">&times;</button></div>' +
+    '<div class="rjd-modal-body"><form class="rjd-master-form" id="rjd-master-form" novalidate>';
+  sk.medan.forEach(function (m) {
+    const k = m[0], tipe = m[1], id = "rjd-mf-" + k.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    const v = lama ? (lama[k] === null || lama[k] === undefined ? "" : lama[k]) : "";
+    h += '<label class="rjd-master-field' + (tipe === "teks" && k === "Catatan" ? ' rjd-master-field-lebar' : '') + '" for="' + id + '"><span>' + rjdMasterE_(k) + (k === sk.nama ? ' *' : '') + '</span>';
+    if (tipe === "aktif" || tipe === "yatidak") {
+      const ya = tipe === "aktif" ? (lama ? rjdMasterAktif_(v) : true) : /^(ya|true|1)$/i.test(String(v).trim());
+      h += '<select id="' + id + '" data-kolom="' + rjdMasterE_(k) + '"><option value="Ya"' + (ya ? ' selected' : '') + '>Ya</option><option value="Tidak"' + (ya ? '' : ' selected') + '>Tidak</option></select>';
+    } else if (tipe === "pilih") {
+      const opsi = m[2].slice(); if (v && opsi.indexOf(String(v)) === -1) opsi.unshift(String(v));
+      h += '<select id="' + id + '" data-kolom="' + rjdMasterE_(k) + '"><option value="">-- pilih --</option>' +
+        opsi.map(function (o) { return '<option value="' + rjdMasterE_(o) + '"' + (String(v) === o ? ' selected' : '') + '>' + rjdMasterE_(o) + '</option>'; }).join("") + '</select>';
+    } else if (tipe === "angka") {
+      h += '<input id="' + id + '" type="text" inputmode="decimal" data-kolom="' + rjdMasterE_(k) + '" data-tipe="angka" value="' + rjdMasterE_(v) + '">';
+    } else {
+      h += '<input id="' + id + '" type="text" data-kolom="' + rjdMasterE_(k) + '" value="' + rjdMasterE_(v) + '"' + (tipe === "alias" ? ' placeholder="Black; Hitam Pekat"' : '') + '>';
+    }
+    h += '</label>';
+  });
+  h += '</form><p class="rjd-master-galat hidden" id="rjd-master-form-galat"></p></div>' +
+    '<div class="rjd-modal-foot"><button type="button" class="rjd-btn rjd-btn-primary" id="rjd-master-simpan" data-aksi="simpan">Simpan</button>' +
+    '<button type="button" class="rjd-btn" data-aksi="tutup">Batal</button></div></div>';
+  ov.innerHTML = h; ov.dataset.jenis = jenis; ov.dataset.kode = kode || "";
+  document.body.appendChild(ov);
+  ov.querySelectorAll('[data-aksi="tutup"]').forEach(function (b) { b.addEventListener("click", rjdMasterTutup_); });
+  ov.querySelector('[data-aksi="simpan"]').addEventListener("click", function () { rjdMasterSimpan_(jenis); });
+  ov.addEventListener("click", function (e) { if (e.target === ov) rjdMasterTutup_(); });
+  const pertama = ov.querySelector("input, select"); if (pertama) pertama.focus();
+}
+function rjdMasterTutup_() { const m = document.getElementById("rjd-master-modal"); if (m) m.remove(); }
+function rjdMasterGalatForm_(pesan) {
+  const el = document.getElementById("rjd-master-form-galat"); if (!el) return;
+  el.textContent = pesan || ""; el.classList.toggle("hidden", !pesan);
+}
+
+function rjdMasterSimpan_(jenis) {
+  const st = RJD_MASTER_[jenis], sk = RJD_MASTER_SKEMA[jenis], ov = document.getElementById("rjd-master-modal");
+  if (!st || !ov) return;
+  const kode = ov.dataset.kode || "", isi = {}; let galat = "";
+  ov.querySelectorAll("[data-kolom]").forEach(function (el) {
+    const k = el.dataset.kolom; let v = el.value;
+    if (el.dataset.tipe === "angka") {
+      if (String(v).trim() !== "") { const n = rjdMasterAngka_(v); if (isNaN(n)) { galat = galat || (k + " '" + v + "' bukan angka -- pakai titik atau koma sekali saja."); return; } v = n; }
+      else v = "";
+    }
+    isi[k] = v;
+  });
+  if (!String(isi[sk.nama] || "").trim()) galat = galat || (sk.nama + " wajib diisi.");
+  if (galat) { rjdMasterGalatForm_(galat); return; }
+  rjdMasterGalatForm_("");
+  const btn = document.getElementById("rjd-master-simpan"), teksAsli = btn.textContent;
+  btn.disabled = true; btn.textContent = "Menyimpan...";
+  const pulih = function () { const b = document.getElementById("rjd-master-simpan"); if (b) { b.disabled = false; b.textContent = teksAsli; } };
+  return fetch(st.cfg.apiUrl, { method: "POST", body: JSON.stringify({ idToken: rjdMasterToken_(st), action: sk.aksiSimpan, payload: { jenis: jenis, kode: kode, isi: isi } }) })
+    .then(function (r) { return r.text(); })
+    .then(function (teks) {
+      let d; try { d = JSON.parse(teks); } catch (e) { throw new Error("Jawaban server tidak terbaca: " + String(teks || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 60)); }
+      if (!d || !d.success) { pulih(); rjdMasterGalatForm_((d && d.error) || "Ditolak server."); return; }
+      rjdMasterTutup_(); rjdMasterMuat_(jenis);
+    })
+    .catch(function (e) {
+      // Jawaban hilang di jalan: isian TETAP di layar (orang tidak mengetik ulang), daftar di belakang
+      // dimuat ulang supaya baris yang mungkin sudah tertulis terlihat. Simpan ulang aman dua arah:
+      // ubah = tulis ulang baris yang sama, tambah = server menolak nama kembar, bukan membuat kedua.
+      pulih();
+      rjdMasterGalatForm_("Tidak sampai ke server -- sambungan terputus di tengah jalan. Isian masih di layar; lihat daftar di belakang, lalu simpan lagi kalau belum ada. (" + String((e && e.message) || e).slice(0, 80) + ")");
+      rjdMasterMuat_(jenis);
+    });
+}

@@ -254,7 +254,34 @@ function spPoFormSah_(idPoForm, apa) {
    tiap blok memancarkan datalistnya sendiri dari SATU daftar bawaan. */
 /* v345 (PF-9): peta alias panel ditulis dua kali (spSwitchTab & spRenderSub_) --
    nilai yang sama, jadi salah satu pasti tertinggal saat tab bermode ditambah. */
-const SP_ALIAS_PANEL = { konfpot: "konf", konfset: "konf", qcring: "qc", qcpot: "qc", qcjahit: "qc" };
+const SP_ALIAS_PANEL = { konfpot: "konf", konfset: "konf", qcring: "qc", qcpot: "qc", qcjahit: "qc", mwarna: "master", msize: "master", mkain: "master" };
+/** v379: subtab master -> jenis master (rute getMasterERP). Peta ini juga yang dipakai spSwitchTab mengenali tab master. */
+const SP_MASTER_TAB = { mwarna: "warna", msize: "size", mkain: "kain" };
+/** Panel master dibuat sekali, disisipkan sesudah panel terakhir supaya ikut disapu toggle [id^=sp-panel-]. */
+function spPanelMaster_() {
+  let p = document.getElementById("sp-panel-master");
+  if (p) return p;
+  const semua = document.querySelectorAll("[id^='sp-panel-']"), akhir = semua[semua.length - 1];
+  if (!akhir || !akhir.parentNode) return null;
+  p = document.createElement("div"); p.id = "sp-panel-master"; p.className = "hidden";
+  p.innerHTML = '<div class="sp-card"><h3 class="sp-judul" id="sp-master-judul">Master</h3><div id="sp-master-isi"></div></div>';
+  akhir.parentNode.insertBefore(p, akhir.nextSibling);
+  return p;
+}
+function spMuatMaster_(tab) {
+  const jenis = SP_MASTER_TAB[tab]; if (!jenis || typeof rjdMasterPasang !== "function") return;
+  const p = spPanelMaster_(); if (!p) return;
+  const judul = document.getElementById("sp-master-judul"); if (judul) judul.textContent = RJD_MASTER_SKEMA[jenis].judul;
+  // Satu wadah per jenis: berpindah subtab tidak membuang daftar yang sudah dimuat, dan jawaban
+  // yang datang terlambat untuk jenis lain tidak menimpa tabel yang sedang dilihat.
+  const isi = document.getElementById("sp-master-isi");
+  isi.querySelectorAll("[data-rjd-master]").forEach(function (w) { w.classList.toggle("hidden", w.dataset.rjdMaster !== jenis); });
+  let w = isi.querySelector("[data-rjd-master='" + jenis + "']");
+  if (!w) { w = document.createElement("div"); isi.appendChild(w); }
+  rjdMasterPasang(w, jenis, { apiUrl: SP_API_URL, idToken: function () { return SP_ID_TOKEN; },   // let halaman, dibaca saat fetch
+    // null = peran belum datang: tombol tetap tampil, server yang memutuskan (pola v156 gembok).
+    bolehUbah: function () { const p = window.SP_PERAN; return p ? (p === "full" || p === "admin") : null; } });
+}
 
 const SP_KOMPONEN_BAWAAN = ["Variasi", "Kerah", "Manset", "Kerah, Manset",
   "Badan", "Lengan", "Saku", "Furing"];
@@ -1475,7 +1502,12 @@ const SP_FASE_PETA = [
   ["sewing",     "Sewing",        [["konfpot", "Konfirmasi Potongan"], ["qcjahit", "QC Jahit"], ["setor", "Setoran ke Finishing"]]],
   ["finishing",  "Finishing",     [["konfset", "Konfirmasi Setoran"], ["qc", "QC Finishing"], ["qcring", "Ringkasan QC"]]],
   ["packing",    "Packing & Kirim", [["stok", "Stok Siap Kirim"], ["terkirim", "Terkirim"]]],
-  ["riw",        "Riwayat",       [["riw", "Riwayat"]]]
+  ["riw",        "Riwayat",       [["riw", "Riwayat"]]],
+  // ROADMAP-ERP Tahap 1 sub-rilis C (v379): master berkode yang dirujuk semua transaksi sejak gs @411.
+  // Paling kanan karena ia data RUJUKAN, bukan langkah kerja; semua staf boleh melihat, yang boleh
+  // mengubah full/admin (server: erpBolehUbah_). Tiga subtab, SATU panel fisik sp-panel-master yang
+  // dibuat JS (spPanelMaster_) -- template Blogger tidak disentuh.
+  ["master",     "Master",        [["mwarna", "Warna"], ["msize", "Size"], ["mkain", "Kain"]]]
 ];
 
 /** Boleh-tidaknya satu tab untuk pemakai -- dari peta bagian, BUKAN dari DOM. */
@@ -1672,6 +1704,7 @@ const SP_BAGIAN_TAB = {
 function spTerapkanBagian_(d) {
   const bagian = (d && d.bagian) ? d.bagian : [];
   const lintas = !!(d && d.lintasBagian);
+  window.SP_PERAN = (d && d.peran) ? String(d.peran) : "";   // v379: dibaca layar master (boleh ubah = full/admin)
 
   // v339: gerbang subtab "Orderan Masuk". bisaOrder = punya area "order" di
   // AREA_PER_AKSI -- cerminan gerbang server, BUKAN daftar peran kedua yang
@@ -2326,7 +2359,8 @@ function spSwitchTab(tab) {
   // Alias panel (v116): konfpot & konfset adalah DUA PINTU ke SATU panel
   // fisik sp-panel-konf -- subtab yang menentukan modenya, bukan sakelar
   // internal (sakelar lama dipensiunkan, lihat spMuatKonfMode_).
-  const SP_PANEL_ALIAS = { konfpot: "konf", konfset: "konf", qcring: "qc", qcpot: "qc", qcjahit: "qc" };
+  if (SP_MASTER_TAB[tab]) spPanelMaster_();   // v379: panel master harus ADA sebelum toggle di bawah
+  const SP_PANEL_ALIAS = SP_ALIAS_PANEL;
   const idPanelTujuan = "sp-panel-" + (SP_PANEL_ALIAS[tab] || tab);
   document.querySelectorAll("[id^='sp-panel-']").forEach(function (p) {
     p.classList.toggle("hidden", p.id !== idPanelTujuan);
@@ -2357,7 +2391,7 @@ function spSwitchTab(tab) {
   // paling telanjang di antara semuanya: isi tab itu justru order yang BELUM
   // punya PO. Kartu pemilih PO di atasnya cuma mengundang salah paham.
   if (kartuPO) kartuPO.classList.toggle("hidden",
-    tab === "riw" || tab === "sop" || tab === "orderan" || tab === "ordermasuk");
+    tab === "riw" || tab === "sop" || tab === "orderan" || tab === "ordermasuk" || !!SP_MASTER_TAB[tab]);
 
   if (tab === "konfpot") { spMuatKonfMode_("potongan"); return; }
   if (tab === "konfset") { spMuatKonfMode_("setoran"); return; }
@@ -2392,6 +2426,7 @@ function spSwitchTab(tab) {
   if (tab === "terkirim") { spMuatTerkirim_(); return; }
   if (tab === "gelar") { spMuatGelaran(); return; }
   if (tab === "riw") { spMuatRiwayat(); return; }
+  if (SP_MASTER_TAB[tab]) { spMuatMaster_(tab); return; }   // v379
   if (tab === "setor") { spMuatLineSetoran_(); spMuatSetoran(); return; }
   if (!window.SP_PO_AKTIF) return;
   if (tab === "cutting" && !window.SP_CUT) spMuatCutting();

@@ -259,7 +259,7 @@ function ksMuat(bulan, opsi) {
 
 // ---------- render ----------
 function ksRender() {
-  ksRenderSaldo_(); ksRenderForm_(); ksRenderBulan_(); ksPasangSaring_(); ksRenderBuku_(); ksRenderArus_(); ksRenderRekon_(); ksRenderJurnal_(); ksRenderPeringatan_();
+  ksRenderSaldo_(); ksRenderForm_(); ksRenderBulan_(); ksPasangSaring_(); ksRenderBuku_(); ksRenderArus_(); ksRenderRekon_(); ksRenderJurnal_(); ksRenderMasterSupplier_(); ksRenderPeringatan_();
 }
 
 function ksRenderSaldo_() {
@@ -1035,6 +1035,32 @@ function ksJurnalWadah_() {
   return el;
 }
 
+/* v379 (ROADMAP-ERP Tahap 1 sub-rilis C) -- MASTER SUPPLIER, finance/owner saja (getMasterSupplier
+   area keuangan; ubah = full/finance di server). Dimuat MALAS lewat tombol, seperti jurnal: kas
+   dibuka tiap hari, master supplier disunting sesekali -- satu fetch per kunjungan untuk daftar yang
+   jarang dilihat adalah kuota yang terbuang. Komponennya rjdMasterPasang (simpro-global.js). */
+function ksMasterSupplierWadah_() {
+  let el = document.getElementById("ks-master-supplier");
+  if (el) return el;
+  const jangkar = document.getElementById("ks-jurnal") || document.getElementById("ks-rekon"); if (!jangkar || !jangkar.parentNode) return null;
+  el = document.createElement("div"); el.id = "ks-master-supplier";
+  jangkar.parentNode.insertBefore(el, jangkar.nextSibling);
+  return el;
+}
+function ksRenderMasterSupplier_() {
+  const el = ksMasterSupplierWadah_(); if (!el) return;
+  if (!KS_DATA || !KS_DATA.bisaFinance) { el.innerHTML = ""; delete el.dataset.rjdMaster; return; }
+  if (el.dataset.rjdMaster) return;   // sudah terpasang: ksRender() dipanggil tiap muat kas, jangan memuat ulang master
+  el.innerHTML = '<div class="ks-kartu"><div class="ks-kartu-judul">Master supplier</div>' +
+    '<p class="ks-info">Daftar pemasok kain, aksesoris, subkon dan jasa -- rekening & termin bayar dipakai pembelian (Tahap 2). Hanya finance/owner.</p>' +
+    '<div class="ks-aksi"><button id="ks-ms-buka" class="ks-btn" type="button" onclick="ksMasterSupplierBuka()">Buka master supplier</button></div></div>';
+}
+function ksMasterSupplierBuka() {
+  const el = ksMasterSupplierWadah_(); if (!el || typeof rjdMasterPasang !== "function") return;
+  el.innerHTML = '<div class="ks-kartu"><div class="ks-kartu-judul">Master supplier</div><div id="ks-ms-isi"></div></div>';
+  rjdMasterPasang(document.getElementById("ks-ms-isi"), "supplier", { apiUrl: KS_API_URL, idToken: function () { return KS_ID_TOKEN; }, bolehUbah: function () { return !!(KS_DATA && KS_DATA.bisaFinance); } });
+  el.dataset.rjdMaster = "supplier";
+}
 function ksJurnalMuat() {
   if (!KS_DATA || !KS_DATA.bisaFinance) return;
   const urut = ++KS_JURNAL_URUT, bulan = KS_BULAN;
