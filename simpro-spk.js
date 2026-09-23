@@ -254,11 +254,11 @@ function spPoFormSah_(idPoForm, apa) {
    tiap blok memancarkan datalistnya sendiri dari SATU daftar bawaan. */
 /* v345 (PF-9): peta alias panel ditulis dua kali (spSwitchTab & spRenderSub_) --
    nilai yang sama, jadi salah satu pasti tertinggal saat tab bermode ditambah. */
-const SP_ALIAS_PANEL = { konfpot: "konf", konfset: "konf", qcring: "qc", qcpot: "qc", qcjahit: "qc", mwarna: "master", msize: "master", mkain: "master", pbeli: "beli", terima: "beli" };
+const SP_ALIAS_PANEL = { konfpot: "konf", konfset: "konf", qcring: "qc", qcpot: "qc", qcjahit: "qc", mwarna: "master", msize: "master", mkain: "master", pbeli: "beli", terima: "beli", gudang: "beli" };
 /** v379: subtab master -> jenis master (rute getMasterERP). Peta ini juga yang dipakai spSwitchTab mengenali tab master. */
 const SP_MASTER_TAB = { mwarna: "warna", msize: "size", mkain: "kain" };
 /** v380 (Tahap 2C): subtab beli -> jenis; keadaannya di sini juga (bukan di blok ujung berkas) karena alasan yang sama. */
-const SP_BELI_TAB = { pbeli: "pb", terima: "gr" };
+const SP_BELI_TAB = { pbeli: "pb", terima: "gr", gudang: "st" };   // gudang (v381) memakai data & pemuatnya sendiri (spMuatGudang_)
 let SP_BELI = null, SP_BELI_URUT = 0, SP_BELI_STATUS = "", SP_BELI_PESAN = {};   // pesan per form BERTAHAN melewati muat ulang
 /** Panel master dibuat sekali, disisipkan sesudah panel terakhir supaya ikut disapu toggle [id^=sp-panel-]. */
 function spPanelMaster_() {
@@ -1512,7 +1512,7 @@ const SP_FASE_PETA = [
   // dibuat JS (spPanelMaster_) -- template Blogger tidak disentuh.
   ["master",     "Master",        [["mwarna", "Warna"], ["msize", "Size"], ["mkain", "Kain"]]],
   // ROADMAP-ERP Tahap 2C (v380): permintaan beli (siapa pun) & terima barang (bagian gudang). Nol rupiah (getPembelianLantai).
-  ["beli",       "Beli",          [["pbeli", "Permintaan Beli"], ["terima", "Terima Barang"]]]
+  ["beli",       "Beli",          [["pbeli", "Permintaan Beli"], ["terima", "Terima Barang"], ["gudang", "Stok & Opname"]]]   // v381: Tahap 3C (tab `stok` = Stok Siap Kirim, sudah ada)
 ];
 
 /** Boleh-tidaknya satu tab untuk pemakai -- dari peta bagian, BUKAN dari DOM. */
@@ -12298,6 +12298,7 @@ function spPanelBeli_() {
 }
 function spMuatBeli_(tab, paksa) {
   if (!SP_BELI_TAB[tab] || !spPanelBeli_()) return;
+  if (tab === "gudang") { spMuatGudang_(paksa); return; }   // v381: rute & keadaan sendiri (getStokLantai)
   const judul = document.getElementById("sp-beli-judul"); if (judul) judul.textContent = tab === "terima" ? "Terima barang" : "Permintaan beli";
   if (SP_BELI && !paksa) { spBeliRender_(); return; }
   if (SP_BELI_STATUS === "memuat" && !paksa) { spBeliRender_(); return; }   // subtab diklik lagi saat masih memuat: satu fetch saja
@@ -12491,4 +12492,108 @@ function spBeliBatalGR_(btn) {
   if (alasan === null) return;
   if (!String(alasan).trim()) { alert("Alasan wajib diisi."); return; }
   spKirim_("batalkanPenerimaan", { idGR: id, alasan: String(alasan).trim() }, { btn: btn, teksSibuk: "Membatalkan...", sukses: function (res) { spMuatBeli_("terima", true); return res; } });
+}
+
+/* ============================================================================
+ * ROADMAP-ERP Tahap 3 sub-rilis C (v381) -- SUBTAB "STOK & OPNAME" (tab `gudang`) DI FASE BELI
+ * NAMA TAB `stok` & spMuatStok_ SUDAH DIPAKAI "Stok Siap Kirim" (fase Packing) -- versi pertama v381 menimpanya (ketahuan sabotase X1 yang tidak merah). (halaman produksi, nol rupiah).
+ * Rute getStokLantai (gs @415): saldo per item/pemilik tanpa nilai, mutasi terakhir, opname Diajukan, master kain.
+ * Opname = saldo awal yang jujur (SD Stok mulai dari nol 1 Okt 2026): gudang menghitung fisik, keuangan menyetujui.
+ * Gembok BAGIAN gudang sama dengan terima barang; server (BAGIAN_PER_AKSI) yang menegakkan.
+ * ========================================================================== */
+let SP_GUDANG = null, SP_GUDANG_URUT = 0, SP_GUDANG_STATUS = "";
+
+function spMuatGudang_(paksa) {
+  if (!spPanelBeli_()) return;
+  const judul = document.getElementById("sp-beli-judul"); if (judul) judul.textContent = "Stok & opname gudang";
+  if (SP_GUDANG && !paksa) { spGudangRender_(); return; }
+  if (SP_GUDANG_STATUS === "memuat" && !paksa) { spGudangRender_(); return; }
+  const urut = ++SP_GUDANG_URUT;
+  SP_GUDANG_STATUS = "memuat"; spGudangRender_();
+  fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getStokLantai" }) })
+    .then(function (r) { return r.text(); })
+    .then(function (teks) {
+      let d; try { d = JSON.parse(teks); } catch (e) { throw new Error("Jawaban server tidak terbaca: " + String(teks || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 60)); }
+      if (!d || !d.success) throw new Error((d && d.error) || "Permintaan ditolak server.");
+      if (urut !== SP_GUDANG_URUT) return;
+      SP_GUDANG = d; SP_GUDANG_STATUS = ""; spGudangRender_();
+    })
+    .catch(function (e) {
+      if (urut !== SP_GUDANG_URUT) return;
+      SP_GUDANG_STATUS = /Failed to fetch|NetworkError|jaringan/i.test(String(e && e.message || e)) ? "Data stok tidak sampai ke server -- sambungan terputus di tengah jalan. Coba lagi." : "Gagal memuat: " + String((e && e.message) || e);
+      spGudangRender_();
+    });
+}
+function spGudangRender_() {
+  const W = document.getElementById("sp-beli-isi"); if (!W || window.SP_TAB !== "gudang") return;
+  if (SP_GUDANG_STATUS) {
+    const memuat = SP_GUDANG_STATUS === "memuat";
+    W.innerHTML = '<p class="sp-info' + (memuat ? '' : ' rjd-beli-galat') + '">' + spBeliE_(memuat ? "Memuat stok..." : SP_GUDANG_STATUS) + '</p>' + (memuat ? '' : '<button type="button" class="sp-btn" onclick="spMuatGudang_(true)">Coba lagi</button>');
+    return;
+  }
+  if (!SP_GUDANG) { W.innerHTML = ""; return; }
+  const boleh = spBeliBolehTerima_(), kain = (SP_GUDANG.kain || []).map(function (k) { return '<option value="' + spBeliE_(k.kode) + '">' + spBeliE_(k.nama) + '</option>'; }).join("");
+  const saldo = (SP_GUDANG.saldo || []).map(function (s) {
+    return '<tr data-kode="' + spBeliE_(s.kode) + '"><td class="rjd-beli-kode-sel">' + spBeliE_(s.kode.indexOf("NAMA:") === 0 ? "(tanpa kode)" : s.kode) + '</td><td>' + spBeliE_(s.nama) + '</td><td>' + spBeliE_(s.pemilik + (s.idKlien ? " " + s.idKlien : "")) + '</td><td class="ks-td-rp">' + spBeliE_(s.qty) + ' ' + spBeliE_(s.satuan) + '</td><td>' + spBeliE_(s.lokasi) + '</td></tr>';
+  }).join("");
+  const opname = (SP_GUDANG.opname || []), perOp = {}; opname.forEach(function (o) { (perOp[o["ID Opname"]] = perOp[o["ID Opname"]] || []).push(o); });
+  const barisOp = Object.keys(perOp).reverse().map(function (id) { const b = perOp[id]; return '<tr data-id="' + spBeliE_(id) + '"><td class="rjd-beli-kode-sel">' + spBeliE_(id) + '</td><td>' + spBeliE_(b[0].Tanggal) + '</td><td>' + b.map(function (o) { return spBeliE_(o["Nama Item"] + ": sistem " + o["Qty Sistem"] + ", hitung " + o["Qty Hitung"] + " (" + (Number(o.Selisih) > 0 ? "+" : "") + o.Selisih + ")"); }).join("<br>") + '</td><td>' + spBeliE_(b[0].Status) + '</td></tr>'; }).join("");
+  const mutasi = (SP_GUDANG.mutasi || []).slice().reverse().slice(0, 30).map(function (m) { return '<tr><td>' + spBeliE_(m.Tanggal) + '</td><td class="rjd-beli-kode-sel">' + spBeliE_(m["Kode Item"]) + '</td><td>' + spBeliE_(m["Nama Item"]) + '</td><td>' + spBeliE_(m.Pemilik) + '</td><td class="ks-td-rp">' + spBeliE_(m.Qty) + ' ' + spBeliE_(m.Satuan) + '</td><td>' + spBeliE_(m.Sumber + (m.Ref ? " " + m.Ref : "") + (m["ID Purchase Order"] ? " PO " + m["ID Purchase Order"] : "")) + '</td></tr>'; }).join("");
+  W.innerHTML = '<p class="sp-info">Saldo gudang dihitung dari mutasi sejak ' + spBeliE_(SP_GUDANG.mulai || "") + ' (barang datang, gelaran, opname). <b>Opname</b> = hitung fisik; selisihnya jadi penyesuaian sesudah disetujui keuangan -- itu juga cara mengisi saldo awal.' + (boleh ? '' : ' <b>Bagianmu bukan gudang -- hanya bisa dibaca.</b>') + '</p>' +
+    '<h4 class="rjd-beli-sub">Saldo (' + (SP_GUDANG.saldo || []).length + ')</h4><div class="rjd-beli-tabelwrap"><table class="rjd-beli-tabel" id="sp-stok-saldo"><thead><tr><th>Kode</th><th>Item</th><th>Pemilik</th><th>Qty</th><th>Lokasi</th></tr></thead><tbody>' + (saldo || '<tr><td colspan="5" class="rjd-beli-kosong">Belum ada saldo -- mulai dengan opname.</td></tr>') + '</tbody></table></div>' +
+    '<form class="rjd-beli-form" id="sp-op-form" onsubmit="return false"><h4 class="rjd-beli-sub rjd-beli-lebar">Opname (hitung fisik)</h4>' +
+    '<div class="rjd-beli-field"><label for="sp-op-tanggal">Tanggal hitung</label><input id="sp-op-tanggal" type="date" value="' + spBeliE_(spBeliHariIni_()) + '"></div>' +
+    '<div class="rjd-beli-tabelwrap rjd-beli-lebar"><table class="rjd-beli-tabel" id="sp-op-item"><thead><tr><th>Item *</th><th>Kode kain</th><th>Pemilik</th><th>Qty hitung *</th><th>Satuan</th><th>Alasan / catatan</th><th></th></tr></thead><tbody>' + spGudangBarisOpHtml_(0) + '</tbody></table></div>' +
+    '<div class="rjd-beli-aksi rjd-beli-lebar"><button type="button" class="sp-btn" onclick="spGudangTambahBaris_()">+ Baris</button><button type="button" class="sp-btn sp-btn-utama" id="sp-op-kirim" onclick="spGudangKirimOpname_(this)"' + (boleh ? '' : ' disabled') + '>Ajukan opname</button><span id="sp-op-pesan" class="rjd-beli-pesan"></span></div></form>' +
+    '<datalist id="sp-stok-kain">' + kain + '</datalist>' +
+    '<form class="rjd-beli-form" id="sp-kl-form" onsubmit="return false"><h4 class="rjd-beli-sub rjd-beli-lebar">Keluar barang (aksesoris ke PO / retur ke supplier)</h4>' +
+    '<div class="rjd-beli-field"><label for="sp-kl-nama">Item *</label><input id="sp-kl-nama" type="text" list="sp-stok-kain" maxlength="80" placeholder="nama item"></div>' +
+    '<div class="rjd-beli-field"><label for="sp-kl-kode">Kode kain</label><input id="sp-kl-kode" type="text" list="sp-stok-kain" maxlength="40"></div>' +
+    '<div class="rjd-beli-field"><label for="sp-kl-qty">Qty *</label><input id="sp-kl-qty" type="text" inputmode="decimal"></div>' +
+    '<div class="rjd-beli-field"><label for="sp-kl-satuan">Satuan</label><input id="sp-kl-satuan" type="text" value="pcs" maxlength="10"></div>' +
+    '<div class="rjd-beli-field"><label for="sp-kl-sumber">Jenis</label><select id="sp-kl-sumber"><option value="keluar-ke-PO">Keluar ke PO</option><option value="retur">Retur ke supplier</option></select></div>' +
+    '<div class="rjd-beli-field"><label for="sp-kl-po">ID Purchase Order</label><input id="sp-kl-po" type="text" list="sp-pb-po-list" maxlength="40"><datalist id="sp-pb-po-list">' + (window.SP_DAFTAR_PO || []).map(function (p) { return '<option value="' + spBeliE_(p.idPurchaseOrder) + '"></option>'; }).join("") + '</datalist></div>' +
+    '<div class="rjd-beli-aksi rjd-beli-lebar"><button type="button" class="sp-btn sp-btn-utama" id="sp-kl-kirim" onclick="spGudangKirimKeluar_(this)"' + (boleh ? '' : ' disabled') + '>Catat keluar</button><span id="sp-kl-pesan" class="rjd-beli-pesan"></span></div></form>' +
+    '<h4 class="rjd-beli-sub">Opname menunggu persetujuan (' + Object.keys(perOp).length + ')</h4><div class="rjd-beli-tabelwrap"><table class="rjd-beli-tabel" id="sp-op-daftar"><thead><tr><th>ID</th><th>Tanggal</th><th>Item</th><th>Status</th></tr></thead><tbody>' + (barisOp || '<tr><td colspan="4" class="rjd-beli-kosong">Tidak ada.</td></tr>') + '</tbody></table></div>' +
+    '<h4 class="rjd-beli-sub">Mutasi terakhir</h4><div class="rjd-beli-tabelwrap"><table class="rjd-beli-tabel" id="sp-stok-mutasi"><thead><tr><th>Tanggal</th><th>Kode</th><th>Item</th><th>Pemilik</th><th>Qty</th><th>Sumber</th></tr></thead><tbody>' + (mutasi || '<tr><td colspan="6" class="rjd-beli-kosong">Belum ada mutasi.</td></tr>') + '</tbody></table></div>';
+  Object.keys(SP_BELI_PESAN).forEach(function (id) { const el = document.getElementById(id), m = SP_BELI_PESAN[id]; if (el && m) { el.textContent = m.teks; el.className = m.kelas; } });
+}
+function spGudangBarisOpHtml_(i) {
+  return '<tr class="rjd-beli-item"><td><input type="text" class="rjd-beli-nama" list="sp-stok-kain" placeholder="nama item" maxlength="80"></td><td><input type="text" class="rjd-beli-kode" list="sp-stok-kain" maxlength="40"></td>' +
+    '<td><select class="rjd-beli-pemilik"><option value="RJD">RJD</option><option value="Klien">Klien</option></select></td><td><input type="text" class="rjd-beli-qty" inputmode="decimal" placeholder="0"></td><td><input type="text" class="rjd-beli-satuan" value="m" maxlength="10"></td>' +
+    '<td><input type="text" class="rjd-beli-ket" maxlength="200" placeholder="mis. hitung bersama Ani"></td><td><button type="button" class="sp-btn rjd-beli-hapus" aria-label="Hapus baris" onclick="spBeliHapusBaris_(this)">&times;</button></td></tr>';
+}
+function spGudangTambahBaris_() { const tb = document.querySelector("#sp-op-item tbody"); if (tb) tb.insertAdjacentHTML("beforeend", spGudangBarisOpHtml_(tb.querySelectorAll("tr").length)); }
+function spGudangKirimOpname_(btn) {
+  const item = [], galat = [];
+  document.querySelectorAll("#sp-op-item tr.rjd-beli-item").forEach(function (tr, i) {
+    const nama = (tr.querySelector(".rjd-beli-nama").value || "").trim(), qT = tr.querySelector(".rjd-beli-qty").value;
+    if (!nama && !String(qT).trim()) return;
+    if (!nama) { galat.push("Baris " + (i + 1) + ": nama item kosong."); return; }
+    const q = spParseDesimal_(qT); if (isNaN(q) || q < 0) { galat.push("Baris " + (i + 1) + " (" + nama + "): qty hitung '" + qT + "' bukan angka."); return; }
+    item.push({ namaItem: nama, kodeItem: (tr.querySelector(".rjd-beli-kode").value || "").trim(), pemilik: tr.querySelector(".rjd-beli-pemilik").value, qtyHitung: q, satuan: (tr.querySelector(".rjd-beli-satuan").value || "m").trim() || "m", alasan: (tr.querySelector(".rjd-beli-ket").value || "").trim() });
+  });
+  if (galat.length) { spBeliPesan_("sp-op-pesan", galat[0], true); return; }
+  if (!item.length) { spBeliPesan_("sp-op-pesan", "Isi minimal satu item yang dihitung (qty 0 pun boleh -- itu informasi).", true); return; }
+  const payload = { tanggal: document.getElementById("sp-op-tanggal").value, item: item };
+  payload.idPermintaan = rjdKunciIsian_("sp-op", payload);
+  spBeliPesan_("sp-op-pesan", "");
+  spKirim_("catatOpname", payload, { btn: btn, teksSibuk: "Mengajukan...", sukses: function (res) {
+    if (res && res.sudahTercatat) spBeliPesan_("sp-op-pesan", "Opname ini SUDAH diajukan sebagai " + res.idOpname + ".");
+    else if (res) spBeliPesan_("sp-op-pesan", "Diajukan " + res.idOpname + " (" + res.item + " item, " + res.berselisih + " berselisih) -- menunggu persetujuan keuangan.");
+    spMuatGudang_(true); return res; } });
+}
+function spGudangKirimKeluar_(btn) {
+  const nama = (document.getElementById("sp-kl-nama").value || "").trim(), qT = document.getElementById("sp-kl-qty").value, q = spParseDesimal_(qT);
+  if (!nama) { spBeliPesan_("sp-kl-pesan", "Nama item wajib.", true); return; }
+  if (isNaN(q) || q <= 0) { spBeliPesan_("sp-kl-pesan", "Qty '" + qT + "' harus angka lebih dari 0.", true); return; }
+  const sumber = document.getElementById("sp-kl-sumber").value, po = (document.getElementById("sp-kl-po").value || "").trim();
+  if (sumber === "keluar-ke-PO" && !po) { spBeliPesan_("sp-kl-pesan", "Keluar ke PO: isi ID Purchase Order.", true); return; }
+  const payload = { namaItem: nama, kodeItem: (document.getElementById("sp-kl-kode").value || "").trim(), qty: q, satuan: (document.getElementById("sp-kl-satuan").value || "pcs").trim() || "pcs", sumber: sumber, idPurchaseOrder: po };
+  payload.idPermintaan = rjdKunciIsian_("sp-kl", payload);
+  spBeliPesan_("sp-kl-pesan", "");
+  spKirim_("keluarStok", payload, { btn: btn, teksSibuk: "Mencatat...", sukses: function (res) {
+    if (res && res.sudahTercatat) spBeliPesan_("sp-kl-pesan", "Mutasi ini SUDAH tercatat (" + res.idMutasi + ").");
+    else if (res) spBeliPesan_("sp-kl-pesan", "Tercatat " + res.idMutasi + " (" + res.qty + ").");
+    spMuatGudang_(true); return res; } });
 }

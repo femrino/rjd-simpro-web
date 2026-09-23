@@ -259,7 +259,7 @@ function ksMuat(bulan, opsi) {
 
 // ---------- render ----------
 function ksRender() {
-  ksRenderSaldo_(); ksRenderForm_(); ksRenderBulan_(); ksPasangSaring_(); ksRenderBuku_(); ksRenderArus_(); ksRenderRekon_(); ksRenderJurnal_(); ksRenderMasterSupplier_(); ksRenderBeli_(); ksRenderPeringatan_();
+  ksRenderSaldo_(); ksRenderForm_(); ksRenderBulan_(); ksPasangSaring_(); ksRenderBuku_(); ksRenderArus_(); ksRenderRekon_(); ksRenderJurnal_(); ksRenderMasterSupplier_(); ksRenderBeli_(); ksRenderStok_(); ksRenderPeringatan_();
 }
 
 function ksRenderSaldo_() {
@@ -1116,6 +1116,8 @@ function ksRenderJurnal_() {
   if (p.kasbon) baris.push(['Kasbon karyawan (' + ksEsc_(p.kasbon.akun) + ')', ksRp(p.kasbon.gl), ksRp(p.kasbon.buku), lencana(p.kasbon.beda === 0, p.kasbon.beda)]);
   // Tahap 2B (gs @413): utang usaha per tagihan supplier. Server lama tanpa medan -> baris tidak dirender (bukan Rp 0 palsu).
   if (p.utang) baris.push(['Utang usaha (211), per tagihan supplier' + rinci(p.utang), ksRp(p.utang.gl), ksRp(p.utang.buku), lencana(p.utang.beda === 0 && !(p.utang.rinci || []).length, p.utang.beda)]);
+  // Tahap 3B (gs @416): persediaan 131+133 vs SD Stok RJD x rata-rata. null (mode beban langsung) / tanpa medan (server lama) -> baris tidak ada.
+  if (p.persediaan) baris.push(['Persediaan bahan (131+133) vs SD Stok RJD', ksRp(p.persediaan.gl), ksRp(p.persediaan.buku), lencana(p.persediaan.beda === 0, p.persediaan.beda)]);
   const htmlPredikat = '<div class="ks-gulir"><table class="ks-tabel" id="ks-jt-predikat"><thead><tr><th>Pemeriksaan</th><th class="ks-td-rp">Buku besar</th><th class="ks-td-rp">Buku pembantu</th><th></th></tr></thead><tbody>' +
     baris.map(function (b) { return '<tr><td>' + b[0] + '</td><td class="ks-td-rp">' + b[1] + '</td><td class="ks-td-rp">' + b[2] + '</td><td>' + b[3] + '</td></tr>'; }).join("") + '</tbody></table></div>';
 
@@ -1398,4 +1400,90 @@ function ksBeliBayar_(btn) {
   if (selKat && selKat.value !== (KS_BELI.kategoriBayar || "Bayar tagihan supplier")) { ksPesan_("Kategori 'Bayar tagihan supplier' belum ada di SD Kategori Kas -- jalankan siapkanPembelian() di editor dulu.", true); return; }
   ksPesan_("Form kas terisi untuk " + id + " (sisa " + ksRp(t.sisa) + "). Pilih akun, periksa jumlah, lalu Simpan.", false);
   const f = document.getElementById("ks-in-akun"); if (f && f.scrollIntoView) { try { f.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) { /* browser tua */ } f.focus(); }
+}
+
+/* ============================================================================
+ * ROADMAP-ERP Tahap 3 sub-rilis C (v381) -- KARTU "STOK & PERSEDIAAN" DI HALAMAN KAS (finance/owner): nilai
+ * persediaan RJD (rata-rata bergerak), opname yang menunggu persetujuan (Setujui/Tolak; item baru minta nilai satuan),
+ * mutasi terakhir. Dimuat MALAS (pola jurnal/pembelian). Rute getStok/setujuiOpname (gs @415).
+ * ========================================================================== */
+let KS_STOK = null, KS_STOK_URUT = 0, KS_STOK_STATUS = "", KS_STOK_TAB = "opname", KS_STOK_PESAN = null;
+
+function ksStokWadah_() {
+  let el = document.getElementById("ks-stok");
+  if (el) return el;
+  const jangkar = document.getElementById("ks-beli") || document.getElementById("ks-master-supplier") || document.getElementById("ks-jurnal") || document.getElementById("ks-rekon"); if (!jangkar || !jangkar.parentNode) return null;
+  el = document.createElement("div"); el.id = "ks-stok";
+  jangkar.parentNode.insertBefore(el, jangkar.nextSibling);
+  return el;
+}
+function ksRenderStok_() {
+  const el = ksStokWadah_(); if (!el) return;
+  if (!KS_DATA || !KS_DATA.bisaFinance) { el.innerHTML = ""; KS_STOK = null; return; }
+  if (KS_STOK || KS_STOK_STATUS) { ksStokRender_(); return; }
+  el.innerHTML = '<div class="ks-kartu"><div class="ks-kartu-judul">Stok &amp; persediaan</div>' +
+    '<p class="ks-info">Saldo gudang dari ledger SD Stok (nilai rata-rata bergerak, hanya barang milik RJD yang bernilai), opname dari lantai yang menunggu persetujuan, dan mutasi terakhir. Selisih opname yang disetujui menjadi penyesuaian persediaan (jurnal 791).</p>' +
+    '<div class="ks-aksi"><button id="ks-stok-buka" class="ks-btn" type="button" onclick="ksStokMuat()">Buka stok</button></div></div>';
+}
+function ksStokMuat() {
+  const urut = ++KS_STOK_URUT;
+  KS_STOK_STATUS = "memuat"; ksStokRender_();
+  ksKirim_("getStok").then(function (d) { if (urut !== KS_STOK_URUT) return; KS_STOK = d; KS_STOK_STATUS = ""; ksStokRender_(); })
+    .catch(function (e) { if (urut !== KS_STOK_URUT) return; KS_STOK_STATUS = /Failed to fetch|NetworkError|jaringan/i.test(String(e && e.message || e)) ? "Data stok tidak sampai ke server -- sambungan terputus di tengah jalan. Coba lagi." : "Gagal memuat: " + String((e && e.message) || e); ksStokRender_(); });
+}
+function ksStokTab(t) { KS_STOK_TAB = t; ksStokRender_(); }
+function ksStokPesan_(teks, galat) { const kelas = "rjd-beli-pesan" + (galat ? " rjd-beli-galat" : (teks ? " rjd-beli-ok" : "")); KS_STOK_PESAN = teks ? { teks: teks, kelas: kelas } : null; const el = document.getElementById("ks-stok-pesan"); if (el) { el.textContent = teks || ""; el.className = kelas; } }
+function ksStokRender_() {
+  const el = ksStokWadah_(); if (!el) return;
+  const judul = '<div class="ks-kartu-judul">Stok &amp; persediaan</div>';
+  if (KS_STOK_STATUS) {
+    const memuat = KS_STOK_STATUS === "memuat";
+    el.innerHTML = '<div class="ks-kartu">' + judul + '<p class="' + (memuat ? 'ks-info' : 'ks-galat') + '" id="ks-stok-status">' + ksEsc_(memuat ? "Memuat stok..." : KS_STOK_STATUS) + '</p>' + (memuat ? '' : '<div class="ks-aksi"><button class="ks-btn" type="button" onclick="ksStokMuat()">Coba lagi</button></div>') + '</div>';
+    return;
+  }
+  if (!KS_STOK) return;
+  const opname = KS_STOK.opname || [], perOp = {}; opname.forEach(function (o) { (perOp[o["ID Opname"]] = perOp[o["ID Opname"]] || []).push(o); });
+  const menunggu = Object.keys(perOp).filter(function (id) { return perOp[id][0].Status === "Diajukan"; }).length;
+  const tab = function (k, label, n) { return '<button type="button" class="rjd-beli-tab' + (KS_STOK_TAB === k ? ' active' : '') + '" data-tab="' + k + '" onclick="ksStokTab(\'' + k + '\')">' + label + (n ? ' <span class="rjd-beli-lencana">' + n + '</span>' : '') + '</button>'; };
+  let isi = "";
+  if (KS_STOK_TAB === "saldo") {
+    isi = '<div class="ks-gulir"><table class="ks-tabel rjd-beli-tabel" id="ks-stok-saldo"><thead><tr><th>Kode</th><th>Item</th><th>Pemilik</th><th class="ks-td-rp">Qty</th><th class="ks-td-rp">Rata-rata</th><th class="ks-td-rp">Nilai</th></tr></thead><tbody>' +
+      ((KS_STOK.saldo || []).map(function (s) { return '<tr data-kode="' + ksEsc_(s.kode) + '"><td class="ks-mono">' + ksEsc_(s.kode.indexOf("NAMA:") === 0 ? "(tanpa kode)" : s.kode) + '</td><td>' + ksEsc_(s.nama) + '</td><td>' + ksEsc_(s.pemilik + (s.idKlien ? " " + s.idKlien : "")) + '</td><td class="ks-td-rp">' + ksEsc_(s.qty + " " + s.satuan) + '</td><td class="ks-td-rp">' + (s.pemilik === "RJD" ? ksRp(s.rata || 0) : "-") + '</td><td class="ks-td-rp">' + (s.pemilik === "RJD" ? ksRp(s.nilai || 0) : "-") + '</td></tr>'; }).join("") || '<tr><td colspan="6" class="rjd-beli-kosong">Belum ada saldo.</td></tr>') + '</tbody></table></div>';
+  } else if (KS_STOK_TAB === "mutasi") {
+    isi = '<div class="ks-gulir"><table class="ks-tabel rjd-beli-tabel" id="ks-stok-mutasi"><thead><tr><th>Tanggal</th><th>ID</th><th>Item</th><th>Pemilik</th><th class="ks-td-rp">Qty</th><th class="ks-td-rp">Nilai</th><th>Sumber</th></tr></thead><tbody>' +
+      ((KS_STOK.mutasi || []).slice().reverse().slice(0, 60).map(function (m) { return '<tr><td>' + ksEsc_(m.Tanggal) + '</td><td class="ks-mono">' + ksEsc_(m["ID Mutasi"]) + '</td><td>' + ksEsc_(m["Nama Item"]) + '</td><td>' + ksEsc_(m.Pemilik) + '</td><td class="ks-td-rp">' + ksEsc_(m.Qty + " " + m.Satuan) + '</td><td class="ks-td-rp">' + ksRp(m.Nilai || 0) + '</td><td>' + ksEsc_(m.Sumber + (m.Ref ? " " + m.Ref : "")) + '</td></tr>'; }).join("") || '<tr><td colspan="7" class="rjd-beli-kosong">Belum ada mutasi.</td></tr>') + '</tbody></table></div>';
+  } else {
+    const baris = Object.keys(perOp).reverse().map(function (id) {
+      const b = perOp[id], s = b[0], diajukan = s.Status === "Diajukan";
+      const baru = b.filter(function (o) { return Number(o["Qty Sistem"]) === 0 && Number(o.Selisih) > 0 && o.Pemilik !== "Klien"; });
+      return '<tr data-id="' + ksEsc_(id) + '"><td class="ks-mono">' + ksEsc_(id) + '<br><small>' + ksEsc_(s.Tanggal) + ' ' + ksEsc_(s["Dicatat Oleh"]) + '</small></td>' +
+        '<td>' + b.map(function (o) { return ksEsc_(o["Nama Item"] + " (" + o.Pemilik + "): sistem " + o["Qty Sistem"] + ", hitung " + o["Qty Hitung"] + " -> " + (Number(o.Selisih) > 0 ? "+" : "") + o.Selisih + " " + o.Satuan) + (o.Alasan ? ' <small>' + ksEsc_(o.Alasan) + '</small>' : ''); }).join("<br>") + '</td>' +
+        '<td>' + ksEsc_(s.Status) + (s.Catatan ? '<br><small>' + ksEsc_(s.Catatan) + '</small>' : '') + '</td>' +
+        '<td>' + (diajukan ? '<button type="button" class="ks-btn-kecil" data-aksi="setuju" data-id="' + ksEsc_(id) + '" data-baru="' + ksEsc_(baru.map(function (o) { return o["Kode Item"] + "|" + o["Nama Item"]; }).join(";")) + '" onclick="ksStokPutus_(this, \'Disetujui\')">Setujui</button> <button type="button" class="ks-btn-kecil" data-aksi="tolak" data-id="' + ksEsc_(id) + '" onclick="ksStokPutus_(this, \'Ditolak\')">Tolak</button>' : '') + '</td></tr>';
+    }).join("");
+    isi = '<p class="ks-info">Opname dari gudang. Item RJD yang BARU (sistem 0) butuh nilai satuan saat disetujui -- diminta lewat kotak isian; tanpa itu nilainya 0 dan persediaan kurang dicatat.</p>' +
+      '<div class="ks-gulir"><table class="ks-tabel rjd-beli-tabel" id="ks-stok-opname"><thead><tr><th>ID</th><th>Item</th><th>Status</th><th></th></tr></thead><tbody>' + (baris || '<tr><td colspan="4" class="rjd-beli-kosong">Belum ada opname.</td></tr>') + '</tbody></table></div>';
+  }
+  el.innerHTML = '<div class="ks-kartu">' + judul +
+    '<div class="rjd-beli-ringkas"><div><span>Nilai persediaan RJD</span><b>' + ksRp(KS_STOK.nilaiRJD || 0) + '</b></div><div><span>Item bersaldo</span><b>' + (KS_STOK.saldo || []).length + '</b></div><div' + (KS_STOK.tanpaKode ? ' class="rjd-beli-awas"' : '') + '><span>Mutasi tanpa kode</span><b>' + (KS_STOK.tanpaKode || 0) + '</b></div><div><button class="ks-btn-kecil" type="button" onclick="ksStokMuat()">Muat ulang</button></div></div>' +
+    '<div class="rjd-beli-tabs">' + tab("opname", "Opname", menunggu) + tab("saldo", "Saldo") + tab("mutasi", "Mutasi") + '</div><span id="ks-stok-pesan" class="rjd-beli-pesan"></span><div id="ks-stok-isi">' + isi + '</div></div>';
+  if (KS_STOK_PESAN) { const p = document.getElementById("ks-stok-pesan"); if (p) { p.textContent = KS_STOK_PESAN.teks; p.className = KS_STOK_PESAN.kelas; } }
+}
+function ksStokPutus_(btn, keputusan) {
+  const id = btn.dataset.id, payload = { idOpname: id, keputusan: keputusan };
+  if (keputusan === "Ditolak") { const alasan = prompt("Alasan menolak " + id + ":"); if (alasan === null) return; if (!String(alasan).trim()) { ksStokPesan_("Alasan penolakan wajib.", true); return; } payload.alasan = String(alasan).trim(); }
+  else if (btn.dataset.baru) {
+    payload.nilaiSatuan = {};
+    const gagal = btn.dataset.baru.split(";").filter(Boolean).some(function (x) {
+      const kode = x.split("|")[0], nama = x.split("|")[1] || kode, t = prompt("Item BARU " + nama + " -- nilai satuan (Rp, tanpa titik ribuan; kosong = 0):");
+      if (t === null) return true;
+      const n = String(t).trim() === "" ? 0 : ksParseRp_(t); if (isNaN(n) || n < 0) { ksStokPesan_("Nilai satuan '" + t + "' bukan angka.", true); return true; }
+      payload.nilaiSatuan[kode] = n; return false;
+    });
+    if (gagal) return;
+  }
+  const teksAsli = btn.textContent; btn.disabled = true; btn.textContent = "Mengirim...";
+  const pulih = function () { if (btn.isConnected) { btn.disabled = false; btn.textContent = teksAsli; } };
+  ksKirim_("setujuiOpname", { payload: payload }).then(function (d) { pulih(); ksStokPesan_(id + " -> " + (d.status || keputusan) + (d.sudahDiputuskan ? " (sudah diputuskan sebelumnya)" : "") + (d.penyesuaian ? ", " + d.penyesuaian + " penyesuaian" : "") + (d.tanpaNilai && d.tanpaNilai.length ? " -- TANPA NILAI: " + d.tanpaNilai.join(", ") : "") + "."); ksStokMuat(); if (KS_JURNAL) ksJurnalMuat(); return d; })   // jurnal yang sedang tampil ikut disegarkan: penyesuaian = entri baru
+    .catch(function (e) { pulih(); const jaringan = /Failed to fetch|NetworkError|jaringan/i.test(String(e && e.message || e)); ksStokPesan_(jaringan ? "Tidak sampai ke server -- sambungan terputus di tengah jalan. Daftar dimuat ulang; lihat statusnya sebelum mengirim lagi." : String((e && e.message) || e), true); if (jaringan) ksStokMuat(); });
 }
