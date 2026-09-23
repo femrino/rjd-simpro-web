@@ -259,7 +259,7 @@ function ksMuat(bulan, opsi) {
 
 // ---------- render ----------
 function ksRender() {
-  ksRenderSaldo_(); ksRenderForm_(); ksRenderBulan_(); ksPasangSaring_(); ksRenderBuku_(); ksRenderArus_(); ksRenderRekon_(); ksRenderJurnal_(); ksRenderMasterSupplier_(); ksRenderPeringatan_();
+  ksRenderSaldo_(); ksRenderForm_(); ksRenderBulan_(); ksPasangSaring_(); ksRenderBuku_(); ksRenderArus_(); ksRenderRekon_(); ksRenderJurnal_(); ksRenderMasterSupplier_(); ksRenderBeli_(); ksRenderPeringatan_();
 }
 
 function ksRenderSaldo_() {
@@ -1114,6 +1114,8 @@ function ksRenderJurnal_() {
   if (p.piutang) baris.push(['Piutang usaha (121), bruto per invoice' + rinci(p.piutang), ksRp(p.piutang.gl), ksRp(p.piutang.buku), lencana(p.piutang.beda === 0 && !(p.piutang.rinci || []).length, p.piutang.beda)]);
   if (p.uangMuka) baris.push(['Uang muka order (219), per PO' + rinci(p.uangMuka), ksRp(p.uangMuka.gl), ksRp(p.uangMuka.buku), lencana(p.uangMuka.beda === 0 && !(p.uangMuka.rinci || []).length, p.uangMuka.beda)]);
   if (p.kasbon) baris.push(['Kasbon karyawan (' + ksEsc_(p.kasbon.akun) + ')', ksRp(p.kasbon.gl), ksRp(p.kasbon.buku), lencana(p.kasbon.beda === 0, p.kasbon.beda)]);
+  // Tahap 2B (gs @413): utang usaha per tagihan supplier. Server lama tanpa medan -> baris tidak dirender (bukan Rp 0 palsu).
+  if (p.utang) baris.push(['Utang usaha (211), per tagihan supplier' + rinci(p.utang), ksRp(p.utang.gl), ksRp(p.utang.buku), lencana(p.utang.beda === 0 && !(p.utang.rinci || []).length, p.utang.beda)]);
   const htmlPredikat = '<div class="ks-gulir"><table class="ks-tabel" id="ks-jt-predikat"><thead><tr><th>Pemeriksaan</th><th class="ks-td-rp">Buku besar</th><th class="ks-td-rp">Buku pembantu</th><th></th></tr></thead><tbody>' +
     baris.map(function (b) { return '<tr><td>' + b[0] + '</td><td class="ks-td-rp">' + b[1] + '</td><td class="ks-td-rp">' + b[2] + '</td><td>' + b[3] + '</td></tr>'; }).join("") + '</tbody></table></div>';
 
@@ -1168,3 +1170,232 @@ window.addEventListener("load", function () {
   const t = document.getElementById("ks-google-btn"); if (t) google.accounts.id.renderButton(t, { theme: "outline", size: "large", width: 260 });
   ksShow("ks-login-box");
 });
+
+/* ============================================================================
+ * ROADMAP-ERP Tahap 2 sub-rilis C (v380) -- KARTU "PEMBELIAN" DI HALAMAN KAS (finance/owner; admin lewat area
+ * keuangan). Tiga tab: Permintaan (setujui/tolak PB), PO supplier (terbitkan/batalkan), Tagihan (catat/batalkan,
+ * sisa & status dari kas, tombol BAYAR mengisi form kas: kategori `Bayar tagihan supplier`, Ref = ID TS).
+ * Dimuat MALAS lewat tombol (pola jurnal & master supplier): daftar ini dilihat sesekali, buku kas tiap hari.
+ * Rupiah diketik tanpa titik ribuan; koma = desimal (ksParseRp_, K16).
+ * ========================================================================== */
+let KS_BELI = null, KS_BELI_URUT = 0, KS_BELI_STATUS = "", KS_BELI_TAB = "ts", KS_BELI_PESAN = null;   // pesan bertahan melewati muat ulang
+
+function ksBeliWadah_() {
+  let el = document.getElementById("ks-beli");
+  if (el) return el;
+  const jangkar = document.getElementById("ks-master-supplier") || document.getElementById("ks-jurnal") || document.getElementById("ks-rekon"); if (!jangkar || !jangkar.parentNode) return null;
+  el = document.createElement("div"); el.id = "ks-beli";
+  jangkar.parentNode.insertBefore(el, jangkar.nextSibling);
+  return el;
+}
+function ksRenderBeli_() {
+  const el = ksBeliWadah_(); if (!el) return;
+  if (!KS_DATA || !KS_DATA.bisaFinance) { el.innerHTML = ""; KS_BELI = null; return; }
+  if (KS_BELI || KS_BELI_STATUS) { ksBeliRender_(); return; }   // sudah dibuka: ksRender() tiap muat kas tidak memuat ulang
+  el.innerHTML = '<div class="ks-kartu"><div class="ks-kartu-judul">Pembelian &amp; utang supplier</div>' +
+    '<p class="ks-info">Permintaan beli dari lantai, PO ke supplier, tagihan yang masuk, dan sisa utangnya. Pembayaran tetap dicatat di buku kas di atas (kategori <b>Bayar tagihan supplier</b>, Ref = ID tagihan) -- tombol Bayar di daftar tagihan mengisikannya.</p>' +
+    '<div class="ks-aksi"><button id="ks-beli-buka" class="ks-btn" type="button" onclick="ksBeliMuat()">Buka pembelian</button></div></div>';
+}
+function ksBeliMuat() {
+  const urut = ++KS_BELI_URUT;
+  KS_BELI_STATUS = "memuat"; ksBeliRender_();
+  ksKirim_("getPembelian").then(function (d) {
+    if (urut !== KS_BELI_URUT) return;
+    KS_BELI = d; KS_BELI_STATUS = ""; ksBeliRender_();
+  }).catch(function (e) {
+    if (urut !== KS_BELI_URUT) return;
+    KS_BELI_STATUS = /Failed to fetch|NetworkError|jaringan/i.test(String(e && e.message || e)) ? "Data pembelian tidak sampai ke server -- sambungan terputus di tengah jalan. Coba lagi." : "Gagal memuat: " + String((e && e.message) || e);
+    ksBeliRender_();
+  });
+}
+function ksBeliTab(t) { KS_BELI_TAB = t; ksBeliRender_(); }
+function ksBeliRender_() {
+  const el = ksBeliWadah_(); if (!el) return;
+  const judul = '<div class="ks-kartu-judul">Pembelian &amp; utang supplier</div>';
+  if (KS_BELI_STATUS) {
+    const memuat = KS_BELI_STATUS === "memuat";
+    el.innerHTML = '<div class="ks-kartu">' + judul + '<p class="' + (memuat ? 'ks-info' : 'ks-galat') + '" id="ks-beli-status">' + ksEsc_(memuat ? "Memuat pembelian..." : KS_BELI_STATUS) + '</p>' +
+      (memuat ? '' : '<div class="ks-aksi"><button class="ks-btn" type="button" onclick="ksBeliMuat()">Coba lagi</button></div>') + '</div>';
+    return;
+  }
+  if (!KS_BELI) return;
+  const r = KS_BELI.ringkas || {};
+  const tab = function (k, label, n) { return '<button type="button" class="rjd-beli-tab' + (KS_BELI_TAB === k ? ' active' : '') + '" data-tab="' + k + '" onclick="ksBeliTab(\'' + k + '\')">' + label + (n ? ' <span class="rjd-beli-lencana">' + n + '</span>' : '') + '</button>'; };
+  const pbDiajukan = (KS_BELI.pb || []).filter(function (o) { return o.Status === "Diajukan"; }).map(function (o) { return o["ID PB"]; }).filter(function (v, i, a) { return a.indexOf(v) === i; }).length;
+  el.innerHTML = '<div class="ks-kartu">' + judul +
+    '<div class="rjd-beli-ringkas"><div><span>Utang terbuka</span><b>' + ksRp(r.utangTerbuka || 0) + '</b></div><div><span>Tagihan terbuka</span><b>' + (r.tagihanTerbuka || 0) + '</b></div><div' + (r.lewatTempo ? ' class="rjd-beli-awas"' : '') + '><span>Lewat jatuh tempo</span><b>' + (r.lewatTempo || 0) + '</b></div>' +
+    '<div><button class="ks-btn-kecil" type="button" onclick="ksBeliMuat()">Muat ulang</button></div></div>' +
+    '<div class="rjd-beli-tabs">' + tab("pb", "Permintaan", pbDiajukan) + tab("pos", "PO supplier") + tab("ts", "Tagihan", r.tagihanTerbuka) + '</div>' +
+    '<div id="ks-beli-isi">' + (KS_BELI_TAB === "pb" ? ksBeliHtmlPB_() : KS_BELI_TAB === "pos" ? ksBeliHtmlPOS_() : ksBeliHtmlTS_()) + '</div></div>';
+  if (KS_BELI_TAB === "pos") ksBeliHitungPOS_();
+  if (KS_BELI_PESAN) { const el = document.getElementById("ks-beli-pesan"); if (el) { el.textContent = KS_BELI_PESAN.teks; el.className = KS_BELI_PESAN.kelas; } }   // sukses memuat ulang kartu; pesannya tidak boleh ikut hilang
+}
+function ksBeliPesan_(teks, galat) {
+  const kelas = "rjd-beli-pesan" + (galat ? " rjd-beli-galat" : (teks ? " rjd-beli-ok" : ""));
+  KS_BELI_PESAN = teks ? { teks: teks, kelas: kelas } : null;
+  const el = document.getElementById("ks-beli-pesan"); if (!el) return; el.textContent = teks || ""; el.className = kelas;
+}
+/** Kirim aksi tulis pembelian: tombol dimatikan selama kirim; success:false -> pesan, jaringan putus -> pesan + muat ulang. */
+function ksBeliKirim_(btn, action, payload, sukses) {
+  const teksAsli = btn ? btn.textContent : ""; if (btn) { btn.disabled = true; btn.textContent = "Mengirim..."; }
+  const pulih = function () { if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = teksAsli; } };
+  return ksKirim_(action, { payload: payload }).then(function (d) { pulih(); ksBeliPesan_(sukses ? sukses(d) : "Tersimpan."); ksBeliMuat(); return d; })
+    .catch(function (e) {
+      pulih();
+      const jaringan = /Failed to fetch|NetworkError|jaringan/i.test(String(e && e.message || e));
+      ksBeliPesan_(jaringan ? "Tidak sampai ke server -- sambungan terputus di tengah jalan. Isian masih di layar; daftar dimuat ulang, lihat apakah sudah tercatat sebelum mengirim lagi." : String((e && e.message) || e), true);
+      if (jaringan) ksBeliMuat();
+    });
+}
+
+// ---------------------------------------------------------------- Permintaan beli
+function ksBeliHtmlPB_() {
+  const perPB = {}; (KS_BELI.pb || []).forEach(function (o) { (perPB[o["ID PB"]] = perPB[o["ID PB"]] || []).push(o); });
+  const ids = Object.keys(perPB).reverse();
+  const baris = ids.map(function (id) {
+    const b = perPB[id], s = b[0], est = b.reduce(function (a, o) { return a + (Number(o["Estimasi Rp"]) || 0); }, 0);
+    const besar = est > (KS_BELI.batasOwnerRp || 0), boleh = s.Status === "Diajukan" && (!besar || KS_BELI.bolehSetujuiBesar);
+    return '<tr data-id="' + ksEsc_(id) + '"><td class="ks-mono">' + ksEsc_(id) + '</td><td>' + ksEsc_(s.Tanggal) + '<br><small>' + ksEsc_(s.Pemohon) + '</small></td>' +
+      '<td>' + b.map(function (o) { return ksEsc_(o["Nama Item"] + " " + o.Qty + " " + o.Satuan) + (o["ID Purchase Order"] ? ' <small>(' + ksEsc_(o["ID Purchase Order"]) + ')</small>' : ''); }).join("<br>") + '</td>' +
+      '<td class="ks-td-rp">' + (est ? ksRp(est) : '-') + (besar ? '<br><small class="rjd-beli-awas">> batas, hanya owner</small>' : '') + '</td>' +
+      '<td>' + ksEsc_(s.Status) + (s["ID PO Supplier"] ? '<br><span class="ks-mono">' + ksEsc_(s["ID PO Supplier"]) + '</span>' : '') + (s.Alasan ? '<br><small>' + ksEsc_(s.Alasan) + '</small>' : '') + '</td>' +
+      '<td>' + (s.Status === "Diajukan" ? '<button type="button" class="ks-btn-kecil" data-aksi="setuju" data-id="' + ksEsc_(id) + '" onclick="ksBeliPutusPB_(this, \'Disetujui\')"' + (boleh ? '' : ' disabled title="Estimasi melebihi batas -- hanya owner"') + '>Setujui</button> ' +
+        '<button type="button" class="ks-btn-kecil" data-aksi="tolak" data-id="' + ksEsc_(id) + '" onclick="ksBeliPutusPB_(this, \'Ditolak\')">Tolak</button>' : '') + '</td></tr>';
+  }).join("");
+  return '<p class="ks-info">Permintaan dari lantai. Yang disetujui bisa dipilih saat menerbitkan PO supplier. Estimasi di atas ' + ksRp(KS_BELI.batasOwnerRp || 0) + ' hanya bisa disetujui owner.</p><span id="ks-beli-pesan" class="rjd-beli-pesan"></span>' +
+    '<div class="ks-gulir"><table class="ks-tabel rjd-beli-tabel" id="ks-beli-pb"><thead><tr><th>ID PB</th><th>Tanggal / pemohon</th><th>Item</th><th class="ks-td-rp">Estimasi</th><th>Status</th><th></th></tr></thead><tbody>' +
+    (baris || '<tr><td colspan="6" class="rjd-beli-kosong">Belum ada permintaan beli.</td></tr>') + '</tbody></table></div>';
+}
+function ksBeliPutusPB_(btn, keputusan) {
+  const id = btn.dataset.id; let alasan = "";
+  if (keputusan === "Ditolak") { alasan = prompt("Alasan menolak " + id + ":"); if (alasan === null) return; if (!String(alasan).trim()) { ksBeliPesan_("Alasan penolakan wajib.", true); return; } }
+  ksBeliKirim_(btn, "setujuiPermintaanBeli", { idPB: id, keputusan: keputusan, alasan: String(alasan || "").trim() }, function (d) { return id + " -> " + (d.status || keputusan) + (d.sudahDiputuskan ? " (sudah diputuskan sebelumnya)" : "") + "."; });
+}
+
+// ---------------------------------------------------------------- PO supplier
+function ksBeliSupplierOpsi_(terpilih) {
+  return '<option value="">-- pilih supplier --</option>' + (KS_BELI.supplier || []).map(function (s) { return '<option value="' + ksEsc_(s.id) + '" data-termin="' + (s.termin || 0) + '"' + (s.id === terpilih ? ' selected' : '') + '>' + ksEsc_(s.id + " " + s.nama + (s.pkp ? " (PKP)" : "")) + '</option>'; }).join("");
+}
+function ksBeliBarisPOSHtml_(i) {
+  const kain = (KS_BELI.kain || []).map(function (k) { return '<option value="' + ksEsc_(k.kode) + '">' + ksEsc_(k.nama) + '</option>'; }).join("");
+  return '<tr class="rjd-beli-item"><td><input type="text" class="rjd-beli-nama" placeholder="nama item" maxlength="80"></td><td><input type="text" class="rjd-beli-kode" list="ks-beli-kain" placeholder="KN-.." maxlength="40"></td>' +
+    '<td><input type="text" class="rjd-beli-qty" inputmode="decimal" placeholder="0" oninput="ksBeliHitungPOS_()"></td><td><input type="text" class="rjd-beli-satuan" value="m" maxlength="10"></td>' +
+    '<td><input type="text" class="rjd-beli-harga" inputmode="decimal" placeholder="harga satuan" oninput="ksBeliHitungPOS_()"></td><td><input type="text" class="rjd-beli-ppn" inputmode="decimal" value="0" oninput="ksBeliHitungPOS_()"></td>' +
+    '<td class="ks-td-rp rjd-beli-subtotal">-</td><td><button type="button" class="ks-btn-kecil" aria-label="Hapus baris" onclick="var t=this.closest(\'tbody\'); if (t.querySelectorAll(\'tr\').length > 1) { this.closest(\'tr\').remove(); ksBeliHitungPOS_(); }">&times;</button></td></tr>' +
+    (i === 0 ? '<datalist id="ks-beli-kain">' + kain + '</datalist>' : '');
+}
+function ksBeliHtmlPOS_() {
+  const pbOpsi = '<option value="">-- tanpa PB --</option>' + (function () { const seen = {}; return (KS_BELI.pb || []).filter(function (o) { if (o.Status !== "Disetujui" || seen[o["ID PB"]]) return false; seen[o["ID PB"]] = 1; return true; }).map(function (o) { return '<option value="' + ksEsc_(o["ID PB"]) + '">' + ksEsc_(o["ID PB"] + " " + o.Pemohon) + '</option>'; }).join(""); })();
+  const pos = (KS_BELI.pos || []).slice().reverse();
+  const baris = pos.map(function (o) {
+    const bisaBatal = o.Status !== "Batal" && !(o.detail || []).some(function (d) { return (Number(d.qtyTerima) || 0) > 0; }) && !(o.tagihan || []).length;
+    return '<tr data-id="' + ksEsc_(o["ID PO Supplier"]) + '"' + (o.Status === "Batal" ? ' class="rjd-beli-pembalik"' : '') + '><td class="ks-mono">' + ksEsc_(o["ID PO Supplier"]) + '<br><small>' + ksEsc_(o.Tanggal) + '</small></td><td>' + ksEsc_(o["Nama Supplier"]) + '<br><small>termin ' + ksEsc_(o["Termin Hari"]) + ' hari' + (o["ID PB"] ? ', ' + ksEsc_(o["ID PB"]) : '') + '</small></td>' +
+      '<td>' + (o.detail || []).map(function (d) { return ksEsc_(d["Nama Item"] + " " + d["Qty Pesan"] + " " + d.Satuan + " @ " + ksRp(d["Harga Satuan"]) + (Number(d["PPN Persen"]) ? " +PPN " + d["PPN Persen"] + "%" : "") + " -- diterima " + (d.qtyTerima || 0)); }).join("<br>") + '</td>' +
+      '<td class="ks-td-rp">' + ksRp(o.Total) + '</td><td>' + ksEsc_(o.Status) + (o.tagihan && o.tagihan.length ? '<br><small>' + ksEsc_(o.tagihan.join(", ")) + '</small>' : '') + (o["Alasan Batal"] ? '<br><small>' + ksEsc_(o["Alasan Batal"]) + '</small>' : '') + '</td>' +
+      '<td>' + (bisaBatal ? '<button type="button" class="ks-btn-kecil" data-aksi="batal-pos" data-id="' + ksEsc_(o["ID PO Supplier"]) + '" onclick="ksBeliBatalPOS_(this)">Batalkan</button>' : '') + '</td></tr>';
+  }).join("");
+  return '<form class="rjd-beli-form" id="ks-pos-form" onsubmit="return false"><h4 class="rjd-beli-sub rjd-beli-lebar">Terbitkan PO supplier</h4>' +
+    '<div class="rjd-beli-field"><label for="ks-pos-supplier">Supplier *</label><select id="ks-pos-supplier" onchange="ksBeliGantiSupplier_()">' + ksBeliSupplierOpsi_("") + '</select></div>' +
+    '<div class="rjd-beli-field"><label for="ks-pos-tanggal">Tanggal</label><input id="ks-pos-tanggal" type="date" value="' + ksEsc_(KS_DATA.hariIni || "") + '"></div>' +
+    '<div class="rjd-beli-field"><label for="ks-pos-termin">Termin (hari)</label><input id="ks-pos-termin" type="text" inputmode="numeric" placeholder="dari master"></div>' +
+    '<div class="rjd-beli-field"><label for="ks-pos-pb">Dari permintaan beli</label><select id="ks-pos-pb">' + pbOpsi + '</select></div>' +
+    '<div class="rjd-beli-field rjd-beli-lebar"><label for="ks-pos-catatan">Catatan</label><input id="ks-pos-catatan" type="text" maxlength="200"></div>' +
+    '<div class="ks-gulir rjd-beli-lebar"><table class="ks-tabel rjd-beli-tabel" id="ks-pos-item"><thead><tr><th>Item *</th><th>Kode kain</th><th>Qty *</th><th>Satuan</th><th>Harga satuan *</th><th>PPN %</th><th class="ks-td-rp">Subtotal</th><th></th></tr></thead><tbody>' + ksBeliBarisPOSHtml_(0) + '</tbody></table></div>' +
+    '<div class="rjd-beli-aksi rjd-beli-lebar"><button type="button" class="ks-btn-kecil" onclick="document.querySelector(\'#ks-pos-item tbody\').insertAdjacentHTML(\'beforeend\', ksBeliBarisPOSHtml_(1))">+ Baris</button>' +
+    '<span class="rjd-beli-total">Total <b id="ks-pos-total">Rp 0</b></span><button type="button" class="ks-btn" id="ks-pos-kirim" onclick="ksBeliTerbitPOS_(this)">Terbitkan PO</button><span id="ks-beli-pesan" class="rjd-beli-pesan"></span></div></form>' +
+    '<h4 class="rjd-beli-sub">PO supplier (' + pos.length + ')</h4><div class="ks-gulir"><table class="ks-tabel rjd-beli-tabel" id="ks-beli-pos"><thead><tr><th>ID</th><th>Supplier</th><th>Item</th><th class="ks-td-rp">Total</th><th>Status</th><th></th></tr></thead><tbody>' +
+    (baris || '<tr><td colspan="6" class="rjd-beli-kosong">Belum ada PO supplier.</td></tr>') + '</tbody></table></div>';
+}
+function ksBeliGantiSupplier_() { const sel = document.getElementById("ks-pos-supplier"), t = document.getElementById("ks-pos-termin"); if (!sel || !t) return; const o = sel.options[sel.selectedIndex]; if (o && o.dataset.termin !== undefined) t.value = o.dataset.termin; }
+function ksBeliItemPOS_() {
+  const item = [], galat = [];
+  document.querySelectorAll("#ks-pos-item tr.rjd-beli-item").forEach(function (tr, i) {
+    const nama = (tr.querySelector(".rjd-beli-nama").value || "").trim(), qT = tr.querySelector(".rjd-beli-qty").value, hT = tr.querySelector(".rjd-beli-harga").value, pT = tr.querySelector(".rjd-beli-ppn").value;
+    if (!nama && !String(qT).trim() && !String(hT).trim()) return;
+    const qty = ksParseRp_(qT), harga = ksParseRp_(hT), ppn = String(pT).trim() === "" ? 0 : ksParseRp_(pT);
+    if (!nama) { galat.push("Baris " + (i + 1) + ": nama item kosong."); return; }
+    if (isNaN(qty) || qty <= 0) { galat.push("Baris " + (i + 1) + ": qty '" + qT + "' harus lebih dari 0 (koma = desimal, tanpa titik ribuan)."); return; }
+    if (isNaN(harga) || harga < 0) { galat.push("Baris " + (i + 1) + ": harga '" + hT + "' bukan angka."); return; }
+    if (isNaN(ppn) || ppn < 0 || ppn > 100) { galat.push("Baris " + (i + 1) + ": PPN % '" + pT + "' tidak masuk akal."); return; }
+    const subtotal = Math.round(qty * harga * 100) / 100, total = Math.round(subtotal * (1 + ppn / 100) * 100) / 100;
+    tr.querySelector(".rjd-beli-subtotal").textContent = ksRp(total);
+    item.push({ nama: nama, kodeItem: (tr.querySelector(".rjd-beli-kode").value || "").trim(), qty: qty, satuan: (tr.querySelector(".rjd-beli-satuan").value || "pcs").trim() || "pcs", hargaSatuan: harga, ppnPersen: ppn, _total: total });
+  });
+  return { item: item, galat: galat };
+}
+function ksBeliHitungPOS_() { const k = ksBeliItemPOS_(); const el = document.getElementById("ks-pos-total"); if (el) el.textContent = ksRp(k.item.reduce(function (a, x) { return a + x._total; }, 0)); }
+function ksBeliTerbitPOS_(btn) {
+  const k = ksBeliItemPOS_(); if (k.galat.length) { ksBeliPesan_(k.galat[0], true); return; }
+  if (!k.item.length) { ksBeliPesan_("Isi minimal satu item.", true); return; }
+  const idSupplier = document.getElementById("ks-pos-supplier").value; if (!idSupplier) { ksBeliPesan_("Pilih supplier.", true); return; }
+  const termin = document.getElementById("ks-pos-termin").value;
+  const payload = { idSupplier: idSupplier, tanggal: document.getElementById("ks-pos-tanggal").value, idPB: document.getElementById("ks-pos-pb").value, catatan: (document.getElementById("ks-pos-catatan").value || "").trim(),
+    item: k.item.map(function (x) { const y = Object.assign({}, x); delete y._total; return y; }) };
+  if (String(termin).trim() !== "") payload.terminHari = ksParseRp_(termin);
+  payload.idPermintaan = rjdKunciIsian_("ks-pos", payload);
+  ksBeliKirim_(btn, "terbitkanPOSupplier", payload, function (d) { return d.sudahTercatat ? "PO ini SUDAH terbit sebagai " + d.idPOS + " -- tidak diterbitkan dua kali." : "Terbit " + d.idPOS + " total " + ksRp(d.total) + "."; });
+}
+function ksBeliBatalPOS_(btn) {
+  const id = btn.dataset.id, alasan = prompt("Alasan membatalkan " + id + ":"); if (alasan === null) return;
+  if (!String(alasan).trim()) { ksBeliPesan_("Alasan wajib.", true); return; }
+  ksBeliKirim_(btn, "batalkanPOSupplier", { idPOS: id, alasan: String(alasan).trim() }, function (d) { return id + " dibatalkan."; });
+}
+
+// ---------------------------------------------------------------- Tagihan supplier
+function ksBeliHtmlTS_() {
+  const posOpsi = '<option value="">-- tanpa PO --</option>' + (KS_BELI.pos || []).filter(function (o) { return o.Status !== "Batal"; }).map(function (o) { return '<option value="' + ksEsc_(o["ID PO Supplier"]) + '" data-supplier="' + ksEsc_(o["ID Supplier"]) + '">' + ksEsc_(o["ID PO Supplier"] + " " + o["Nama Supplier"] + " " + ksRp(o.Total) + " (" + o.Status + ")") + '</option>'; }).join("");
+  const ts = (KS_BELI.ts || []).slice().reverse();
+  const baris = ts.map(function (t) {
+    return '<tr data-id="' + ksEsc_(t["ID TS"]) + '"' + (t.lewatTempo ? ' class="rjd-beli-awas-baris"' : '') + '><td class="ks-mono">' + ksEsc_(t["ID TS"]) + '<br><small>' + ksEsc_(t.Tanggal) + '</small></td><td>' + ksEsc_(t["Nama Supplier"]) + '<br><small>faktur ' + ksEsc_(t["No Faktur"]) + (t["ID PO Supplier"] ? ', ' + ksEsc_(t["ID PO Supplier"]) : '') + '</small>' + (t["Catatan Selisih"] ? '<br><small class="rjd-beli-awas">' + ksEsc_(t["Catatan Selisih"]) + '</small>' : '') + '</td>' +
+      '<td>' + ksEsc_(t["Jatuh Tempo"]) + (t.lewatTempo ? '<br><small class="rjd-beli-awas">LEWAT</small>' : '') + '</td><td class="ks-td-rp">' + ksRp(t.Total) + '</td><td class="ks-td-rp">' + ksRp(t.dibayar) + '</td><td class="ks-td-rp"><b>' + ksRp(t.sisa) + '</b></td><td>' + ksEsc_(t.status) + '</td>' +
+      '<td>' + (t.sisa > 0 ? '<button type="button" class="ks-btn-kecil" data-aksi="bayar" data-id="' + ksEsc_(t["ID TS"]) + '" onclick="ksBeliBayar_(this)">Bayar</button> ' : '') +
+      (!t.dibayar ? '<button type="button" class="ks-btn-kecil" data-aksi="batal-ts" data-id="' + ksEsc_(t["ID TS"]) + '" onclick="ksBeliBatalTS_(this)">Batalkan</button>' : '') + '</td></tr>';
+  }).join("");
+  return '<form class="rjd-beli-form" id="ks-ts-form" onsubmit="return false"><h4 class="rjd-beli-sub rjd-beli-lebar">Catat tagihan supplier</h4>' +
+    '<div class="rjd-beli-field"><label for="ks-ts-supplier">Supplier *</label><select id="ks-ts-supplier">' + ksBeliSupplierOpsi_("") + '</select></div>' +
+    '<div class="rjd-beli-field"><label for="ks-ts-faktur">No faktur *</label><input id="ks-ts-faktur" type="text" maxlength="60"></div>' +
+    '<div class="rjd-beli-field"><label for="ks-ts-tanggal">Tanggal</label><input id="ks-ts-tanggal" type="date" value="' + ksEsc_(KS_DATA.hariIni || "") + '"></div>' +
+    '<div class="rjd-beli-field"><label for="ks-ts-tempo">Jatuh tempo</label><input id="ks-ts-tempo" type="date" placeholder="dari termin"></div>' +
+    '<div class="rjd-beli-field"><label for="ks-ts-pos">PO supplier</label><select id="ks-ts-pos" onchange="var o=this.options[this.selectedIndex]; if (o && o.dataset.supplier) document.getElementById(\'ks-ts-supplier\').value = o.dataset.supplier;">' + posOpsi + '</select></div>' +
+    '<div class="rjd-beli-field"><label for="ks-ts-dpp">DPP *</label><input id="ks-ts-dpp" type="text" inputmode="decimal" placeholder="tanpa titik ribuan" oninput="ksBeliHitungTS_()"></div>' +
+    '<div class="rjd-beli-field"><label for="ks-ts-ppn">PPN (Rp)</label><input id="ks-ts-ppn" type="text" inputmode="decimal" value="0" oninput="ksBeliHitungTS_()"></div>' +
+    '<div class="rjd-beli-field"><label>Total</label><b id="ks-ts-total" class="rjd-beli-total">Rp 0</b></div>' +
+    '<div class="rjd-beli-field rjd-beli-lebar"><label for="ks-ts-catatan">Catatan</label><input id="ks-ts-catatan" type="text" maxlength="200"></div>' +
+    '<div class="rjd-beli-aksi rjd-beli-lebar"><button type="button" class="ks-btn" id="ks-ts-kirim" onclick="ksBeliCatatTS_(this)">Catat tagihan</button><span id="ks-beli-pesan" class="rjd-beli-pesan"></span></div></form>' +
+    '<h4 class="rjd-beli-sub">Tagihan (' + ts.length + ')</h4><div class="ks-gulir"><table class="ks-tabel rjd-beli-tabel" id="ks-beli-ts"><thead><tr><th>ID TS</th><th>Supplier</th><th>Jatuh tempo</th><th class="ks-td-rp">Total</th><th class="ks-td-rp">Dibayar</th><th class="ks-td-rp">Sisa</th><th>Status</th><th></th></tr></thead><tbody>' +
+    (baris || '<tr><td colspan="8" class="rjd-beli-kosong">Belum ada tagihan.</td></tr>') + '</tbody></table></div>';
+}
+function ksBeliHitungTS_() { const d = ksParseRp_(document.getElementById("ks-ts-dpp").value), p = ksParseRp_(document.getElementById("ks-ts-ppn").value || "0"); const el = document.getElementById("ks-ts-total"); if (el) el.textContent = isNaN(d) || isNaN(p) ? "?" : ksRp(Math.round((d + p) * 100) / 100); }
+function ksBeliCatatTS_(btn) {
+  const idSupplier = document.getElementById("ks-ts-supplier").value, faktur = (document.getElementById("ks-ts-faktur").value || "").trim();
+  const dpp = ksParseRp_(document.getElementById("ks-ts-dpp").value), ppnT = document.getElementById("ks-ts-ppn").value, ppn = String(ppnT).trim() === "" ? 0 : ksParseRp_(ppnT);
+  if (!idSupplier) { ksBeliPesan_("Pilih supplier.", true); return; }
+  if (!faktur) { ksBeliPesan_("No faktur wajib.", true); return; }
+  if (isNaN(dpp) || dpp <= 0) { ksBeliPesan_("DPP harus angka lebih dari 0 (koma = desimal, tanpa titik ribuan).", true); return; }
+  if (isNaN(ppn) || ppn < 0) { ksBeliPesan_("PPN bukan angka.", true); return; }
+  const payload = { idSupplier: idSupplier, noFaktur: faktur, tanggal: document.getElementById("ks-ts-tanggal").value, jatuhTempo: document.getElementById("ks-ts-tempo").value, idPOS: document.getElementById("ks-ts-pos").value, dpp: dpp, ppn: ppn, catatan: (document.getElementById("ks-ts-catatan").value || "").trim() };
+  payload.idPermintaan = rjdKunciIsian_("ks-ts", payload);
+  ksBeliKirim_(btn, "catatTagihanSupplier", payload, function (d) {
+    if (d.sudahTercatat) return "Tagihan ini SUDAH tercatat sebagai " + d.idTS + " -- tidak dicatat dua kali.";
+    const s = d.selisih || {}; return "Tercatat " + d.idTS + " " + ksRp(d.total) + ", jatuh tempo " + d.jatuhTempo + (s.catatan ? ". SELISIH: " + s.catatan : ".");
+  });
+}
+function ksBeliBatalTS_(btn) {
+  const id = btn.dataset.id, alasan = prompt("Alasan membatalkan tagihan " + id + " (baris pembalik dicatat):"); if (alasan === null) return;
+  if (!String(alasan).trim()) { ksBeliPesan_("Alasan wajib.", true); return; }
+  ksBeliKirim_(btn, "batalkanTagihanSupplier", { idTS: id, alasan: String(alasan).trim() }, function (d) { return id + " dibalik oleh " + d.idPembalik + "."; });
+}
+/** Tombol Bayar: mengisi FORM KAS (bukan mengirim) -- arah Keluar, kategori Bayar tagihan supplier, Ref = ID TS, jumlah = sisa,
+ *  pihak = supplier. Orang tinggal memilih akun & menekan Simpan; servernya (pbPeriksaBayarTagihan_) menjaga Ref & sisa. */
+function ksBeliBayar_(btn) {
+  const id = btn.dataset.id, t = (KS_BELI.ts || []).filter(function (x) { return x["ID TS"] === id; })[0]; if (!t) return;
+  if (typeof ksAksiTutup_ === "function") ksAksiTutup_();
+  const radio = document.querySelector('input[name="ks-arah"][value="Keluar"]'); if (radio) { radio.checked = true; if (typeof ksFormArahBerubah === "function") ksFormArahBerubah(); }
+  const isi = function (elId, v) { const el = document.getElementById(elId); if (el) el.value = v; };
+  isi("ks-in-kategori", KS_BELI.kategoriBayar || "Bayar tagihan supplier"); isi("ks-in-jumlah", ksRpIsian_(t.sisa)); isi("ks-in-ref", id); isi("ks-in-pihak", t["Nama Supplier"] || ""); isi("ks-in-ket", "Bayar faktur " + (t["No Faktur"] || "") + " " + (t["Nama Supplier"] || ""));
+  if (typeof ksPanduanKategori_ === "function") ksPanduanKategori_();
+  const selKat = document.getElementById("ks-in-kategori");
+  if (selKat && selKat.value !== (KS_BELI.kategoriBayar || "Bayar tagihan supplier")) { ksPesan_("Kategori 'Bayar tagihan supplier' belum ada di SD Kategori Kas -- jalankan siapkanPembelian() di editor dulu.", true); return; }
+  ksPesan_("Form kas terisi untuk " + id + " (sisa " + ksRp(t.sisa) + "). Pilih akun, periksa jumlah, lalu Simpan.", false);
+  const f = document.getElementById("ks-in-akun"); if (f && f.scrollIntoView) { try { f.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) { /* browser tua */ } f.focus(); }
+}

@@ -254,9 +254,12 @@ function spPoFormSah_(idPoForm, apa) {
    tiap blok memancarkan datalistnya sendiri dari SATU daftar bawaan. */
 /* v345 (PF-9): peta alias panel ditulis dua kali (spSwitchTab & spRenderSub_) --
    nilai yang sama, jadi salah satu pasti tertinggal saat tab bermode ditambah. */
-const SP_ALIAS_PANEL = { konfpot: "konf", konfset: "konf", qcring: "qc", qcpot: "qc", qcjahit: "qc", mwarna: "master", msize: "master", mkain: "master" };
+const SP_ALIAS_PANEL = { konfpot: "konf", konfset: "konf", qcring: "qc", qcpot: "qc", qcjahit: "qc", mwarna: "master", msize: "master", mkain: "master", pbeli: "beli", terima: "beli" };
 /** v379: subtab master -> jenis master (rute getMasterERP). Peta ini juga yang dipakai spSwitchTab mengenali tab master. */
 const SP_MASTER_TAB = { mwarna: "warna", msize: "size", mkain: "kain" };
+/** v380 (Tahap 2C): subtab beli -> jenis; keadaannya di sini juga (bukan di blok ujung berkas) karena alasan yang sama. */
+const SP_BELI_TAB = { pbeli: "pb", terima: "gr" };
+let SP_BELI = null, SP_BELI_URUT = 0, SP_BELI_STATUS = "", SP_BELI_PESAN = {};   // pesan per form BERTAHAN melewati muat ulang
 /** Panel master dibuat sekali, disisipkan sesudah panel terakhir supaya ikut disapu toggle [id^=sp-panel-]. */
 function spPanelMaster_() {
   let p = document.getElementById("sp-panel-master");
@@ -1507,7 +1510,9 @@ const SP_FASE_PETA = [
   // Paling kanan karena ia data RUJUKAN, bukan langkah kerja; semua staf boleh melihat, yang boleh
   // mengubah full/admin (server: erpBolehUbah_). Tiga subtab, SATU panel fisik sp-panel-master yang
   // dibuat JS (spPanelMaster_) -- template Blogger tidak disentuh.
-  ["master",     "Master",        [["mwarna", "Warna"], ["msize", "Size"], ["mkain", "Kain"]]]
+  ["master",     "Master",        [["mwarna", "Warna"], ["msize", "Size"], ["mkain", "Kain"]]],
+  // ROADMAP-ERP Tahap 2C (v380): permintaan beli (siapa pun) & terima barang (bagian gudang). Nol rupiah (getPembelianLantai).
+  ["beli",       "Beli",          [["pbeli", "Permintaan Beli"], ["terima", "Terima Barang"]]]
 ];
 
 /** Boleh-tidaknya satu tab untuk pemakai -- dari peta bagian, BUKAN dari DOM. */
@@ -2360,6 +2365,7 @@ function spSwitchTab(tab) {
   // fisik sp-panel-konf -- subtab yang menentukan modenya, bukan sakelar
   // internal (sakelar lama dipensiunkan, lihat spMuatKonfMode_).
   if (SP_MASTER_TAB[tab]) spPanelMaster_();   // v379: panel master harus ADA sebelum toggle di bawah
+  if (SP_BELI_TAB[tab]) spPanelBeli_();       // v380: panel beli, sama
   const SP_PANEL_ALIAS = SP_ALIAS_PANEL;
   const idPanelTujuan = "sp-panel-" + (SP_PANEL_ALIAS[tab] || tab);
   document.querySelectorAll("[id^='sp-panel-']").forEach(function (p) {
@@ -2391,7 +2397,7 @@ function spSwitchTab(tab) {
   // paling telanjang di antara semuanya: isi tab itu justru order yang BELUM
   // punya PO. Kartu pemilih PO di atasnya cuma mengundang salah paham.
   if (kartuPO) kartuPO.classList.toggle("hidden",
-    tab === "riw" || tab === "sop" || tab === "orderan" || tab === "ordermasuk" || !!SP_MASTER_TAB[tab]);
+    tab === "riw" || tab === "sop" || tab === "orderan" || tab === "ordermasuk" || !!SP_MASTER_TAB[tab] || !!SP_BELI_TAB[tab]);
 
   if (tab === "konfpot") { spMuatKonfMode_("potongan"); return; }
   if (tab === "konfset") { spMuatKonfMode_("setoran"); return; }
@@ -2427,6 +2433,7 @@ function spSwitchTab(tab) {
   if (tab === "gelar") { spMuatGelaran(); return; }
   if (tab === "riw") { spMuatRiwayat(); return; }
   if (SP_MASTER_TAB[tab]) { spMuatMaster_(tab); return; }   // v379
+  if (SP_BELI_TAB[tab]) { spMuatBeli_(tab); return; }       // v380
   if (tab === "setor") { spMuatLineSetoran_(); spMuatSetoran(); return; }
   if (!window.SP_PO_AKTIF) return;
   if (tab === "cutting" && !window.SP_CUT) spMuatCutting();
@@ -12268,3 +12275,220 @@ function spMuatStok_() {
    bukan cuma SPK. Jangan pasang ulang di sini: dua penyadap fetch =
    fetch terbungkus dua kali. window.rjdSesiHabis_ tetap tersedia --
    sekarang dari global. */
+
+/* ============================================================================
+ * ROADMAP-ERP Tahap 2 sub-rilis C (v380) -- FASE "BELI" DI HALAMAN PRODUKSI: permintaan beli (siapa pun) dan
+ * terima barang (bagian gudang; server menegakkan BAGIAN_PER_AKSI, di sini cuma gembok). Nol rupiah: rute
+ * getPembelianLantai (gs @414) membuang harga/PPN/estimasi -- halaman produksi tetap halaman BARANG (v156).
+ * Panel dibuat JS (spPanelBeli_), pola panel master v379; jawaban yang disusul dibuang (PF-3).
+ * Satu idPermintaan per ISIAN (rjdKunciIsian_, P18-A): kiriman ulang isian yang sama dijawab sudahTercatat.
+ * ========================================================================== */
+// (SP_BELI_TAB & keadaan SP_BELI dideklarasikan di ATAS berkas, di sebelah SP_MASTER_TAB: spSwitchTab membacanya saat
+//  berkas dimuat, dan const di ujung berkas masih di zona mati -- terukur jalan126 "Cannot access before initialization".)
+
+function spPanelBeli_() {
+  let p = document.getElementById("sp-panel-beli");
+  if (p) return p;
+  const semua = document.querySelectorAll("[id^='sp-panel-']"), akhir = semua[semua.length - 1];
+  if (!akhir || !akhir.parentNode) return null;
+  p = document.createElement("div"); p.id = "sp-panel-beli"; p.className = "hidden";
+  p.innerHTML = '<div class="sp-card"><h3 class="sp-judul" id="sp-beli-judul">Pembelian</h3><div id="sp-beli-isi"></div></div>';
+  akhir.parentNode.insertBefore(p, akhir.nextSibling);
+  return p;
+}
+function spMuatBeli_(tab, paksa) {
+  if (!SP_BELI_TAB[tab] || !spPanelBeli_()) return;
+  const judul = document.getElementById("sp-beli-judul"); if (judul) judul.textContent = tab === "terima" ? "Terima barang" : "Permintaan beli";
+  if (SP_BELI && !paksa) { spBeliRender_(); return; }
+  if (SP_BELI_STATUS === "memuat" && !paksa) { spBeliRender_(); return; }   // subtab diklik lagi saat masih memuat: satu fetch saja
+  const urut = ++SP_BELI_URUT;
+  SP_BELI_STATUS = "memuat"; spBeliRender_();
+  fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: "getPembelianLantai" }) })
+    .then(function (r) { return r.text(); })
+    .then(function (teks) {
+      let d; try { d = JSON.parse(teks); } catch (e) { throw new Error("Jawaban server tidak terbaca: " + String(teks || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 60)); }
+      if (!d || !d.success) throw new Error((d && d.error) || "Permintaan ditolak server.");
+      if (urut !== SP_BELI_URUT) return;
+      SP_BELI = d; SP_BELI_STATUS = ""; spBeliRender_();
+    })
+    .catch(function (e) {
+      if (urut !== SP_BELI_URUT) return;
+      SP_BELI_STATUS = /Failed to fetch|NetworkError|jaringan/i.test(String(e && e.message || e)) ? "Data pembelian tidak sampai ke server -- sambungan terputus di tengah jalan. Coba lagi." : "Gagal memuat: " + String((e && e.message) || e);
+      spBeliRender_();
+    });
+}
+function spBeliE_(s) { return rjdEscapeHtml_(s === null || s === undefined ? "" : String(s)); }
+function spBeliHariIni_() { return typeof spHariIniLokal_ === "function" ? spHariIniLokal_() : new Date().toISOString().slice(0, 10); }
+function spBeliBolehTerima_() { return window.SP_BAGIAN_SEMUA !== false || (window.SP_BAGIAN || []).indexOf("gudang") !== -1; }
+
+function spBeliRender_() {
+  const W = document.getElementById("sp-beli-isi"); if (!W) return;
+  const tab = window.SP_TAB;
+  if (SP_BELI_STATUS) {
+    const memuat = SP_BELI_STATUS === "memuat";
+    W.innerHTML = '<p class="sp-info' + (memuat ? '' : ' rjd-beli-galat') + '">' + spBeliE_(memuat ? "Memuat data pembelian..." : SP_BELI_STATUS) + '</p>' +
+      (memuat ? '' : '<button type="button" class="sp-btn" onclick="spMuatBeli_(window.SP_TAB, true)">Coba lagi</button>');
+    return;
+  }
+  if (!SP_BELI) { W.innerHTML = ""; return; }
+  W.innerHTML = tab === "terima" ? spBeliHtmlTerima_() : spBeliHtmlPB_();
+  if (tab === "terima") spBeliGantiSumber_();
+  // Pesan sukses/gagal dipasang LAGI sesudah render: sukses simpan memuat ulang daftar, dan render ulang menimpa panel --
+  // tanpa ini "Tercatat PB-..." hilang tepat saat orang ingin membacanya (terukur jalan126).
+  Object.keys(SP_BELI_PESAN).forEach(function (id) { const el = document.getElementById(id), m = SP_BELI_PESAN[id]; if (el && m) { el.textContent = m.teks; el.className = m.kelas; } });
+}
+
+// ---------------------------------------------------------------- permintaan beli
+function spBeliBarisItemHtml_(i, opsi) {
+  opsi = opsi || {};
+  const kain = (SP_BELI.kain || []).map(function (k) { return '<option value="' + spBeliE_(k.kode) + '">' + spBeliE_(k.nama) + '</option>'; }).join("");
+  return '<tr class="rjd-beli-item" data-i="' + i + '">' +
+    '<td><input type="text" class="rjd-beli-nama" placeholder="mis. Toyobo CN 40 / Kancing 18L" maxlength="80"></td>' +
+    '<td><input type="text" class="rjd-beli-kode" list="rjd-beli-kain" placeholder="KN-.. (opsional)" maxlength="40"></td>' +
+    '<td><input type="text" class="rjd-beli-qty" inputmode="decimal" placeholder="0"></td>' +
+    '<td><input type="text" class="rjd-beli-satuan" value="' + spBeliE_(opsi.satuan || "pcs") + '" maxlength="10"></td>' +
+    (opsi.tanpaEstimasi ? '' : '<td><input type="text" class="rjd-beli-estimasi" inputmode="numeric" placeholder="Rp (opsional)"></td>') +
+    (opsi.roll ? '<td><input type="text" class="rjd-beli-roll" placeholder="no roll" maxlength="40"></td>' : '<td><input type="text" class="rjd-beli-ket" placeholder="keterangan" maxlength="200"></td>') +
+    '<td><button type="button" class="sp-btn rjd-beli-hapus" aria-label="Hapus baris" onclick="spBeliHapusBaris_(this)">&times;</button></td></tr>' +
+    (i === 0 ? '<datalist id="rjd-beli-kain">' + kain + '</datalist>' : '');
+}
+function spBeliHapusBaris_(btn) { const tb = btn.closest("tbody"); const tr = btn.closest("tr"); if (tb && tb.querySelectorAll("tr.rjd-beli-item").length > 1) tr.remove(); }
+function spBeliTambahBaris_(idTabel, opsi) {
+  const tb = document.querySelector("#" + idTabel + " tbody"); if (!tb) return;
+  const n = tb.querySelectorAll("tr.rjd-beli-item").length;
+  tb.insertAdjacentHTML("beforeend", spBeliBarisItemHtml_(n, opsi));
+}
+function spBeliHtmlPB_() {
+  const po = (window.SP_DAFTAR_PO || []).map(function (p) { return '<option value="' + spBeliE_(p.idPurchaseOrder) + '">' + spBeliE_((p.namaKlien || "") + " " + ((p.artikel || []).join(", "))) + '</option>'; }).join("");
+  const daftar = (SP_BELI.pb || []).slice().reverse();
+  const perPB = {}; daftar.forEach(function (o) { const k = o["ID PB"]; (perPB[k] = perPB[k] || []).push(o); });
+  const barisPB = Object.keys(perPB).map(function (id) {
+    const b = perPB[id], s = b[0];
+    return '<tr data-id="' + spBeliE_(id) + '"><td class="rjd-beli-kode-sel">' + spBeliE_(id) + '</td><td>' + spBeliE_(s.Tanggal) + '</td><td>' + spBeliE_(s.Pemohon) + '</td>' +
+      '<td>' + b.map(function (o) { return spBeliE_(o["Nama Item"] + " " + o.Qty + " " + o.Satuan); }).join("<br>") + '</td>' +
+      '<td><span class="rjd-beli-status rjd-beli-status-' + spBeliE_(String(s.Status || "").toLowerCase().replace(/\s+/g, "-")) + '">' + spBeliE_(s.Status) + '</span>' + (s["ID PO Supplier"] ? '<br><span class="ks-mono">' + spBeliE_(s["ID PO Supplier"]) + '</span>' : '') + (s.Alasan ? '<br><small>' + spBeliE_(s.Alasan) + '</small>' : '') + '</td></tr>';
+  }).join("");
+  return '<p class="sp-info">Ajukan bahan/aksesoris yang perlu dibeli. Keuangan menyetujui, menerbitkan PO ke supplier, dan mencatat tagihannya; kamu tinggal <b>Terima barang</b> saat datang.</p>' +
+    '<form class="rjd-beli-form" id="sp-pb-form" onsubmit="return false">' +
+    '<div class="rjd-beli-field"><label for="sp-pb-tanggal">Tanggal</label><input id="sp-pb-tanggal" type="date" value="' + spBeliE_(spBeliHariIni_()) + '"></div>' +
+    '<div class="rjd-beli-field"><label for="sp-pb-po">Untuk PO (opsional)</label><input id="sp-pb-po" type="text" list="sp-pb-po-list" placeholder="ID Purchase Order" maxlength="40"><datalist id="sp-pb-po-list">' + po + '</datalist></div>' +
+    '<div class="rjd-beli-tabelwrap rjd-beli-lebar"><table class="rjd-beli-tabel" id="sp-pb-item"><thead><tr><th>Nama item *</th><th>Kode kain</th><th>Qty *</th><th>Satuan</th><th>Estimasi Rp</th><th>Keterangan</th><th></th></tr></thead><tbody>' + spBeliBarisItemHtml_(0) + '</tbody></table></div>' +
+    '<div class="rjd-beli-aksi rjd-beli-lebar"><button type="button" class="sp-btn" onclick="spBeliTambahBaris_(\'sp-pb-item\')">+ Baris</button>' +
+    '<button type="button" class="sp-btn sp-btn-utama" id="sp-pb-kirim" onclick="spBeliKirimPB_(this)">Ajukan permintaan</button><span id="sp-pb-pesan" class="rjd-beli-pesan"></span></div></form>' +
+    '<h4 class="rjd-beli-sub">Permintaan beli (' + Object.keys(perPB).length + ')</h4>' +
+    '<div class="rjd-beli-tabelwrap"><table class="rjd-beli-tabel" id="sp-pb-daftar"><thead><tr><th>ID PB</th><th>Tanggal</th><th>Pemohon</th><th>Item</th><th>Status</th></tr></thead><tbody>' +
+    (barisPB || '<tr><td colspan="5" class="rjd-beli-kosong">Belum ada permintaan beli.</td></tr>') + '</tbody></table></div>';
+}
+function spBeliKumpulItem_(idTabel, opsi) {
+  opsi = opsi || {};
+  const item = [], galat = [];
+  document.querySelectorAll("#" + idTabel + " tr.rjd-beli-item").forEach(function (tr, i) {
+    const nama = (tr.querySelector(".rjd-beli-nama") || {}).value || "", qtyT = (tr.querySelector(".rjd-beli-qty") || {}).value || "";
+    if (!String(nama).trim() && !String(qtyT).trim()) return;   // baris kosong dilewati
+    if (!String(nama).trim()) { galat.push("Baris " + (i + 1) + ": nama item kosong."); return; }
+    const qty = spParseDesimal_(qtyT);
+    if (isNaN(qty) || qty <= 0) { galat.push("Baris " + (i + 1) + " (" + nama + "): qty '" + qtyT + "' harus angka lebih dari 0 -- titik/koma = desimal, jangan pakai titik ribuan."); return; }
+    const it = { nama: String(nama).trim(), kodeItem: ((tr.querySelector(".rjd-beli-kode") || {}).value || "").trim(), qty: qty, satuan: ((tr.querySelector(".rjd-beli-satuan") || {}).value || "pcs").trim() || "pcs" };
+    const est = tr.querySelector(".rjd-beli-estimasi"); if (est && String(est.value).trim()) { const e = spParseDesimal_(String(est.value).replace(/\./g, "")); if (isNaN(e)) { galat.push("Baris " + (i + 1) + ": estimasi '" + est.value + "' bukan angka."); return; } it.estimasiRp = e; }
+    const ket = tr.querySelector(".rjd-beli-ket"); if (ket) it.keterangan = String(ket.value || "").trim();
+    const roll = tr.querySelector(".rjd-beli-roll"); if (roll) it.noRoll = String(roll.value || "").trim();
+    item.push(it);
+  });
+  return { item: item, galat: galat };
+}
+function spBeliPesan_(id, teks, galat) {
+  const kelas = "rjd-beli-pesan" + (galat ? " rjd-beli-galat" : (teks ? " rjd-beli-ok" : ""));
+  if (teks) SP_BELI_PESAN[id] = { teks: teks, kelas: kelas }; else delete SP_BELI_PESAN[id];
+  const el = document.getElementById(id); if (!el) return; el.textContent = teks || ""; el.className = kelas;
+}
+function spBeliKirimPB_(btn) {
+  const k = spBeliKumpulItem_("sp-pb-item");
+  if (k.galat.length) { spBeliPesan_("sp-pb-pesan", k.galat[0], true); return; }
+  if (!k.item.length) { spBeliPesan_("sp-pb-pesan", "Isi minimal satu item (nama & qty).", true); return; }
+  const payload = { tanggal: document.getElementById("sp-pb-tanggal").value, idPurchaseOrder: (document.getElementById("sp-pb-po").value || "").trim(), item: k.item };
+  payload.idPermintaan = rjdKunciIsian_("sp-pb", payload);
+  spBeliPesan_("sp-pb-pesan", "");
+  spKirim_("simpanPermintaanBeli", payload, { btn: btn, teksSibuk: "Mengirim...", sukses: function (res) {
+    if (res && res.sudahTercatat) spBeliPesan_("sp-pb-pesan", "Permintaan ini SUDAH tercatat sebelumnya sebagai " + res.idPB + " -- tidak dikirim dua kali.");
+    else if (res) spBeliPesan_("sp-pb-pesan", "Tercatat " + res.idPB + " (" + res.item + " item).");
+    spMuatBeli_("pbeli", true); return res; } });
+}
+
+// ---------------------------------------------------------------- terima barang
+function spBeliHtmlTerima_() {
+  const boleh = spBeliBolehTerima_();
+  const posOpsi = (SP_BELI.pos || []).map(function (o) { return '<option value="' + spBeliE_(o["ID PO Supplier"]) + '">' + spBeliE_(o["ID PO Supplier"] + " -- " + o["Nama Supplier"] + " (" + o.Status + ")") + '</option>'; }).join("");
+  const gr = (SP_BELI.gr || []).slice().reverse();
+  const perGR = {}; gr.forEach(function (o) { const k = o["ID GR"]; (perGR[k] = perGR[k] || []).push(o); });
+  const dibalik = {}; gr.forEach(function (o) { if (o.Membatalkan) dibalik[o.Membatalkan] = true; });
+  const barisGR = Object.keys(perGR).map(function (id) {
+    const b = perGR[id], s = b[0], pembalik = !!s.Membatalkan;
+    return '<tr data-id="' + spBeliE_(id) + '"' + (pembalik ? ' class="rjd-beli-pembalik"' : '') + '><td class="rjd-beli-kode-sel">' + spBeliE_(id) + (pembalik ? '<br><small>membatalkan ' + spBeliE_(s.Membatalkan) + '</small>' : '') + '</td><td>' + spBeliE_(s.Tanggal) + '</td>' +
+      '<td>' + spBeliE_(s["ID PO Supplier"] || ("milik " + s.Pemilik + (s["ID Klien"] ? " " + s["ID Klien"] : ""))) + '</td>' +
+      '<td>' + b.map(function (o) { return spBeliE_(o["Nama Item"] + " " + o["Qty Terima"] + " " + o.Satuan + (o["No Roll"] ? " (" + o["No Roll"] + ")" : "")); }).join("<br>") + '</td>' +
+      '<td>' + spBeliE_(s["Diterima Oleh"]) + '</td><td>' + (boleh && !pembalik && !dibalik[id] ? '<button type="button" class="sp-btn rjd-beli-kecil" data-aksi="batal-gr" data-id="' + spBeliE_(id) + '" onclick="spBeliBatalGR_(this)">Batalkan</button>' : '') + '</td></tr>';
+  }).join("");
+  return '<p class="sp-info">Catat barang yang DATANG: pilih PO supplier-nya, isi qty yang benar-benar diterima (boleh sebagian; sisanya bisa diterima lagi nanti). Kain titipan klien tanpa PO: pilih "Tanpa PO".' + (boleh ? '' : ' <b>Bagianmu bukan gudang -- form ini hanya bisa dibaca.</b>') + '</p>' +
+    '<form class="rjd-beli-form" id="sp-gr-form" onsubmit="return false">' +
+    '<div class="rjd-beli-field"><label for="sp-gr-sumber">PO supplier</label><select id="sp-gr-sumber" onchange="spBeliGantiSumber_()"><option value="">-- pilih PO supplier --</option>' + posOpsi + '<option value="__klien">Tanpa PO (barang milik klien)</option></select></div>' +
+    '<div class="rjd-beli-field"><label for="sp-gr-tanggal">Tanggal terima</label><input id="sp-gr-tanggal" type="date" value="' + spBeliE_(spBeliHariIni_()) + '"></div>' +
+    '<div class="rjd-beli-field hidden" id="sp-gr-klien-wrap"><label for="sp-gr-klien">ID Klien *</label><input id="sp-gr-klien" type="text" placeholder="ID klien pemilik kain" maxlength="40"></div>' +
+    '<div class="rjd-beli-field rjd-beli-lebar"><label for="sp-gr-catatan">Catatan</label><input id="sp-gr-catatan" type="text" maxlength="200"></div>' +
+    '<div class="rjd-beli-lebar" id="sp-gr-item-wrap"></div>' +
+    '<div class="rjd-beli-aksi rjd-beli-lebar"><button type="button" class="sp-btn sp-btn-utama" id="sp-gr-kirim" onclick="spBeliKirimGR_(this)"' + (boleh ? '' : ' disabled') + '>Catat penerimaan</button><span id="sp-gr-pesan" class="rjd-beli-pesan"></span></div></form>' +
+    '<h4 class="rjd-beli-sub">Penerimaan terakhir</h4>' +
+    '<div class="rjd-beli-tabelwrap"><table class="rjd-beli-tabel" id="sp-gr-daftar"><thead><tr><th>ID GR</th><th>Tanggal</th><th>PO / pemilik</th><th>Item</th><th>Oleh</th><th></th></tr></thead><tbody>' +
+    (barisGR || '<tr><td colspan="6" class="rjd-beli-kosong">Belum ada penerimaan.</td></tr>') + '</tbody></table></div>';
+}
+function spBeliGantiSumber_() {
+  const sel = document.getElementById("sp-gr-sumber"), wrap = document.getElementById("sp-gr-item-wrap"), kw = document.getElementById("sp-gr-klien-wrap");
+  if (!sel || !wrap) return;
+  const v = sel.value; kw.classList.toggle("hidden", v !== "__klien");
+  if (!v) { wrap.innerHTML = ""; return; }
+  if (v === "__klien") {
+    wrap.innerHTML = '<div class="rjd-beli-tabelwrap"><table class="rjd-beli-tabel" id="sp-gr-item"><thead><tr><th>Nama item *</th><th>Kode kain</th><th>Qty *</th><th>Satuan</th><th>No roll</th><th></th></tr></thead><tbody>' + spBeliBarisItemHtml_(0, { tanpaEstimasi: true, roll: true, satuan: "m" }) + '</tbody></table></div>' +
+      '<button type="button" class="sp-btn" onclick="spBeliTambahBaris_(\'sp-gr-item\', { tanpaEstimasi: true, roll: true, satuan: \'m\' })">+ Baris</button>';
+    return;
+  }
+  const pos = (SP_BELI.pos || []).filter(function (o) { return o["ID PO Supplier"] === v; })[0];
+  if (!pos) { wrap.innerHTML = ""; return; }
+  wrap.innerHTML = '<div class="rjd-beli-tabelwrap"><table class="rjd-beli-tabel" id="sp-gr-item-pos"><thead><tr><th>Item</th><th>Dipesan</th><th>Sudah diterima</th><th>Sisa</th><th>Qty terima sekarang</th><th>No roll</th></tr></thead><tbody>' +
+    (pos.detail || []).map(function (d, i) {
+      const pesan = Number(d["Qty Pesan"]) || 0, sudah = Number(d.qtyTerima) || 0, sisa = Math.max(0, Math.round((pesan - sudah) * 100) / 100);
+      return '<tr class="rjd-beli-item-pos" data-i="' + i + '" data-kode="' + spBeliE_(d["Kode Item"]) + '" data-nama="' + spBeliE_(d["Nama Item"]) + '" data-satuan="' + spBeliE_(d.Satuan) + '">' +
+        '<td>' + spBeliE_(d["Nama Item"]) + (d["Kode Item"] ? ' <span class="ks-mono">' + spBeliE_(d["Kode Item"]) + '</span>' : '') + '</td><td>' + spBeliE_(pesan + " " + d.Satuan) + '</td><td>' + spBeliE_(sudah) + '</td><td' + (sisa > 0 ? '' : ' class="rjd-beli-ok"') + '>' + spBeliE_(sisa) + '</td>' +
+        '<td><input type="text" class="rjd-beli-qty" inputmode="decimal" placeholder="0" aria-label="Qty terima ' + spBeliE_(d["Nama Item"]) + '"></td><td><input type="text" class="rjd-beli-roll" placeholder="no roll" maxlength="40"></td></tr>';
+    }).join("") + '</tbody></table></div>';
+}
+function spBeliKirimGR_(btn) {
+  const sumber = (document.getElementById("sp-gr-sumber") || {}).value || "";
+  if (!sumber) { spBeliPesan_("sp-gr-pesan", "Pilih PO supplier dulu, atau 'Tanpa PO' untuk kain milik klien.", true); return; }
+  const payload = { tanggal: document.getElementById("sp-gr-tanggal").value, catatan: (document.getElementById("sp-gr-catatan").value || "").trim(), item: [] };
+  if (sumber === "__klien") {
+    payload.pemilik = "Klien"; payload.idKlien = (document.getElementById("sp-gr-klien").value || "").trim();
+    if (!payload.idKlien) { spBeliPesan_("sp-gr-pesan", "ID Klien wajib untuk kain milik klien.", true); return; }
+    const k = spBeliKumpulItem_("sp-gr-item"); if (k.galat.length) { spBeliPesan_("sp-gr-pesan", k.galat[0], true); return; } payload.item = k.item;
+  } else {
+    payload.idPOS = sumber; payload.pemilik = "RJD";
+    const galat = [];
+    document.querySelectorAll("#sp-gr-item-pos tr.rjd-beli-item-pos").forEach(function (tr) {
+      const t = (tr.querySelector(".rjd-beli-qty") || {}).value || ""; if (!String(t).trim()) return;
+      const q = spParseDesimal_(t); if (isNaN(q) || q <= 0) { galat.push("Qty '" + t + "' untuk " + tr.dataset.nama + " harus angka lebih dari 0."); return; }
+      payload.item.push({ kodeItem: tr.dataset.kode, nama: tr.dataset.nama, qty: q, satuan: tr.dataset.satuan, noRoll: ((tr.querySelector(".rjd-beli-roll") || {}).value || "").trim() });
+    });
+    if (galat.length) { spBeliPesan_("sp-gr-pesan", galat[0], true); return; }
+  }
+  if (!payload.item.length) { spBeliPesan_("sp-gr-pesan", "Isi qty yang diterima minimal untuk satu item.", true); return; }
+  payload.idPermintaan = rjdKunciIsian_("sp-gr", payload);
+  spBeliPesan_("sp-gr-pesan", "");
+  spKirim_("terimaBarang", payload, { btn: btn, teksSibuk: "Mencatat...", sukses: function (res) {
+    if (res && res.sudahTercatat) spBeliPesan_("sp-gr-pesan", "Penerimaan ini SUDAH tercatat sebagai " + res.idGR + " -- tidak dicatat dua kali.");
+    else if (res) spBeliPesan_("sp-gr-pesan", "Tercatat " + res.idGR + (res.statusPOS ? " -- PO kini " + res.statusPOS : "") + ".");
+    spMuatBeli_("terima", true); return res; } });
+}
+function spBeliBatalGR_(btn) {
+  const id = btn.dataset.id, alasan = prompt("Alasan membatalkan penerimaan " + id + " (baris pembalik akan dicatat, aslinya tetap ada):");
+  if (alasan === null) return;
+  if (!String(alasan).trim()) { alert("Alasan wajib diisi."); return; }
+  spKirim_("batalkanPenerimaan", { idGR: id, alasan: String(alasan).trim() }, { btn: btn, teksSibuk: "Membatalkan...", sukses: function (res) { spMuatBeli_("terima", true); return res; } });
+}

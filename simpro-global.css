@@ -1500,3 +1500,60 @@ body[data-bagian~="lintas"] .rjd-bagian-lain { display: none; }
   .rjd-master-form { grid-template-columns: 1fr; }
   .rjd-master-hitung { margin-left: 0; flex-basis: 100%; }
 }
+
+
+/* ==========================================================================
+   ROADMAP-ERP Tahap 2 sub-rilis C (v380) -- PEMBELIAN: fase "Beli" di produksi (simpro-spk.js) dan kartu
+   "Pembelian" di kas (simpro-kas.js). Kelas berawalan .rjd-beli- supaya tidak menyentuh dua konteks CSS itu.
+   Kotak isian 16px (lantai zoom iOS v350); tabel menggulir di pembungkusnya + min-width, word-break normal
+   di sel (bundel Blogger memecah kata, PF-19). Form grid 2 kolom -> 1 kolom di <= 640px.
+   ========================================================================== */
+.rjd-beli-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; margin: 0 0 14px; }
+.rjd-beli-field { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--ink-soft); min-width: 0; }
+.rjd-beli-field label { font-weight: 600; }
+/* (0,2,1): aturan luas [id^="sp-panel-"] select di simpro-spk.css bernilai (0,1,1) dan berkasnya dimuat SESUDAH ini -- seri
+   diputus urutan berkas (PF-12), jadi select PO supplier melebar mengikuti opsi terpanjangnya sampai 642 px di 390 px viewport. */
+.rjd-beli-form .rjd-beli-field input, .rjd-beli-form .rjd-beli-field select { font-size: 16px; padding: 8px 10px; border: 1px solid var(--line, #d9d4c8); border-radius: 8px; background: var(--white, #fff); color: var(--ink); width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
+/* (1,2,1): di halaman produksi aturan luas simpro-spk.css v347 [id^=sp-panel-] select:not(...) bernilai (0,4,1) -- satu ID
+   mengalahkan berapa pun kelas (CLAUDE.md, PF-12). Tanpa ini select PO supplier tetap 642 px di 390 px viewport. */
+#sp-panel-beli .rjd-beli-form select, #sp-panel-beli .rjd-beli-form input, #sp-panel-beli .rjd-beli-tabel select, #sp-panel-beli .rjd-beli-tabel input { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
+#sp-panel-beli .rjd-beli-tabel .rjd-beli-qty, #sp-panel-beli .rjd-beli-tabel .rjd-beli-ppn { min-width: 64px; }
+#sp-panel-beli .rjd-beli-tabel .rjd-beli-nama { min-width: 160px; }
+/* Anak grid bawaannya min-width:auto = tidak boleh lebih sempit dari isinya: pembungkus tabel (min-width 640) di dalamnya
+   memaksa SELURUH kolom ke 642 px di 390 px viewport, dan setiap field ikut melebar (terukur jalan126 H). */
+.rjd-beli-form > * { min-width: 0; }
+.rjd-beli-lebar { grid-column: 1 / -1; }
+.rjd-beli-aksi { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.rjd-beli-pesan { font-size: 13px; color: var(--ink-soft); flex: 1 1 200px; }
+.rjd-beli-pesan.rjd-beli-ok { color: #1f6b3a; }
+.rjd-beli-galat { color: #8f2c22 !important; }
+.rjd-beli-sub { font-family: 'Archivo', sans-serif; font-size: 14px; font-weight: 800; margin: 16px 0 8px; color: var(--ink); }
+.rjd-beli-tabelwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line-soft, #e6e1d6); border-radius: 10px; }
+.rjd-beli-tabel { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 13px; }
+.rjd-beli-tabel th, .rjd-beli-tabel td { padding: 6px 8px; border-bottom: 1px solid var(--line-soft, #e6e1d6); text-align: left; vertical-align: top; word-break: normal; overflow-wrap: normal; }
+.rjd-beli-tabel th { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); background: var(--cream, #f6f3ec); white-space: nowrap; }
+.rjd-beli-tabel tbody tr:last-child td { border-bottom: none; }
+.rjd-beli-tabel input, .rjd-beli-tabel select { font-size: 16px; padding: 6px 8px; border: 1px solid var(--line, #d9d4c8); border-radius: 6px; width: 100%; min-width: 72px; box-sizing: border-box; background: var(--white, #fff); color: var(--ink); }
+.rjd-beli-tabel .rjd-beli-qty, .rjd-beli-tabel .rjd-beli-ppn { min-width: 64px; }
+.rjd-beli-tabel .rjd-beli-nama { min-width: 160px; }
+.rjd-beli-kode-sel { font-family: 'IBM Plex Mono', monospace; white-space: nowrap; }
+.rjd-beli-kosong { color: var(--ink-soft); text-align: center; padding: 16px 8px; }
+.rjd-beli-pembalik td { color: var(--ink-soft); text-decoration: line-through; text-decoration-color: rgba(0,0,0,.25); }
+.rjd-beli-pembalik td:last-child { text-decoration: none; }
+.rjd-beli-hapus, .rjd-beli-kecil { padding: 4px 9px; font-size: 12px; }
+.rjd-beli-status { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; background: var(--cream, #f6f3ec); }
+.rjd-beli-status-disetujui, .rjd-beli-status-jadi-po { background: #E4F3E8; color: #1f6b3a; }
+.rjd-beli-status-ditolak { background: #FDECEA; color: #8f2c22; }
+.rjd-beli-ringkas { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin: 0 0 10px; }
+.rjd-beli-ringkas > div { display: flex; flex-direction: column; font-size: 12px; color: var(--ink-soft); }
+.rjd-beli-ringkas b { font-size: 15px; color: var(--ink); }
+.rjd-beli-awas, .rjd-beli-ringkas .rjd-beli-awas b { color: #8f2c22; }
+.rjd-beli-awas-baris td:nth-child(3) { color: #8f2c22; }
+.rjd-beli-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.rjd-beli-tab { font-family: 'Inter', system-ui, sans-serif; font-size: 13px; font-weight: 600; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line, #d9d4c8); background: var(--white, #fff); color: var(--ink-soft); cursor: pointer; }
+.rjd-beli-tab.active { background: var(--ink); border-color: var(--ink); color: var(--white, #fff); }
+.rjd-beli-lencana { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 999px; background: #BD4335; color: #fff; font-size: 11px; text-align: center; }
+.rjd-beli-total { font-size: 14px; }
+@media (max-width: 640px) {
+  .rjd-beli-form { grid-template-columns: 1fr; }
+}
