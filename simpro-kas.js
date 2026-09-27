@@ -259,7 +259,7 @@ function ksMuat(bulan, opsi) {
 
 // ---------- render ----------
 function ksRender() {
-  ksRenderSaldo_(); ksRenderForm_(); ksRenderBulan_(); ksPasangSaring_(); ksRenderBuku_(); ksRenderArus_(); ksRenderRekon_(); ksRenderJurnal_(); ksRenderMasterSupplier_(); ksRenderBeli_(); ksRenderStok_(); ksRenderPeringatan_();
+  ksRenderSaldo_(); ksRenderForm_(); ksRenderBulan_(); ksPasangSaring_(); ksRenderBuku_(); ksRenderArus_(); ksRenderRekon_(); ksRenderJurnal_(); ksRenderMasterSupplier_(); ksRenderBeli_(); ksRenderStok_(); ksRenderBiaya_(); ksRenderPeringatan_();
 }
 
 function ksRenderSaldo_() {
@@ -1486,4 +1486,150 @@ function ksStokPutus_(btn, keputusan) {
   const pulih = function () { if (btn.isConnected) { btn.disabled = false; btn.textContent = teksAsli; } };
   ksKirim_("setujuiOpname", { payload: payload }).then(function (d) { pulih(); ksStokPesan_(id + " -> " + (d.status || keputusan) + (d.sudahDiputuskan ? " (sudah diputuskan sebelumnya)" : "") + (d.penyesuaian ? ", " + d.penyesuaian + " penyesuaian" : "") + (d.tanpaNilai && d.tanpaNilai.length ? " -- TANPA NILAI: " + d.tanpaNilai.join(", ") : "") + "."); ksStokMuat(); if (KS_JURNAL) ksJurnalMuat(); return d; })   // jurnal yang sedang tampil ikut disegarkan: penyesuaian = entri baru
     .catch(function (e) { pulih(); const jaringan = /Failed to fetch|NetworkError|jaringan/i.test(String(e && e.message || e)); ksStokPesan_(jaringan ? "Tidak sampai ke server -- sambungan terputus di tengah jalan. Daftar dimuat ulang; lihat statusnya sebelum mengirim lagi." : String((e && e.message) || e), true); if (jaringan) ksStokMuat(); });
+}
+
+
+/* ============================================================================
+ * ROADMAP-ERP Tahap 4 sub-rilis B (v384) -- KARTU "BIAYA & MARGIN PER PO" DI HALAMAN KAS (owner/finance; admin ditolak
+ * server lewat bpoBolehLihat_). Rekap dari cache SD Rekap Biaya PO (gs @418 getBiayaPO), tombol Hitung ulang
+ * (hitungUlangBiayaPO, 2-3 menit), tab per PO (saring cari / klien / hanya lengkap -- hanya TABELNYA yang ditulis ulang,
+ * kotak cari tidak dibongkar, pola v348) & per klien, rincian satu PO dihitung SEGAR saat barisnya diklik. Dimuat MALAS
+ * (pola stok). Angka per PO = MARGIN KONTRIBUSI. PO yang belum lengkap TETAP tampil beserta sebabnya (kolom Catatan) --
+ * margin yang komponennya belum terisi lebih berbahaya disembunyikan daripada ditandai.
+ * ========================================================================== */
+let KS_BIAYA = null, KS_BIAYA_URUT = 0, KS_BIAYA_STATUS = "", KS_BIAYA_TAB = "po", KS_BIAYA_PESAN = null, KS_BIAYA_RINCI = null, KS_BIAYA_SIBUK = false;
+const KS_BIAYA_SARING = { q: "", klien: "", lengkap: false };
+
+function ksBiayaWadah_() {
+  let el = document.getElementById("ks-biaya");
+  if (el) return el;
+  const jangkar = document.getElementById("ks-stok") || document.getElementById("ks-beli") || document.getElementById("ks-jurnal") || document.getElementById("ks-rekon"); if (!jangkar || !jangkar.parentNode) return null;
+  el = document.createElement("div"); el.id = "ks-biaya";
+  jangkar.parentNode.insertBefore(el, jangkar.nextSibling);
+  return el;
+}
+function ksRenderBiaya_() {
+  const el = ksBiayaWadah_(); if (!el) return;
+  if (!KS_DATA || !KS_DATA.bisaFinance) { el.innerHTML = ""; KS_BIAYA = null; return; }
+  if (KS_BIAYA || KS_BIAYA_STATUS) { ksBiayaRender_(); return; }
+  el.innerHTML = '<div class="ks-kartu"><div class="ks-kartu-judul">Biaya &amp; margin per PO</div>' +
+    '<p class="ks-info">Margin kontribusi NYATA per order: pendapatan invoice dikurangi kain, aksesoris, upah, subkon, sablon, dan alokasi overhead -- dibaca dari ledger masing-masing (stok, arsip produksi x tarif, buku kas), bukan estimasi. Rekap dihitung tiap malam; Hitung ulang memperbaruinya sekarang.</p>' +
+    '<div class="ks-aksi"><button id="ks-biaya-buka" class="ks-btn" type="button" onclick="ksBiayaMuat()">Buka rekap</button></div></div>';
+}
+function ksBiayaMuat() {
+  const urut = ++KS_BIAYA_URUT;
+  KS_BIAYA_STATUS = "memuat"; KS_BIAYA_RINCI = null; ksBiayaRender_();
+  ksKirim_("getBiayaPO").then(function (d) { if (urut !== KS_BIAYA_URUT) return; KS_BIAYA = d; KS_BIAYA_STATUS = ""; ksBiayaRender_(); })
+    .catch(function (e) { if (urut !== KS_BIAYA_URUT) return; KS_BIAYA_STATUS = /Failed to fetch|NetworkError|jaringan/i.test(String(e && e.message || e)) ? "Rekap biaya tidak sampai ke server -- sambungan terputus di tengah jalan. Coba lagi." : String(e && e.message || e); ksBiayaRender_(); });
+}
+function ksBiayaHitung() {
+  if (KS_BIAYA_SIBUK) return;
+  KS_BIAYA_SIBUK = true; ksBiayaPesan_("Menghitung ulang dari semua ledger (bisa 2-3 menit)...", false); ksBiayaRender_();
+  ksKirim_("hitungUlangBiayaPO").then(function (d) {
+    KS_BIAYA_SIBUK = false;
+    ksBiayaPesan_("Rekap diperbarui: " + d.jumlahPO + " PO, " + d.lengkap + " lengkap" + (d.tanpaPO ? ", " + d.tanpaPO + " baris kas biaya PO tanpa Ref PO yang dikenal" : "") + ".", false);
+    ksBiayaMuat();
+  }).catch(function (e) { KS_BIAYA_SIBUK = false; ksBiayaPesan_(String(e && e.message || e), true); ksBiayaRender_(); });
+}
+function ksBiayaTab(t) { KS_BIAYA_TAB = t; ksBiayaRender_(); }
+function ksBiayaPesan_(teks, galat) {
+  const kelas = "rjd-beli-pesan" + (galat ? " rjd-beli-galat" : (teks ? " rjd-beli-ok" : ""));
+  KS_BIAYA_PESAN = teks ? { teks: teks, kelas: kelas } : null;
+  const el = document.getElementById("ks-biaya-pesan"); if (el) { el.textContent = teks || ""; el.className = kelas; }
+}
+function ksBiayaSaring_() {
+  const q = document.getElementById("ks-biaya-cari"), k = document.getElementById("ks-biaya-klien"), l = document.getElementById("ks-biaya-lengkap");
+  KS_BIAYA_SARING.q = q ? q.value.trim().toLowerCase() : ""; KS_BIAYA_SARING.klien = k ? k.value : ""; KS_BIAYA_SARING.lengkap = !!(l && l.checked);
+  const w = document.getElementById("ks-biaya-tabel"); if (w) w.innerHTML = ksBiayaTabelHtml_();
+}
+function ksBiayaTersaring_() {
+  return (KS_BIAYA && KS_BIAYA.rekap || []).filter(function (r) {
+    if (KS_BIAYA_SARING.klien && String(r["ID Klien"]) !== KS_BIAYA_SARING.klien) return false;
+    if (KS_BIAYA_SARING.lengkap && r.Lengkap !== "Ya") return false;
+    if (KS_BIAYA_SARING.q && [r["ID Purchase Order"], r["ID Klien"], r["Status PO"], r.Catatan].join(" ").toLowerCase().indexOf(KS_BIAYA_SARING.q) === -1) return false;
+    return true;
+  });
+}
+function ksBiayaRp_(v) { return v === "" || v === null || v === undefined ? "-" : ksRp(v); }
+function ksBiayaTabelHtml_() {
+  const baris = ksBiayaTersaring_(), semua = (KS_BIAYA && KS_BIAYA.rekap || []).length;
+  if (!baris.length) return '<p class="ks-info" id="ks-biaya-kosong">' + (semua ? "Tidak ada PO yang cocok dengan saringan." : "Belum ada PO di rekap.") + '</p>';
+  return '<p class="ks-info">' + (baris.length === semua ? semua + " PO" : "Tersaring " + baris.length + " dari " + semua + " PO") + ' &#183; klik baris untuk rincian per komponen</p>' +
+    '<div class="ks-gulir"><table class="ks-tabel rjd-beli-tabel" id="ks-biaya-po"><thead><tr><th>PO</th><th>Klien</th><th>Status</th><th class="ks-td-rp">Pendapatan</th>' +
+    '<th class="ks-td-rp">Kain</th><th class="ks-td-rp">Aksesoris</th><th class="ks-td-rp">Upah</th><th class="ks-td-rp">Subkon + sablon</th><th class="ks-td-rp">Overhead</th>' +
+    '<th class="ks-td-rp">Margin</th><th class="ks-td-rp">%</th><th>Lengkap</th></tr></thead><tbody>' +
+    baris.map(function (r) {
+      const m = Number(r["Margin Kontribusi"]) || 0, belum = r.Lengkap !== "Ya";
+      return '<tr class="ks-biaya-baris' + (belum ? ' ks-biaya-belum' : '') + '" data-po="' + ksEsc_(r["ID Purchase Order"]) + '" onclick="ksBiayaRinci(\'' + rjdAttrJs_(r["ID Purchase Order"]) + '\')">' +
+        '<td class="ks-mono">' + ksEsc_(r["ID Purchase Order"]) + '</td><td>' + ksEsc_(r["ID Klien"]) + '</td><td>' + ksEsc_(r["Status PO"]) + (r["Status Biaya"] === "Ditutup" ? ' <small>(biaya ditutup)</small>' : '') + '</td>' +
+        '<td class="ks-td-rp">' + ksBiayaRp_(r.Pendapatan) + '</td><td class="ks-td-rp">' + ksBiayaRp_(r.Kain) + '</td><td class="ks-td-rp">' + ksBiayaRp_(r.Aksesoris) + '</td>' +
+        '<td class="ks-td-rp">' + ksBiayaRp_(r.Upah) + '</td><td class="ks-td-rp">' + ksBiayaRp_((Number(r.Subkon) || 0) + (Number(r.Sablon) || 0)) + '</td>' +
+        '<td class="ks-td-rp">' + ksBiayaRp_(r.Overhead) + (r["Overhead Sementara"] === "Ya" ? ' <small>sementara</small>' : '') + '</td>' +
+        '<td class="ks-td-rp' + (m < 0 ? ' ks-biaya-rugi' : '') + '">' + ksRp(m) + '</td><td class="ks-td-rp">' + (r["Margin %"] === "" ? "-" : ksEsc_(String(r["Margin %"]).replace(".", ",")) + "%") + '</td>' +
+        '<td>' + (belum ? '<span class="ks-biaya-catatan" title="' + ksEsc_(r.Catatan) + '">Belum &#183; ' + ksEsc_(r.Catatan) + '</span>' : 'Ya') + '</td></tr>';
+    }).join("") + '</tbody></table></div>';
+}
+function ksBiayaKlienHtml_() {
+  const k = (KS_BIAYA && KS_BIAYA.perKlien) || [];
+  if (!k.length) return '<p class="ks-info">Belum ada data per klien.</p>';
+  return '<div class="ks-gulir"><table class="ks-tabel rjd-beli-tabel" id="ks-biaya-klien-tabel"><thead><tr><th>Klien</th><th class="ks-td-rp">PO</th><th class="ks-td-rp">Pendapatan</th><th class="ks-td-rp">Total biaya</th><th class="ks-td-rp">Margin</th><th class="ks-td-rp">%</th><th class="ks-td-rp">Lengkap</th></tr></thead><tbody>' +
+    k.map(function (x) {
+      return '<tr data-klien="' + ksEsc_(x.idKlien) + '"><td>' + ksEsc_(x.idKlien) + '</td><td class="ks-td-rp">' + x.po + '</td><td class="ks-td-rp">' + ksRp(x.pendapatan) + '</td><td class="ks-td-rp">' + ksRp(x.biaya) + '</td>' +
+        '<td class="ks-td-rp' + (x.margin < 0 ? ' ks-biaya-rugi' : '') + '">' + ksRp(x.margin) + '</td><td class="ks-td-rp">' + (x.marginPersen === null ? "-" : String(x.marginPersen).replace(".", ",") + "%") + '</td>' +
+        '<td class="ks-td-rp">' + x.lengkap + ' / ' + x.po + '</td></tr>';
+    }).join("") + '</tbody></table></div>' +
+    '<p class="ks-info">Margin per klien hanya seutuh PO yang LENGKAP -- kolom terakhir menyebut berapa dari berapa.</p>';
+}
+function ksBiayaRinci(id) {
+  KS_BIAYA_RINCI = { id: id, status: "memuat" }; ksBiayaRender_();
+  ksKirim_("getBiayaPO", { payload: { idPurchaseOrder: id } })
+    .then(function (d) { if (!KS_BIAYA_RINCI || KS_BIAYA_RINCI.id !== id) return; KS_BIAYA_RINCI = { id: id, data: d }; ksBiayaRender_(); })
+    .catch(function (e) { if (!KS_BIAYA_RINCI || KS_BIAYA_RINCI.id !== id) return; KS_BIAYA_RINCI = { id: id, status: String(e && e.message || e) }; ksBiayaRender_(); });
+}
+function ksBiayaRinciHtml_() {
+  const r = KS_BIAYA_RINCI; if (!r) return "";
+  if (r.status === "memuat") return '<div class="ks-biaya-rinci" id="ks-biaya-rinci"><p class="ks-info">Menghitung rincian ' + ksEsc_(r.id) + ' dari sumbernya...</p></div>';
+  if (r.status) return '<div class="ks-biaya-rinci" id="ks-biaya-rinci"><p class="ks-galat">' + ksEsc_(r.status) + '</p></div>';
+  const d = r.data, k = d.rekap || {}, rows = d.rincian || [];
+  return '<div class="ks-biaya-rinci" id="ks-biaya-rinci"><div class="ks-kartu-judul">Rincian ' + ksEsc_(r.id) + ' <small>(dihitung segar dari sumber)</small></div>' +
+    '<div class="rjd-beli-ringkas"><div>Pendapatan<b>' + ksRp(k.Pendapatan) + '</b></div><div>Total biaya<b>' + ksRp(k["Total Biaya"]) + '</b></div><div>Margin<b class="' + ((Number(k["Margin Kontribusi"]) || 0) < 0 ? 'ks-biaya-rugi' : '') + '">' + ksRp(k["Margin Kontribusi"]) + '</b></div>' +
+    '<div>Status biaya<b>' + ksEsc_(k["Status Biaya"] || "-") + (k["Tanggal Tutup"] ? ' (tutup ' + ksEsc_(k["Tanggal Tutup"]) + ')' : '') + '</b></div>' +
+    (k["Varian Biaya"] !== "" && k["Varian Biaya"] !== undefined ? '<div>Varian vs estimasi<b>' + ksRp(k["Varian Biaya"]) + '</b></div>' : '') +
+    (Number(k["Biaya Sesudah Tutup"]) ? '<div class="rjd-beli-awas">Biaya sesudah tutup<b>' + ksRp(k["Biaya Sesudah Tutup"]) + '</b></div>' : '') + '</div>' +
+    (k.Catatan ? '<p class="ks-info">Catatan: ' + ksEsc_(k.Catatan) + '</p>' : '') +
+    '<div class="ks-gulir"><table class="ks-tabel rjd-beli-tabel" id="ks-biaya-rinci-tabel"><thead><tr><th>Tanggal</th><th>Komponen</th><th class="ks-td-rp">Nilai</th><th>Sumber</th><th>Ref</th></tr></thead><tbody>' +
+    rows.map(function (x) { return '<tr><td>' + ksEsc_(x.tanggal) + '</td><td>' + ksEsc_(x.komponen) + '</td><td class="ks-td-rp">' + ksRp(x.nilai) + '</td><td>' + ksEsc_(x.sumber) + '</td><td class="ks-mono">' + ksEsc_(x.ref) + '</td></tr>'; }).join("") +
+    '</tbody></table></div><div class="ks-aksi"><button class="ks-btn" type="button" onclick="KS_BIAYA_RINCI=null;ksBiayaRender_()">Tutup rincian</button></div></div>';
+}
+function ksBiayaRender_() {
+  const el = ksBiayaWadah_(); if (!el) return;
+  const judul = '<div class="ks-kartu-judul">Biaya &amp; margin per PO</div>';
+  if (KS_BIAYA_STATUS) {
+    const memuat = KS_BIAYA_STATUS === "memuat";
+    el.innerHTML = '<div class="ks-kartu">' + judul + '<p class="' + (memuat ? 'ks-info' : 'ks-galat') + '" id="ks-biaya-status">' + ksEsc_(memuat ? "Memuat rekap biaya..." : KS_BIAYA_STATUS) + '</p>' +
+      (memuat ? '' : '<div class="ks-aksi"><button class="ks-btn" type="button" onclick="ksBiayaMuat()">Coba lagi</button></div>') + '</div>';
+    return;
+  }
+  if (!KS_BIAYA) return;
+  const pesan = '<div id="ks-biaya-pesan" class="' + (KS_BIAYA_PESAN ? KS_BIAYA_PESAN.kelas : 'rjd-beli-pesan') + '">' + (KS_BIAYA_PESAN ? ksEsc_(KS_BIAYA_PESAN.teks) : '') + '</div>';
+  const tombolHitung = '<button id="ks-biaya-hitung" class="ks-btn" type="button" onclick="ksBiayaHitung()"' + (KS_BIAYA_SIBUK ? ' disabled' : '') + '>' + (KS_BIAYA_SIBUK ? 'Menghitung...' : 'Hitung ulang') + '</button>';
+  if (!KS_BIAYA.adaCache) {
+    el.innerHTML = '<div class="ks-kartu">' + judul + '<p class="ks-info" id="ks-biaya-belum">Rekap belum pernah dihitung (cache kosong). Hitung sekarang -- membaca stok, arsip produksi, buku kas, dan invoice; 2-3 menit.</p>' +
+      pesan + '<div class="ks-aksi">' + tombolHitung + '</div></div>';
+    return;
+  }
+  const rekap = KS_BIAYA.rekap || [], lengkap = rekap.filter(function (r) { return r.Lengkap === "Ya"; }).length;
+  const klien = []; rekap.forEach(function (r) { const k = String(r["ID Klien"] || ""); if (k && klien.indexOf(k) === -1) klien.push(k); }); klien.sort();
+  const tab = function (k, label) { return '<button type="button" class="rjd-beli-tab' + (KS_BIAYA_TAB === k ? ' active' : '') + '" data-tab="' + k + '" onclick="ksBiayaTab(\'' + k + '\')">' + label + '</button>'; };
+  let isi = "";
+  if (KS_BIAYA_TAB === "klien") isi = ksBiayaKlienHtml_();
+  else isi = '<div class="ks-saring ks-biaya-saring"><input id="ks-biaya-cari" type="search" placeholder="cari PO / klien / catatan" value="' + ksEsc_(KS_BIAYA_SARING.q) + '" oninput="ksBiayaSaring_()">' +
+    '<select id="ks-biaya-klien" onchange="ksBiayaSaring_()"><option value="">semua klien</option>' + klien.map(function (k) { return '<option value="' + ksEsc_(k) + '"' + (KS_BIAYA_SARING.klien === k ? ' selected' : '') + '>' + ksEsc_(k) + '</option>'; }).join("") + '</select>' +
+    '<label><input id="ks-biaya-lengkap" type="checkbox" onchange="ksBiayaSaring_()"' + (KS_BIAYA_SARING.lengkap ? ' checked' : '') + '> hanya yang lengkap</label></div>' +
+    '<div id="ks-biaya-tabel">' + ksBiayaTabelHtml_() + '</div>';
+  el.innerHTML = '<div class="ks-kartu">' + judul +
+    '<div class="rjd-beli-ringkas"><div>PO di rekap<b>' + rekap.length + '</b></div><div>Lengkap<b>' + lengkap + ' dari ' + rekap.length + '</b></div>' +
+    '<div>Diperbarui<b>' + ksEsc_(KS_BIAYA.diperbarui || "-") + '</b></div><div>Tutup biaya<b>kirim terakhir + ' + ksEsc_(String(KS_BIAYA.tutupHari || 30)) + ' hari</b></div></div>' +
+    '<div class="rjd-beli-tabs">' + tab("po", "Per PO") + tab("klien", "Per klien") + '</div>' + pesan + isi + ksBiayaRinciHtml_() +
+    '<div class="ks-aksi">' + tombolHitung + '<button class="ks-btn" type="button" onclick="ksBiayaMuat()">Muat ulang</button></div></div>';
 }

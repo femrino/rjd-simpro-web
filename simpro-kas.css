@@ -223,3 +223,13 @@
   background: #EEE9F7; color: #4C3F8C; border: 1px solid #CFC5E8;
   font-size: 12.5px; line-height: 1.55;
 }
+
+/* v384: kartu Biaya & margin per PO (ROADMAP-ERP Tahap 4B). Bilah saringnya memakai .ks-saring buku kas;
+   yang baru cuma penanda rugi / belum lengkap / baris bisa diklik / blok rincian. */
+.ks-biaya-rugi { color: #8f2c22; font-weight: 700; }
+.ks-biaya-baris { cursor: pointer; }
+.ks-biaya-baris:hover td { background: var(--cream, #FAF7F1); }
+.ks-biaya-belum td { color: var(--ink-soft, #5F6B7A); }
+.ks-biaya-catatan { font-size: 11px; white-space: normal; }
+.ks-biaya-rinci { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line, #E5E0D5); }
+.ks-biaya-rinci .ks-kartu-judul small { font-weight: 400; color: var(--ink-soft, #5F6B7A); }
