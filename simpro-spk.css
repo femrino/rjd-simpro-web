@@ -1472,6 +1472,13 @@ body.sp-siap #sp-subtabs { visibility: visible; }
 /* ---- Tab Orderan di layar sempit (v159) ---- */
 
 .sp-ord-lebih { font-size: 11px; color: var(--ink-soft, #5F6B7A); white-space: nowrap; }
+/* v383: tombol Edit order di baris Orderan Berjalan -- bahasa visual .db-po-terbit (order-list): tautan bertepi,
+   bukan tombol besar, supaya baris yang sudah bisa diklik tidak punya dua target yang saling berebut. */
+.sp-ord-aksi { margin-top: 5px; }
+.sp-ord-edit { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; font-weight: 700; color: var(--thread, #B23A2A);
+  background: var(--white, #fff); border: 1px solid var(--terra-light, #E8A49C); border-radius: 6px; padding: 3px 9px;
+  cursor: pointer; line-height: 1.2; transition: background .15s, color .15s; }
+.sp-ord-edit:hover { background: var(--thread, #B23A2A); color: var(--white, #fff); }
 
 @media (max-width: 760px) {
   /* Bilah alat menumpuk penuh: dropdown setengah lebar bersebelahan lebih

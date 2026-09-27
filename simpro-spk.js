@@ -46,6 +46,18 @@ const SP_OAUTH_CLIENT_ID = "1004242498410-6g4palcfo8p4kifmpkhnu1b9eaq424nl.apps.
 const SP_API_URL = "https://script.google.com/macros/s/AKfycbwIe9qIookHaaYNEyQ0OdX5mtIVXXwQThMKnvKBOslSxlstZaPjvqmiTeC9pz_FMpfLig/exec";
 
 let SP_ID_TOKEN = null;
+// v383: sambungan modal Edit Order (komponen bersama di simpro-global.js, dipakai tab Orderan Berjalan).
+// idToken lewat FUNGSI: SP_ID_TOKEN `let` yang terisi sesudah login. sesudahSimpan memuat ulang daftar PO
+// (yang ikut merender ulang tab Orderan) dan MEMBUANG Detail Order yang tersimpan -- data yang baru diubah
+// tidak boleh tampil basi (aturan 'snapshot tidak boleh tampil sesudah tulis').
+if (typeof rjdEditPOPasang === "function") rjdEditPOPasang({
+  apiUrl: SP_API_URL, idToken: function () { return SP_ID_TOKEN; },
+  sesudahSimpan: function () {
+    window.SP_DETAIL = null; window.SP_DETAIL_PO = null;
+    if (typeof spMuatDaftarPO === "function") spMuatDaftarPO();
+    if (window.SP_TAB === "detailorder" && typeof spMuatDetailOrder_ === "function") spMuatDetailOrder_();
+  }
+});
 
 function spShow(id) {
   ["sp-login-box", "sp-loading", "sp-isi"].forEach(function (x) {
@@ -1710,6 +1722,10 @@ function spTerapkanBagian_(d) {
   const bagian = (d && d.bagian) ? d.bagian : [];
   const lintas = !!(d && d.lintasBagian);
   window.SP_PERAN = (d && d.peran) ? String(d.peran) : "";   // v379: dibaca layar master (boleh ubah = full/admin)
+  // v383: tombol Edit di Orderan Berjalan bergantung peran; kalau tabnya sudah dirender sebelum jawaban peran
+  // tiba (peran dan daftar PO datang dari dua permintaan yang berlomba), render ulang -- tanpa ini tombolnya baru
+  // lahir sesudah pindah tab dan kembali.
+  if (window.SP_TAB === "orderan" && typeof spRenderOrderan_ === "function") spRenderOrderan_();
 
   // v339: gerbang subtab "Orderan Masuk". bisaOrder = punya area "order" di
   // AREA_PER_AKSI -- cerminan gerbang server, BUKAN daftar peran kedua yang
@@ -3428,7 +3444,15 @@ function spOrderanBaris_() {
 /**
  * v348 (PF-8): isi wilayah hasil -- tabel, atau kalimat "tidak ada yang cocok".
  */
+/** v383: tombol Edit di Orderan Berjalan hanya untuk peran yang lolos gerbang server simpanEditPO (bagian admin,
+ *  atau lintas bagian = full/admin) -- cerminan, bukan daftar peran kedua; server tetap menolak yang lain. */
+function spBolehEditOrder_() {
+  const p = window.SP_PERAN;
+  return (p === "full" || p === "admin") && typeof dbBukaEditPO === "function";
+}
+
 function spOrderanHasilHtml_(baris) {
+  const bolehEdit = spBolehEditOrder_();   // v383
   return (baris.length
         // v159: sp-tabel-kartu -- di bawah 760px tabel berubah jadi kartu,
         // satu order satu kartu. Enam kolom di HP membuat tiap kolom
@@ -3465,7 +3489,16 @@ function spOrderanHasilHtml_(baris) {
                 (p.spSelesai ? ' <span class="sp-riw-kunci">Selesai</span>' : '') +
                 (p.spBatal ? ' <span class="sp-tag-batal">DIBATALKAN</span>' : '') +
                 '<div class="sp-gelar-size">' + rjdEscapeHtml_(p.namaKlien || "-") +
-                (p.noSO ? ' \u00b7 ' + rjdEscapeHtml_(p.noSO) : '') + '</div></td>' +
+                (p.noSO ? ' \u00b7 ' + rjdEscapeHtml_(p.noSO) : '') + '</div>' +
+                // v383: Edit order dari sini -- modal yang sama dengan halaman Order List. Ditaruh di sel
+                // PO/Klien, BUKAN di sel panah: sel panah disembunyikan CSS di mode kartu (< 760 px), dan
+                // tombol yang hilang di HP adalah tombol yang tidak ada. stopPropagation: baris ini sendiri
+                // membuka Detail Order saat diklik. Order DIBATALKAN tidak diedit dari sini.
+                (bolehEdit && !p.spBatal
+                  ? '<div class="sp-ord-aksi"><button type="button" class="sp-ord-edit" onclick="event.stopPropagation(); dbBukaEditPO(' +
+                      '\'' + rjdAttrJs_(p.idPurchaseOrder) + '\'' + ')" title="Edit order ini -- form yang sama dengan halaman Order List">Edit</button></div>'
+                  : '') +
+                '</td>' +
               // art sudah memuat markup (span "+N lainnya"), jadi bagian
               // teksnya di-escape saat dirakit -- bukan di sini.
               '<td data-label="Artikel">' + (daftarArt.length
