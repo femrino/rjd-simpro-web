@@ -1657,7 +1657,12 @@ function ckRenderSPK(){
             rjdEscapeHtml_(d.artikelBelumDiMaster.join("; ")) + '.</div>' +
           '</div>'
         : '') +
-      ckKainKlienHtml_(d.kainDariKlien) +
+      // v382 (permintaan Femri 27 Sep 2026): tabel KAIN DARI KLIEN hanya di SPK PRODUKSI (PO penuh, tanpa
+      // ?line=) dan Konfirmasi Order. SPK per LINE (Sewing/Cutting -- "seluruh jatah line di PO ini") tidak
+      // memuatnya: kepala line tidak menerima kain, dan daftar roll klien di kertasnya cuma memanjangkan
+      // dokumen yang dibaca di mesin jahit. d.line adalah penanda mode per-line yang sama dengan kepala
+      // dokumen & Target Selesai di atas -- satu penanda, bukan parameter baru.
+      (d.line ? '' : ckKainKlienHtml_(d.kainDariKlien)) +
       ckJadwalKirimHtml_(d.jadwalKirim) +
       catatanHtml +
       ckChecklistQCHtml_(d.checklistQC) +

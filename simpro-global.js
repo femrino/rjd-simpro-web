@@ -3300,8 +3300,19 @@ function omRenderList(daftar){
     const totalQty = g.items.reduce(function(sum, it){
       return sum + OM_SIZE_KOLOM.reduce(function(s, size){ return s + (it.sizeQty[size] || 0); }, 0);
     }, 0);
-    const jumlahItem = rjdGroupOrderItems_(g.items).length;
+    const grupItem = rjdGroupOrderItems_(g.items);
+    const jumlahItem = grupItem.length;
     const labelIsi = jumlahItem + ' item &#183; ' + g.items.length + ' warna &#183; ' + totalQty + ' pcs';
+    // v382 (permintaan Femri 27 Sep 2026): nama item (artikel + style) DI KARTU. Sebelumnya kartu hanya
+    // menyebut klien & qty, jadi mencari "Raissa" di 19 pengajuan berarti membuka satu per satu. Dipangkas
+    // ke 3 item pertama + "+N lainnya" -- pola yang sama dengan kolom Artikel di Orderan Berjalan.
+    const namaItem = grupItem.map(function(it){
+      return [it.artikel, it.style].map(function(x){ return String(x || "").trim(); }).filter(Boolean).join(" / ");
+    }).filter(Boolean);
+    const labelItem = namaItem.length
+      ? namaItem.slice(0, 3).map(rjdEscapeHtml_).join(' &#183; ') +
+        (namaItem.length > 3 ? ' <span class="om-group-item-lebih">+' + (namaItem.length - 3) + ' lainnya</span>' : '')
+      : '<span class="om-group-item-lebih">(item belum bernama)</span>';
     // Klik kartu -> MODAL PROOFING (dulu: buka-tutup detail inline). Modal
     // memakai komponen form yang sama dengan Form Order & Edit Order, jadi
     // tampilan proofing seragam dengan sisa sistem.
@@ -3309,6 +3320,7 @@ function omRenderList(daftar){
       '<div class="om-group-head" onclick="omBukaModalProofing(' + idx + ')" title="Buka proofing order ini">' +
         '<div>' +
           '<span class="om-group-nama">' + (g.namaKlien || g.namaPerusahaanBaru || "(tanpa nama)") + '</span>' +
+          '<div class="om-group-item">' + labelItem + '</div>' +
           '<div class="om-group-meta">' + labelIsi + ' &#183; Target kirim: ' + rjdEscapeHtml_(g.targetTanggalKirim || "-") + '</div>' +
           '<div class="om-group-meta">Diajukan: ' + (g.diajukanOleh || "-") + '</div>' +
         '</div>' +
