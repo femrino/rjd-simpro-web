@@ -252,3 +252,26 @@
 .ks-lap-nonaktif td { color: var(--ink-soft, #5F6B7A); }
 .ks-lap-form { margin-top: 12px; }
 .ks-lap-form input, .ks-lap-form select { flex: 1 1 140px; min-width: 0; }
+
+/* ROADMAP-ERP Tahap 9B (v389): kartu KPI owner -- ubin berstatus, lencana berteks (warna bukan satu-satunya penanda). */
+.ks-kpi-aksi { margin-bottom: 10px; }
+.ks-kpi-ok b { color: #1D6B3A; }
+.ks-kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin: 10px 0 12px; }
+.ks-kpi-ubin { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; font-family: inherit; padding: 10px 12px 12px; min-height: 96px; border-radius: 12px; border: 1px solid var(--line, #E5E0D6); border-left-width: 5px; border-left-color: #9FB2C6; background: #fff; color: var(--ink, #17212F); cursor: pointer; }
+.ks-kpi-ubin:hover { box-shadow: 0 2px 8px rgba(23, 33, 47, .08); }
+.ks-kpi-ubin.ks-kpi-terbuka { box-shadow: 0 0 0 2px var(--navy, #17212F) inset; }
+.ks-kpi-ubin.ks-kpi-ok { border-left-color: #1D6B3A; background: #F3FAF5; }
+.ks-kpi-ubin.ks-kpi-belum { border-left-color: #B3261E; background: #FDF3F1; }
+.ks-kpi-ubin.ks-kpi-info { border-left-color: #9FB2C6; }
+.ks-kpi-nama { font-size: 12px; color: var(--ink-soft, #5F6B7A); font-weight: 600; word-break: normal; }
+.ks-kpi-nilai { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 20px; line-height: 1.15; word-break: normal; overflow-wrap: anywhere; }
+.ks-kpi-target { font-size: 11px; color: var(--ink-soft, #5F6B7A); }
+.ks-kpi-badge { margin-top: auto; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; padding: 1px 7px; border-radius: 999px; background: #EEF0F3; color: var(--ink, #17212F); }
+.ks-kpi-ok .ks-kpi-badge { background: #DDEFE3; color: #1D6B3A; }
+.ks-kpi-belum .ks-kpi-badge { background: #F7D9D5; color: #8f2c22; }
+.ks-kpi-rinci { margin-top: 6px; padding-top: 12px; border-top: 1px dashed var(--line, #E5E0D5); }
+.ks-kpi-rinci .ks-kartu-judul small { font-weight: 400; color: var(--ink-soft, #5F6B7A); }
+.ks-kpi-tabel th, .ks-kpi-tabel td { white-space: nowrap; }
+.ks-kpi-tabel td:nth-child(2) { white-space: normal; min-width: 120px; }
+.ks-kpi-kaki { margin: 8px 0 0; font-size: 11.5px; }
+@media (max-width: 640px) { .ks-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .ks-kpi-nilai { font-size: 17px; } }

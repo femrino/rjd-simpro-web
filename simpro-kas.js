@@ -259,7 +259,7 @@ function ksMuat(bulan, opsi) {
 
 // ---------- render ----------
 function ksRender() {
-  ksRenderSaldo_(); ksRenderForm_(); ksRenderBulan_(); ksPasangSaring_(); ksRenderBuku_(); ksRenderArus_(); ksRenderRekon_(); ksRenderJurnal_(); ksRenderMasterSupplier_(); ksRenderBeli_(); ksRenderStok_(); ksRenderBiaya_(); ksRenderLaporan_(); ksRenderPeringatan_();
+  ksRenderSaldo_(); ksRenderForm_(); ksRenderBulan_(); ksPasangSaring_(); ksRenderBuku_(); ksRenderArus_(); ksRenderRekon_(); ksRenderJurnal_(); ksRenderMasterSupplier_(); ksRenderBeli_(); ksRenderStok_(); ksRenderBiaya_(); ksRenderLaporan_(); ksRenderKpi_(); ksRenderPeringatan_();   // v389: KPI owner (Tahap 9B)
 }
 
 function ksRenderSaldo_() {
@@ -1778,4 +1778,123 @@ function ksLapRender_() {
   }
   el.innerHTML = '<div class="ks-kartu">' + judul + ringkas + '<div class="rjd-beli-tabs">' + Object.keys(KS_LAP_TAB_NAMA).map(tab).join("") + '</div>' + pesan + isi +
     '<div class="ks-aksi"><button class="ks-btn" type="button" onclick="ksLapMuat()">Muat ulang</button></div></div>';
+}
+
+
+/* ============================================================================
+ * ROADMAP-ERP Tahap 9 sub-rilis B (v389, butuh gs >= @425) -- KARTU KPI OWNER di puncak halaman Kas (di atas saldo),
+ * owner (Full) & finance. Sebelas ubin dari cache `SD KPI Owner` untuk bulan yang sedang dilihat (KS_BULAN): nilai, target,
+ * status OK/BELUM/INFO sebagai LENCANA BERTEKS (warna bukan satu-satunya penanda), ubin diklik = rincian (PO telat, PO macet,
+ * per klien, per akun, ...). Dimuat OTOMATIS saat halaman terbuka (cache murah, dan owner membuka halaman ini justru untuk
+ * angka ini) -- menyimpang dari pola kartu lain yang malas, sengaja. Hitung ulang (mahal, arsip dibaca utuh) dikunci selama
+ * berjalan; bulan berganti = cache lama dibuang; jawaban yang disusul dibuang.
+ * ========================================================================== */
+let KS_KPI = null, KS_KPI_URUT = 0, KS_KPI_STATUS = "", KS_KPI_PESAN = null, KS_KPI_SIBUK = false, KS_KPI_BUKA = "", KS_KPI_BULAN_MUAT = "";
+const KS_KPI_STATUS_NAMA = { OK: "OK", BELUM: "BELUM", INFO: "INFO" };
+
+function ksKpiWadah_() {
+  let el = document.getElementById("ks-kpi");
+  if (el) return el;
+  const jangkar = document.getElementById("ks-saldo"); if (!jangkar || !jangkar.parentNode) return null;
+  el = document.createElement("div"); el.id = "ks-kpi";
+  jangkar.parentNode.insertBefore(el, jangkar);
+  return el;
+}
+function ksRenderKpi_() {
+  const el = ksKpiWadah_(); if (!el) return;
+  if (!KS_DATA || !KS_DATA.bisaFinance) { el.innerHTML = ""; KS_KPI = null; KS_KPI_STATUS = ""; return; }
+  if (KS_KPI && KS_KPI.bulan !== KS_BULAN) { KS_KPI = null; KS_KPI_STATUS = ""; KS_KPI_PESAN = null; KS_KPI_BUKA = ""; }   // bulan berganti: angka lama bukan jawaban
+  // bulan berganti SAAT permintaan masih terbang: minta lagi (urut naik, jawaban lama dibuang) -- tanpa ini jawaban bulan lama
+  // mendarat di bawah judul bulan baru (ditemukan jalan134 D2).
+  if (KS_KPI_STATUS === "memuat" && KS_KPI_BULAN_MUAT !== KS_BULAN) { ksKpiMuat(); return; }
+  if (!KS_KPI && !KS_KPI_STATUS) { ksKpiMuat(); return; }
+  ksKpiRender_();
+}
+function ksKpiMuat() {
+  const urut = ++KS_KPI_URUT, bulan = KS_BULAN; KS_KPI_BULAN_MUAT = bulan;
+  KS_KPI_STATUS = "memuat"; ksKpiRender_();
+  ksKirim_("getKpiOwner", { payload: { bulan: bulan } })
+    .then(function (d) { if (urut !== KS_KPI_URUT) return; KS_KPI = d; KS_KPI_STATUS = ""; ksKpiRender_(); })
+    .catch(function (e) { if (urut !== KS_KPI_URUT) return; KS_KPI_STATUS = /Failed to fetch|NetworkError|jaringan/i.test(String(e && e.message || e)) ? "KPI tidak sampai ke server -- sambungan terputus di tengah jalan. Coba lagi." : "Gagal memuat: " + String(e && e.message || e); ksKpiRender_(); });
+}
+function ksKpiPesan_(teks, galat) {
+  KS_KPI_PESAN = teks ? { teks: teks, galat: !!galat } : null;
+  const el = document.getElementById("ks-kpi-pesan"); if (el) { el.textContent = teks || ""; el.className = "rjd-beli-pesan" + (galat ? " rjd-beli-galat" : (teks ? " rjd-beli-ok" : "")); }
+}
+function ksKpiHitung() {
+  if (KS_KPI_SIBUK) return;
+  KS_KPI_SIBUK = true; ksKpiPesan_("Menghitung ulang dari semua modul (arsip produksi 150 ribu baris dibaca utuh, terukur ~3 menit)...", false); ksKpiRender_();
+  ksKirim_("hitungUlangKpiOwner", { payload: { bulan: KS_BULAN } }).then(function (d) {
+    KS_KPI_SIBUK = false;
+    KS_KPI_PESAN = { teks: "KPI " + d.bulan + " dihitung per " + d.dihitungPer + ": OK " + d.ringkas.ok + ", BELUM " + d.ringkas.belum + ", INFO " + d.ringkas.info + ".", galat: false };
+    KS_KPI = null; ksKpiMuat();
+  }).catch(function (e) { KS_KPI_SIBUK = false; ksKpiPesan_(String(e && e.message || e), true); ksKpiRender_(); });
+}
+function ksKpiBuka(kpi) { KS_KPI_BUKA = KS_KPI_BUKA === kpi ? "" : kpi; ksKpiRender_(); }
+function ksKpiNilai_(k) {
+  if (k.nilai === null || k.nilai === undefined || k.nilai === "") return "-";
+  const n = Number(k.nilai);
+  if (k.satuan === "Rp") return "Rp " + ksRp(n);   // ksRp kas tanpa awalan; di ubin satuannya harus terbaca
+  if (k.satuan === "%") return n.toLocaleString("id-ID") + "%";
+  return n.toLocaleString("id-ID") + " " + k.satuan;
+}
+function ksKpiTarget_(k) {
+  if (k.target === "" || k.target === null || k.target === undefined) return "tanpa target (INFO)";
+  const t = Number(k.target), teks = k.satuan === "Rp" ? "Rp " + ksRp(t) : t.toLocaleString("id-ID") + (k.satuan === "%" ? "%" : " " + k.satuan);
+  return "target " + (k.arah === "turun" ? "≤ " : "≥ ") + teks;
+}
+function ksKpiTabel_(id, kolom, baris) {
+  const E = ksEsc_;
+  return '<div class="ks-gulir"><table class="ks-tabel ks-kpi-tabel" id="' + id + '"><thead><tr>' + kolom.map(function (c) { return '<th>' + E(c[0]) + '</th>'; }).join("") + '</tr></thead><tbody>' +
+    (baris.length ? baris.map(function (b) { return '<tr>' + kolom.map(function (c) { const v = typeof c[1] === "function" ? c[1](b) : b[c[1]]; return '<td' + (c[2] ? ' class="ks-td-rp"' : '') + '>' + E(v === null || v === undefined ? "-" : v) + '</td>'; }).join("") + '</tr>'; }).join("") : '<tr><td colspan="' + kolom.length + '" class="ks-info">tidak ada</td></tr>') + '</tbody></table></div>';
+}
+function ksKpiRinci_(k) {
+  const r = k.rinci || {}, E = ksEsc_, rp = function (v) { return ksRp(Number(v) || 0); };
+  switch (k.kpi) {
+    case "ontime": return '<p class="ks-info">' + E(r.poSelesai) + ' PO Selesai kirim bulan ini: ' + E(r.tepat) + ' tepat, ' + E(r.telat) + ' telat.</p>' + ksKpiTabel_("ks-kpi-rinci-ontime", [["PO", "po"], ["Klien", "klien"], ["Deadline", "deadline"], ["Kirim terakhir", "kirim"], ["Telat (hari)", "telatHari", true]], r.daftarTelat || []);
+    case "leadTotal": return '<p class="ks-info">' + E(r.n) + ' PO. Terlama:</p>' + ksKpiTabel_("ks-kpi-rinci-lead", [["PO", "po"], ["Hari", "hari", true]], (r.terlama || []).concat(r.tercepat || []));
+    case "leadTahap": return ksKpiTabel_("ks-kpi-rinci-tahap", [["Divisi", "divisi"], ["PO selesai", "n", true], ["Median hari", "median", true], ["Terlama", function (d) { return (d.terlama || []).map(function (x) { return x.po + " " + x.hari + " hr"; }).join(", "); }]], r.divisi || []) + (r.catatan ? '<p class="ks-info">' + E(r.catatan) + '</p>' : '');
+    case "wipMacet": return '<p class="ks-info">' + E(r.poAktif) + ' PO aktif; macet = tanpa arsip harian/pengiriman > ' + E(r.ambangHari) + ' hari.</p>' + ksKpiTabel_("ks-kpi-rinci-macet", [["PO", "po"], ["Klien", "klien"], ["Status", "status"], ["Aktivitas terakhir", "terakhir"], ["Diam (hari)", "diamHari", true], ["Deadline", "deadline"]], r.daftar || []);
+    case "efisiensi": return '<div class="rjd-beli-ringkas"><div>Proses-pcs<b>' + E((Number(r.prosesPcs) || 0).toLocaleString("id-ID")) + '</b></div><div>Hari kerja<b>' + E(r.hariKerja) + '</b></div><div>Hari ada arsip<b>' + E(r.hariAktif) + '</b></div><div>Operator aktif<b>' + E(r.operatorAktif) + '</b></div><div>Pcs/operator<b>' + E(r.pcsPerOperator === null ? "-" : r.pcsPerOperator) + '</b></div><div>Bulan lalu<b>' + E(r.bulanLalu === null ? "-" : r.bulanLalu + " pcs/hari") + '</b></div><div>Standar kalibrasi<b>' + E(r.standarKalibrasi === null ? "-" : r.standarKalibrasi + " pcs/hari") + '</b></div></div>';
+    case "margin": return '<p class="ks-info">' + E(r.poLengkap) + ' PO Lengkap (pendapatan ' + rp(r.pendapatan) + ', margin ' + rp(r.marginRp) + ')' + (r.belumLengkap ? '; ' + E(r.belumLengkap) + ' PO kirim bulan ini belum lengkap biayanya' : '') + '.</p>' +
+      ksKpiTabel_("ks-kpi-rinci-margin", [["Klien", "klien"], ["PO", "po", true], ["Pendapatan", function (x) { return rp(x.pendapatan); }, true], ["Margin", function (x) { return rp(x.margin); }, true], ["%", function (x) { return x.persen === null ? "-" : x.persen + "%"; }, true]], r.perKlien || []) +
+      ((r.negatif || []).length ? '<p class="ks-info ks-biaya-rugi">Margin negatif: ' + E(r.negatif.map(function (x) { return x.po + " " + rp(x.margin); }).join("; ")) + '</p>' : '');
+    case "piutangTelat": return '<p class="ks-info">Piutang total ' + rp(r.piutangTotal) + ' (' + E(r.invoiceBersisa) + ' invoice bersisa); telat = lebih tua dari ' + E(r.hariMaks) + ' hari.</p>' + ksKpiTabel_("ks-kpi-rinci-piutang", [["Klien", "klien"], ["Invoice", "invoice", true], ["Terlama (hari)", "terlama", true], ["Sisa", function (x) { return rp(x.sisa); }, true]], r.perKlien || []);
+    case "utangTelat": return '<p class="ks-info">Utang terbuka ' + rp(r.utangTerbuka) + ' (' + E(r.tagihanTerbuka) + ' tagihan).</p>' + ksKpiTabel_("ks-kpi-rinci-utang", [["Tagihan", "idTS"], ["Supplier", "supplier"], ["Jatuh tempo", "jatuhTempo"], ["Telat (hari)", "telatHari", true], ["Sisa", function (x) { return rp(x.sisa); }, true]], r.daftar || []);
+    case "kas": return ksKpiTabel_("ks-kpi-rinci-kas", [["Akun", "kode"], ["Nama", "nama"], ["Jenis", "jenis"], ["Saldo", function (x) { return rp(x.saldo); }, true]], r.perAkun || []) + '<p class="ks-info">Segmen hidup sejak ' + E(r.mulaiKas) + '.</p>';
+    case "stokKain": return '<p class="ks-info">' + E(r.item) + ' item milik RJD. Terbesar:</p>' + ksKpiTabel_("ks-kpi-rinci-stok", [["Kode", "kode"], ["Item", "nama"], ["Qty", function (x) { return (Number(x.qty) || 0).toLocaleString("id-ID") + " " + (x.satuan || ""); }, true], ["Nilai", function (x) { return rp(x.nilai); }, true]], r.terbesar || []);
+    case "omset": return '<p class="ks-info">' + E(r.invoice) + ' invoice.</p>' + ksKpiTabel_("ks-kpi-rinci-omset", [["Klien", "klien"], ["Total", function (x) { return rp(x.total); }, true]], r.perKlien || []);
+    default: return '<pre class="ks-info">' + E(JSON.stringify(r)) + '</pre>';
+  }
+}
+function ksKpiRender_() {
+  const el = document.getElementById("ks-kpi"); if (!el) return;
+  const E = ksEsc_;
+  const kepala = '<div class="ks-kartu-judul">KPI owner ' + E(ksNamaBulan(KS_BULAN)) + '</div>' +
+    '<div class="ks-aksi ks-kpi-aksi"><button id="ks-kpi-hitung" class="ks-btn" type="button" onclick="ksKpiHitung()"' + (KS_KPI_SIBUK || KS_KPI_STATUS === "memuat" ? ' disabled' : '') + '>' + (KS_KPI_SIBUK ? 'Menghitung...' : 'Hitung ulang') + '</button>' +
+    '<button class="ks-btn-kecil" type="button" onclick="ksKpiMuat()"' + (KS_KPI_SIBUK ? ' disabled' : '') + '>Muat ulang</button>' +
+    '<span id="ks-kpi-pesan" class="rjd-beli-pesan' + (KS_KPI_PESAN ? (KS_KPI_PESAN.galat ? ' rjd-beli-galat' : ' rjd-beli-ok') : '') + '">' + (KS_KPI_PESAN ? E(KS_KPI_PESAN.teks) : '') + '</span></div>';
+  if (KS_KPI_STATUS) {
+    const memuat = KS_KPI_STATUS === "memuat";
+    el.innerHTML = '<div class="ks-kartu">' + kepala + '<p class="ks-info' + (memuat ? '' : ' rjd-beli-galat') + '" id="ks-kpi-status">' + E(memuat ? "Memuat KPI..." : KS_KPI_STATUS) + '</p>' + (memuat ? '' : '<button class="ks-btn-kecil" type="button" onclick="ksKpiMuat()">Coba lagi</button>') + '</div>';
+    return;
+  }
+  if (!KS_KPI) { el.innerHTML = '<div class="ks-kartu">' + kepala + '</div>'; return; }
+  const d = KS_KPI;
+  if (!d.adaCache) {
+    el.innerHTML = '<div class="ks-kartu">' + kepala + '<p class="ks-info" id="ks-kpi-kosong">Belum pernah dihitung untuk ' + E(ksNamaBulan(d.bulan)) + '. Tekan <b>Hitung ulang</b>' + ((d.bulanTersedia || []).length ? ' -- bulan yang sudah ada: ' + E(d.bulanTersedia.join(", ")) : '') + '.</p></div>';
+    return;
+  }
+  const r = d.ringkas || {};
+  const ubin = (d.kpi || []).map(function (k) {
+    const st = KS_KPI_STATUS_NAMA[k.status] || "INFO", buka = KS_KPI_BUKA === k.kpi;
+    return '<button type="button" class="ks-kpi-ubin ks-kpi-' + st.toLowerCase() + (buka ? ' ks-kpi-terbuka' : '') + '" data-kpi="' + E(k.kpi) + '" onclick="ksKpiBuka(\'' + E(k.kpi) + '\')" aria-expanded="' + (buka ? 'true' : 'false') + '">' +
+      '<span class="ks-kpi-nama">' + E(k.nama) + '</span><span class="ks-kpi-nilai">' + E(ksKpiNilai_(k)) + '</span><span class="ks-kpi-target">' + E(ksKpiTarget_(k)) + '</span><span class="ks-kpi-badge">' + E(st) + '</span></button>';
+  }).join("");
+  const terbuka = (d.kpi || []).filter(function (k) { return k.kpi === KS_KPI_BUKA; })[0];
+  el.innerHTML = '<div class="ks-kartu">' + kepala +
+    '<div class="rjd-beli-ringkas" id="ks-kpi-ringkas"><div class="ks-kpi-ok">OK<b>' + E(r.ok || 0) + '</b></div><div class="' + ((r.belum || 0) ? 'rjd-beli-awas' : '') + '">BELUM<b>' + E(r.belum || 0) + '</b></div><div>INFO<b>' + E(r.info || 0) + '</b></div><div>Dihitung per<b>' + E(d.dihitungPer || "-") + '</b></div></div>' +
+    '<div class="ks-kpi-grid" id="ks-kpi-grid">' + ubin + '</div>' +
+    (terbuka ? '<div class="ks-kpi-rinci" id="ks-kpi-rinci"><div class="ks-kartu-judul">' + E(terbuka.nama) + ' <small>' + E(terbuka.keterangan) + '</small></div>' + ksKpiRinci_(terbuka) + '</div>' : '') +
+    '<p class="ks-info ks-kpi-kaki">Angka keadaan (PO macet, piutang, utang, kas, stok) berlaku per tanggal hitung, bukan akhir bulan. Target diubah di sheet SD Target KPI (kosong = INFO).' + (d.diperbarui ? ' Cache diperbarui ' + E(d.diperbarui) + '.' : '') + '</p></div>';
 }
