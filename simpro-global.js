@@ -3602,22 +3602,34 @@ function omTeksJanji_(data) {
 
 function omApprove(idOrderRequest){
   if(!confirm("Setujui order ini? Akan otomatis dibuat Purchase Order baru.")) return;
+  omApproveKirim_(idOrderRequest, null);
+}
+/* ROADMAP-ERP Tahap 8B (v388, gs >= @424): batas kredit. Server menolak dengan awalan "KREDIT DITOLAK:" (piutang melebihi
+   batas / invoice lewat hari maks, invoice-nya disebut). Layar menawarkan jalur ABAIKAN -- confirm + alasan wajib -- lalu
+   mengirim ulang dengan abaikanKredit; server yang memutuskan siapa boleh (owner). Pengabaian yang berhasil disebut di alert. */
+function omApproveKirim_(idOrderRequest, opsi){
+  var body = { idToken: OM_KONF.token, action: "approveOrderRequest", idOrderRequest: idOrderRequest };
+  if (opsi && opsi.abaikanKredit) { body.abaikanKredit = true; body.alasanKredit = opsi.alasanKredit; }
   fetch(OM_KONF.api, {
     method: "POST",
-    body: JSON.stringify({ idToken: OM_KONF.token, action: "approveOrderRequest", idOrderRequest: idOrderRequest })
+    body: JSON.stringify(body)
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
     if(data.success){
-      // ROADMAP-ERP Tahap 7B (v387, gs >= @423): jawaban approve membawa `janji` (estimasi produksi + ketersediaan bahan).
-      // Server LAMA / janji gagal dihitung -> alert lama apa adanya; janjiGalat disebut supaya "tidak ada janji" bisa dibedakan dari "sanggup".
-      alert("Order disetujui. PO baru: " + data.idPurchaseOrder + omTeksJanji_(data));
+      alert("Order disetujui. PO baru: " + data.idPurchaseOrder + (data.kreditDiabaikan ? "\n\nBATAS KREDIT DIABAIKAN: " + data.kreditDiabaikan : "") + omTeksJanji_(data));
       omTutupModalProofing(); // aksi selesai -> modal ditutup biar nggak nampilin data basi
       omRender_();
+    } else if (/^KREDIT DITOLAK:/.test(String(data.error || "")) && !(opsi && opsi.abaikanKredit)) {
+      if (!confirm(data.error + "\n\nLanjutkan dengan MENGABAIKAN batas kredit? (hanya owner; alasan wajib dan dicatat di pengajuan)")) return;
+      var alasan = prompt("Alasan mengabaikan batas kredit:") || "";
+      if (!alasan.trim()) { alert("Alasan wajib diisi -- order TIDAK disetujui."); return; }
+      omApproveKirim_(idOrderRequest, { abaikanKredit: true, alasanKredit: alasan.trim() });
     } else {
       alert(data.error || "Gagal approve order.");
     }
-  });
+  })
+  .catch(function(e){ alert("Setujui order tidak sampai ke server -- sambungan terputus di tengah jalan. Muat ulang halaman Order Masuk sebelum mencoba lagi: pengajuan yang sudah jadi PO akan terlihat di sana. (" + String(e && e.message || e) + ")"); });
 }
 
 function omReject(idOrderRequest){

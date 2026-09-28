@@ -91,6 +91,7 @@ function khTampilkanForm_(){
   if (b) b.classList.remove("hidden");   // v222: sekaligus membuka hamburger (gate CSS)
   khShow("kh-isi");
   khBangunForm_();
+  pjPasang_();   // v388: kartu Penjualan di bawah kisi (Tahap 8B)
 }
 
 
@@ -446,7 +447,9 @@ function khHitung(){
   .then(function(d){
     if (d.error) { khFormError_(d.error); return; }
     KH_PAYLOAD_TERAKHIR = p;
+    KH_HASIL_TERAKHIR = d.hasil; KH_ID_QUOTE_TERAKHIR = "";   // v388: hasil untuk penawaran; idQuote baru sesudah Simpan
     khRender_(d.hasil);
+    if (document.getElementById("pj-wadah") && PJ_TAB === "penawaran") pjRender_();
   })
   .catch(function(e){
     khFormError_("Gagal menghubungi server: " + String(e && e.message ? e.message : e));
@@ -658,10 +661,243 @@ function khSimpan(){
   .then(function(d){
     if (d.error) { khFormError_(d.error); return; }
     var ok = document.getElementById("kh-simpan-ok");
+    KH_ID_QUOTE_TERAKHIR = d.idQuote || "";   // v388: penawaran berikutnya MENGANGKAT baris ini (kolom diisi di tempat)
     ok.textContent = "Tersimpan ke SD Quote: " + (d.idQuote || "(tanpa ID)") +
-      ". Isi kolom Status setelah klien menjawab.";
+      ". Jadikan penawaran bernomor di kartu Penjualan di bawah.";
     ok.classList.add("tampil");
   })
   .catch(function(e){ khFormError_("Gagal menyimpan: " + String(e && e.message ? e.message : e)); })
   .finally(function(){ btn.disabled = false; btn.textContent = "Simpan sebagai Penawaran"; });
+}
+
+
+/* ============================================================================
+ * ROADMAP-ERP Tahap 8 sub-rilis B (v388, butuh gs >= @424) -- PENJUALAN di halaman kalkulator: kartu di bawah kisi
+ * (dibuat JS, template tidak disentuh) dengan tiga tab. PENAWARAN: buat dari pekerjaan yang sedang dihitung (brand/
+ * artikel/style/jenis dari form; harga tawar diusulkan dari harga klien berlaku, lalu harga tawar hasil terakhir --
+ * usulan, bukan paksaan) + warna & qty per size; daftar penawaran dengan aksi Terkirim / Disetujui (alasan wajib bila
+ * di bawah minimum, server yang memutuskan siapa boleh) / Batal / Perpanjang / Jadikan order. HARGA KLIEN: master harga
+ * khusus ber-Berlaku Sejak. KREDIT KLIEN: piutang vs batas & hari, invoice yang telat. Semua aksi tulis: satu kunci
+ * isian (rjdKunciIsian_), tombol dikunci selama menunggu, jawaban yang disusul dibuang, jalur gagal berbicara.
+ * ========================================================================== */
+let PJ_DATA = null, PJ_URUT = 0, PJ_STATUS = "", PJ_TAB = "penawaran", PJ_SIBUK = false, PJ_PESAN = null, PJ_HARGA = null, PJ_KREDIT = null, PJ_KLIEN_FILTER = "";
+let KH_HASIL_TERAKHIR = null, KH_ID_QUOTE_TERAKHIR = "";
+const PJ_SIZE = ["XS", "S", "M", "L", "XL", "2XL", "3XL"];
+
+function pjE_(s) { return rjdEscapeHtml_(s === null || s === undefined ? "" : String(s)); }
+function pjRp_(n) { return "Rp " + Math.round(Number(n) || 0).toLocaleString("id-ID"); }
+function pjKirim_(action, payload) {
+  return fetch(KH_API_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ idToken: KH_ID_TOKEN, action: action, payload: payload || {} }) })
+    .then(function (r) { return r.text(); })
+    .then(function (teks) {
+      let d; try { d = JSON.parse(teks); } catch (e) { throw new Error("Jawaban server tidak terbaca: " + String(teks || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 60)); }
+      if (!d || !d.success) throw new Error((d && d.error) || "Permintaan ditolak server.");
+      return d;
+    });
+}
+function pjPesanGagal_(e, apa) {
+  const t = String(e && e.message || e);
+  return /Failed to fetch|NetworkError|jaringan/i.test(t) ? apa + " tidak sampai ke server -- sambungan terputus di tengah jalan. Coba lagi." : t;
+}
+/** Dipanggil sesudah login (khTampilkanForm_): memasang kartu di bawah kisi kalkulator. Idempoten. */
+function pjPasang_() {
+  if (document.getElementById("pj-wadah")) return;
+  const grid = document.querySelector(".kh-grid"); if (!grid || !grid.parentNode) return;
+  const el = document.createElement("div"); el.id = "pj-wadah"; el.className = "kh-card pj-wadah";
+  grid.parentNode.insertBefore(el, grid.nextSibling);
+  pjRender_(); pjMuat_();   // daftar klien untuk form penawaran datang dari getPenawaran -- tanpa ini select klien kosong (ditemukan jalan133 A1)
+}
+function pjTab(tab) { PJ_TAB = tab; pjRender_(); if (tab === "penawaran" && !PJ_DATA) pjMuat_(); if (tab === "harga" && !PJ_HARGA) pjMuatHarga_(); }
+function pjPesan_(teks, galat) {
+  PJ_PESAN = teks ? { teks: teks, galat: !!galat } : null;
+  const el = document.getElementById("pj-pesan"); if (el) { el.textContent = teks || ""; el.className = "pj-pesan" + (galat ? " pj-galat" : (teks ? " pj-ok" : "")); }
+}
+function pjMuat_() {
+  const urut = ++PJ_URUT; PJ_STATUS = "memuat"; pjRender_();
+  pjKirim_("getPenawaran", PJ_KLIEN_FILTER ? { idKlien: PJ_KLIEN_FILTER } : {})
+    .then(function (d) { if (urut !== PJ_URUT) return; PJ_DATA = d; PJ_STATUS = ""; pjRender_(); })
+    .catch(function (e) { if (urut !== PJ_URUT) return; PJ_STATUS = pjPesanGagal_(e, "Daftar penawaran"); pjRender_(); });
+}
+function pjMuatHarga_() {
+  const urut = ++PJ_URUT; PJ_STATUS = "memuat"; pjRender_();
+  pjKirim_("getHargaKlien", {}).then(function (d) { if (urut !== PJ_URUT) return; PJ_HARGA = d; PJ_STATUS = ""; pjRender_(); })
+    .catch(function (e) { if (urut !== PJ_URUT) return; PJ_STATUS = pjPesanGagal_(e, "Harga klien"); pjRender_(); });
+}
+function pjFilterKlien(id) { PJ_KLIEN_FILTER = String(id || ""); PJ_DATA = null; pjMuat_(); }
+/** Satu jalur untuk semua aksi tulis: kunci sibuk, pesan, muat ulang. `sesudah(d)` -> teks pesan. */
+function pjAksi_(action, payload, sesudah, muatUlang) {
+  if (PJ_SIBUK) return;
+  PJ_SIBUK = true; pjPesan_("Mengirim...", false); pjRender_();
+  pjKirim_(action, payload).then(function (d) {
+    PJ_SIBUK = false; PJ_PESAN = { teks: sesudah(d), galat: false };
+    if (muatUlang === "harga") { PJ_HARGA = null; pjMuatHarga_(); } else { PJ_DATA = null; pjMuat_(); }
+  }).catch(function (e) { PJ_SIBUK = false; pjPesan_(pjPesanGagal_(e, "Permintaan"), true); pjRender_(); });
+}
+function pjV_(id) { const el = document.getElementById(id); return el ? String(el.value || "").trim() : ""; }
+function pjAngka_(v) { return khParseRp_(v); }
+/** Isian form penawaran -> payload buatPenawaran (identitas pekerjaan dari form kalkulator). */
+function pjKumpulPenawaran_() {
+  const warna = [];
+  document.querySelectorAll("#pj-warna tr.pj-warna-baris").forEach(function (tr) {
+    const nama = String(tr.querySelector(".pj-warna-nama").value || "").trim(), sizeQty = {};
+    tr.querySelectorAll("input[data-size]").forEach(function (i) { const q = Number(String(i.value || "").replace(/\./g, "").replace(",", ".")); if (q > 0) sizeQty[i.dataset.size] = q; });
+    if (nama || Object.keys(sizeQty).length) warna.push({ warna: nama, sizeQty: sizeQty });
+  });
+  return { idKlien: pjV_("pj-klien"), brand: khNilai_("kh-brand"), artikel: khNilai_("kh-artikel"), style: khNilai_("kh-style"), jenisOrder: khNilai_("kh-jenis") || "CMT",
+    hargaTawar: pjAngka_(pjV_("pj-harga")), warna: warna, berlakuSampai: pjV_("pj-berlaku"), targetKirim: pjV_("pj-target"), catatan: pjV_("pj-catatan"),
+    idQuote: KH_ID_QUOTE_TERAKHIR || "", lantaiMinKalkulator: KH_HASIL_TERAKHIR && KH_HASIL_TERAKHIR.harga ? Math.round(KH_HASIL_TERAKHIR.harga.lantaiMin) : 0 };
+}
+function pjBuatPenawaran() {
+  const p = pjKumpulPenawaran_();
+  if (!p.idKlien) { pjPesan_("Pilih klien dulu.", true); return; }
+  if (!p.artikel) { pjPesan_("Artikel kosong -- isi form kalkulator (Brand/Artikel/Style) di atas.", true); return; }
+  if (!(p.hargaTawar > 0)) { pjPesan_("Harga tawar wajib angka positif.", true); return; }
+  const qty = p.warna.reduce(function (t, w) { return t + Object.keys(w.sizeQty).reduce(function (u, s) { return u + w.sizeQty[s]; }, 0); }, 0);
+  if (!qty) { pjPesan_("Qty per size wajib diisi minimal satu warna.", true); return; }
+  p.idPermintaan = rjdKunciIsian_("pj-penawaran", p);
+  pjAksi_("buatPenawaran", p, function (d) {
+    rjdKunciLepas_("pj-penawaran");
+    if (d.sudahTercatat) return "Penawaran " + d.noPenawaran + " SUDAH tercatat sebelumnya (kiriman ulang).";
+    return "Penawaran " + d.noPenawaran + " dibuat (Draf, " + d.qty + " pcs, tawar " + pjRp_(d.hargaTawar) + ", berlaku sampai " + d.berlakuSampai + "). " +
+      (d.hargaMinimum ? "Harga minimum " + pjRp_(d.hargaMinimum) + " (" + d.sumberMinimum + ")" + (d.perluApprover ? " -- DI BAWAH MINIMUM, butuh persetujuan owner sebelum bisa Disetujui." : " -- di atas minimum.") : "Tanpa pembanding harga minimum (belum ada PO aktual lengkap maupun hasil kalkulator).");
+  });
+}
+function pjTambahWarna() { const tb = document.querySelector("#pj-warna tbody"); if (tb) tb.insertAdjacentHTML("beforeend", pjBarisWarna_()); }
+function pjBarisWarna_(nama, sizeQty) {
+  return '<tr class="pj-warna-baris"><td><input class="pj-warna-nama" placeholder="Warna" value="' + pjE_(nama || "") + '"></td>' +
+    PJ_SIZE.map(function (s) { return '<td><input data-size="' + s + '" inputmode="numeric" placeholder="' + s + '" value="' + pjE_(sizeQty && sizeQty[s] ? sizeQty[s] : "") + '"></td>'; }).join("") +
+    '<td><button type="button" class="pj-kecil" aria-label="Hapus warna" onclick="this.closest(\'tr\').remove()">&times;</button></td></tr>';
+}
+function pjStatusUbah(no, status) {
+  const b = (PJ_DATA && PJ_DATA.baris || []).filter(function (x) { return x.noPenawaran === no; })[0] || {};
+  let alasan = "";
+  if (status === "Batal") { alasan = window.prompt("Alasan membatalkan " + no + ":") || ""; if (!alasan.trim()) { pjPesan_("Alasan wajib diisi.", true); return; } }
+  if (status === "Disetujui" && b.perluApprover && !b.disetujuiOleh) {
+    alasan = window.prompt("Harga tawar " + pjRp_(b.hargaTawar) + " di bawah minimum " + pjRp_(b.hargaMinimum) + " (" + (b.sumberMinimum || "") + "). Hanya owner yang bisa menyetujui -- alasan:") || "";
+    if (!alasan.trim()) { pjPesan_("Alasan wajib diisi untuk harga di bawah minimum.", true); return; }
+  }
+  pjAksi_("ubahStatusPenawaran", { noPenawaran: no, status: status, alasan: alasan.trim() }, function (d) { return "Penawaran " + d.noPenawaran + " -> " + d.status + (d.disetujuiOleh ? " (disetujui " + d.disetujuiOleh + ")" : "") + "."; });
+}
+function pjPerpanjang(no) {
+  const t = window.prompt("Berlaku sampai (yyyy-mm-dd) untuk " + no + ":") || "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t.trim())) { pjPesan_("Tanggal harus yyyy-mm-dd.", true); return; }
+  pjAksi_("ubahStatusPenawaran", { noPenawaran: no, status: "Terkirim", berlakuSampai: t.trim() }, function (d) { return "Penawaran " + d.noPenawaran + " diperpanjang, status " + d.status + "."; });
+}
+function pjKonversi(no) {
+  const b = (PJ_DATA && PJ_DATA.baris || []).filter(function (x) { return x.noPenawaran === no; })[0] || {};
+  let target = b.targetKirim || "";
+  if (!target) { target = window.prompt("Target tanggal kirim (yyyy-mm-dd) untuk order dari " + no + ":") || ""; if (!/^\d{4}-\d{2}-\d{2}$/.test(target.trim())) { pjPesan_("Target tanggal kirim wajib yyyy-mm-dd.", true); return; } }
+  if (!window.confirm("Jadikan " + no + " order request (Pending) untuk " + (b.namaKlien || b.idKlien) + " dengan harga " + pjRp_(b.hargaTawar) + "/pcs? Setujui Order tetap lewat halaman Order Masuk.")) return;
+  pjAksi_("konversiPenawaran", { noPenawaran: no, targetTanggalKirim: target.trim() }, function (d) {
+    return d.sudahTercatat ? "Penawaran " + d.noPenawaran + " SUDAH jadi order " + d.idOrderRequest + " sebelumnya." : "Order request " + d.idOrderRequest + " dibuat dari " + d.noPenawaran + " (" + d.baris + " warna, harga " + pjRp_(d.harga) + "). Setujui di halaman Order Masuk.";
+  });
+}
+function pjSimpanHarga() {
+  const p = { idHarga: pjV_("pj-hk-id"), idKlien: pjV_("pj-hk-klien"), brand: pjV_("pj-hk-brand"), artikel: pjV_("pj-hk-artikel"), style: pjV_("pj-hk-style"), jenisOrder: pjV_("pj-hk-jenis"),
+    harga: pjAngka_(pjV_("pj-hk-harga")), berlakuSejak: pjV_("pj-hk-sejak"), berlakuSampai: pjV_("pj-hk-sampai"), catatan: pjV_("pj-hk-catatan") };
+  if (!p.idKlien || !p.artikel || !(p.harga > 0)) { pjPesan_("Klien, artikel, dan harga (angka positif) wajib diisi.", true); return; }
+  pjAksi_("simpanHargaKlien", p, function (d) { return "Harga klien " + d.idHarga + (d.diubah ? " diubah." : " disimpan."); }, "harga");
+}
+function pjNonaktifHarga(id) {
+  const r = (PJ_HARGA && PJ_HARGA.baris || []).filter(function (x) { return x["ID Harga"] === id; })[0]; if (!r) return;
+  if (!window.confirm("Nonaktifkan harga " + id + " (" + r.Artikel + " " + pjRp_(r.Harga) + ")?")) return;
+  pjAksi_("simpanHargaKlien", { idHarga: id, idKlien: r["ID Klien"], brand: r.Brand, artikel: r.Artikel, style: r.Style, jenisOrder: r["Jenis Order"], harga: r.Harga, berlakuSejak: r["Berlaku Sejak"], berlakuSampai: r["Berlaku Sampai"], aktif: false, catatan: r.Catatan },
+    function (d) { return "Harga " + d.idHarga + " dinonaktifkan."; }, "harga");
+}
+function pjIsiFormHarga(id) {
+  const r = (PJ_HARGA && PJ_HARGA.baris || []).filter(function (x) { return x["ID Harga"] === id; })[0]; if (!r) return;
+  [["pj-hk-id", r["ID Harga"]], ["pj-hk-klien", r["ID Klien"]], ["pj-hk-brand", r.Brand], ["pj-hk-artikel", r.Artikel], ["pj-hk-style", r.Style], ["pj-hk-jenis", r["Jenis Order"]], ["pj-hk-harga", r.Harga], ["pj-hk-sejak", String(r["Berlaku Sejak"] || "").slice(0, 10)], ["pj-hk-sampai", String(r["Berlaku Sampai"] || "").slice(0, 10)], ["pj-hk-catatan", r.Catatan]]
+    .forEach(function (x) { const el = document.getElementById(x[0]); if (el) el.value = x[1] === null || x[1] === undefined ? "" : x[1]; });
+}
+function pjCekKredit() {
+  const id = pjV_("pj-kr-klien"); if (!id) { pjPesan_("Pilih klien dulu.", true); return; }
+  const urut = ++PJ_URUT; PJ_STATUS = "memuat"; pjRender_();
+  pjKirim_("getKreditKlien", { idKlien: id }).then(function (d) { if (urut !== PJ_URUT) return; PJ_KREDIT = d; PJ_STATUS = ""; pjRender_(); })
+    .catch(function (e) { if (urut !== PJ_URUT) return; PJ_STATUS = pjPesanGagal_(e, "Kredit klien"); pjRender_(); });
+}
+function pjOpsiKlien_(daftar, terpilih) {
+  return '<option value="">-- pilih klien --</option>' + (daftar || []).map(function (k) { return '<option value="' + pjE_(k.id) + '"' + (String(k.id) === String(terpilih) ? ' selected' : '') + '>' + pjE_(k.nama + " (" + k.id + ")") + '</option>'; }).join("");
+}
+function pjRender_() {
+  const W = document.getElementById("pj-wadah"); if (!W) return;
+  const E = pjE_, klien = (PJ_DATA && PJ_DATA.klien) || (PJ_HARGA && PJ_HARGA.klien) || [];
+  const tabs = '<div class="pj-tabs">' + [["penawaran", "Penawaran"], ["harga", "Harga klien"], ["kredit", "Kredit klien"]].map(function (t) {
+    return '<button type="button" class="pj-tab' + (PJ_TAB === t[0] ? ' aktif' : '') + '" data-tab="' + t[0] + '" onclick="pjTab(\'' + t[0] + '\')">' + t[1] + '</button>'; }).join("") + '</div>';
+  const pesan = '<div id="pj-pesan" class="pj-pesan' + (PJ_PESAN ? (PJ_PESAN.galat ? ' pj-galat' : ' pj-ok') : '') + '">' + (PJ_PESAN ? E(PJ_PESAN.teks) : '') + '</div>';
+  let isi = "";
+  const status = PJ_STATUS ? '<p class="kh-sub pj-status' + (PJ_STATUS === "memuat" ? '' : ' pj-galat') + '" id="pj-status">' + E(PJ_STATUS === "memuat" ? "Memuat..." : PJ_STATUS) + '</p>' + (PJ_STATUS === "memuat" ? '' : '<button type="button" class="kh-btn kh-btn-navy pj-btn" onclick="' + (PJ_TAB === "harga" ? "pjMuatHarga_()" : PJ_TAB === "kredit" ? "pjCekKredit()" : "pjMuat_()") + '">Coba lagi</button>') : "";
+  if (PJ_TAB === "penawaran") {
+    const bacaWarna = document.querySelectorAll("#pj-warna tr.pj-warna-baris").length ? Array.from(document.querySelectorAll("#pj-warna tr.pj-warna-baris")).map(function (tr) {
+      const sq = {}; tr.querySelectorAll("input[data-size]").forEach(function (i) { if (i.value) sq[i.dataset.size] = i.value; }); return { warna: tr.querySelector(".pj-warna-nama").value, sizeQty: sq }; }) : [{ warna: "", sizeQty: {} }];
+    const isian = { klien: pjV_("pj-klien"), harga: pjV_("pj-harga"), berlaku: pjV_("pj-berlaku"), target: pjV_("pj-target"), catatan: pjV_("pj-catatan") };
+    const usul = !isian.harga && KH_HASIL_TERAKHIR && KH_HASIL_TERAKHIR.harga ? Math.round(KH_HASIL_TERAKHIR.harga.tawarMin) : "";
+    isi += '<h2>Buat penawaran dari pekerjaan di atas</h2><p class="kh-sub">Brand/Artikel/Style/Jenis diambil dari form kalkulator: <b id="pj-identitas">' + E([khNilai_("kh-brand"), khNilai_("kh-artikel"), khNilai_("kh-style")].filter(Boolean).join(" / ") || "(belum diisi)") + '</b>' +
+      (KH_HASIL_TERAKHIR ? ' -- hasil terakhir tawar ' + E(khRentang_(KH_HASIL_TERAKHIR.harga.tawarMin, KH_HASIL_TERAKHIR.harga.tawarMax)) + ', lantai ' + E(khRentang_(KH_HASIL_TERAKHIR.harga.lantaiMin, KH_HASIL_TERAKHIR.harga.lantaiMax)) : ' -- belum ada hasil hitung (harga minimum akan memakai biaya aktual saja)') + '.</p>' +
+      '<div class="kh-row3"><div class="kh-field"><label>Klien</label><select id="pj-klien">' + pjOpsiKlien_(klien, isian.klien) + '</select></div>' +
+      '<div class="kh-field"><label>Harga tawar / pcs</label><input id="pj-harga" inputmode="decimal" placeholder="' + (usul ? "usulan " + usul.toLocaleString("id-ID") : "") + '" value="' + E(isian.harga || (usul ? String(usul) : "")) + '"></div>' +
+      '<div class="kh-field"><label>Berlaku sampai</label><input id="pj-berlaku" type="date" value="' + E(isian.berlaku) + '"><span class="kh-sub">kosong = 14 hari</span></div></div>' +
+      '<div class="kh-row3"><div class="kh-field"><label>Target kirim</label><input id="pj-target" type="date" value="' + E(isian.target) + '"></div>' +
+      '<div class="kh-field pj-lebar2"><label>Catatan</label><input id="pj-catatan" value="' + E(isian.catatan) + '"></div></div>' +
+      '<div class="pj-tabelwrap"><table class="kh-tabel pj-tabel" id="pj-warna"><thead><tr><th>Warna</th>' + PJ_SIZE.map(function (s) { return '<th>' + s + '</th>'; }).join("") + '<th></th></tr></thead><tbody>' +
+      bacaWarna.map(function (w) { return pjBarisWarna_(w.warna, w.sizeQty); }).join("") + '</tbody></table></div>' +
+      '<div class="pj-aksi"><button type="button" class="kh-btn kh-btn-navy pj-btn" onclick="pjTambahWarna()">+ Warna</button>' +
+      '<button type="button" class="kh-btn pj-btn" id="pj-btn-buat" onclick="pjBuatPenawaran()"' + (PJ_SIBUK ? ' disabled' : '') + '>' + (PJ_SIBUK ? 'Mengirim...' : 'Buat penawaran (Draf)') + '</button></div>' + pesan;
+    isi += '<h2 class="pj-judul2">Daftar penawaran</h2>';
+    if (PJ_STATUS) isi += status;
+    else if (PJ_DATA) {
+      const r = PJ_DATA.ringkas || {};
+      isi += '<div class="pj-ringkas" id="pj-ringkas">' + Object.keys(r).map(function (k) { return '<span class="pj-badge pj-st-' + k.toLowerCase().replace(/\s+/g, "-") + '">' + E(k) + ' <b>' + r[k] + '</b></span>'; }).join("") +
+        '<label class="pj-filter">Saring klien <select id="pj-filter-klien" onchange="pjFilterKlien(this.value)"><option value="">semua</option>' + (PJ_DATA.klien || []).map(function (k) { return '<option value="' + E(k.id) + '"' + (k.id === PJ_KLIEN_FILTER ? ' selected' : '') + '>' + E(k.nama) + '</option>'; }).join("") + '</select></label>' +
+        '<button type="button" class="pj-kecil" onclick="pjMuat_()">Muat ulang</button></div>';
+      const baris = PJ_DATA.baris || [];
+      isi += baris.length ? '<div class="pj-tabelwrap"><table class="kh-tabel pj-tabel pj-daftar" id="pj-daftar"><thead><tr><th>No</th><th>Klien</th><th>Pekerjaan</th><th>Qty</th><th>Tawar</th><th>Minimum</th><th>Berlaku</th><th>Status</th><th>Aksi</th></tr></thead><tbody>' +
+        baris.map(function (b) {
+          const st = b.status, aksi = [];
+          if (st === "Draf") aksi.push(['Terkirim', "pjStatusUbah('" + E(b.noPenawaran) + "','Terkirim')"]);
+          if (st === "Draf" || st === "Terkirim") aksi.push(['Disetujui', "pjStatusUbah('" + E(b.noPenawaran) + "','Disetujui')"]);
+          if (st === "Disetujui") aksi.push(['Jadikan order', "pjKonversi('" + E(b.noPenawaran) + "')"]);
+          if (st === "Kedaluwarsa") aksi.push(['Perpanjang', "pjPerpanjang('" + E(b.noPenawaran) + "')"]);
+          if (st !== "Jadi Order" && st !== "Batal") aksi.push(['Batal', "pjStatusUbah('" + E(b.noPenawaran) + "','Batal')"]);
+          return '<tr data-no="' + E(b.noPenawaran) + '" class="pj-st-' + E(st.toLowerCase().replace(/\s+/g, "-")) + '"><td class="pj-mono">' + E(b.noPenawaran) + '<div class="kh-sub">' + E(String(b.tanggal || "").slice(0, 10)) + '</div></td><td>' + E(b.namaKlien || b.idKlien) + '</td>' +
+            '<td>' + E([b.brand, b.artikel, b.style].filter(Boolean).join(" / ")) + '<div class="kh-sub">' + E(b.jenisOrder) + ' &middot; ' + E((b.warna || []).map(function (w) { return w.warna; }).join(", ")) + '</div></td><td>' + E(b.qty) + '</td>' +
+            '<td class="pj-angka">' + E(pjRp_(b.hargaTawar)) + '</td><td class="pj-angka' + (b.perluApprover ? ' pj-awas' : '') + '">' + (b.hargaMinimum ? E(pjRp_(b.hargaMinimum)) + (b.perluApprover ? '<div class="kh-sub">di bawah minimum' + (b.disetujuiOleh ? ' -- disetujui ' + E(b.disetujuiOleh) : '') + '</div>' : '') : '<span class="kh-sub">tanpa pembanding</span>') + '</td>' +
+            '<td>' + E(b.berlakuSampai || "-") + '</td><td><span class="pj-badge pj-st-' + E(st.toLowerCase().replace(/\s+/g, "-")) + '">' + E(st) + '</span>' + (b.idOrderRequestHasil ? '<div class="kh-sub pj-mono">' + E(b.idOrderRequestHasil) + '</div>' : '') + '</td>' +
+            '<td class="pj-aksi-sel">' + aksi.map(function (a) { return '<button type="button" class="pj-kecil" data-aksi="' + E(a[0]) + '" onclick="' + a[1] + '"' + (PJ_SIBUK ? ' disabled' : '') + '>' + a[0] + '</button>'; }).join("") + '</td></tr>';
+        }).join("") + '</tbody></table></div>' : '<p class="kh-sub" id="pj-kosong">Belum ada penawaran bernomor' + (PJ_KLIEN_FILTER ? ' untuk klien ini' : '') + '.</p>';
+    }
+  } else if (PJ_TAB === "harga") {
+    const v = function (id) { return pjV_(id); };
+    isi += '<h2>Harga khusus per klien-artikel</h2><p class="kh-sub">Berlaku Sejak menentukan harga mana yang dipakai pada tanggal penawaran; kenaikan harga = baris BARU ber-tanggal, bukan menimpa. Dipakai sebagai USULAN harga tawar.</p>' +
+      '<input type="hidden" id="pj-hk-id" value="' + E(v("pj-hk-id")) + '">' +
+      '<div class="kh-row3"><div class="kh-field"><label>Klien</label><select id="pj-hk-klien">' + pjOpsiKlien_(klien, v("pj-hk-klien")) + '</select></div>' +
+      '<div class="kh-field"><label>Brand</label><input id="pj-hk-brand" value="' + E(v("pj-hk-brand")) + '"></div><div class="kh-field"><label>Artikel</label><input id="pj-hk-artikel" value="' + E(v("pj-hk-artikel")) + '"></div></div>' +
+      '<div class="kh-row3"><div class="kh-field"><label>Style <span class="kh-hint">kosong = semua</span></label><input id="pj-hk-style" value="' + E(v("pj-hk-style")) + '"></div>' +
+      '<div class="kh-field"><label>Jenis order</label><select id="pj-hk-jenis"><option value=""' + (v("pj-hk-jenis") ? '' : ' selected') + '>semua</option><option' + (v("pj-hk-jenis") === "Maklon" ? ' selected' : '') + '>Maklon</option><option' + (v("pj-hk-jenis") === "CMT" ? ' selected' : '') + '>CMT</option></select></div>' +
+      '<div class="kh-field"><label>Harga / pcs</label><input id="pj-hk-harga" inputmode="decimal" value="' + E(v("pj-hk-harga")) + '"></div></div>' +
+      '<div class="kh-row3"><div class="kh-field"><label>Berlaku sejak</label><input id="pj-hk-sejak" type="date" value="' + E(v("pj-hk-sejak")) + '"></div><div class="kh-field"><label>Berlaku sampai</label><input id="pj-hk-sampai" type="date" value="' + E(v("pj-hk-sampai")) + '"></div>' +
+      '<div class="kh-field"><label>Catatan</label><input id="pj-hk-catatan" value="' + E(v("pj-hk-catatan")) + '"></div></div>' +
+      '<div class="pj-aksi"><button type="button" class="kh-btn pj-btn" id="pj-btn-harga" onclick="pjSimpanHarga()"' + (PJ_SIBUK ? ' disabled' : '') + '>' + (PJ_SIBUK ? 'Mengirim...' : 'Simpan harga klien') + '</button>' +
+      '<button type="button" class="pj-kecil" onclick="document.getElementById(\'pj-hk-id\').value=\'\'; pjRender_()">Form baru</button></div>' + pesan;
+    if (PJ_STATUS) isi += status;
+    else if (PJ_HARGA) {
+      const baris = PJ_HARGA.baris || [];
+      isi += baris.length ? '<div class="pj-tabelwrap"><table class="kh-tabel pj-tabel" id="pj-harga-daftar"><thead><tr><th>Klien</th><th>Pekerjaan</th><th>Harga</th><th>Sejak</th><th>Sampai</th><th>Aktif</th><th></th></tr></thead><tbody>' +
+        baris.map(function (r) { return '<tr data-id="' + E(r["ID Harga"]) + '"' + (String(r.Aktif).toLowerCase() === "tidak" ? ' class="pj-nonaktif"' : '') + '><td>' + E(r.namaKlien || r["ID Klien"]) + '</td><td>' + E([r.Brand, r.Artikel, r.Style].filter(Boolean).join(" / ")) + (r["Jenis Order"] ? '<div class="kh-sub">' + E(r["Jenis Order"]) + '</div>' : '') + '</td><td class="pj-angka">' + E(pjRp_(r.Harga)) + '</td><td>' + E(String(r["Berlaku Sejak"] || "").slice(0, 10)) + '</td><td>' + E(String(r["Berlaku Sampai"] || "").slice(0, 10) || "-") + '</td><td>' + E(r.Aktif) + '</td>' +
+          '<td class="pj-aksi-sel"><button type="button" class="pj-kecil" onclick="pjIsiFormHarga(\'' + E(r["ID Harga"]) + '\')">Ubah</button>' + (String(r.Aktif).toLowerCase() === "tidak" ? '' : '<button type="button" class="pj-kecil" data-aksi="nonaktif" onclick="pjNonaktifHarga(\'' + E(r["ID Harga"]) + '\')"' + (PJ_SIBUK ? ' disabled' : '') + '>Nonaktifkan</button>') + '</td></tr>'; }).join("") +
+        '</tbody></table></div>' : '<p class="kh-sub" id="pj-harga-kosong">Belum ada harga khusus.</p>';
+    }
+  } else {
+    isi += '<h2>Kredit klien</h2><p class="kh-sub">Setujui Order ditolak bila piutang melebihi Batas Kredit atau ada invoice bersisa lebih tua dari Kredit Hari Maks (SD Master Klien; kosong = tanpa batas nominal, 60 hari). Owner bisa mengabaikannya dengan alasan.</p>' +
+      '<div class="kh-row3"><div class="kh-field pj-lebar2"><label>Klien</label><select id="pj-kr-klien">' + pjOpsiKlien_(klien, pjV_("pj-kr-klien") || (PJ_KREDIT && PJ_KREDIT.idKlien)) + '</select></div><div class="kh-field"><label>&nbsp;</label><button type="button" class="kh-btn kh-btn-navy pj-btn" onclick="pjCekKredit()">Periksa</button></div></div>' + pesan;
+    if (PJ_STATUS) isi += status;
+    else if (PJ_KREDIT) {
+      const k = PJ_KREDIT;
+      isi += '<div class="pj-ringkas" id="pj-kredit"><span class="pj-badge ' + (k.ditolak ? 'pj-st-batal' : 'pj-st-disetujui') + '" id="pj-kredit-putusan">' + (k.ditolak ? 'APPROVE AKAN DITOLAK' : 'Boleh order') + '</span>' +
+        '<span>Piutang <b>' + E(pjRp_(k.piutang)) + '</b></span><span>Batas <b>' + E(k.batas ? pjRp_(k.batas) : "tanpa batas") + '</b></span><span>Hari maks <b>' + E(k.hariMaks) + '</b></span></div>' +
+        (k.sebab && k.sebab.length ? '<ul class="pj-sebab">' + k.sebab.map(function (s) { return '<li>' + E(s) + '</li>'; }).join("") + '</ul>' : '') +
+        ((k.invoice || []).length ? '<div class="pj-tabelwrap"><table class="kh-tabel pj-tabel" id="pj-kredit-invoice"><thead><tr><th>Invoice</th><th>PO</th><th>Tanggal</th><th>Umur</th><th>Sisa</th></tr></thead><tbody>' +
+          k.invoice.map(function (i) { return '<tr' + (i.hari > k.hariMaks ? ' class="pj-telat"' : '') + '><td class="pj-mono">' + E(i.idInvoice) + '</td><td>' + E(i.idPurchaseOrder) + '</td><td>' + E(i.tanggal) + '</td><td>' + E(i.hari) + ' hari</td><td class="pj-angka">' + E(pjRp_(i.sisa)) + '</td></tr>'; }).join("") + '</tbody></table></div>' : '<p class="kh-sub">Tidak ada invoice bersisa.</p>');
+    }
+  }
+  W.innerHTML = '<div class="kh-eyebrow">Penjualan</div>' + tabs + isi;
 }

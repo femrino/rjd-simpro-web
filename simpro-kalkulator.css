@@ -150,3 +150,45 @@
 .kh-card input::placeholder,
 .kh-card select:invalid { color: #BDB5A7; font-style: italic; opacity: 1; }
 .kh-card input, .kh-card select { color: var(--ink); font-style: normal; }
+
+/* ROADMAP-ERP Tahap 8B (v388): kartu Penjualan di bawah kisi kalkulator (penawaran bernomor, harga klien, kredit klien). */
+.pj-wadah { margin-top: 20px; }
+.pj-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.pj-tab { font-family: 'Inter', system-ui, sans-serif; font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line, #E5E0D6); background: #fff; color: var(--ink, #17212F); cursor: pointer; min-height: 36px; }
+.pj-tab.aktif { background: var(--navy); color: #fff; border-color: var(--navy); }
+.pj-wadah h2 { margin: 6px 0 4px; }
+.pj-judul2 { margin-top: 22px !important; }
+.pj-wadah .kh-field select, .pj-wadah .kh-field input { font-size: 16px; padding: 9px 10px; min-height: 40px; border: 1px solid var(--line, #E5E0D6); border-radius: 9px; background: #fff; color: var(--ink, #17212F); font-family: inherit; width: 100%; max-width: 100%; }
+.pj-lebar2 { grid-column: span 2; }
+.pj-aksi { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 10px 0; }
+.pj-aksi .pj-btn { width: auto; padding: 10px 16px; }
+.pj-status + .pj-btn { width: auto; padding: 10px 16px; margin-bottom: 8px; }
+.pj-pesan { font-size: 13px; color: var(--ink-soft, #6B7280); flex: 1 1 200px; min-height: 18px; }
+.pj-pesan.pj-ok { color: #1f6b3a; }
+.pj-galat { color: #8f2c22 !important; }
+.pj-tabelwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line-soft, #EFEAE0); border-radius: 10px; margin: 8px 0; }
+.pj-tabel { min-width: 640px; }
+.pj-tabel th { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .04em; text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line-soft, #EFEAE0); color: var(--ink-soft, #6B7280); white-space: nowrap; }
+.pj-tabel td { word-break: normal; overflow-wrap: normal; vertical-align: top; }
+.pj-tabel td:last-child { text-align: left; white-space: normal; }
+.pj-tabel input { font-size: 16px; padding: 6px 8px; min-height: 36px; width: 100%; min-width: 56px; border: 1px solid var(--line, #E5E0D6); border-radius: 8px; box-sizing: border-box; }
+.pj-tabel .pj-warna-nama { min-width: 120px; }
+.pj-angka { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pj-mono { font-family: 'IBM Plex Mono', monospace; white-space: nowrap; }
+.pj-awas, .pj-awas .kh-sub { color: #8f2c22; }
+.pj-kecil { font-family: inherit; font-size: 12px; padding: 5px 10px; min-height: 30px; border-radius: 8px; border: 1px solid var(--line, #E5E0D6); background: #fff; color: var(--ink, #17212F); cursor: pointer; margin: 2px 4px 2px 0; }
+.pj-kecil:disabled { opacity: .55; cursor: default; }
+.pj-aksi-sel { white-space: normal; }
+.pj-ringkas { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 8px 0; font-size: 13px; }
+.pj-ringkas b { color: var(--ink, #17212F); }
+.pj-filter { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.pj-filter select { font-size: 16px; min-height: 36px; padding: 4px 8px; border: 1px solid var(--line, #E5E0D6); border-radius: 8px; background: #fff; }
+.pj-badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: #EEF0F3; color: var(--ink, #17212F); white-space: nowrap; }
+.pj-st-disetujui { background: #E4F3E8; color: #1f6b3a; }
+.pj-st-jadi-order { background: #DCE8F7; color: #1F3A5F; }
+.pj-st-terkirim { background: #FDF6E7; color: #6B4E10; }
+.pj-st-kedaluwarsa, .pj-st-batal { background: #FDECEA; color: #8f2c22; }
+tr.pj-st-kedaluwarsa td, tr.pj-st-batal td, tr.pj-nonaktif td { color: var(--ink-soft, #6B7280); }
+tr.pj-telat td { background: #FFF6F4; color: #8f2c22; }
+.pj-sebab { margin: 6px 0 10px; padding-left: 18px; font-size: 13px; color: #8f2c22; }
+@media (max-width: 640px) { .pj-lebar2 { grid-column: auto; } .pj-wadah .kh-row3 { grid-template-columns: 1fr; } }
