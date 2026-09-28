@@ -3585,6 +3585,21 @@ function omVerifikasiKlien(idOrderRequest, idx, disetujui){
     });
 }
 
+/** v387: teks janji lead time untuk alert approve; "" bila server tidak melampirkannya. Dipakai juga harness (jalan132). */
+function omTeksJanji_(data) {
+  const j = data && data.janji;
+  if (!j) return data && data.janjiGalat ? "\n\n(Janji lead time tidak terhitung: " + data.janjiGalat + ")" : "";
+  const b = j.bahan || {}, kurang = b.kurang || [];
+  let t = "\n\nJANJI LEAD TIME" +
+    "\n- Estimasi produksi: " + (j.estimasiProduksi || "-") + (j.akurasi ? " (" + j.akurasi + ")" : "") +
+    "\n- Bahan: " + (b.lengkap ? "lengkap" : kurang.length + " kurang, tiba " + (b.tanggalBahanTiba || "?") + (b.geserHariKerja ? ", geser " + b.geserHariKerja + " hari kerja" : "")) +
+    "\n- Janji selesai: " + (j.janjiSelesai || "-") +
+    "\n- Deadline: " + (j.deadline || "-") + (j.sanggup === null || j.sanggup === undefined ? "" : (j.sanggup ? " -- SANGGUP" : " -- TIDAK SANGGUP"));
+  if (kurang.length) t += "\n- Kurang: " + kurang.slice(0, 5).map(function (k) { return k.nama + " " + k.kekurangan + " " + (k.satuan || ""); }).join("; ") + (kurang.length > 5 ? "; +" + (kurang.length - 5) + " lagi" : "");
+  (j.catatan || []).forEach(function (c) { t += "\n- " + c; });
+  return t;
+}
+
 function omApprove(idOrderRequest){
   if(!confirm("Setujui order ini? Akan otomatis dibuat Purchase Order baru.")) return;
   fetch(OM_KONF.api, {
@@ -3594,7 +3609,9 @@ function omApprove(idOrderRequest){
   .then(function(r){ return r.json(); })
   .then(function(data){
     if(data.success){
-      alert("Order disetujui. PO baru: " + data.idPurchaseOrder);
+      // ROADMAP-ERP Tahap 7B (v387, gs >= @423): jawaban approve membawa `janji` (estimasi produksi + ketersediaan bahan).
+      // Server LAMA / janji gagal dihitung -> alert lama apa adanya; janjiGalat disebut supaya "tidak ada janji" bisa dibedakan dari "sanggup".
+      alert("Order disetujui. PO baru: " + data.idPurchaseOrder + omTeksJanji_(data));
       omTutupModalProofing(); // aksi selesai -> modal ditutup biar nggak nampilin data basi
       omRender_();
     } else {

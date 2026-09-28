@@ -266,11 +266,11 @@ function spPoFormSah_(idPoForm, apa) {
    tiap blok memancarkan datalistnya sendiri dari SATU daftar bawaan. */
 /* v345 (PF-9): peta alias panel ditulis dua kali (spSwitchTab & spRenderSub_) --
    nilai yang sama, jadi salah satu pasti tertinggal saat tab bermode ditambah. */
-const SP_ALIAS_PANEL = { konfpot: "konf", konfset: "konf", qcring: "qc", qcpot: "qc", qcjahit: "qc", mwarna: "master", msize: "master", mkain: "master", pbeli: "beli", terima: "beli", gudang: "beli" };
+const SP_ALIAS_PANEL = { konfpot: "konf", konfset: "konf", qcring: "qc", qcpot: "qc", qcjahit: "qc", mwarna: "master", msize: "master", mkain: "master", pbeli: "beli", terima: "beli", gudang: "beli", mrp: "beli" };
 /** v379: subtab master -> jenis master (rute getMasterERP). Peta ini juga yang dipakai spSwitchTab mengenali tab master. */
 const SP_MASTER_TAB = { mwarna: "warna", msize: "size", mkain: "kain" };
 /** v380 (Tahap 2C): subtab beli -> jenis; keadaannya di sini juga (bukan di blok ujung berkas) karena alasan yang sama. */
-const SP_BELI_TAB = { pbeli: "pb", terima: "gr", gudang: "st" };   // gudang (v381) memakai data & pemuatnya sendiri (spMuatGudang_)
+const SP_BELI_TAB = { pbeli: "pb", terima: "gr", gudang: "st", mrp: "kb" };   // mrp (v387): Tahap 7B, pemuat sendiri (spMuatMRP_)   // gudang (v381) memakai data & pemuatnya sendiri (spMuatGudang_)
 let SP_BELI = null, SP_BELI_URUT = 0, SP_BELI_STATUS = "", SP_BELI_PESAN = {};   // pesan per form BERTAHAN melewati muat ulang
 /** Panel master dibuat sekali, disisipkan sesudah panel terakhir supaya ikut disapu toggle [id^=sp-panel-]. */
 function spPanelMaster_() {
@@ -1524,7 +1524,7 @@ const SP_FASE_PETA = [
   // dibuat JS (spPanelMaster_) -- template Blogger tidak disentuh.
   ["master",     "Master",        [["mwarna", "Warna"], ["msize", "Size"], ["mkain", "Kain"]]],
   // ROADMAP-ERP Tahap 2C (v380): permintaan beli (siapa pun) & terima barang (bagian gudang). Nol rupiah (getPembelianLantai).
-  ["beli",       "Beli",          [["pbeli", "Permintaan Beli"], ["terima", "Terima Barang"], ["gudang", "Stok & Opname"]]]   // v381: Tahap 3C (tab `stok` = Stok Siap Kirim, sudah ada)
+  ["beli",       "Beli",          [["pbeli", "Permintaan Beli"], ["terima", "Terima Barang"], ["gudang", "Stok & Opname"], ["mrp", "Kebutuhan Bahan"]]]   // v381: Tahap 3C (tab `stok` = Stok Siap Kirim, sudah ada); v387: Tahap 7B MRP
 ];
 
 /** Boleh-tidaknya satu tab untuk pemakai -- dari peta bagian, BUKAN dari DOM. */
@@ -12332,6 +12332,7 @@ function spPanelBeli_() {
 function spMuatBeli_(tab, paksa) {
   if (!SP_BELI_TAB[tab] || !spPanelBeli_()) return;
   if (tab === "gudang") { spMuatGudang_(paksa); return; }   // v381: rute & keadaan sendiri (getStokLantai)
+  if (tab === "mrp") { spMuatMRP_(paksa); return; }        // v387: Tahap 7B kebutuhan bahan (getKebutuhanBahan)
   const judul = document.getElementById("sp-beli-judul"); if (judul) judul.textContent = tab === "terima" ? "Terima barang" : "Permintaan beli";
   if (SP_BELI && !paksa) { spBeliRender_(); return; }
   if (SP_BELI_STATUS === "memuat" && !paksa) { spBeliRender_(); return; }   // subtab diklik lagi saat masih memuat: satu fetch saja
@@ -12629,4 +12630,101 @@ function spGudangKirimKeluar_(btn) {
     if (res && res.sudahTercatat) spBeliPesan_("sp-kl-pesan", "Mutasi ini SUDAH tercatat (" + res.idMutasi + ").");
     else if (res) spBeliPesan_("sp-kl-pesan", "Tercatat " + res.idMutasi + " (" + res.qty + ").");
     spMuatGudang_(true); return res; } });
+}
+
+
+/* ============================================================================
+ * ROADMAP-ERP Tahap 7 sub-rilis B (v387, butuh gs >= @423) -- SUBTAB "KEBUTUHAN BAHAN" (MRP) di fase Beli halaman produksi.
+ * Semua PO dari cache (getKebutuhanBahan tanpa payload) atau SATU PO dihitung segar beserta janji lead time (payload
+ * idPurchaseOrder). Tombol: Hitung ulang semua (hitungUlangKebutuhanBahan), Buat permintaan beli yang kurang untuk PO terpilih
+ * (buatPermintaanBeliMRP -> PB Diajukan; server melewati item yang sudah punya PB). Aksi tulis dikunci selama sibuk; jawaban
+ * yang disusul dibuang; baris cache (nama kolom sheet) dan baris segar (camelCase) dinormalkan ke SATU bentuk. Nol rupiah.
+ * ========================================================================== */
+let SP_MRP = null, SP_MRP_URUT = 0, SP_MRP_STATUS = "", SP_MRP_PO = "", SP_MRP_PESAN = null, SP_MRP_SIBUK = false;
+
+function spMrpNormal_(r) {
+  if (r.idPO !== undefined) return r;   // segar (camelCase dari mrpHitung_)
+  return { idPO: r["ID Purchase Order"], idKlien: r["ID Klien"], statusPO: r["Status PO"], jenisOrder: r["Jenis Order"], jenis: r.Jenis, kode: r["Kode Item"], nama: r["Nama Item"], satuan: r.Satuan,
+    kebutuhan: Number(r.Kebutuhan) || 0, kebutuhanAllowance: Number(r["Kebutuhan + Allowance"]) || 0, tersedia: Number(r.Tersedia) || 0, dipesan: Number(r.Dipesan) || 0, kekurangan: Number(r.Kekurangan) || 0,
+    tanggalButuh: r["Tanggal Butuh"] || "", sumberTanggal: r["Sumber Tanggal"] || "", leadTime: Number(r["Lead Time Hari"]) || 0, saranBeli: r["Saran Tanggal Beli"] || "", idSupplier: r["ID Supplier"] || "", idPB: r["ID PB"] || "", status: r.Status, catatan: r.Catatan || "" };
+}
+function spMrpKirim_(action, payload) {
+  return fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: action, payload: payload || {} }) })
+    .then(function (r) { return r.text(); })
+    .then(function (teks) {
+      let d; try { d = JSON.parse(teks); } catch (e) { throw new Error("Jawaban server tidak terbaca: " + String(teks || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 60)); }
+      if (!d || !d.success) throw new Error((d && d.error) || "Permintaan ditolak server.");
+      return d;
+    });
+}
+function spMuatMRP_(paksa) {
+  if (!spPanelBeli_()) return;
+  const judul = document.getElementById("sp-beli-judul"); if (judul) judul.textContent = "Kebutuhan bahan (MRP)";
+  if (SP_MRP && !paksa) { spMrpRender_(); return; }
+  if (SP_MRP_STATUS === "memuat" && !paksa) { spMrpRender_(); return; }
+  const urut = ++SP_MRP_URUT, po = SP_MRP_PO;
+  SP_MRP_STATUS = "memuat"; spMrpRender_();
+  spMrpKirim_("getKebutuhanBahan", po ? { idPurchaseOrder: po } : {})
+    .then(function (d) { if (urut !== SP_MRP_URUT) return; SP_MRP = d; SP_MRP_STATUS = ""; spMrpRender_(); })
+    .catch(function (e) { if (urut !== SP_MRP_URUT) return; SP_MRP_STATUS = /Failed to fetch|NetworkError|jaringan/i.test(String(e && e.message || e)) ? "Kebutuhan bahan tidak sampai ke server -- sambungan terputus di tengah jalan. Coba lagi." : "Gagal memuat: " + String(e && e.message || e); spMrpRender_(); });
+}
+function spMrpPilihPO_(id) { SP_MRP_PO = String(id || ""); SP_MRP = null; spMuatMRP_(true); }
+function spMrpPesan_(teks, galat) {
+  SP_MRP_PESAN = teks ? { teks: teks, galat: !!galat } : null;
+  const el = document.getElementById("sp-mrp-pesan"); if (el) { el.textContent = teks || ""; el.className = "rjd-beli-pesan" + (galat ? " rjd-beli-galat" : (teks ? " rjd-beli-ok" : "")); }
+}
+function spMrpAksi_(action, payload, sesudah) {
+  if (SP_MRP_SIBUK) return;
+  SP_MRP_SIBUK = true; spMrpPesan_("Mengirim...", false); spMrpRender_();
+  spMrpKirim_(action, payload).then(function (d) { SP_MRP_SIBUK = false; SP_MRP_PESAN = { teks: sesudah(d), galat: false }; SP_MRP = null; spMuatMRP_(true); })
+    .catch(function (e) { SP_MRP_SIBUK = false; spMrpPesan_(String(e && e.message || e), true); spMrpRender_(); });
+}
+function spMrpHitungUlang() {
+  spMrpAksi_("hitungUlangKebutuhanBahan", {}, function (d) { return "Dihitung ulang: " + d.jumlahPO + " PO, " + d.baris + " baris, " + d.kurang + " kurang" + (d.tanpaMarker ? ", " + d.tanpaMarker + " tanpa marker" : "") + (d.tanpaResep ? ", " + d.tanpaResep + " tanpa resep" : "") + (d.peringatan ? " -- " + d.peringatan : "") + "."; });
+}
+function spMrpBuatPB() {
+  if (!SP_MRP_PO) { spMrpPesan_("Pilih satu PO dulu.", true); return; }
+  if (!window.confirm("Buat permintaan beli (status Diajukan) untuk semua bahan yang KURANG di PO " + SP_MRP_PO + "? Item yang sudah punya PB dilewati server.")) return;
+  spMrpAksi_("buatPermintaanBeliMRP", { idPurchaseOrder: SP_MRP_PO }, function (d) {
+    return d.item ? "PB " + d.idPB + " dibuat: " + d.item + " item Diajukan" + ((d.dilewati || []).length ? "; dilewati " + d.dilewati.length + " (" + d.dilewati.slice(0, 3).join(", ") + (d.dilewati.length > 3 ? ", ..." : "") + ")" : "") + "."
+      : (d.sudahTercatat ? "PB " + d.idPB + " sudah tercatat sebelumnya (kiriman ulang)." : (d.pesan || "Tidak ada yang perlu dibeli.") + ((d.dilewati || []).length ? " Dilewati: " + d.dilewati.join(", ") : ""));
+  });
+}
+function spMrpQty_(v, satuan) { const n = Number(v) || 0; return (Math.round(n * 100) / 100).toLocaleString("id-ID") + (satuan ? " " + satuan : ""); }
+function spMrpRender_() {
+  const W = document.getElementById("sp-beli-isi"); if (!W || window.SP_TAB !== "mrp") return;
+  const E = spBeliE_;
+  const daftarPO = (window.SP_DAFTAR_PO || []).map(function (p) { return '<option value="' + E(p.idPurchaseOrder) + '"' + (p.idPurchaseOrder === SP_MRP_PO ? ' selected' : '') + '>' + E(p.idPurchaseOrder + " -- " + (p.namaKlien || "") + " " + ((p.artikel || []).join(", "))) + '</option>'; }).join("");
+  const alat = '<div class="rjd-beli-aksi sp-mrp-alat"><label>PO <select id="sp-mrp-po" onchange="spMrpPilihPO_(this.value)"><option value=""' + (SP_MRP_PO ? '' : ' selected') + '>semua PO aktif (cache)</option>' + daftarPO + '</select></label>' +
+    '<button type="button" class="sp-btn" id="sp-mrp-hitung" onclick="spMrpHitungUlang()"' + (SP_MRP_SIBUK ? ' disabled' : '') + '>' + (SP_MRP_SIBUK ? 'Mengirim...' : 'Hitung ulang semua') + '</button>' +
+    '<button type="button" class="sp-btn" id="sp-mrp-pb" onclick="spMrpBuatPB()"' + (SP_MRP_SIBUK || !SP_MRP_PO ? ' disabled' : '') + '>Buat permintaan beli yang kurang</button>' +
+    '<button type="button" class="sp-btn" onclick="spMuatMRP_(true)">Muat ulang</button></div>';
+  const pesan = '<div id="sp-mrp-pesan" class="rjd-beli-pesan' + (SP_MRP_PESAN ? (SP_MRP_PESAN.galat ? ' rjd-beli-galat' : ' rjd-beli-ok') : '') + '">' + (SP_MRP_PESAN ? E(SP_MRP_PESAN.teks) : '') + '</div>';
+  if (SP_MRP_STATUS) {
+    const memuat = SP_MRP_STATUS === "memuat";
+    W.innerHTML = alat + pesan + '<p class="sp-info' + (memuat ? '' : ' rjd-beli-galat') + '" id="sp-mrp-status">' + E(memuat ? "Menghitung kebutuhan bahan..." : SP_MRP_STATUS) + '</p>' + (memuat ? '' : '<button type="button" class="sp-btn" onclick="spMuatMRP_(true)">Coba lagi</button>');
+    return;
+  }
+  if (!SP_MRP) { W.innerHTML = alat + pesan; return; }
+  const d = SP_MRP, baris = (d.baris || []).map(spMrpNormal_), kurang = baris.filter(function (b) { return b.status === "Kurang"; }).length;
+  const ringkas = '<div class="rjd-beli-ringkas" id="sp-mrp-ringkas"><div>' + (d.segar ? 'PO' : 'PO di cache') + '<b>' + E(d.segar ? d.idPurchaseOrder : ((d.ringkas || {}).po || 0)) + '</b></div><div>Baris<b>' + baris.length + '</b></div><div class="' + (kurang ? 'rjd-beli-awas' : '') + '">Kurang<b>' + kurang + '</b></div>' +
+    (d.segar ? '<div>Dihitung<b>segar dari sumber</b></div>' : '<div>Diperbarui<b>' + E(d.diperbarui || (d.adaCache ? "-" : "belum pernah -- tekan Hitung ulang semua")) + '</b></div>') + '</div>';
+  let janji = "";
+  if (d.segar && d.janji) {
+    const j = d.janji, sanggup = j.sanggup === null ? '' : (j.sanggup ? '<span class="sp-mrp-sanggup">SANGGUP</span>' : '<span class="sp-mrp-tidak">TIDAK SANGGUP</span>');
+    janji = '<div class="sp-mrp-janji" id="sp-mrp-janji"><div class="rjd-beli-ringkas"><div>Estimasi produksi<b>' + E(j.estimasiProduksi || "-") + '</b><span class="sp-mrp-sub">' + E(j.akurasi) + '</span></div>' +
+      '<div>Bahan<b>' + (j.bahan.lengkap ? 'lengkap' : j.bahan.kurang.length + ' kurang, tiba ' + E(j.bahan.tanggalBahanTiba || "?")) + '</b>' + (j.bahan.geserHariKerja ? '<span class="sp-mrp-sub rjd-beli-awas">geser ' + j.bahan.geserHariKerja + ' hari kerja</span>' : '') + '</div>' +
+      '<div>JANJI selesai<b id="sp-mrp-janji-tanggal">' + E(j.janjiSelesai || "-") + '</b></div><div>Deadline<b>' + E(j.deadline || "-") + '</b>' + sanggup + '</div></div>' +
+      ((j.catatan || []).length ? '<ul class="sp-mrp-catatan">' + j.catatan.map(function (c) { return '<li>' + E(c) + '</li>'; }).join("") + '</ul>' : '') + '</div>';
+  }
+  const catatanPO = d.segar && (d.catatan || []).length ? '<div class="rjd-beli-awas sp-mrp-catatan-po" id="sp-mrp-catatan-po">' + d.catatan.map(E).join("; ") + '</div>' : '';
+  const tabel = baris.length ? '<div class="rjd-beli-tabelwrap"><table class="rjd-beli-tabel sp-mrp-tabel" id="sp-mrp-tabel"><thead><tr>' + (d.segar ? '' : '<th>PO</th>') + '<th>Jenis</th><th>Item</th><th>Kode</th><th>Butuh</th><th>Tersedia</th><th>Dipesan</th><th>Kurang</th><th>Butuh tgl</th><th>Saran beli</th><th>Status</th><th>PB</th></tr></thead><tbody>' +
+    baris.map(function (b) {
+      const kur = b.status === "Kurang";
+      return '<tr data-po="' + E(b.idPO) + '" data-kode="' + E(b.kode) + '" class="' + (kur ? 'sp-mrp-kurang' : '') + '">' + (d.segar ? '' : '<td class="rjd-beli-kode-sel">' + E(b.idPO) + '</td>') + '<td>' + E(b.jenis) + '</td><td>' + E(b.nama) + (b.catatan ? '<div class="sp-mrp-sub">' + E(b.catatan) + '</div>' : '') + '</td>' +
+        '<td class="rjd-beli-kode-sel">' + E(b.kode && b.kode.indexOf("NAMA:") === 0 ? "(tanpa kode)" : b.kode) + '</td><td>' + spMrpQty_(b.kebutuhanAllowance, b.satuan) + (b.kebutuhan !== b.kebutuhanAllowance ? '<div class="sp-mrp-sub">marker ' + spMrpQty_(b.kebutuhan) + '</div>' : '') + '</td>' +
+        '<td>' + spMrpQty_(b.tersedia) + '</td><td>' + spMrpQty_(b.dipesan) + '</td><td class="sp-mrp-kek">' + spMrpQty_(b.kekurangan) + '</td><td>' + E(b.tanggalButuh || "-") + (b.sumberTanggal && b.sumberTanggal !== "jadwal" ? '<div class="sp-mrp-sub">' + E(b.sumberTanggal) + '</div>' : '') + '</td>' +
+        '<td>' + E(b.saranBeli || "-") + (b.leadTime ? '<div class="sp-mrp-sub">lead ' + b.leadTime + ' hr</div>' : '') + '</td><td>' + E(b.status) + '</td><td class="rjd-beli-kode-sel">' + E(b.idPB || "") + '</td></tr>';
+    }).join("") + '</tbody></table></div>' : '<p class="sp-info" id="sp-mrp-kosong">' + (d.segar ? 'PO ini tidak punya baris Detail PO -- tidak ada yang bisa dihitung.' : 'Cache kebutuhan bahan kosong. Tekan <b>Hitung ulang semua</b>.') + '</p>';
+  W.innerHTML = alat + ringkas + pesan + janji + catatanPO + tabel;
 }

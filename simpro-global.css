@@ -1669,6 +1669,21 @@ body[data-bagian~="lintas"] .rjd-bagian-lain { display: none; }
 .rjd-beli-tab.active { background: var(--ink); border-color: var(--ink); color: var(--white, #fff); }
 .rjd-beli-lencana { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 999px; background: #BD4335; color: #fff; font-size: 11px; text-align: center; }
 .rjd-beli-total { font-size: 14px; }
+/* ROADMAP-ERP Tahap 7B (v387): subtab Kebutuhan Bahan (MRP) di fase Beli produksi -- di sini karena kelas rjd-beli-* tinggal di berkas ini. */
+.sp-mrp-alat { margin: 0 0 10px; }
+.sp-mrp-alat label { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; }
+.sp-mrp-alat select { font-size: 16px; padding: 5px 8px; min-height: 36px; border: 1px solid var(--line, #E5E0D6); border-radius: 8px; background: #fff; color: var(--ink, #17212F); font-family: inherit; max-width: 100%; }
+.sp-mrp-sub { font-size: 11px; color: var(--ink-soft); font-weight: 400; }
+.sp-mrp-tabel tr.sp-mrp-kurang td { background: #FFF6F4; }
+.sp-mrp-tabel tr.sp-mrp-kurang .sp-mrp-kek { color: #8f2c22; font-weight: 700; }
+.sp-mrp-janji { border: 1px solid var(--line-soft, #e6e1d6); border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; background: #FBFAF7; }
+.sp-mrp-janji .rjd-beli-ringkas { margin: 0; }
+.sp-mrp-sanggup, .sp-mrp-tidak { display: inline-block; margin-top: 3px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.sp-mrp-sanggup { background: #E4F3E8; color: #1f6b3a; }
+.sp-mrp-tidak { background: #FDECEA; color: #8f2c22; }
+.sp-mrp-catatan { margin: 8px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--ink-soft); }
+.sp-mrp-catatan-po { font-size: 12.5px; margin: 0 0 10px; }
+@media (max-width: 640px) { .sp-mrp-alat label { flex: 1 1 100%; } .sp-mrp-alat select { flex: 1 1 auto; min-width: 0; } }
 @media (max-width: 640px) {
   .rjd-beli-form { grid-template-columns: 1fr; }
 }
