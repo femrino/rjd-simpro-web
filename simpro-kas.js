@@ -1118,6 +1118,9 @@ function ksRenderJurnal_() {
   if (p.utang) baris.push(['Utang usaha (211), per tagihan supplier' + rinci(p.utang), ksRp(p.utang.gl), ksRp(p.utang.buku), lencana(p.utang.beda === 0 && !(p.utang.rinci || []).length, p.utang.beda)]);
   // Tahap 3B (gs @416): persediaan 131+133 vs SD Stok RJD x rata-rata. null (mode beban langsung) / tanpa medan (server lama) -> baris tidak ada.
   if (p.persediaan) baris.push(['Persediaan bahan (131+133) vs SD Stok RJD', ksRp(p.persediaan.gl), ksRp(p.persediaan.buku), lencana(p.persediaan.beda === 0, p.persediaan.beda)]);
+  // Tahap 5B (gs @420): utang gaji 212 per slip (akrual JP-16 dikurangi kas ber-Ref slip) dan slip Dibayar vs kas bulan ini. Server lama tanpa medan -> tidak dirender.
+  if (p.utangGaji) baris.push(['Utang gaji (212), per slip' + rinci(p.utangGaji), ksRp(p.utangGaji.gl), ksRp(p.utangGaji.buku), lencana(p.utangGaji.beda === 0 && !(p.utangGaji.rinci || []).length, p.utangGaji.beda)]);
+  if (p.gaji) baris.push(['Gaji bulan ini: kas ber-Ref slip vs netto slip Dibayar' + rinci(p.gaji) + (p.gaji.kasTanpaSlipBaris ? '<div class="ks-sub" id="ks-jt-gaji-tanpa-slip">' + p.gaji.kasTanpaSlipBaris + ' baris kas kategori gaji TANPA slip: ' + ksRp(p.gaji.kasTanpaSlip) + '</div>' : ''), ksRp(p.gaji.gl), ksRp(p.gaji.buku), lencana(p.gaji.beda === 0 && !(p.gaji.rinci || []).length, p.gaji.beda)]);
   const htmlPredikat = '<div class="ks-gulir"><table class="ks-tabel" id="ks-jt-predikat"><thead><tr><th>Pemeriksaan</th><th class="ks-td-rp">Buku besar</th><th class="ks-td-rp">Buku pembantu</th><th></th></tr></thead><tbody>' +
     baris.map(function (b) { return '<tr><td>' + b[0] + '</td><td class="ks-td-rp">' + b[1] + '</td><td class="ks-td-rp">' + b[2] + '</td><td>' + b[3] + '</td></tr>'; }).join("") + '</tbody></table></div>';
 

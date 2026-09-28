@@ -185,3 +185,31 @@
   .up-rinci { display: none; }   /* rincian dilipat: lampiran cukup totalnya */
   .up-tabel { font-size: 11px; }
 }
+
+/* v385 (ROADMAP-ERP Tahap 5C): kartu Slip gaji di bawah hasil upah. Tabelnya 12 kolom -> lantai 980px di dalam
+   .up-tabelwrap yang sudah menggulir (PF-21); tombol kecil untuk aksi per baris; baris Dibatalkan dicoret. */
+#up-slip { margin-top: 16px; }
+.up-slip-judul { font-weight: 700; font-size: 15px; margin-bottom: 6px; }
+.up-slip-bilah { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin: 10px 0 12px; }
+.up-slip-bilah label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-soft, #5F6B7A); }
+.up-slip-bilah select, .up-slip-bilah input { padding: 8px 10px; border: 1px solid var(--line, #E5E0D6); border-radius: 9px; font-family: inherit; font-size: 13.5px; }
+.up-btn-kecil { padding: 7px 11px; font-size: 12px; border-radius: 8px; }
+.up-btn-putih { background: #fff; color: var(--navy, #17212F); border: 1px solid var(--line, #E5E0D6); }
+.up-btn-putih:hover { background: var(--paper, #FAF7F2); color: var(--navy, #17212F); }
+.up-btn:disabled { opacity: .55; cursor: not-allowed; }
+.up-slip-pesan { font-size: 13px; margin: 8px 0; min-height: 1em; }
+.up-slip-ok { color: #1D6B3A; }
+.up-slip-ringkas { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; margin-bottom: 8px; }
+.up-slip-ringkas b { margin-left: 4px; }
+.up-slip-tabel { min-width: 980px; }
+.up-slip-tabel td.num { white-space: nowrap; }
+/* bundel widget Blogger memberi body { word-break: break-word } (PF-19): tanpa dua aturan ini ID slip, nama, dan tombol 'Ubah' PECAH
+   di tengah huruf pada 12 kolom (terukur jalan130 H: SLP2/609-001, Wahyunin/gsih, U/bah di 1300 px). Kata utuh, tabel melebar, pembungkusnya menggulir. */
+.up-slip-tabel td, .up-slip-tabel th { word-break: normal; overflow-wrap: normal; }
+.up-slip-tabel td.up-slip-aksi, .up-slip-tabel td.up-slip-aksi button { white-space: nowrap; }
+
+.up-slip-edit input { width: 96px; padding: 5px 7px; border: 1px solid var(--line, #E5E0D6); border-radius: 7px; font-size: 13px; font-family: inherit; }
+.up-slip-edit input.up-slip-ket { width: 160px; margin-top: 4px; }
+.up-slip-batal td { color: var(--ink-soft, #5F6B7A); text-decoration: line-through; }
+.up-slip-batal td.up-slip-aksi, .up-slip-batal td.up-slip-st { text-decoration: none; }
+.up-slip-dibayar td.up-slip-st { color: #1D6B3A; font-weight: 700; }
