@@ -233,3 +233,22 @@
 .ks-biaya-catatan { font-size: 11px; white-space: normal; }
 .ks-biaya-rinci { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line, #E5E0D5); }
 .ks-biaya-rinci .ks-kartu-judul small { font-weight: 400; color: var(--ink-soft, #5F6B7A); }
+
+/* v386: kartu Laporan keuangan & tutup periode (ROADMAP-ERP Tahap 6B). Tab & ringkas memakai kelas rjd-beli-*; yang baru:
+   dua kolom neraca (satu kolom di HP), daftar syarat, baris subtotal laba rugi, rincian per akun, aset nonaktif, form aset. */
+.ks-lap-dua { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 760px) { .ks-lap-dua { grid-template-columns: 1fr; } }
+.ks-lap-dua .ks-gulir + .ks-gulir { margin-top: 0; }
+.ks-lap-sub td { font-weight: 700; background: var(--cream, #FAF7F1); }
+.ks-lap-rinci td { font-size: 12px; color: var(--ink-soft, #5F6B7A); padding-top: 3px; padding-bottom: 3px; }
+.ks-lap-rinci td:first-child { padding-left: 22px; }
+.ks-lap-syarat { list-style: none; margin: 0 0 10px; padding: 0; }
+.ks-lap-syarat li { padding: 7px 10px; border-left: 3px solid #9FB2C6; margin-bottom: 6px; font-size: 13px; line-height: 1.5; background: #F2F5F8; border-radius: 6px; }
+.ks-lap-syarat li b { display: inline-block; min-width: 52px; }
+.ks-lap-syarat li.ks-lap-ok { border-left-color: #1D6B3A; background: #EEF7F0; }
+.ks-lap-syarat li.ks-lap-ok b { color: #1D6B3A; }
+.ks-lap-syarat li.ks-lap-belum { border-left-color: #B3261E; background: #FBEDEB; }
+.ks-lap-syarat li.ks-lap-belum b { color: #B3261E; }
+.ks-lap-nonaktif td { color: var(--ink-soft, #5F6B7A); }
+.ks-lap-form { margin-top: 12px; }
+.ks-lap-form input, .ks-lap-form select { flex: 1 1 140px; min-width: 0; }

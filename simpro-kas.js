@@ -259,7 +259,7 @@ function ksMuat(bulan, opsi) {
 
 // ---------- render ----------
 function ksRender() {
-  ksRenderSaldo_(); ksRenderForm_(); ksRenderBulan_(); ksPasangSaring_(); ksRenderBuku_(); ksRenderArus_(); ksRenderRekon_(); ksRenderJurnal_(); ksRenderMasterSupplier_(); ksRenderBeli_(); ksRenderStok_(); ksRenderBiaya_(); ksRenderPeringatan_();
+  ksRenderSaldo_(); ksRenderForm_(); ksRenderBulan_(); ksPasangSaring_(); ksRenderBuku_(); ksRenderArus_(); ksRenderRekon_(); ksRenderJurnal_(); ksRenderMasterSupplier_(); ksRenderBeli_(); ksRenderStok_(); ksRenderBiaya_(); ksRenderLaporan_(); ksRenderPeringatan_();
 }
 
 function ksRenderSaldo_() {
@@ -1121,6 +1121,8 @@ function ksRenderJurnal_() {
   // Tahap 5B (gs @420): utang gaji 212 per slip (akrual JP-16 dikurangi kas ber-Ref slip) dan slip Dibayar vs kas bulan ini. Server lama tanpa medan -> tidak dirender.
   if (p.utangGaji) baris.push(['Utang gaji (212), per slip' + rinci(p.utangGaji), ksRp(p.utangGaji.gl), ksRp(p.utangGaji.buku), lencana(p.utangGaji.beda === 0 && !(p.utangGaji.rinci || []).length, p.utangGaji.beda)]);
   if (p.gaji) baris.push(['Gaji bulan ini: kas ber-Ref slip vs netto slip Dibayar' + rinci(p.gaji) + (p.gaji.kasTanpaSlipBaris ? '<div class="ks-sub" id="ks-jt-gaji-tanpa-slip">' + p.gaji.kasTanpaSlipBaris + ' baris kas kategori gaji TANPA slip: ' + ksRp(p.gaji.kasTanpaSlip) + '</div>' : ''), ksRp(p.gaji.gl), ksRp(p.gaji.buku), lencana(p.gaji.beda === 0 && !(p.gaji.rinci || []).length, p.gaji.beda)]);
+  // Tahap 6A (gs @421): akumulasi penyusutan per akun akumulasi vs SD Penyusutan. null / tanpa medan (belum ada aset, server lama) -> baris tidak ada.
+  if (p.penyusutan) baris.push(['Akumulasi penyusutan (15x) vs SD Penyusutan' + rinci(p.penyusutan), ksRp(p.penyusutan.gl), ksRp(p.penyusutan.buku), lencana(p.penyusutan.beda === 0 && !(p.penyusutan.rinci || []).length, p.penyusutan.beda)]);
   const htmlPredikat = '<div class="ks-gulir"><table class="ks-tabel" id="ks-jt-predikat"><thead><tr><th>Pemeriksaan</th><th class="ks-td-rp">Buku besar</th><th class="ks-td-rp">Buku pembantu</th><th></th></tr></thead><tbody>' +
     baris.map(function (b) { return '<tr><td>' + b[0] + '</td><td class="ks-td-rp">' + b[1] + '</td><td class="ks-td-rp">' + b[2] + '</td><td>' + b[3] + '</td></tr>'; }).join("") + '</tbody></table></div>';
 
@@ -1635,4 +1637,145 @@ function ksBiayaRender_() {
     '<div>Diperbarui<b>' + ksEsc_(KS_BIAYA.diperbarui || "-") + '</b></div><div>Tutup biaya<b>kirim terakhir + ' + ksEsc_(String(KS_BIAYA.tutupHari || 30)) + ' hari</b></div></div>' +
     '<div class="rjd-beli-tabs">' + tab("po", "Per PO") + tab("klien", "Per klien") + '</div>' + pesan + isi + ksBiayaRinciHtml_() +
     '<div class="ks-aksi">' + tombolHitung + '<button class="ks-btn" type="button" onclick="ksBiayaMuat()">Muat ulang</button></div></div>';
+}
+
+
+/* ============================================================================
+ * ROADMAP-ERP Tahap 6 sub-rilis B (v386, butuh gs >= @421) -- KARTU "LAPORAN KEUANGAN & TUTUP PERIODE" di halaman Kas
+ * (owner/finance). Semua angka dari getLaporanKeuangan {bulan: KS_BULAN} -- diturunkan server dari jurnal, tidak dihitung di
+ * sini. Dimuat MALAS; bulan berganti = laporan lama dibuang (laporan bulan lain bukan jawaban). Enam tab: Neraca (aset =
+ * kewajiban + ekuitas + laba kumulatif, lencana SEIMBANG dari angka server), Laba rugi (bulan & kumulatif), Arus kas, PPh
+ * (dua basis DISANDINGKAN -- layar tidak memilih), Syarat tutup (daftar syarat + tombol Tutup periode yang hanya hidup
+ * kalau SEMUA syarat OK, bulan sudah lewat, dan belum ditutup), Aset tetap (daftar + catat + nonaktifkan + jalankan
+ * penyusutan bulan). Aksi tulis lewat satu jalur (ksLapAksi_): dikunci selama sibuk, idPermintaan dari rjdKunciIsian_
+ * untuk catat aset, pesan server apa adanya saat gagal, laporan dimuat ulang sesudah sukses.
+ * ========================================================================== */
+let KS_LAP = null, KS_LAP_URUT = 0, KS_LAP_STATUS = "", KS_LAP_TAB = "neraca", KS_LAP_PESAN = null, KS_LAP_SIBUK = false;
+const KS_LAP_TAB_NAMA = { neraca: "Neraca", lr: "Laba rugi", arus: "Arus kas", pph: "PPh Final", syarat: "Syarat tutup", aset: "Aset tetap" };
+const KS_ASET_KELOMPOK = ["inventaris", "kendaraan", "bangunan"];
+
+function ksLapWadah_() {
+  let el = document.getElementById("ks-laporan");
+  if (el) return el;
+  const jangkar = document.getElementById("ks-biaya") || document.getElementById("ks-stok") || document.getElementById("ks-jurnal") || document.getElementById("ks-rekon"); if (!jangkar || !jangkar.parentNode) return null;
+  el = document.createElement("div"); el.id = "ks-laporan";
+  jangkar.parentNode.insertBefore(el, jangkar.nextSibling);
+  return el;
+}
+function ksRenderLaporan_() {
+  const el = ksLapWadah_(); if (!el) return;
+  if (!KS_DATA || !KS_DATA.bisaFinance) { el.innerHTML = ""; KS_LAP = null; KS_LAP_STATUS = ""; return; }
+  if (KS_LAP && KS_LAP.bulan !== KS_BULAN) { KS_LAP = null; KS_LAP_STATUS = ""; KS_LAP_PESAN = null; }   // bulan berganti: laporan lama bukan jawaban
+  ksLapRender_();
+}
+function ksLapMuat() {
+  const urut = ++KS_LAP_URUT, bulan = KS_BULAN;
+  KS_LAP_STATUS = "memuat"; ksLapRender_();
+  ksKirim_("getLaporanKeuangan", { payload: { bulan: bulan } })
+    .then(function (d) { if (urut !== KS_LAP_URUT) return; KS_LAP = d; KS_LAP_STATUS = ""; ksLapRender_(); })
+    .catch(function (e) { if (urut !== KS_LAP_URUT) return; KS_LAP_STATUS = /Failed to fetch|NetworkError|jaringan/i.test(String(e && e.message || e)) ? "Laporan keuangan tidak sampai ke server -- sambungan terputus di tengah jalan. Coba lagi." : String(e && e.message || e); ksLapRender_(); });
+}
+function ksLapTab(t) { KS_LAP_TAB = t; ksLapRender_(); }
+function ksLapPesan_(teks, galat) {
+  const kelas = "rjd-beli-pesan" + (galat ? " rjd-beli-galat" : (teks ? " rjd-beli-ok" : ""));
+  KS_LAP_PESAN = teks ? { teks: teks, kelas: kelas } : null;
+  const el = document.getElementById("ks-lap-pesan"); if (el) { el.textContent = teks || ""; el.className = kelas; }
+}
+function ksLapAksi_(action, payload, sesudah) {
+  if (KS_LAP_SIBUK) return;
+  KS_LAP_SIBUK = true; ksLapPesan_("Mengirim...", false); ksLapRender_();
+  ksKirim_(action, { payload: payload }).then(function (d) { KS_LAP_SIBUK = false; KS_LAP_PESAN = { teks: sesudah(d), kelas: "rjd-beli-pesan rjd-beli-ok" }; ksLapMuat(); })
+    .catch(function (e) { KS_LAP_SIBUK = false; ksLapPesan_(String(e && e.message || e), true); ksLapRender_(); });
+}
+function ksLapTutup() {
+  if (!KS_LAP || KS_LAP.tertutup) return;
+  const gagal = (KS_LAP.syarat || []).filter(function (s) { return !s.ok; });
+  if (gagal.length) { ksLapPesan_("Belum bisa ditutup: " + gagal.map(function (s) { return s.nama; }).join("; "), true); return; }
+  if (!window.confirm("Tutup periode " + ksNamaBulan(KS_LAP.bulan) + "? Sesudah ditutup, SEMUA modul menolak tulisan bertanggal bulan ini (kas, pelunasan, pembelian, stok, gaji, penyusutan). Penyusutan bulan ini & alokasi overhead ditulis otomatis.")) return;
+  ksLapAksi_("tutupPeriode", { bulan: KS_LAP.bulan }, function (d) { return d.sudahTercatat ? "Periode " + d.bulan + " sudah ditutup sebelumnya." : "Periode " + d.bulan + " DITUTUP: laba bersih " + ksRp(d.labaBersih) + ", total aset " + ksRp(d.totalAset) + ", " + d.entri + " entri jurnal" + (d.penyusutan && d.penyusutan.jumlah ? ", penyusutan " + d.penyusutan.jumlah + " aset" : "") + (d.alokasiOverhead && d.alokasiOverhead.jumlah ? ", alokasi overhead " + d.alokasiOverhead.jumlah + " PO" : "") + "."; });
+}
+function ksAsetCatat() {
+  const v = function (id) { const e = document.getElementById(id); return e ? e.value : ""; };
+  const isian = { nama: v("ks-aset-nama").trim(), kelompok: v("ks-aset-kelompok"), tanggalPerolehan: v("ks-aset-tanggal"), nilaiPerolehan: ksParseRp_(v("ks-aset-nilai")), nilaiResidu: ksParseRp_(v("ks-aset-residu")), umurBulan: Number(String(v("ks-aset-umur")).replace(/[^0-9]/g, "")) || 0, catatan: v("ks-aset-catatan").trim() };
+  if (!isian.nama || !isian.tanggalPerolehan || !(isian.nilaiPerolehan > 0) || !(isian.umurBulan > 0)) { ksLapPesan_("Nama, tanggal perolehan, nilai perolehan (> 0) dan umur (bulan, > 0) wajib diisi.", true); return; }
+  isian.idPermintaan = typeof rjdKunciIsian_ === "function" ? rjdKunciIsian_("ks-aset", isian) : "";
+  ksLapAksi_("catatAsetTetap", isian, function (d) { return d.sudahTercatat ? "Aset " + d.idAset + " sudah tercatat sebelumnya (tidak dicatat dua kali)." : "Aset " + d.idAset + " dicatat -- penyusutan " + ksRp(d.perBulan) + " per bulan."; });
+}
+function ksAsetNonaktif(id) {
+  const catatan = String(window.prompt("Nonaktifkan aset " + id + " (dijual / dihapus-bukukan)? Tulis keterangannya:") || "").trim();
+  if (!catatan) return;
+  ksLapAksi_("ubahStatusAsetTetap", { idAset: id, aktif: false, catatan: catatan }, function (d) { return "Aset " + d.idAset + " dinonaktifkan -- tidak disusutkan lagi."; });
+}
+function ksAsetPenyusutan() {
+  if (!KS_LAP) return;
+  ksLapAksi_("jalankanPenyusutanBulan", { bulan: KS_LAP.bulan }, function (d) { return "Penyusutan " + d.bulan + ": " + d.jumlah + " aset, " + ksRp(d.total) + (d.dilewati && d.dilewati.length ? " (dilewati: " + d.dilewati.slice(0, 5).join(", ") + ")" : "") + "."; });
+}
+function ksLapRp_(v) { return ksRp(Number(v) || 0); }
+function ksLapTabelSaldo_(id, judul, baris, total) {
+  return '<table class="ks-tabel rjd-beli-tabel" id="' + id + '"><thead><tr><th>' + judul + '</th><th class="ks-td-rp">Saldo</th></tr></thead><tbody>' +
+    (baris || []).map(function (b) { return '<tr data-akun="' + ksEsc_(b.akun) + '"><td><span class="ks-mono">' + ksEsc_(b.akun) + '</span> ' + ksEsc_(b.nama) + '</td><td class="ks-td-rp">' + ksLapRp_(b.saldo) + '</td></tr>'; }).join("") +
+    '</tbody><tfoot><tr><th>Total</th><th class="ks-td-rp">' + ksLapRp_(total) + '</th></tr></tfoot></table>';
+}
+function ksLapRender_() {
+  const el = ksLapWadah_(); if (!el) return;
+  const judul = '<div class="ks-kartu-judul">Laporan keuangan &amp; tutup periode ' + ksEsc_(ksNamaBulan(KS_BULAN)) + '</div>';
+  if (KS_LAP_STATUS) {
+    const memuat = KS_LAP_STATUS === "memuat";
+    el.innerHTML = '<div class="ks-kartu">' + judul + '<p class="' + (memuat ? 'ks-info' : 'ks-galat') + '" id="ks-lap-status">' + ksEsc_(memuat ? "Menyusun laporan dari jurnal..." : KS_LAP_STATUS) + '</p>' +
+      (memuat ? '' : '<div class="ks-aksi"><button class="ks-btn" type="button" onclick="ksLapMuat()">Coba lagi</button></div>') + '</div>';
+    return;
+  }
+  if (!KS_LAP) {
+    el.innerHTML = '<div class="ks-kartu">' + judul + '<p class="ks-info">Neraca, laba rugi, arus kas, dan rekap PPh Final bulan ini -- semuanya diturunkan dari jurnal turunan, tidak ada yang diketik. Tab <b>Syarat tutup</b> menyebut apa yang belum beres sebelum periode bisa ditutup untuk semua modul.</p>' +
+      '<div class="ks-aksi"><button id="ks-lap-buka" class="ks-btn" type="button" onclick="ksLapMuat()">Muat laporan</button></div></div>';
+    return;
+  }
+  const d = KS_LAP, n = d.neraca || {}, lr = d.labaRugi || { bulan: {}, kumulatif: {} }, pph = d.pph || {}, ar = d.arusKas;
+  const pesan = '<div id="ks-lap-pesan" class="' + (KS_LAP_PESAN ? KS_LAP_PESAN.kelas : 'rjd-beli-pesan') + '">' + (KS_LAP_PESAN ? ksEsc_(KS_LAP_PESAN.teks) : '') + '</div>';
+  const lencana = function (ok, teksOk, teksBeda) { return ok ? '<span class="ks-jt-cocok">' + teksOk + '</span>' : '<span class="ks-jt-beda">' + teksBeda + '</span>'; };
+  const ringkas = '<div class="rjd-beli-ringkas" id="ks-lap-ringkas"><div>Laba bersih bulan<b class="' + ((lr.bulan.labaBersih || 0) < 0 ? 'ks-biaya-rugi' : '') + '">' + ksLapRp_(lr.bulan.labaBersih) + '</b></div><div>Total aset<b>' + ksLapRp_(n.totalAset) + '</b></div>' +
+    '<div>Kewajiban<b>' + ksLapRp_(n.totalKewajiban) + '</b></div><div>Ekuitas + laba kumulatif<b>' + ksLapRp_(n.totalEkuitas) + '</b></div><div>Neraca<b>' + lencana(n.seimbang, "SEIMBANG", "SELISIH " + ksLapRp_(n.selisih)) + '</b></div>' +
+    '<div>Periode<b>' + (d.tertutup ? '<span class="ks-badge ks-badge-tutup">DITUTUP ' + ksEsc_((d.tutup || {}).waktu || "") + '</span>' : 'terbuka') + '</b></div></div>';
+  const tab = function (k) { return '<button type="button" class="rjd-beli-tab' + (KS_LAP_TAB === k ? ' active' : '') + '" data-tab="' + k + '" onclick="ksLapTab(\'' + k + '\')">' + KS_LAP_TAB_NAMA[k] + '</button>'; };
+  let isi = "";
+  if (KS_LAP_TAB === "neraca") {
+    isi = '<div class="ks-lap-dua"><div class="ks-gulir">' + ksLapTabelSaldo_("ks-lap-aset", "Aset", n.aset, n.totalAset) + '</div><div class="ks-gulir">' + ksLapTabelSaldo_("ks-lap-kewajiban", "Kewajiban", n.kewajiban, n.totalKewajiban) +
+      ksLapTabelSaldo_("ks-lap-ekuitas", "Ekuitas", (n.ekuitas || []).concat([{ akun: "", nama: "Laba (rugi) kumulatif -- dari 4xx..9xx", saldo: n.labaKumulatif }]), n.totalEkuitas) + '</div></div>' +
+      '<p class="ks-info" id="ks-lap-neraca-cek">Aset ' + ksLapRp_(n.totalAset) + ' &#8722; kewajiban ' + ksLapRp_(n.totalKewajiban) + ' &#8722; ekuitas ' + ksLapRp_(n.totalEkuitas) + ' = ' + ksLapRp_(n.selisih) + ' &#8594; ' + lencana(n.seimbang, "SEIMBANG", "TIDAK SEIMBANG") + ' (dihitung, bukan diasumsikan).</p>';
+  } else if (KS_LAP_TAB === "lr") {
+    const kel = [["pendapatanUsaha", "Pendapatan usaha (4xx)"], ["hpp", "HPP (5xx)"], ["labaKotor", "= Laba kotor"], ["penyusutan", "Penyusutan (76x)"], ["operasional", "Biaya operasional (7xx)"], ["labaUsaha", "= Laba usaha"], ["pendapatanLain", "Pendapatan lain (8xx)"], ["lainLain", "Di luar operasional (9xx)"], ["labaBersih", "= LABA BERSIH"]];
+    const nilai = function (p, k) { const x = p[k]; return x && typeof x === "object" ? x.total : x; };
+    isi = '<div class="ks-gulir"><table class="ks-tabel rjd-beli-tabel" id="ks-lap-lr"><thead><tr><th>Pos</th><th class="ks-td-rp">Bulan ini</th><th class="ks-td-rp">Kumulatif</th></tr></thead><tbody>' +
+      kel.map(function (x) { const sub = x[0].indexOf("laba") === 0; return '<tr data-pos="' + x[0] + '"' + (sub ? ' class="ks-lap-sub"' : '') + '><td>' + x[1] + '</td><td class="ks-td-rp">' + ksLapRp_(nilai(lr.bulan, x[0])) + '</td><td class="ks-td-rp">' + ksLapRp_(nilai(lr.kumulatif, x[0])) + '</td></tr>' +
+        (!sub && lr.bulan[x[0]] && (lr.bulan[x[0]].rinci || []).length ? lr.bulan[x[0]].rinci.map(function (r) { return '<tr class="ks-lap-rinci"><td><span class="ks-mono">' + ksEsc_(r.akun) + '</span> ' + ksEsc_(r.nama) + '</td><td class="ks-td-rp">' + ksLapRp_(r.saldo) + '</td><td class="ks-td-rp"></td></tr>'; }).join("") : ''); }).join("") +
+      '</tbody></table></div>';
+  } else if (KS_LAP_TAB === "arus") {
+    isi = ar ? '<div class="rjd-beli-ringkas"><div>Saldo awal<b>' + ksLapRp_(ar.saldoAwal) + '</b></div><div>Masuk<b>' + ksLapRp_(ar.totalMasuk) + '</b></div><div>Keluar<b>' + ksLapRp_(ar.totalKeluar) + '</b></div><div>Saldo akhir<b>' + ksLapRp_(ar.saldoAkhir) + '</b></div></div>' +
+      '<div class="ks-gulir"><table class="ks-tabel rjd-beli-tabel" id="ks-lap-arus"><thead><tr><th>Tipe</th><th class="ks-td-rp">Masuk</th><th class="ks-td-rp">Keluar</th><th class="ks-td-rp">Baris</th></tr></thead><tbody>' +
+      Object.keys(ar.perTipe || {}).map(function (t) { const x = ar.perTipe[t]; return '<tr><td>' + ksEsc_(t) + '</td><td class="ks-td-rp">' + ksLapRp_(x.masuk) + '</td><td class="ks-td-rp">' + ksLapRp_(x.keluar) + '</td><td class="ks-td-rp">' + x.baris + '</td></tr>'; }).join("") + '</tbody></table></div>' : '<p class="ks-info">Arus kas bulan ini belum ada.</p>';
+  } else if (KS_LAP_TAB === "pph") {
+    isi = '<div class="ks-gulir"><table class="ks-tabel rjd-beli-tabel" id="ks-lap-pph"><thead><tr><th>Basis</th><th class="ks-td-rp">Omset</th><th class="ks-td-rp">PPh Final 0,5%</th></tr></thead><tbody>' +
+      '<tr data-basis="akrual"><td>Akrual -- invoice terbit bulan ini (4xx)</td><td class="ks-td-rp">' + ksLapRp_(pph.basisAkrual) + '</td><td class="ks-td-rp">' + ksLapRp_(pph.pphAkrual) + '</td></tr>' +
+      '<tr data-basis="kas"><td>Kas -- uang klien yang masuk bulan ini</td><td class="ks-td-rp">' + ksLapRp_(pph.basisKas) + '</td><td class="ks-td-rp">' + ksLapRp_(pph.pphKas) + '</td></tr>' +
+      '<tr><td>PPh dipotong klien bulan ini (124)</td><td></td><td class="ks-td-rp">' + ksLapRp_(pph.dipotongKlien) + '</td></tr><tr><td>Setoran PPh Final bulan ini (217)</td><td></td><td class="ks-td-rp">' + ksLapRp_(pph.setoran) + '</td></tr></tbody></table></div>' +
+      '<p class="ks-info">' + ksEsc_(pph.catatan || "") + '</p>';
+  } else if (KS_LAP_TAB === "syarat") {
+    const semuaOk = (d.syarat || []).every(function (s) { return s.ok; }), bolehTutup = !d.tertutup && semuaOk && d.bulan < String(KS_DATA.hariIni || "").slice(0, 7);
+    isi = '<ul class="ks-lap-syarat" id="ks-lap-syarat">' + (d.syarat || []).map(function (s) { return '<li data-syarat="' + ksEsc_(s.kode) + '" class="' + (s.ok ? 'ks-lap-ok' : 'ks-lap-belum') + '"><b>' + (s.ok ? 'OK' : 'BELUM') + '</b> ' + ksEsc_(s.nama) + (s.keterangan ? ' <span class="ks-sub">' + ksEsc_(s.keterangan) + '</span>' : '') + '</li>'; }).join("") + '</ul>' +
+      '<div class="ks-aksi">' + (d.tertutup ? '<span class="ks-badge ks-badge-tutup">Periode sudah ditutup' + (d.tutup ? ' oleh ' + ksEsc_(String(d.tutup.oleh || "").split("@")[0]) : '') + '</span>' :
+        '<button id="ks-lap-tutup" class="ks-btn ks-btn-utama" type="button" onclick="ksLapTutup()"' + (bolehTutup && !KS_LAP_SIBUK ? '' : ' disabled="disabled" title="Semua syarat harus OK dan bulan sudah lewat"') + '>' + (KS_LAP_SIBUK ? 'Mengirim...' : 'Tutup periode ' + ksEsc_(ksNamaBulan(d.bulan))) + '</button>') + '</div>' +
+      (d.alokasiOverhead && d.alokasiOverhead.baris ? '<p class="ks-info">Alokasi overhead bulan ini: ' + d.alokasiOverhead.baris + ' PO, ' + ksLapRp_(d.alokasiOverhead.total) + '.</p>' : '');
+  } else if (KS_LAP_TAB === "aset") {
+    const as = d.aset || { aset: [] };
+    isi = '<div class="ks-gulir"><table class="ks-tabel rjd-beli-tabel" id="ks-lap-aset-tabel"><thead><tr><th>Aset</th><th>Kelompok</th><th>Perolehan</th><th class="ks-td-rp">Nilai</th><th class="ks-td-rp">Akumulasi</th><th class="ks-td-rp">Nilai buku</th><th></th></tr></thead><tbody>' +
+      (as.aset || []).map(function (a) { return '<tr data-aset="' + ksEsc_(a.idAset) + '"' + (a.aktif ? '' : ' class="ks-lap-nonaktif"') + '><td><b>' + ksEsc_(a.nama) + '</b><div class="ks-sub ks-mono">' + ksEsc_(a.idAset) + '</div></td><td>' + ksEsc_(a.kelompok) + (a.aktif ? '' : ' <span class="ks-sub">nonaktif</span>') + '</td><td>' + ksEsc_(a.tanggalPerolehan) + ' &#183; ' + a.umurBulan + ' bln</td>' +
+        '<td class="ks-td-rp">' + ksLapRp_(a.perolehan) + '</td><td class="ks-td-rp">' + ksLapRp_(a.akumulasi) + '</td><td class="ks-td-rp">' + ksLapRp_(a.nilaiBuku) + '</td><td>' + (a.aktif ? '<button class="ks-btn ks-btn-kecil" type="button" onclick="ksAsetNonaktif(\'' + (typeof rjdAttrJs_ === "function" ? rjdAttrJs_(a.idAset) : ksEsc_(a.idAset)) + '\')"' + (KS_LAP_SIBUK ? ' disabled' : '') + '>Nonaktifkan</button>' : '') + '</td></tr>'; }).join("") +
+      '</tbody></table></div>' + (!(as.aset || []).length ? '<p class="ks-info" id="ks-lap-aset-kosong">Belum ada aset tetap. Catat mesin, kendaraan, atau bangunan di bawah; penyusutannya dihitung garis lurus per bulan dan masuk jurnal otomatis.</p>' : '') +
+      '<div class="ks-saring ks-lap-form" id="ks-aset-form"><input id="ks-aset-nama" placeholder="nama aset"><select id="ks-aset-kelompok">' + KS_ASET_KELOMPOK.map(function (k) { return '<option value="' + k + '">' + k + '</option>'; }).join("") + '</select>' +
+      '<input id="ks-aset-tanggal" type="date" title="tanggal perolehan"><input id="ks-aset-nilai" inputmode="decimal" placeholder="nilai perolehan"><input id="ks-aset-residu" inputmode="decimal" placeholder="nilai residu (opsional)"><input id="ks-aset-umur" inputmode="numeric" placeholder="umur (bulan)"><input id="ks-aset-catatan" placeholder="catatan">' +
+      '<button id="ks-aset-simpan" class="ks-btn ks-btn-kecil" type="button" onclick="ksAsetCatat()"' + (KS_LAP_SIBUK ? ' disabled' : '') + '>Catat aset</button></div>' +
+      '<div class="ks-aksi"><button id="ks-aset-penyusutan" class="ks-btn ks-btn-kecil" type="button" onclick="ksAsetPenyusutan()"' + (KS_LAP_SIBUK || d.tertutup ? ' disabled' : '') + '>Jalankan penyusutan ' + ksEsc_(ksNamaBulan(d.bulan)) + '</button><span class="ks-sub">Idempoten: aset yang sudah disusutkan bulan ini dilewati. Tutup periode menjalankannya otomatis.</span></div>';
+  }
+  el.innerHTML = '<div class="ks-kartu">' + judul + ringkas + '<div class="rjd-beli-tabs">' + Object.keys(KS_LAP_TAB_NAMA).map(tab).join("") + '</div>' + pesan + isi +
+    '<div class="ks-aksi"><button class="ks-btn" type="button" onclick="ksLapMuat()">Muat ulang</button></div></div>';
 }
