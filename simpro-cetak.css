@@ -619,3 +619,14 @@ body:has(nav) { padding-top: 0; }
    MENJELASKAN angka di atasnya, jadi dibuat lebih redup dan tidak boleh ikut dijumlah dengan mata. */
 .ck-rl-asal { color: #6B6157; }
 .ck-rl-asal b { color: #2E2A25; }
+
+/* ============================================================
+   SET PO (30 Okt 2026, butuh gs >= @427): blok set memakai kerangka blok produk (ck-sj-blok /
+   ck-sj-matriks). Pembedanya garis tepi kiri dan baris rincian "1 set = ..." yang TERBACA di kertas --
+   warna bukan satu-satunya penanda. word-break: normal melawan bundel Blogger (body break-word).
+   ============================================================ */
+.ck-set-blok { border-left: 3px solid var(--navy); padding-left: 10px; }
+.ck-set-isi { font-size: 12px; color: var(--ink-soft); margin: -2px 0 6px; word-break: normal; overflow-wrap: break-word; }
+.ck-set-catatan { font-size: 12px; color: var(--ink-soft); margin: 0 0 18px; padding: 8px 12px;
+  border: 1px dashed var(--line); border-radius: 8px; word-break: normal; overflow-wrap: break-word; }
+.ck-set-galat { font-size: 12px; color: #8A5D1F; background: #FCF3E3; border-radius: 8px; padding: 8px 12px; margin: 0 0 18px; }

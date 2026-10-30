@@ -276,10 +276,208 @@ function ckMatriksInvoice_(items){
   return { blok: blok, lain: lain };
 }
 
+/* ============================================================
+ * SET PO DI CETAKAN (30 Okt 2026, butuh gs >= @427 -- set-po.js)
+ * ============================================================
+ * Order yang dijual per SET (261029/MCONX A33: Dress Relarm 15 + Outer Relarm 15, Rp 37.000/set) tetap
+ * dicatat per potong: produksinya memang terpisah, dan harga set dipecah ke tiap style di Edit PO. Di kertas,
+ * anggota satu set digabung jadi SATU blok -- qty dalam set, harga per set (= jumlah harga anggota), dan
+ * rinciannya ("1 set = Dress Rp 22.000 + Outer Rp 15.000") di bawah judul supaya keuangan klien bisa
+ * mencocokkannya dengan PO mereka.
+ *
+ * Per (warna, size): qty set = MIN qty anggota. Kelebihan anggota (set belum lengkap) TETAP tercetak per
+ * potong dan disebut di "Catatan set" -- jadi total dokumen tidak berubah sesen pun. Subtotal set dihitung
+ * qty set x harga anggota, sisanya = subtotal ASLI dikurangi bagian set (pola ckMatriksInvoice_: subtotal
+ * dijumlah dari subtotal asli, bukan dihitung ulang). Sel yang anggotanya punya lebih dari satu harga tidak
+ * dipasangkan: harga set-nya tidak tunggal. Pasangan warna: rjdSetPasanganWarna_ (simpro-global.js), aturan
+ * yang SAMA dengan peringatan form surat jalan.
+ *
+ * Payload lama (tanpa `set`) dan item tanpa setId = perilaku lama persis: semuanya lewat `sisa`.
+ */
+function ckSetTeks_(v){ return String(v === null || v === undefined ? "" : v).trim(); }
+
+/** FUNGSI MURNI. pakaiHarga: invoice (true) / surat jalan (false). Kembali { blok, sisa, catatan }. */
+function ckSetGabung_(items, daftarSet, pakaiHarga){
+  const urutSize = ["XS","S","M","L","XL","2XL","3XL","4XL","5XL","All Size"];
+  const petaSet = {};
+  (Array.isArray(daftarSet) ? daftarSet : []).forEach(function(s){
+    if(s && s.id && Array.isArray(s.anggota) && s.anggota.length >= 2) petaSet[s.id] = s;
+  });
+  const sisa = [], perSet = {}, urutSet = [], blok = [], catatan = [];
+  (items || []).forEach(function(it){
+    const s = it && it.setId ? petaSet[it.setId] : null;
+    const ai = it ? Number(it.setAnggota) : NaN;
+    if(!s || !(ai >= 0 && ai < s.anggota.length) || Math.floor(ai) !== ai){ sisa.push(it); return; }
+    if(!perSet[s.id]){ perSet[s.id] = s.anggota.map(function(){ return []; }); urutSet.push(s.id); }
+    perSet[s.id][ai].push(it);
+  });
+
+  urutSet.forEach(function(id){
+    const s = petaSet[id], grup = perSet[id];
+    const namaAng = s.anggota.map(function(a){ return ckSetTeks_(a.style) || ckSetTeks_(a.deskripsi) || "-"; });
+    const pasang = rjdSetPasanganWarna_(grup.map(function(arr){
+      return arr.map(function(it){ return ckSetTeks_(it.warna) || "-"; });
+    }));
+    if(!pasang){
+      grup.forEach(function(arr){ arr.forEach(function(it){ sisa.push(it); }); });
+      const absen = namaAng.filter(function(n, i){ return !grup[i].length; });
+      catatan.push(s.nama + ": " + (absen.length ? absen.join(", ") + " tidak ada di dokumen ini" :
+        "warna anggotanya tidak bisa dipasangkan") + ", jadi dicetak per potong.");
+      return;
+    }
+    const sel = grup.map(function(){ return {}; });
+    grup.forEach(function(arr, i){
+      arr.forEach(function(it){
+        const baris = pasang(i, ckSetTeks_(it.warna) || "-");
+        if(baris === null){   // warna yang tidak dimiliki semua anggota -- disebut, sama dengan peringatan form
+          sisa.push(it);
+          catatan.push(s.nama + ": " + namaAng[i] + " " + (ckSetTeks_(it.warna) || "-") + " " + (ckSetTeks_(it.size) || "-") + " " +
+            (Number(it.jumlah) || 0) + " pcs tidak berpasangan warna, dicetak per potong.");
+          return;
+        }
+        const kk = baris + "||" + (ckSetTeks_(it.size) || "-");
+        const c = sel[i][kk] || (sel[i][kk] = { qty: 0, sub: 0, harga: [], item: [] });
+        c.qty += Number(it.jumlah) || 0;
+        c.sub += Number(it.subtotal) || 0;
+        const h = Number(it.hargaSatuan) || 0;
+        if(c.harga.indexOf(h) === -1) c.harga.push(h);
+        c.item.push(it);
+      });
+    });
+    const semua = [];
+    sel.forEach(function(m){ Object.keys(m).forEach(function(kk){ if(semua.indexOf(kk) === -1) semua.push(kk); }); });
+    const perHarga = {}, urutHarga = [];
+    semua.forEach(function(kk){
+      const cs = sel.map(function(m){ return m[kk] || null; });
+      const bagian = kk.split("||"), baris = bagian[0], sz = bagian[1];
+      const lengkap = cs.every(function(c){ return c && c.qty > 0; });
+      const satuHarga = !pakaiHarga || cs.every(function(c){ return c && c.harga.length === 1; });
+      const q = (lengkap && satuHarga) ? Math.min.apply(null, cs.map(function(c){ return c.qty; })) : 0;
+      if(q > 0){
+        const hargaAng = pakaiHarga ? cs.map(function(c){ return c.harga[0]; }) : [];
+        const kunci = hargaAng.join("+");
+        if(!perHarga[kunci]){
+          perHarga[kunci] = { nama: s.nama, anggota: s.anggota, hargaAnggota: hargaAng,
+            harga: hargaAng.reduce(function(x, y){ return x + y; }, 0), baris: [], size: {}, sel: {}, sub: {},
+            totalSet: 0, totalSub: 0, jumlahAnggota: s.anggota.length, catatan: [] };
+          urutHarga.push(kunci);
+        }
+        const b = perHarga[kunci];
+        if(b.baris.indexOf(baris) === -1) b.baris.push(baris);
+        b.size[sz] = true;
+        b.sel[kk] = (b.sel[kk] || 0) + q;
+        const subSet = pakaiHarga ? hargaAng.reduce(function(x, h){ return x + q * h; }, 0) : 0;
+        b.sub[baris] = (b.sub[baris] || 0) + subSet;
+        b.totalSet += q;
+        b.totalSub += subSet;
+        cs.forEach(function(c){ c.item.forEach(function(it){
+          if(it.catatan && b.catatan.indexOf(it.catatan) === -1) b.catatan.push(it.catatan);
+        }); });
+      }
+      // Kelebihan per anggota tetap tercetak per potong -- total dokumen tidak boleh bergeser.
+      const lebih = [];
+      cs.forEach(function(c, i){
+        if(!c) return;
+        const n = c.qty - q;
+        if(n <= 0) return;
+        if(q === 0){ c.item.forEach(function(it){ sisa.push(it); }); }
+        else {
+          sisa.push(Object.assign({}, c.item[0], { jumlah: n,
+            subtotal: pakaiHarga ? c.sub - q * c.harga[0] : c.item[0].subtotal }));
+        }
+        lebih.push(namaAng[i] + " " + n + " pcs");
+      });
+      if(lebih.length){
+        const tempat = s.nama + " " + (baris !== "-" ? baris + " " : "") + sz + ": ";
+        const absen = namaAng.filter(function(n, i){ return !cs[i] || !(cs[i].qty > 0); });
+        catatan.push(tempat + (q ? q + " set, " : "") +
+          (!lengkap ? lebih.join(", ") + " tanpa pasangan (" + absen.join(", ") + " tidak ada)" :
+            (!satuHarga ? "harga anggota tidak tunggal, " + lebih.join(", ") :
+              "lebih " + lebih.join(", "))) + " dicetak per potong.");
+      }
+    });
+    urutHarga.forEach(function(k){
+      const b = perHarga[k];
+      const ada = Object.keys(b.size);
+      b.size = urutSize.filter(function(x){ return b.size[x]; })
+        .concat(ada.filter(function(x){ return urutSize.indexOf(x) === -1; }));
+      blok.push(b);
+    });
+  });
+  return { blok: blok, sisa: sisa, catatan: catatan };
+}
+
+/** "1 set = CNX / MCONX A33: Dress Relarm 15 Rp 22.000 + Outer Relarm 15 Rp 15.000" (HTML, sudah di-escape). */
+function ckSetIsi_(b){
+  const a = b.anggota || [];
+  const induk = a.length > 0 && a.every(function(x){
+    return ckSetTeks_(x.brand) === ckSetTeks_(a[0].brand) && ckSetTeks_(x.artikel) === ckSetTeks_(a[0].artikel);
+  });
+  const bagian = a.map(function(x, i){
+    const n = induk ? (ckSetTeks_(x.style) || "-")
+      : (ckSetTeks_(x.deskripsi) || [x.brand, x.artikel, x.style].map(ckSetTeks_).filter(Boolean).join(" / "));
+    return rjdEscapeHtml_(n) + (b.hargaAnggota && b.hargaAnggota.length ? " " + formatRupiah(b.hargaAnggota[i]) : "");
+  });
+  const kepala = induk ? [a[0].brand, a[0].artikel].map(ckSetTeks_).filter(Boolean).join(" / ") : "";
+  return "1 set = " + (kepala ? rjdEscapeHtml_(kepala) + ": " : "") + bagian.join(" + ");
+}
+
+/** Satu blok set -- kerangka yang sama dengan blok produk (ck-sj-blok / ck-sj-matriks), kolom jumlahnya "Set". */
+function ckSetBlokHtml_(b, pakaiHarga){
+  const kepala = '<tr><th class="ck-sj-warna">Warna</th>' +
+    b.size.map(function(sz){ return '<th class="num">' + rjdEscapeHtml_(sz) + '</th>'; }).join("") +
+    '<th class="num ck-sj-total">Set</th>' + (pakaiHarga ? '<th class="num ck-inv-sub">Subtotal</th>' : '') + '</tr>';
+  const baris = b.baris.map(function(w){
+    let qw = 0;
+    const sel = b.size.map(function(sz){
+      const q = b.sel[w + "||" + sz] || 0;
+      qw += q;
+      return '<td class="num">' + (q ? q : '<span class="ck-sj-nol">&#8212;</span>') + '</td>';
+    }).join("");
+    return '<tr><td class="ck-sj-warna">' + rjdEscapeHtml_(w) + '</td>' + sel +
+      '<td class="num ck-sj-total">' + qw + '</td>' +
+      (pakaiHarga ? '<td class="num ck-inv-sub">' + formatRupiah(b.sub[w] || 0) + '</td>' : '') + '</tr>';
+  }).join("");
+  const kaki = '<tr class="ck-sj-kaki"><td class="ck-sj-warna">Total</td>' +
+    b.size.map(function(sz){
+      let t = 0;
+      b.baris.forEach(function(w){ t += b.sel[w + "||" + sz] || 0; });
+      return '<td class="num">' + t + '</td>';
+    }).join("") +
+    '<td class="num ck-sj-total">' + b.totalSet + '</td>' +
+    (pakaiHarga ? '<td class="num ck-inv-sub">' + formatRupiah(b.totalSub) + '</td>' : '') + '</tr>';
+  return '<div class="ck-sj-blok ck-set-blok">' +
+    '<div class="ck-sj-judul">' + rjdEscapeHtml_(b.nama) +
+      '<span>' + (pakaiHarga ? formatRupiah(b.harga) + ' / set' : b.totalSet + ' set') + '</span></div>' +
+    '<div class="ck-set-isi">' + ckSetIsi_(b) + '</div>' +
+    '<table class="ck-dok-tabel ck-sj-matriks">' +
+      '<thead>' + kepala + '</thead><tbody>' + baris + kaki + '</tbody></table>' +
+    (!pakaiHarga && b.catatan.length
+      ? '<div class="ck-sj-catatan">' + b.catatan.map(rjdEscapeHtml_).join(" &#183; ") + '</div>' : '') +
+  '</div>';
+}
+
+/** Ekor baris "Total Dikirim": berapa set di dalam pcs itu -- 1 set = 2 pcs, dan klien menghitung set. */
+function ckSetTotalSJ_(gab){
+  let set = 0, pcs = 0;
+  gab.blok.forEach(function(b){ set += b.totalSet; pcs += b.totalSet * b.jumlahAnggota; });
+  return set ? ' &#183; termasuk ' + set + ' set (' + pcs + ' pcs)' : '';
+}
+
+/** Catatan set (tercetak) + galat baca set (layar saja). */
+function ckSetCatatanHtml_(gab, setGalat){
+  return (gab.catatan.length
+      ? '<div class="ck-set-catatan"><b>Catatan set:</b> ' + gab.catatan.map(rjdEscapeHtml_).join(" ") + '</div>' : '') +
+    (setGalat
+      ? '<div class="ck-set-galat ck-no-print">' + rjdEscapeHtml_(setGalat) + ' &#8212; dokumen ini dicetak per potong.</div>' : '');
+}
+
 function ckRenderInvoice(d){
   const statusClass = d.status === "Lunas" ? "lp-badge-lunas" : (d.status === "DP Diterima" ? "lp-badge-dp" : "lp-badge-belum");
 
-  const m = ckMatriksInvoice_(d.items);
+  // 30 Okt 2026 (set PO, butuh gs >= @427): anggota set digabung jadi blok per set; sisanya per produk seperti biasa.
+  const gabSet = ckSetGabung_(d.items, d.set, true);
+  const m = ckMatriksInvoice_(gabSet.sisa);
 
   const blokItem = m.blok.map(function(g){
     const kepala = '<tr><th class="ck-sj-warna">Warna</th>' +
@@ -329,7 +527,8 @@ function ckRenderInvoice(d){
       '</tbody></table>'
     : '';
 
-  const barisItem = blokItem + blokLain;
+  const barisItem = gabSet.blok.map(function(b){ return ckSetBlokHtml_(b, true); }).join("") +
+    blokItem + blokLain + ckSetCatatanHtml_(gabSet, d.setGalat);
 
   // Urutan baris ringkasan SENGAJA: Subtotal -> Total Tagihan -> Pembayaran -> Sisa Tagihan.
   //
@@ -484,7 +683,10 @@ function ckMatriksPengiriman_(items){
 }
 
 function ckRenderSuratJalan(d){
-  const blokProduk = ckMatriksPengiriman_(d.items).map(function(p){
+  // 30 Okt 2026 (set PO, butuh gs >= @427): blok set dulu, lalu produk yang bukan (atau belum lengkap sebagai) set.
+  const gabSet = ckSetGabung_(d.items, d.set, false);
+  const blokProduk = gabSet.blok.map(function(b){ return ckSetBlokHtml_(b, false); }).join("") +
+    ckMatriksPengiriman_(gabSet.sisa).map(function(p){
     const kepala = '<tr><th class="ck-sj-warna">Warna</th>' +
       p.size.map(function(sz){ return '<th class="num">' + rjdEscapeHtml_(sz) + '</th>'; }).join("") +
       '<th class="num ck-sj-total">Total</th></tr>';
@@ -530,7 +732,8 @@ function ckRenderSuratJalan(d){
         '<br/>Jenis: ' + rjdEscapeHtml_(d.jenisPengiriman) + '<br/>Metode: ' + rjdEscapeHtml_(d.metode) +
         (d.noResi ? '<br/>No. Resi: ' + rjdEscapeHtml_(d.noResi) : '')) +
       blokProduk +
-      '<div style="text-align:right;font-weight:700;font-size:14px;margin-bottom:20px">Total Dikirim: ' + d.jumlah + ' pcs</div>' +
+      '<div style="text-align:right;font-weight:700;font-size:14px;margin-bottom:20px">Total Dikirim: ' + d.jumlah + ' pcs' + ckSetTotalSJ_(gabSet) + '</div>' +
+      ckSetCatatanHtml_(gabSet, d.setGalat) +
       (d.catatan ? '<div class="ck-dok-catatan"><b>Catatan:</b> ' + rjdEscapeHtml_(d.catatan) + '</div>' : '') +
       '<div class="ck-dok-ttd">' +
         '<div class="kolom">Dikirim oleh,<div class="garis"></div><div class="nama-ttd">RJD Apparel</div></div>' +

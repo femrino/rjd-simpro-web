@@ -6086,3 +6086,35 @@ async function dbSimpanEditPO(){
       "Tekan Simpan lagi tanpa menutup form: kiriman ulang dari form yang sama tidak disimpan dua kali.";
   });
 }
+
+/* ============================================================
+ * SET PO -- ATURAN PASANGAN WARNA ANGGOTA SET (30 Okt 2026, butuh gs >= @427)
+ * ============================================================
+ * SATU tempat untuk cetakan surat jalan & invoice (simpro-cetak.js) dan peringatan form surat jalan
+ * (simpro-pengiriman.js) -- supaya yang diperingatkan form dan yang tercetak di kertas tidak pernah berbeda
+ * pendapat. Masukan: warna yang ADA per anggota set, [[...], [...]].
+ *   - tiap anggota cuma punya SATU warna -> satu baris set; labelnya warna-warna itu digabung " / "
+ *     (Dress Hitam + Outer Motif = "Hitam / Motif") -- set yang potongannya beda warna
+ *   - selain itu -> dipasangkan per NAMA warna yang dimiliki SEMUA anggota; warna yang tidak dimiliki
+ *     semua anggota tidak berpasangan (dicetak per potong)
+ *   - ada anggota tanpa warna sama sekali (absen dari dokumen/isian) -> null: tidak ada pasangan. Ini JATUH dari
+ *     aturan kedua (warna yang dimiliki SEMUA anggota = kosong), bukan pemeriksaan sendiri -- NISAN 30 Okt 2026:
+ *     pemeriksaan terpisah `w.some(kosong)` dicabut lewat sabotase dan tidak satu uji pun merah, karena hasilnya
+ *     selalu sama; perilakunya dijaga jalan135 C3 & G5.
+ * Kembali: fungsi (indeksAnggota, warna) -> label baris set atau null; atau null.  FUNGSI MURNI.
+ */
+function rjdSetPasanganWarna_(warnaPerAnggota){
+  const w = (warnaPerAnggota || []).map(function(x){
+    return (x || []).filter(function(v, i, a){ return a.indexOf(v) === i; });
+  });
+  if(w.length < 2) return null;
+  if(w.every(function(x){ return x.length === 1; })){
+    const nama = [];
+    w.forEach(function(x){ if(nama.indexOf(x[0]) === -1) nama.push(x[0]); });
+    const label = nama.join(" / ");
+    return function(){ return label; };
+  }
+  const sama = w[0].filter(function(v){ return w.every(function(x){ return x.indexOf(v) !== -1; }); });
+  if(!sama.length) return null;
+  return function(i, warna){ return sama.indexOf(warna) !== -1 ? warna : null; };
+}
