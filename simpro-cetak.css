@@ -531,6 +531,56 @@ body:has(nav) { padding-top: 0; }
      justru lebih sulit dibaca daripada daftar panjang. */
   .ck-sj-blok { page-break-inside: avoid; }
 }
+/* ============================================================
+   @PF-25 (30 Okt 2026) -- MATRIKS INVOICE & SURAT JALAN: ANGKA TIDAK BOLEH TERBELAH.
+   ============================================================
+   Gejalanya `4/27`, `15/37`, header `X/L` di layar HP -- invoice dibuka klien di HP lewat portal, dan
+   portal memakai halaman ini juga -- serta di KERTAS A4 untuk order 10 size (header `2X/L`). Sebabnya
+   bundel CSS Blogger (`body { word-break: break-word }`) menurunkan lebar minimum sel sampai satu huruf,
+   dan `.ck-dok-tabel { width: 100% }` tanpa pembungkus penggulir memeras kolom angka alih-alih meluber.
+
+   TERUKUR SEBELUM (uji/ukur-pf25.py: struktur halaman live -- `section.ck-scr-main` ber-padding 16 px
+   di HP, fixture jalan135 lama tidak menirunya --, font asli, bundel Blogger):
+     invoice MCONX A33 (5 size)  360 px 33 kata pecah, 390 px 32, 430 px 29; dengan blok set 480 px 11
+     invoice 10 size 3 warna     pecah di SEMUA lebar <= 760 px, sekaligus meluberkan halaman <= 520 px;
+                                 KERTAS 700 px 19, 718 px (A4) 17
+     surat jalan                 5 size 360 px 22; 10 size pecah sampai 760 px
+
+   KENAPA BUKAN POLA PF-19 SAJA (`word-break: normal` = redistribusi, nol ongkos): di sini ongkosnya
+   TIDAK nol. Lebar minimum matriks 5 size 406 px, 10 size 738 px -- lebih lebar daripada ruang dokumen
+   di HP (316 px pada 390 px), jadi tanpa pembungkus halamannya meluber 53 px di 390 px, dan matriks
+   10 size meluber di KERTAS 700/718 px (terpotong printer). Jadi pola PF-23: pembungkus penggulir
+   (markupnya di simpro-cetak.js -- ckSetBlokHtml_, ckRenderInvoice, ckRenderSuratJalan), dan aturan
+   sel HANYA di dalam pembungkus itu: di luar pembungkus `word-break: normal` meluberkan halaman.
+
+   Margin pindah dari tabel ke pembungkus: `overflow-x: auto` membuat konteks format blok, sehingga
+   margin bawah tabel tidak lagi melebur dengan margin blok induknya -- tanpa pemindahan ini jarak
+   antarblok di desktop bertambah 4 px.
+
+   TERUKUR SESUDAH (berkas ini, tanpa suntikan): nol kata/angka terbelah dan nol luber halaman di
+   6 bentuk x 18 lebar/kertas; geometri desktop 900/1300 px dan kertas 700-800 px identik dengan v390
+   pada 34 dari 36 render -- dua sisanya tepat render yang dulu rusak (10 size di kertas 700/718 px,
+   matriksnya 60/80 px lebih pendek karena header tidak pecah per huruf lagi).
+   ONGKOS YANG DITERIMA: di HP tabel yang lebih lebar daripada ruang dokumen menggulir -- invoice
+   5 size di < 480 px (di 390 px kolom Subtotal ada di balik geseran 90 px), 10 size sampai ~880 px.
+   Memadatkan tabel di HP mengubah tampilan dokumen klien -- keputusan Femri, bukan bagian patch ini.
+   ============================================================ */
+.ck-sj-gulir { overflow-x: auto; margin-bottom: 4px; }
+.ck-sj-gulir.ck-inv-lain { margin-bottom: 20px; }
+.ck-sj-gulir > .ck-dok-tabel { margin-bottom: 0; }
+.ck-sj-gulir th, .ck-sj-gulir td { word-break: normal; }
+/* "Rp 165.438.000" satu kesatuan: saat tabel menggulir (lebar minimum), kolom Subtotal 108 px membungkus
+   "Rp" ke baris sendiri untuk angka 9 digit -- terukur juga di kertas 700/718 px. Qty satu token, jadi
+   aturan ini tidak mengubahnya. */
+.ck-sj-gulir td.num { white-space: nowrap; }
+@media print {
+  /* Kertas tidak punya penggeser (pola PF-23): `overflow: auto` di media cetak bisa MEMOTONG isi. */
+  .ck-sj-gulir { overflow: visible; }
+  /* Matriks 10 size + nama warna tiga kata ("Dusty Pink Motif 2") = lebar minimum 738 px > A4 718 px.
+     Di KERTAS nama warna boleh membungkus -- terjadi hanya kalau tabelnya memang tidak muat; di layar
+     tetap satu baris karena pembungkusnya menggulir. */
+  .ck-sj-gulir .ck-sj-warna { white-space: normal; }
+}
 /* Kolom subtotal di matriks invoice. Harga satuan tidak jadi kolom -- sudah
    jadi judul blok, karena satu blok = satu harga. */
 .ck-inv-sub { min-width: 108px; font-weight: 600; }

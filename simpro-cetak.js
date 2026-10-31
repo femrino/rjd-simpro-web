@@ -450,8 +450,9 @@ function ckSetBlokHtml_(b, pakaiHarga){
     '<div class="ck-sj-judul">' + rjdEscapeHtml_(b.nama) +
       '<span>' + (pakaiHarga ? formatRupiah(b.harga) + ' / set' : b.totalSet + ' set') + '</span></div>' +
     '<div class="ck-set-isi">' + ckSetIsi_(b) + '</div>' +
-    '<table class="ck-dok-tabel ck-sj-matriks">' +
-      '<thead>' + kepala + '</thead><tbody>' + baris + kaki + '</tbody></table>' +
+    // @PF-25: pembungkus penggulir .ck-sj-gulir (lihat simpro-cetak.css) -- tanpa itu angka terbelah di HP.
+    '<div class="ck-sj-gulir"><table class="ck-dok-tabel ck-sj-matriks">' +
+      '<thead>' + kepala + '</thead><tbody>' + baris + kaki + '</tbody></table></div>' +
     (!pakaiHarga && b.catatan.length
       ? '<div class="ck-sj-catatan">' + b.catatan.map(rjdEscapeHtml_).join(" &#183; ") + '</div>' : '') +
   '</div>';
@@ -508,14 +509,16 @@ function ckRenderInvoice(d){
     return '<div class="ck-sj-blok">' +
       '<div class="ck-sj-judul">' + rjdEscapeHtml_(g.nama) +
         '<span>' + formatRupiah(g.harga) + ' / pcs</span></div>' +
-      '<table class="ck-dok-tabel ck-sj-matriks">' +
-        '<thead>' + kepala + '</thead><tbody>' + baris + kaki + '</tbody></table>' +
+      // @PF-25: pembungkus penggulir .ck-sj-gulir (lihat simpro-cetak.css) -- tanpa itu angka terbelah di HP.
+      '<div class="ck-sj-gulir"><table class="ck-dok-tabel ck-sj-matriks">' +
+        '<thead>' + kepala + '</thead><tbody>' + baris + kaki + '</tbody></table></div>' +
     '</div>';
   }).join("");
 
-  // Baris non-produk (ongkir, potongan) tetap sebagai tabel biasa.
+  // Baris non-produk (ongkir, potongan) tetap sebagai tabel biasa -- ikut dibungkus (@PF-25): di 360 px
+  // header "Deskri/psi" dan "Ongki/r" ikut pecah. ck-inv-lain membawa margin 20 px milik .ck-dok-tabel.
   const blokLain = m.lain.length
-    ? '<table class="ck-dok-tabel"><thead><tr><th>Deskripsi</th>' +
+    ? '<div class="ck-sj-gulir ck-inv-lain"><table class="ck-dok-tabel"><thead><tr><th>Deskripsi</th>' +
         '<th class="num">Qty</th><th class="num">Harga Satuan</th><th class="num">Subtotal</th>' +
       '</tr></thead><tbody>' +
       m.lain.map(function(it){
@@ -524,7 +527,7 @@ function ckRenderInvoice(d){
           '<td class="num">' + formatRupiah(it.hargaSatuan) + '</td>' +
           '<td class="num">' + formatRupiah(it.subtotal) + '</td></tr>';
       }).join("") +
-      '</tbody></table>'
+      '</tbody></table></div>'
     : '';
 
   const barisItem = gabSet.blok.map(function(b){ return ckSetBlokHtml_(b, true); }).join("") +
@@ -717,8 +720,9 @@ function ckRenderSuratJalan(d){
     return '<div class="ck-sj-blok">' +
       '<div class="ck-sj-judul">' + rjdEscapeHtml_(p.nama) +
         '<span>' + p.total + ' pcs</span></div>' +
-      '<table class="ck-dok-tabel ck-sj-matriks">' +
-        '<thead>' + kepala + '</thead><tbody>' + baris + kaki + '</tbody></table>' +
+      // @PF-25: pembungkus penggulir .ck-sj-gulir (lihat simpro-cetak.css) -- tanpa itu angka terbelah di HP.
+      '<div class="ck-sj-gulir"><table class="ck-dok-tabel ck-sj-matriks">' +
+        '<thead>' + kepala + '</thead><tbody>' + baris + kaki + '</tbody></table></div>' +
       (p.catatan.length
         ? '<div class="ck-sj-catatan">' + p.catatan.map(rjdEscapeHtml_).join(" &#183; ") + '</div>'
         : '') +
