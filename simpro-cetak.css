@@ -695,10 +695,34 @@ body:has(nav) { padding-top: 0; }
   .ck-lc-ringkasan, .ck-lc-ringkasan-kecil { grid-template-columns: repeat(2, 1fr); }
 }
 /* Laporan cutting PER ROLL (opsi A, gs >= @430): order vs cutting 3 baris, neraca per kain-warna dalam satuan kirim roll, satu baris per
-   roll per rasio. Sel tabel baru `word-break: normal` + `overflow-wrap: normal` HANYA di dalam pembungkus .ck-lc-wrap (pola PF-25):
-   kode marker panjang tanpa spasi melebarkan tabel di dalam penggulir layar, bukan dipecah bundel Blogger; di kertas pembungkusnya
-   tidak menggulir, jadi jalan139 P8b menuntut tabelnya muat. */
-.ck-lc-wrap .ck-lc-pr th, .ck-lc-wrap .ck-lc-pr td, .ck-lc-wrap .ck-lc-os th, .ck-lc-wrap .ck-lc-os td { word-break: normal; overflow-wrap: normal; }
+   roll per rasio. Sel tabelnya memakai aturan PF-28 di bawah (v398 memasang aturan yang sama khusus .ck-lc-pr & .ck-lc-os). */
+/* @PF-28 (2 Nov 2026) -- SEMUA tabel di pembungkus .ck-lc-wrap: sel `word-break: normal` + `overflow-wrap: normal` (pola PF-25),
+   dan di KERTAS header boleh membungkus.
+   v398 memasang aturan sel ini hanya untuk dua tabel per roll; tabel LAMA -- hasil potong, konsumsi kain, rincian gelaran -- yang
+   dipakai bentuk lama DAN bab "Kain lain" tetap dipecah bundel Blogger (`body { word-break: break-word }`).
+   TERUKUR SEBELUM (uji/ukur-pf28.py: fixture halaman live, font asli, bentuk data jalan139 & jalan9):
+     tabel konsumsi 10 kolom lebar minimum 803 px di SEMUA lebar -- seluruhnya dari header nowrap, sel diperas sampai satu huruf:
+       `Furin/g`, `Sutr/a`, `Brok/at`, `Burgu/ndy`, kode `C8/0`, termasuk di desktop 1300 px (ruang dokumen 762 px);
+     rincian gelaran `Norma/l` sampai 900 px; hasil potong `menun/ggu`, `pasang/an`, `Burgu/ndy` sampai 641 px;
+     KERTAS: 803 px > 718 px isi A4 -> Chrome MENGECILKAN seluruh laporan (label tanda tangan 8,42 pt, bukan 9,375; F4 8,63).
+   SEL: aturan pertama di bawah. Di luar pembungkus ia akan meluberkan halaman; di dalamnya tabel melebar di penggulir.
+     `overflow-wrap: normal` bukan hiasan: tanpanya `Burgund/y`, `Toyob/o` tetap pecah di 360-1100 px (selisih pembulatan
+     lebar min-content, kasus `Dust/y` PF-26).
+   KERTAS: pembungkus tidak menggulir (`overflow: visible` di blok cetak di atas), dan begitu sel tidak lagi diperas, tabel
+     konsumsi jadi 808-837 px -- dikecilkan 11-14%, LEBIH buruk. Opsi diukur di cetak A4 sungguhan (page.pdf + PyMuPDF), 5 bentuk:
+       kolom Re-cut & Panel klien dibuang bila nol   muat HANYA kalau semuanya nol; re-cut berisi (jalan9) tetap 825 px, -13%
+       Re-cut & Panel klien digabung satu kolom       743-771 px, masih dikecilkan 3-7%
+       kertas mendatar (named page, size landscape)   muat & 9,375 pt, tapi SETIAP bentuk +1 halaman A4 (2->3, 3->4)
+       header membungkus di kertas (DIPILIH)          muat di 620-800 px, 9,375 pt, jumlah halaman tetap, nol perubahan markup
+     Ongkos yang diterima: header konsumsi 2-3 baris di kertas ("RE-/CUT/(M)" patah di tanda hubung -- patahan sah).
+   LAYAR: header tetap nowrap (kebijakan PF-23: layar punya penggeser). Membungkus juga di layar >= 641 px menghapus geseran
+     desktop 46-75 px tabel konsumsi, tapi ikut membungkus header gelaran yang sudah muat (thead 29 -> 48 px) -- tidak diambil.
+   SENGAJA tidak ikut: angka kartu ringkasan pecah di 641-740 px (PF-29) dan tabel sisa per roll di 320 px (di luar pembungkus,
+     dijaga jalan119 E). Penjaga: uji/jalan139.py P8c-P9. */
+.ck-lc-wrap .ck-lc-tabel th, .ck-lc-wrap .ck-lc-tabel td { word-break: normal; overflow-wrap: normal; }
+@media print {
+  .ck-lc-wrap .ck-lc-tabel thead th { white-space: normal; }
+}
 .ck-lc-os tbody th { font-size: 10.5px; font-weight: 600; color: var(--ink-soft); text-align: left; white-space: nowrap; }
 .ck-lc-os tr.ck-lc-os-awal td, .ck-lc-os tr.ck-lc-os-awal th { border-top: 1.5px solid var(--line); }
 .ck-lc-os tr.ck-lc-os-akhir td, .ck-lc-os tr.ck-lc-os-akhir th { background: var(--cream); }
