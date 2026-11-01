@@ -84,6 +84,36 @@
 .cr-st-diukur-tanpa-gelaran { color: var(--amber, #D9941E); }
 .cr-catatan { font-size: 12.5px; color: var(--ink-soft, #6B7280); margin: 10px 0 0; }
 
+/* ---------- tabel isian (v395) ---------- kotak isian tetap 16 px (zoom iOS); lebar kolom dipaku supaya tabel
+   menggulir di HP alih-alih memeras kotak sampai tidak terbaca. Sel Hasil boleh membungkus (kalimat, bukan angka). */
+.cr-petunjuk { margin: 0 0 10px; }
+.cr-isian td { vertical-align: middle; padding: 5px 6px; }
+.cr-in { font: inherit; font-size: 16px; color: var(--ink, #172134); padding: 6px 8px; border: 1px solid var(--line, #E5E0D6); border-radius: 8px;
+  background: #fff; min-height: 38px; box-sizing: border-box; width: 100%; }
+.cr-in:focus { outline: 2px solid var(--sky, #3B7BBF); outline-offset: 0; border-color: transparent; }
+.cr-in:disabled { background: var(--cream, #F9F7F2); color: var(--ink-soft, #6B7280); }
+.cr-in-no { width: 112px; }
+.cr-in-yd { width: 104px; }
+.cr-in-lapis { width: 72px; }
+.cr-in-marker { min-width: 210px; }
+.cr-isian .cr-hasil { min-width: 200px; font-size: 13px; }
+.cr-isian .cr-nomor { color: var(--ink-soft, #6B7280); }
+.cr-baris-ok td { background: #EAF5EF; }
+.cr-baris-gagal td { background: #FBEDEB; }
+.cr-baris-tunda td { background: var(--cream, #F9F7F2); }
+.cr-galat { color: var(--terra-deep, #9E3528); font-size: 12.5px; margin-top: 2px; }
+.cr-ok { color: #1F6B48; font-size: 12.5px; }
+.cr-hapus { width: 32px; height: 32px; border: 1px solid var(--line, #E5E0D6); border-radius: 8px; background: #fff; color: var(--ink-soft, #6B7280);
+  font-size: 18px; line-height: 1; cursor: pointer; }
+.cr-form > .cr-aksi { margin-top: 12px; }
+.cr-tempel { margin-top: 14px; padding: 12px; background: var(--cream, #F9F7F2); border-radius: 10px; }
+.cr-tempel textarea { width: 100%; box-sizing: border-box; font-size: 16px; font-family: ui-monospace, Consolas, monospace; border: 1px solid var(--line, #E5E0D6);
+  border-radius: 8px; padding: 8px; margin-bottom: 8px; }
+.cr-tempel-kolom { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.cr-tempel-kolom .cr-f { flex: 1 1 150px; }
+.cr-tempel-kolom small { font-weight: 400; }
+#cr-tempel-peta .cr-f-marker { margin-bottom: 10px; max-width: 420px; }
+
 @media (max-width: 640px) {
   .cr-wrap { padding: 0 10px 60px; }
   .cr-kartu { padding: 14px 12px; }
