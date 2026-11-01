@@ -3804,6 +3804,7 @@ function rjdDaftarApi_() {
   if (typeof CK_API_URL !== "undefined") u.push(String(CK_API_URL));   // cetak
   if (typeof KS_API_URL !== "undefined") u.push(String(KS_API_URL));   // buku kas
   if (typeof UP_API_URL !== "undefined") u.push(String(UP_API_URL));   // upah borongan (v245: dulu tak terdaftar di mana pun)
+  if (typeof CR_API_URL !== "undefined") u.push(String(CR_API_URL));   // cutting per roll (1 Nov 2026)
   return u;
 }
 
@@ -4009,6 +4010,9 @@ var RJD_JAGA_HALAMAN = {
   // BARANG (tahap & tanggal, nol rupiah), jadi areanya "produksi" -- semua
   // staf internal boleh melihat, seperti halaman produksi.
   "/p/jadwal.html":       "produksi",
+  // 1 Nov 2026: form cutting per roll (simpro-cutting.js; kerangkanya disusun JS, template tidak punya cabangnya).
+  // Area produksi seperti halaman produksi; bagian "cutting" ditegakkan server per rute (simpanCuttingRoll).
+  "/p/cutting.html":      "produksi",
   // v245: SOP Lantai Produksi. Dokumen internal (alur, aturan tahap, skenario)
   // -- nol rupiah, semua staf internal boleh baca, seperti jadwal. Halaman ini
   // sudah memanggil rjdJagaHalaman sejak awal tapi tidak pernah didaftarkan,

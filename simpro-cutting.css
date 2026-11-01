@@ -1,0 +1,91 @@
+/* simpro-cutting.css -- /p/cutting.html, form cutting per roll (1 Nov 2026). Kerangka (header, menu, hero) memakai
+ * kelas simpro-global.css; yang di sini cuma isi halaman. Tiga aturan yang SUDAH dibayar halaman lain, dipasang sejak awal:
+ *   - kotak isian >= 16 px: di bawah itu iOS memperbesar halaman tiap kotak disentuh (PF-12);
+ *   - tabel angka di dalam pembungkus penggulir + word-break normal: bundel Blogger memasang
+ *     body{word-break:break-word; overflow-wrap:break-word} yang memecah "115,5" / "Chantil/y" di sel sempit (PF-19, PF-25);
+ *   - lencana status di LUAR aliran tinggi baris tidak perlu -- statusnya teks biasa di sel sendiri. */
+.cr-hero { padding: 52px 20px 20px; grid-template-columns: 1fr; text-align: center; }
+.cr-hero-isi { max-width: 660px; margin: 0 auto; }
+.cr-hero .eyebrow { justify-content: center; }
+.cr-hero h1 { font-size: clamp(26px, 4vw, 38px); }
+.cr-hero .lead { margin: 0 auto; max-width: 560px; }
+
+.cr-wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px 80px; position: relative; }
+.cr-kotak-login { background: #fff; border: 1px solid var(--line, #E5E0D6); border-radius: 16px; padding: 28px 24px; text-align: center; max-width: 420px; margin: 40px auto; }
+.cr-kotak-login h2 { margin: 0 0 8px; font-size: 20px; }
+.cr-kotak-login p { margin: 0 0 18px; color: var(--ink-soft, #6B7280); font-size: 13.5px; }
+#cr-google-btn { display: flex; justify-content: center; }
+.cr-info { font-size: 13.5px; color: var(--ink-soft, #6B7280); margin: 8px 0; }
+
+.cr-kartu { background: #fff; border: 1px solid var(--line, #E5E0D6); border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
+.cr-pilih { display: flex; flex-wrap: wrap; gap: 12px; }
+.cr-judul { font-size: 16px; margin: 0 0 12px; color: var(--navy, #172134); }
+.cr-judul-lap { margin: 22px 0 10px; }
+.cr-satuan { font-weight: 400; color: var(--ink-soft, #6B7280); font-size: 13px; }
+
+.cr-f { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft, #6B7280); min-width: 0; }
+.cr-f input, .cr-f select { font: inherit; font-size: 16px; font-weight: 400; color: var(--ink, #172134); padding: 9px 10px; border: 1px solid var(--line, #E5E0D6);
+  border-radius: 10px; background: #fff; min-height: 42px; box-sizing: border-box; width: 100%; }
+.cr-f input:focus, .cr-f select:focus { outline: 2px solid var(--sky, #3B7BBF); outline-offset: 0; border-color: transparent; }
+.cr-f-po { flex: 2 1 280px; }
+.cr-f-kw { flex: 1 1 220px; }
+.cr-baris { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; align-items: flex-end; }
+.cr-f-roll { flex: 2 1 240px; }
+.cr-f-no { flex: 1 1 120px; }
+.cr-f-yd { flex: 1 1 130px; }
+.cr-f-marker { flex: 3 1 260px; }
+.cr-f-lapis { flex: 0 1 90px; }
+.cr-f-tgl { flex: 1 1 150px; }
+.cr-f-kode { flex: 1 1 130px; }
+
+.cr-sumber { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 12px; font-size: 14px; }
+.cr-sumber label, .cr-cek { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; cursor: pointer; }
+.cr-sumber input, .cr-cek input { width: 18px; height: 18px; margin: 0; }
+.cr-cek { font-size: 14px; font-weight: 600; color: var(--navy, #172134); flex: 1 1 260px; }
+.cr-baris-selesai { padding: 10px 12px; background: var(--cream, #F9F7F2); border-radius: 10px; }
+
+.cr-hitung { font-size: 13.5px; color: var(--ink, #172134); line-height: 1.6; margin: 4px 0 12px; }
+.cr-hitung:empty { display: none; }
+.cr-awas { color: var(--terra-deep, #9E3528); font-weight: 600; }
+.cr-aksi { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.cr-btn { font: inherit; font-size: 15px; font-weight: 700; border-radius: 10px; padding: 10px 22px; min-height: 44px; border: 1px solid var(--line, #E5E0D6); background: #fff; cursor: pointer; }
+.cr-btn-utama { background: var(--navy, #172134); color: #fff; border-color: var(--navy, #172134); }
+.cr-btn:disabled { opacity: .6; cursor: wait; }
+.cr-pesan { font-size: 13.5px; padding: 8px 12px; border-radius: 10px; flex: 1 1 260px; }
+.cr-pesan-ok { background: #EAF5EF; color: #1F6B48; }
+.cr-pesan-galat { background: #FBEDEB; color: var(--terra-deep, #9E3528); }
+#cr-pesan-muat { margin-bottom: 14px; }
+
+.cr-grup-aktif { border-color: var(--navy-soft, #2A3754); }
+.cr-grup-judul { margin: 0 0 10px; font-size: 15px; color: var(--navy, #172134); }
+.cr-ring { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.cr-ring span { background: var(--cream, #F9F7F2); border-radius: 10px; padding: 6px 10px; min-width: 96px; }
+.cr-ring small { display: block; font-size: 11px; color: var(--ink-soft, #6B7280); }
+.cr-ring b { font-size: 15px; white-space: nowrap; }
+.cr-minus, .cr-ring .cr-minus b { color: var(--terra-deep, #9E3528); }
+.cr-plus { color: #1F6B48; }
+
+.cr-gulir { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* NISAN 1 Nov 2026: min-width 640px DICABUT. Diukur (360-900 px, data pendek & panjang): dengan kode marker panjang lebar
+   minimum isinya sendiri sudah 643 px (aturan itu no-op); dengan data pendek ia cuma membuat 640-690 px menggeser 46 px
+   untuk tabel yang muat. Yang dulu ditahannya -- sel membungkus jadi 3 baris di HP -- ditahan teks yang tak boleh putus:
+   "kode x lapis" bersambung spasi tak-putus, status nowrap (jalan137 J menuntut tinggi baris = jumlah marker di sel). */
+.cr-tabel { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.cr-tabel th, .cr-tabel td { padding: 7px 8px; border-bottom: 1px solid var(--line-soft, #EFEAE0); text-align: left; vertical-align: top;
+  word-break: normal; overflow-wrap: normal; }
+.cr-tabel th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft, #6B7280); white-space: nowrap; }
+.cr-tabel .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cr-tabel .cr-no { font-weight: 700; white-space: nowrap; }
+.cr-endcut td { background: var(--cream, #F9F7F2); }
+.cr-st { font-size: 12px; white-space: nowrap; }
+.cr-st-selesai { color: #1F6B48; font-weight: 600; }
+.cr-st-dipakai { color: var(--sky, #3B7BBF); font-weight: 600; }
+.cr-st-belum-dipakai { color: var(--ink-soft, #6B7280); }
+.cr-st-diukur-tanpa-gelaran { color: var(--amber, #D9941E); }
+.cr-catatan { font-size: 12.5px; color: var(--ink-soft, #6B7280); margin: 10px 0 0; }
+
+@media (max-width: 640px) {
+  .cr-wrap { padding: 0 10px 60px; }
+  .cr-kartu { padding: 14px 12px; }
+  .cr-hero { padding: 40px 12px 14px; }
+}
