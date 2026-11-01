@@ -303,6 +303,17 @@ body:has(nav) { padding-top: 0; }
      kaki halaman 1 dan separuhnya di kepala halaman 2 adalah cara paling
      mudah membuat klien salah transfer. */
   .ck-rekening{page-break-inside:avoid;break-inside:avoid}
+  /* @PF-27 (1 Nov 2026): blok TANDA TANGAN tidak boleh terbelah halaman -- label ("Hormat kami,") di satu
+     lembar, garis & nama di lembar berikutnya = dokumen yang ditandatangani di dua kertas. Terukur di cetak
+     SUNGGUHAN (uji/ukur-pf27.py: page.pdf A4 margin 10 mm dibaca PyMuPDF, bentuk disapu melintasi batas
+     halaman; emulate_media tidak memaginasi, jadi tidak ada harness yang pernah melihatnya), v395 terbelah:
+     invoice 10/72 bentuk, surat jalan 9/72, surat jalan potongan 10/80, konfirmasi order 5/48, SPK 10/48
+     (F4: 8, 4, 5, 5, 4). Sesudah aturan ini 0 di semua dokumen & kedua kertas, dan jumlah halaman TIDAK
+     bertambah di bentuk mana pun: bentuk yang terbelah sudah memakai halaman itu -- kini lembar terakhirnya
+     memuat tanda tangan UTUH, bukan garis & nama saja. Huruf tetap 12,5 px (tidak dikecilkan Chrome).
+     Menggantikan aturan khusus proforma PF-26 (v393); Laporan Cutting sudah punya .ck-lc-ttd sejak v210.
+     Penjaga: uji/jalan138.py. */
+  .ck-dok-ttd{break-inside:avoid;page-break-inside:avoid}
 }
 
 /* ============================================================
@@ -499,9 +510,8 @@ body:has(nav) { padding-top: 0; }
      jadi tidak terbedakan dari paragraf biasa. */
   .ck-pro-termin, .ck-pro-warn { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .ck-pro-wm { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  /* @PF-26: blok tanda tangan tidak boleh terbelah halaman (label di hal. 1, garis & nama di hal. 2) -- terukur di v391
-     pada 3 dari 10 bentuk proforma, dan pada bentuk keempat begitu watermark berhenti meluber (nisan PF-26 di bawah). */
-  .ck-pro .ck-dok-ttd { break-inside: avoid; page-break-inside: avoid; }
+  /* @PF-27: aturan tanda tangan proforma PF-26 (v393, `.ck-pro .ck-dok-ttd { break-inside: avoid }`) DIGANTIKAN
+     aturan umum `.ck-dok-ttd` di blok cetak utama -- keterbelahan yang sama terukur di lima dokumen lain. */
 }
 
 @media (max-width: 640px) {
@@ -616,7 +626,7 @@ body:has(nav) { padding-top: 0; }
    AKIBAT YANG DIUKUR & DITANGANI: tanpa pengecilan itu proforma 2 item tanpa catatan pindah dari 1 ke 2 halaman dan
      blok tanda tangannya TERBELAH -- keterbelahan yang di v391 sudah terjadi pada 3 dari 10 bentuk (1-5 item, dengan
      & tanpa catatan). `break-inside: avoid` pada tanda tangan proforma: nol terbelah di 10 bentuk, jumlah halaman
-     selain bentuk itu tidak berubah.
+     selain bentuk itu tidak berubah. (Sejak PF-27 aturannya umum, `.ck-dok-ttd` di blok cetak utama.)
    TERUKUR SESUDAH (berkas ini): nol kata/angka terbelah, nol luber halaman, nol rupiah membungkus di 4 bentuk x 12
      lebar/kertas; geometri A33 di desktop & kertas identik v392. ONGKOS YANG DITERIMA, sama dengan PF-25: proforma
      menggulir di < 412 px (A33) / < 430 px (10 size) -- di 360 px 52 px kolom Subtotal ada di balik geseran --,
