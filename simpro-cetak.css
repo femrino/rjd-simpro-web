@@ -694,6 +694,31 @@ body:has(nav) { padding-top: 0; }
 @media (max-width: 640px) {
   .ck-lc-ringkasan, .ck-lc-ringkasan-kecil { grid-template-columns: repeat(2, 1fr); }
 }
+/* Laporan cutting PER ROLL (opsi A, gs >= @430): order vs cutting 3 baris, neraca per kain-warna dalam satuan kirim roll, satu baris per
+   roll per rasio. Sel tabel baru `word-break: normal` + `overflow-wrap: normal` HANYA di dalam pembungkus .ck-lc-wrap (pola PF-25):
+   kode marker panjang tanpa spasi melebarkan tabel di dalam penggulir layar, bukan dipecah bundel Blogger; di kertas pembungkusnya
+   tidak menggulir, jadi jalan139 P8b menuntut tabelnya muat. */
+.ck-lc-wrap .ck-lc-pr th, .ck-lc-wrap .ck-lc-pr td, .ck-lc-wrap .ck-lc-os th, .ck-lc-wrap .ck-lc-os td { word-break: normal; overflow-wrap: normal; }
+.ck-lc-os tbody th { font-size: 10.5px; font-weight: 600; color: var(--ink-soft); text-align: left; white-space: nowrap; }
+.ck-lc-os tr.ck-lc-os-awal td, .ck-lc-os tr.ck-lc-os-awal th { border-top: 1.5px solid var(--line); }
+.ck-lc-os tr.ck-lc-os-akhir td, .ck-lc-os tr.ck-lc-os-akhir th { background: var(--cream); }
+.ck-lc-kel { margin-bottom: 14px; }
+.ck-lc-kel-judul { font-size: 12.5px; margin: 0 0 6px; }
+.ck-lc-kel-judul span { color: var(--ink-soft); font-size: 11px; }
+.ck-lc-kel .ck-lc-ringkasan { margin-bottom: 10px; }
+.ck-lc-tabel tr.ck-lc-rasio td { background: var(--cream); font-size: 11px; border-top: 1.5px solid var(--line); }
+.ck-lc-tabel tr.ck-lc-perhatikan td { background: #FCF3E3; }
+.ck-lc-tabel tr.ck-lc-ec td { color: var(--ink-soft); }
+.ck-lc-tabel tr.ck-lc-total td { border-top: 2px solid var(--ink); }
+.ck-lc-tabel .ck-lc-no { font-weight: 700; white-space: nowrap; }
+.ck-lc-ukur { white-space: nowrap; }
+.ck-lc-sorot { font-size: 11.5px; margin: 0 0 6px; padding: 6px 10px; background: #FDECEA; border-radius: 8px; }
+.ck-lc-sub-blok { margin-bottom: 14px; }
+.ck-lc-sub-blok h3 { font-size: 12px; font-weight: 700; margin: 0 0 6px; }
+@media print {
+  .ck-lc-kel { page-break-inside: auto; }
+  .ck-lc-sorot { background: none; border: 1px solid var(--line); }
+}
 /* v300: rantai setor -> QC di Rekap Kerja Line */
 .ck-rl-kartu.perhatian { border-color: var(--gold, #C8964A); background: #FFF6E5; }
 .ck-rl-kartu.perhatian .ck-rl-angka { color: #8F5A16; }
