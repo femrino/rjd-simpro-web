@@ -791,7 +791,10 @@ function ckTanda_(v){ if (v === null || v === undefined) return "&#8212;"; const
 /* ---------- LAPORAN CUTTING PER ROLL (opsi A, keputusan Femri 1 Nov 2026; butuh gs >= @430) ----------
  * PO yang dicatat lewat form cutting per roll (d.perRoll ada) dicetak berbentuk lembar tim "CUTTING MANSL288":
  * order vs cutting per size (3 baris), neraca kain dalam SATUAN KIRIM roll, lalu satu baris per roll dikelompokkan
- * per rasio dengan subtotal + rincian size, roll di luar ambang ditandai, dan kalimat sorotan "N roll = X% short".
+ * per rasio dengan subtotal, roll di luar ambang ditandai, dan kalimat sorotan "N roll = X% short".
+ * v400 (permintaan Femri): hasil tiap baris dipecah PER SIZE dalam kolom (size yang ada hasilnya di kelompok itu + Total),
+ * menggantikan kolom Pcs dan teks "S 220 . 2XL 220" di sel subtotal/End cut/Total. Terukur di PDF A4: tetap tegak,
+ * tidak dikecilkan (huruf label 9,375 pt), jumlah halaman MANSL 288 tetap 4.
  * Bagian lama "Konsumsi kain" (meter), "Sisa kain per roll" dan "Rincian gelaran" DIGANTI untuk kain berdata per roll
  * -- keduanya separuh cerita yang sama -- dan tetap dicetak untuk kain LAIN di PO yang sama yang belum per roll.
  * PO tanpa data per roll: bentuk lama, tidak tersentuh.
@@ -806,9 +809,10 @@ function ckUkurAsli_(x, satuan){
   const su = x.satuanUkur === "m" ? "m" : "yd";
   return su === satuan ? "" : ' <span class="ck-lc-kecil ck-lc-ukur">(' + ckAngka_(x.sisaUkur) + CK_NBSP + su + ')</span>';
 }
-function ckUrutSize_(perSize, sz){
-  return (sz || []).filter(function(s){ return perSize && perSize[s]; }).concat(Object.keys(perSize || {}).filter(function(s){ return (sz || []).indexOf(s) === -1 && perSize[s]; }))
-    .map(function(s){ return rjdEscapeHtml_(s) + CK_NBSP + perSize[s]; }).join(" &#183; ");
+/** Size yang ADA hasilnya, urut kolom size PO lalu size di luar daftar. v400: menggantikan ckUrutSize_ (teks "S 220 . 2XL 220"
+ *  di satu sel) -- rinciannya sekarang kolom tabel per roll. */
+function ckSizeAda_(perSize, sz){
+  return (sz || []).filter(function(s){ return perSize && perSize[s]; }).concat(Object.keys(perSize || {}).filter(function(s){ return (sz || []).indexOf(s) === -1 && perSize[s]; }));
 }
 
 /** 1. Order vs cutting per size -- tiga baris per warna (Order / Cutting / Balance), kolom = size. */
@@ -849,16 +853,20 @@ function ckLcNeraca_(PR){
   }).join("") + '</div>';
 }
 
-/** 3. Rincian per roll -- dikelompokkan per rasio, subtotal + size, End cut, total, sorotan. */
+/** 3. Rincian per roll -- dikelompokkan per rasio, kolom hasil per size, subtotal, End cut, total, sorotan. */
 function ckLcPerRoll_(d, PR){
   const sz = d.sizeKolom || [];
   const isi = PR.kelompok.map(function(g){
     const u = ckSatuanTeks_(g.satuan);
+    // Kolom size = size yang ada hasilnya di KELOMPOK ini (kain lain di PO yang sama bisa berbeda); 7 kolom tetap + size + Total.
+    const szK = ckSizeAda_((g.ringkasan || {}).perSize, sz), nk = 8 + szK.length;
+    const selSz = function(ps, pcs){ return szK.map(function(z){ return '<td class="num ck-lc-sz">' + (ps && ps[z] ? ckAngka_(ps[z], 0) : '') + '</td>'; }).join('') +
+      '<td class="num ck-lc-sz-total"><b>' + ckAngka_(pcs || 0, 0) + '</b></td>'; };
     // Urut KODE rasio (1, 2, 3 ...), bukan kemunculan roll pertama: roll dua marker bisa membuat Rasio 3 muncul sebelum Rasio 2.
     const rasioUrut = (g.rasio || []).slice().sort(function(a, b){ if (!a.idMarker !== !b.idMarker) return a.idMarker ? -1 : 1;
       return String(a.kode || '').localeCompare(String(b.kode || ''), 'id', { numeric: true }); });
     const baris = rasioUrut.map(function(R){
-      const kepala = '<tr class="ck-lc-rasio"><td colspan="8"><b>' + (R.kode ? rjdEscapeHtml_(R.kode) : 'Roll belum dipakai') + '</b>' +
+      const kepala = '<tr class="ck-lc-rasio"><td colspan="' + nk + '"><b>' + (R.kode ? rjdEscapeHtml_(R.kode) : 'Roll belum dipakai') + '</b>' +
         (R.panjang ? ' &#183; panjang gelaran ' + ckAngka_(R.panjang) + CK_NBSP + u : '') + (R.pcsPerLapis ? ' &#183; ' + R.pcsPerLapis + ' pcs/lapis' : '') +
         ' &#183; ' + (R.roll || []).length + ' roll</td></tr>';
       const rows = (R.roll || []).map(function(x){
@@ -870,32 +878,34 @@ function ckLcPerRoll_(d, PR){
           '<td class="num">' + ckAngka_(x.kirim) + '</td><td class="num">' + ckAngka_(x.aktual) + '</td>' +
           '<td class="num">' + (x.sisa === null || x.sisa === undefined ? '&#8212;' : ckAngka_(x.sisa) + ckUkurAsli_(x, u)) + '</td>' +
           '<td class="num' + (x.selisih < 0 ? ' ck-lc-merah' : '') + '">' + (x.selisih === null || x.selisih === undefined ? '&#8212;' : ckTanda_(x.selisih)) + '</td>' +
-          '<td class="num">' + pct + '</td><td class="num">' + ckAngka_(x.pcs || 0, 0) + '</td></tr>';
+          '<td class="num">' + pct + '</td>' + selSz(x.perSize, x.pcs) + '</tr>';
       }).join("");
       const t = R.subtotal || {};
-      const sub = R.kode ? '<tr class="ck-lc-kaki"><td>Subtotal</td><td class="ck-lc-kecil">' + ckUrutSize_(t.perSize, sz) + '</td>' +
+      const sub = R.kode ? '<tr class="ck-lc-kaki"><td>Subtotal</td><td></td>' +
         '<td class="num">' + ckAngka_(t.kirim) + '</td><td class="num">' + ckAngka_(t.aktual) + '</td><td class="num">' + ckAngka_(t.sisa) + '</td>' +
-        '<td class="num">' + ckTanda_(t.selisih) + '</td><td></td><td class="num">' + ckAngka_(t.pcs, 0) + '</td></tr>' : '';
+        '<td class="num">' + ckTanda_(t.selisih) + '</td><td></td>' + selSz(t.perSize, t.pcs) + '</tr>' : '';
       return kepala + rows + sub;
     }).join("");
     const ec = g.endCut || { gelaran: [] };
-    const endCut = (ec.gelaran || []).length ? '<tr class="ck-lc-rasio"><td colspan="8"><b>End cut</b> &#183; dari kumpulan sisa roll</td></tr>' +
+    const endCut = (ec.gelaran || []).length ? '<tr class="ck-lc-rasio"><td colspan="' + nk + '"><b>End cut</b> &#183; dari kumpulan sisa roll</td></tr>' +
       ec.gelaran.map(function(x){
-        return '<tr class="ck-lc-ec"><td></td><td>' + rjdEscapeHtml_(x.kode) + CK_NBSP + '&#215;' + CK_NBSP + rjdEscapeHtml_(x.lapis) + '<div class="ck-lc-kecil">' + ckUrutSize_(x.perSize, sz) + '</div></td>' +
-          '<td class="num">&#8212;</td><td class="num">' + ckAngka_(x.aktual) + '</td><td class="num">&#8212;</td><td class="num">&#8212;</td><td></td><td class="num">' + ckAngka_(x.pcs || 0, 0) + '</td></tr>';
+        return '<tr class="ck-lc-ec"><td></td><td>' + rjdEscapeHtml_(x.kode) + CK_NBSP + '&#215;' + CK_NBSP + rjdEscapeHtml_(x.lapis) + '</td>' +
+          '<td class="num">&#8212;</td><td class="num">' + ckAngka_(x.aktual) + '</td><td class="num">&#8212;</td><td class="num">&#8212;</td><td></td>' + selSz(x.perSize, x.pcs) + '</tr>';
       }).join("") : '';
     const s = g.ringkasan || {};
-    const total = '<tr class="ck-lc-kaki ck-lc-total"><td>Total</td><td class="ck-lc-kecil">' + ckUrutSize_(s.perSize, sz) + '</td>' +
+    const total = '<tr class="ck-lc-kaki ck-lc-total"><td>Total</td><td></td>' +
       '<td class="num">' + ckAngka_(s.material) + '</td><td class="num">' + ckAngka_(s.konsumsi) + '</td><td class="num">' + ckAngka_(s.sisaAkhir) + '</td>' +
-      '<td class="num">' + ckTanda_(-(s.short || 0)) + '</td><td class="num">' + (s.shortPersen === null || s.shortPersen === undefined ? '' : ckAngka_(Math.abs(s.shortPersen), 1) + '%') + '</td><td class="num">' + ckAngka_(s.pcs, 0) + '</td></tr>';
+      '<td class="num">' + ckTanda_(-(s.short || 0)) + '</td><td class="num">' + (s.shortPersen === null || s.shortPersen === undefined ? '' : ckAngka_(Math.abs(s.shortPersen), 1) + '%') + '</td>' + selSz(s.perSize, s.pcs) + '</tr>';
     const so = g.sorotan || {};
     const sorot = so.roll ? '<p class="ck-lc-sorot"><b>' + so.roll + ' roll di luar batas wajar</b> (' + so.periksa + ' periksa, ' + so.perhatikan + ' perhatikan) menyumbang ' +
       ckAngka_(Math.abs(so.selisih)) + ' ' + u + (so.persenDariShort === null || so.persenDariShort === undefined ? '' : ' = ' + ckAngka_(so.persenDariShort, 1) + '% dari short') + '.</p>' : '';
     const tanpa = (g.tanpaRoll || []).length ? '<p class="ck-lc-catatan">Tanpa roll (form gelaran lama, tidak masuk neraca roll): ' +
       g.tanpaRoll.map(function(t){ return t.gelaran + ' gelaran ' + rjdEscapeHtml_(t.jenis) + ' ' + ckAngka_(t.panjang) + ' ' + u + ', ' + t.pcs + ' pcs'; }).join('; ') + '.</p>' : '';
     return '<div class="ck-lc-kel"><div class="ck-lc-kel-judul"><b>' + rjdEscapeHtml_(g.jenisKain) + ' &#183; ' + rjdEscapeHtml_(g.warna) + '</b></div>' + sorot +
-      '<div class="ck-lc-wrap"><table class="ck-dok-tabel ck-lc-tabel ck-lc-pr"><thead><tr><th>Roll</th><th>Marker &#215; lapis</th><th class="num">Kirim (' + u + ')</th>' +
-      '<th class="num">Aktual</th><th class="num">Sisa</th><th class="num">Selisih</th><th class="num">%</th><th class="num">Pcs</th></tr></thead>' +
+      '<div class="ck-lc-wrap"><table class="ck-dok-tabel ck-lc-tabel ck-lc-pr"><thead><tr><th rowspan="2">Roll</th><th rowspan="2">Marker &#215; lapis</th><th class="num" rowspan="2">Kirim (' + u + ')</th>' +
+      '<th class="num" rowspan="2">Aktual</th><th class="num" rowspan="2">Sisa</th><th class="num" rowspan="2">Selisih</th><th class="num" rowspan="2">%</th>' +
+      '<th colspan="' + (szK.length + 1) + '" class="ck-lc-sz-kepala">Hasil cutting (pcs)</th></tr><tr>' +
+      szK.map(function(z){ return '<th class="num ck-lc-sz">' + rjdEscapeHtml_(z) + '</th>'; }).join('') + '<th class="num ck-lc-sz-total">Total</th></tr></thead>' +
       '<tbody>' + baris + endCut + total + '</tbody></table></div>' + tanpa + '</div>';
   }).join("");
   const a = PR.ambang || {};

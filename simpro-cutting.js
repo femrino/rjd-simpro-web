@@ -10,6 +10,9 @@
  * v397 (permintaan Femri): SISA diketik dalam METER (hasil meteran di lantai) dan dikirim apa adanya ber-satuanSisa "m" --
  * server menyimpannya di kolom Satuan Sisa (v204), bukan angka yard hasil konversi layar. Panjang roll tetap yard (label).
  * Semua perbandingan antar-satuan di layar memakai CR_YD; neraca tetap yard, dengan angka ukur asli "(12,5 m)" di sel sisa.
+ * v400 (permintaan Femri, bentuk lembar tim "HASIL CUTTING (PER-SIZE)"): neraca memecah hasil tiap roll PER SIZE -- kolom
+ * size yang ada hasilnya di kelompok itu + Total, menggantikan kolom Pcs -- dan mendapat baris Total (jumlah kolom).
+ * Data per size sudah dikirim server sejak @428 (perSize per roll / End cut / ringkasan); tidak butuh gs baru.
  *
  * KERANGKA HALAMAN DISUSUN BERKAS INI, BUKAN TEMPLATE. Template Blogger v340 tidak punya cabang untuk /p/cutting.html,
  * jadi body-nya kosong; menambah cabang = tempel template (langkah manual). Header, menu, hero, kotak login dan wadah
@@ -542,6 +545,12 @@ function crTempelMasukkan_() {
 }
 
 // ---------- laporan per roll ----------
+/** Kolom size neraca (v400): hanya size yang ADA hasilnya di kelompok itu, urut size PO (getMarkerPO) lalu urutan baku. */
+function crSizeKolom_(perSize) {
+  const urut = ((CR.konteks && CR.konteks.sizeTersedia) || []).concat(LP_SIZE_ORDER_DIKENAL, ["All Size"]);
+  const pos = function (z) { const i = urut.indexOf(z); return i === -1 ? 999 : i; };
+  return Object.keys(perSize || {}).filter(function (z) { return perSize[z]; }).sort(function (a, b) { return pos(a) - pos(b) || a.localeCompare(b); });
+}
 function crRenderLaporan_() {
   const el = crEl_("cr-laporan"); if (!el) return;
   const L = CR.lap; if (!L) { el.innerHTML = ""; return; }
@@ -552,6 +561,16 @@ function crRenderLaporan_() {
   el.innerHTML = '<h2 class="cr-judul cr-judul-lap">Neraca per roll &#8212; ' + crEsc_(L.idPurchaseOrder) + ' <span class="cr-satuan">(yard)</span></h2>' +
     grup.map(function (g) {
       const s = g.ringkasan || {}, aktif = crKunciKw_(g.jenisKain, g.warna) === CR.kw;
+      const sz = crSizeKolom_(s.perSize);
+      // sel kosong untuk size tanpa hasil (seperti lembar tim) -- angka 0 di 5 kolom x 50 roll menenggelamkan yang terisi
+      const selSz = function (ps, pcs) {
+        return sz.map(function (z) { return '<td class="num cr-sz">' + (ps && ps[z] ? ps[z] : "") + '</td>'; }).join("") + '<td class="num cr-sz-total"><b>' + (pcs || 0) + '</b></td>';
+      };
+      // Baris Total = JUMLAH KOLOM (sisa = sisa roll 353,24, bukan sisa akhir): sisa akhir sudah di kotak ringkasan. Laporan
+      // cetak memakai sisa akhir di barisnya dan menerangkannya di catatan kaki -- perbedaan yang disetujui Femri 2 Nov 2026.
+      const kaki = '<tfoot><tr class="cr-total"><td class="cr-no">Total</td><td class="num">' + sel(s.materialYd) + '</td><td></td><td class="num">' +
+        sel(Math.round(((s.konsumsiRollYd || 0) + (s.endCutYd || 0)) * 100) / 100) + '</td><td class="num">' + sel(s.sisaRollYd) + '</td><td class="num' + kelasSel(s.shortYd) + '">' +
+        sel(s.shortYd) + '</td>' + selSz(s.perSize, s.pcs) + '<td></td></tr></tfoot>';
       const tanpa = Object.keys(g.tanpaRoll || {}).map(function (j) { const t = g.tanpaRoll[j]; return t.gelaran + " gelaran " + j + " (" + crAngka_(t.yd) + " yd, " + t.pcs + " pcs)"; });
       return '<div class="cr-kartu cr-grup' + (aktif ? " cr-grup-aktif" : "") + '" data-kw="' + crEsc_(crKunciKw_(g.jenisKain, g.warna)) + '">' +
         '<h3 class="cr-grup-judul">' + crEsc_(g.jenisKain + " · " + g.warna) + '</h3>' +
@@ -563,16 +582,18 @@ function crRenderLaporan_() {
         '<span><small>End cut</small><b>' + sel(s.endCutYd) + (s.endCutPcs ? " &#183; " + s.endCutPcs + " pcs" : "") + '</b></span>' +
         '<span class="' + kelasSel(s.sisaAkhirYd < 0 ? s.sisaAkhirYd : 0) + '"><small>Sisa akhir</small><b>' + sel(s.sisaAkhirYd) + '</b></span>' +
         '<span><small>Hasil</small><b>' + (s.pcs || 0) + ' pcs</b></span></div>' +
-        '<div class="cr-gulir"><table class="cr-tabel"><thead><tr><th>Roll</th><th class="num">Kirim</th><th>Marker &#215; lapis</th><th class="num">Aktual</th><th class="num">Sisa</th><th class="num">Selisih</th><th class="num">Pcs</th><th>Status</th></tr></thead><tbody>' +
+        '<div class="cr-gulir"><table class="cr-tabel"><thead><tr><th rowspan="2">Roll</th><th rowspan="2" class="num">Kirim</th><th rowspan="2">Marker &#215; lapis</th><th rowspan="2" class="num">Aktual</th><th rowspan="2" class="num">Sisa</th><th rowspan="2" class="num">Selisih</th>' +
+        '<th colspan="' + (sz.length + 1) + '" class="cr-sz-kepala">Hasil cutting per size (pcs)</th><th rowspan="2">Status</th></tr><tr>' +
+        sz.map(function (z) { return '<th class="num cr-sz">' + crEsc_(z) + '</th>'; }).join("") + '<th class="num cr-sz-total">Total</th></tr></thead><tbody>' +
         g.roll.map(function (r) {
           return '<tr><td class="cr-no">' + crEsc_(r.noRoll || "-") + '</td><td class="num">' + sel(r.kirimYd) + '</td><td>' +
             (r.pemakaian.length ? r.pemakaian.map(function (x) { return crTeksPakai_(x); }).join("<br>") : "-") + '</td>' +
             '<td class="num">' + sel(r.aktualYd) + '</td><td class="num">' + sel(r.sisaYd) + (r.satuanUkur === "m" ? ' <small class="cr-ukur">(' + crAngka_(r.sisaUkur) + ' m)</small>' : "") + '</td><td class="num' + kelasSel(r.selisihYd) + '">' + sel(r.selisihYd) + '</td>' +
-            '<td class="num">' + (r.pcs || 0) + '</td><td><span class="cr-st cr-st-' + crNorm_(r.status).replace(/[^a-z]+/g, "-") + '">' + crEsc_(r.status) + '</span></td></tr>';
+            selSz(r.perSize, r.pcs) + '<td><span class="cr-st cr-st-' + crNorm_(r.status).replace(/[^a-z]+/g, "-") + '">' + crEsc_(r.status) + '</span></td></tr>';
         }).join("") +
         (g.endCut && g.endCut.gelaran && g.endCut.gelaran.length ? '<tr class="cr-endcut"><td class="cr-no">End cut</td><td class="num">-</td><td>' + g.endCut.gelaran.map(function (x) { return crTeksPakai_(x); }).join("<br>") +
-          '</td><td class="num">' + sel(g.endCut.yd) + '</td><td class="num">-</td><td class="num">-</td><td class="num">' + (g.endCut.pcs || 0) + '</td><td><span class="cr-st">dari kumpulan sisa</span></td></tr>' : "") +
-        '</tbody></table></div>' +
+          '</td><td class="num">' + sel(g.endCut.yd) + '</td><td class="num">-</td><td class="num">-</td>' + selSz(g.endCut.perSize, g.endCut.pcs) + '<td><span class="cr-st">dari kumpulan sisa</span></td></tr>' : "") +
+        '</tbody>' + kaki + '</table></div>' +
         (tanpa.length ? '<p class="cr-catatan">Tanpa roll (dicatat lewat form gelaran lama, tidak masuk neraca roll): ' + crEsc_(tanpa.join("; ")) + '.</p>' : "") +
         '</div>';
     }).join("") +

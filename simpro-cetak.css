@@ -739,6 +739,22 @@ body:has(nav) { padding-top: 0; }
 .ck-lc-sorot { font-size: 11.5px; margin: 0 0 6px; padding: 6px 10px; background: #FDECEA; border-radius: 8px; }
 .ck-lc-sub-blok { margin-bottom: 14px; }
 .ck-lc-sub-blok h3 { font-size: 12px; font-weight: 700; margin: 0 0 6px; }
+/* v400: kolom hasil per size di tabel per roll. Padding size dipersempit (6 px) supaya 13 kolom muat A4 tegak tanpa
+   dikecilkan -- terukur di PDF MANSL 288; 4 px membuat subtotal "5 289" nyaris bersentuhan. */
+.ck-lc-pr thead th[rowspan] { vertical-align: bottom; }
+.ck-lc-pr th.ck-lc-sz-kepala { text-align: center; }
+.ck-lc-pr .ck-lc-sz { padding-left: 6px; padding-right: 6px; min-width: 2.4em; }
+.ck-lc-pr .ck-lc-sz-total { border-left: 1px solid var(--line); }
+/* Di KERTAS sel dirapatkan (4 px, size 3 px) -- kertas tidak bisa digeser, dan lebar minimum tabel ditentukan jumlah size
+   DAN panjang kode marker ("kode x lapis" tak boleh putus). Terukur v400 (font asli, isi A4 718 px), tanpa -> dengan:
+   kode pendek (MANSL 288) 5 size 656 -> 578, 7 size 739 -> 649, 9 size 822 -> 720 (~0,3% dikecilkan); kode panjang tanpa
+   spasi (fixture jalan139) 2 size 663 -> 607, 4 size 746 -> 678, 5 size 787 -> 713, 6 size 829 -> 749 (~4% dikecilkan --
+   batas yang DITERIMA). Ambang "rapat hanya bila >= 7 size" dicoba lalu DIBUANG: kode panjang sudah melewati A4 di 4 size.
+   Huruf tidak dikecilkan (PF-28); layar tetap lega + menggeser. */
+@media print {
+  .ck-lc-tabel.ck-lc-pr th, .ck-lc-tabel.ck-lc-pr td { padding-left: 4px; padding-right: 4px; }
+  .ck-lc-tabel.ck-lc-pr .ck-lc-sz { padding-left: 3px; padding-right: 3px; }
+}
 @media print {
   .ck-lc-kel { page-break-inside: auto; }
   .ck-lc-sorot { background: none; border: 1px solid var(--line); }

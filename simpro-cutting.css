@@ -84,6 +84,15 @@
 .cr-st-diukur-tanpa-gelaran { color: var(--amber, #D9941E); }
 .cr-ukur { font-size: 11.5px; color: var(--ink-soft, #6B7280); }
 .cr-catatan { font-size: 12.5px; color: var(--ink-soft, #6B7280); margin: 10px 0 0; }
+/* v400: hasil per size. Kepala dua baris (judul kelompok di atas kolom size); sel ber-rowspan ditaruh di bawah supaya
+   sejajar dengan nama size. Total per baris dipisah garis -- itulah angka yang dicocokkan dengan lembar tim.
+   NISAN 2 Nov 2026: kolom Roll MENEMPEL (position: sticky) dicoba di pratinjau lalu DICABUT -- di HP angka yang tergeser
+   setengah ke bawahnya terbaca angka LAIN ("17" tampil "7", "19" tampil "9"). Tabel menggeser utuh seperti sebelumnya. */
+.cr-tabel thead th[rowspan] { vertical-align: bottom; }
+.cr-tabel th.cr-sz-kepala { text-align: center; border-bottom: 1px solid var(--line, #E5E0D6); color: var(--navy, #172134); }
+.cr-tabel .cr-sz { min-width: 2.4em; }
+.cr-tabel .cr-sz-total { border-left: 1px solid var(--line, #E5E0D6); }
+.cr-tabel tfoot td { font-weight: 700; background: var(--cream, #F9F7F2); border-top: 2px solid var(--line, #E5E0D6); border-bottom: 0; }
 
 /* ---------- tabel isian (v395) ---------- kotak isian tetap 16 px (zoom iOS); lebar kolom dipaku supaya tabel
    menggulir di HP alih-alih memeras kotak sampai tidak terbaca. Sel Hasil boleh membungkus (kalimat, bukan angka). */
