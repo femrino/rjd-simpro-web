@@ -282,8 +282,11 @@ function ckMatriksInvoice_(items){
  * Order yang dijual per SET (261029/MCONX A33: Dress Relarm 15 + Outer Relarm 15, Rp 37.000/set) tetap
  * dicatat per potong: produksinya memang terpisah, dan harga set dipecah ke tiap style di Edit PO. Di kertas,
  * anggota satu set digabung jadi SATU blok -- qty dalam set, harga per set (= jumlah harga anggota), dan
- * rinciannya ("1 set = Dress Rp 22.000 + Outer Rp 15.000") di bawah judul supaya keuangan klien bisa
- * mencocokkannya dengan PO mereka.
+ * komposisinya ("1 set = CNX / MCONX A33: Dress Relarm 15 + Outer Relarm 15") di bawah judul.
+ * HARGA ANGGOTA TIDAK DICETAK (keputusan Femri 31 Okt 2026, v392): klien membeli per set; pecahan harga per
+ * style hanya angka internal supaya data per potong punya harga. Konsekuensinya blok invoice dikelompokkan per
+ * HARGA SET, bukan per pecahan -- dua pecahan berbeda dengan harga set sama (22.000 + 15.000 dan 20.000 +
+ * 17.000) akan tampil sebagai dua blok kembar yang tidak bisa dibedakan pembacanya.
  *
  * Per (warna, size): qty set = MIN qty anggota. Kelebihan anggota (set belum lengkap) TETAP tercetak per
  * potong dan disebut di "Catatan set" -- jadi total dokumen tidak berubah sesen pun. Subtotal set dihitung
@@ -355,10 +358,11 @@ function ckSetGabung_(items, daftarSet, pakaiHarga){
       const q = (lengkap && satuHarga) ? Math.min.apply(null, cs.map(function(c){ return c.qty; })) : 0;
       if(q > 0){
         const hargaAng = pakaiHarga ? cs.map(function(c){ return c.harga[0]; }) : [];
-        const kunci = hargaAng.join("+");
+        const hargaSet = hargaAng.reduce(function(x, y){ return x + y; }, 0);
+        const kunci = String(hargaSet);   // per HARGA SET, bukan pecahan -- pecahannya tidak dicetak (v392)
         if(!perHarga[kunci]){
-          perHarga[kunci] = { nama: s.nama, anggota: s.anggota, hargaAnggota: hargaAng,
-            harga: hargaAng.reduce(function(x, y){ return x + y; }, 0), baris: [], size: {}, sel: {}, sub: {},
+          perHarga[kunci] = { nama: s.nama, anggota: s.anggota,
+            harga: hargaSet, baris: [], size: {}, sel: {}, sub: {},
             totalSet: 0, totalSub: 0, jumlahAnggota: s.anggota.length, catatan: [] };
           urutHarga.push(kunci);
         }
@@ -407,16 +411,16 @@ function ckSetGabung_(items, daftarSet, pakaiHarga){
   return { blok: blok, sisa: sisa, catatan: catatan };
 }
 
-/** "1 set = CNX / MCONX A33: Dress Relarm 15 Rp 22.000 + Outer Relarm 15 Rp 15.000" (HTML, sudah di-escape). */
+/** "1 set = CNX / MCONX A33: Dress Relarm 15 + Outer Relarm 15" (HTML, sudah di-escape). Tanpa harga anggota (v392). */
 function ckSetIsi_(b){
   const a = b.anggota || [];
   const induk = a.length > 0 && a.every(function(x){
     return ckSetTeks_(x.brand) === ckSetTeks_(a[0].brand) && ckSetTeks_(x.artikel) === ckSetTeks_(a[0].artikel);
   });
-  const bagian = a.map(function(x, i){
+  const bagian = a.map(function(x){
     const n = induk ? (ckSetTeks_(x.style) || "-")
       : (ckSetTeks_(x.deskripsi) || [x.brand, x.artikel, x.style].map(ckSetTeks_).filter(Boolean).join(" / "));
-    return rjdEscapeHtml_(n) + (b.hargaAnggota && b.hargaAnggota.length ? " " + formatRupiah(b.hargaAnggota[i]) : "");
+    return rjdEscapeHtml_(n);   // harga anggota sengaja tidak dicetak (v392)
   });
   const kepala = induk ? [a[0].brand, a[0].artikel].map(ckSetTeks_).filter(Boolean).join(" / ") : "";
   return "1 set = " + (kepala ? rjdEscapeHtml_(kepala) + ": " : "") + bagian.join(" + ");
