@@ -434,7 +434,9 @@ body:has(nav) { padding-top: 0; }
   position: absolute; top: 44%; left: 50%;
   transform: translate(-50%, -50%) rotate(-26deg);
   font-family: 'Archivo', sans-serif; font-weight: 900;
-  font-size: 104px; letter-spacing: .1em;
+  /* @PF-26: min(..., 12vw) supaya kotak miringnya tidak pernah lebih lebar daripada kartu (dan halaman) -- nisan di
+     blok PF-26 bawah. 104 px tetap fallback DAN tetap ukuran desktop >= 867 px. */
+  font-size: 104px; font-size: min(104px, 12vw); letter-spacing: .1em;
   color: rgba(190, 60, 45, .09);
   pointer-events: none; z-index: 0; white-space: nowrap;
 }
@@ -497,10 +499,13 @@ body:has(nav) { padding-top: 0; }
      jadi tidak terbedakan dari paragraf biasa. */
   .ck-pro-termin, .ck-pro-warn { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .ck-pro-wm { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* @PF-26: blok tanda tangan tidak boleh terbelah halaman (label di hal. 1, garis & nama di hal. 2) -- terukur di v391
+     pada 3 dari 10 bentuk proforma, dan pada bentuk keempat begitu watermark berhenti meluber (nisan PF-26 di bawah). */
+  .ck-pro .ck-dok-ttd { break-inside: avoid; page-break-inside: avoid; }
 }
 
 @media (max-width: 640px) {
-  .ck-pro-wm { font-size: 58px; }
+  .ck-pro-wm { font-size: 58px; font-size: min(58px, 12vw); }
   .ck-pro-termin-grid { grid-template-columns: 1fr 1fr; }
 }
 
@@ -567,8 +572,15 @@ body:has(nav) { padding-top: 0; }
    ============================================================ */
 .ck-sj-gulir { overflow-x: auto; margin-bottom: 4px; }
 .ck-sj-gulir.ck-inv-lain { margin-bottom: 20px; }
+/* @PF-26: tabel LEPAS proforma & surat jalan potongan -- pembungkus mengambil alih margin 20 px .ck-dok-tabel. Kelas
+   sendiri, BUKAN ck-inv-lain: dua dokumen tagihan yang berbagi kelas saling merusak saat salah satunya dipoles (kepala
+   bagian PROFORMA di atas). */
+.ck-sj-gulir.ck-gulir-lepas { margin-bottom: 20px; }
 .ck-sj-gulir > .ck-dok-tabel { margin-bottom: 0; }
-.ck-sj-gulir th, .ck-sj-gulir td { word-break: normal; }
+/* `overflow-wrap: normal` (@PF-26): bundel Blogger juga memasang `overflow-wrap: break-word`, dan v391 baru menetralkan
+   `word-break`-nya. Di sel ber-lebar min-content selisih pembulatan cukup untuk memecah kata (kolom 35,000 px, "Dusty"
+   35,016 px -> `Dust/y` di 320 px). Di dalam pembungkus tabel boleh melebar, jadi katup itu tidak dibutuhkan. */
+.ck-sj-gulir th, .ck-sj-gulir td { word-break: normal; overflow-wrap: normal; }
 /* "Rp 165.438.000" satu kesatuan: saat tabel menggulir (lebar minimum), kolom Subtotal 108 px membungkus
    "Rp" ke baris sendiri untuk angka 9 digit -- terukur juga di kertas 700/718 px. Qty satu token, jadi
    aturan ini tidak mengubahnya. */
@@ -581,6 +593,35 @@ body:has(nav) { padding-top: 0; }
      tetap satu baris karena pembungkusnya menggulir. */
   .ck-sj-gulir .ck-sj-warna { white-space: normal; }
 }
+/* ============================================================
+   @PF-26 (1 Nov 2026) -- PROFORMA & SURAT JALAN POTONGAN: anggota keluarga PF-25 yang tidak ikut v391.
+   ============================================================
+   Proforma DIBUKA KLIEN di portal untuk membayar DP, jadi angka terbelah di sana sama mahalnya dengan invoice.
+   TERUKUR SEBELUM (uji/ukur-pf25.py LAIN=1, fixture halaman live, v391 = v392 untuk kedua fungsi ini):
+     proforma A33 (2 item)       360 px 9 kata/angka terbelah (`33.88/0.000`, `22.00/0`, `15/40`), 480 px 4, 641 px 2;
+                                 halaman meluber 27 px di 360, 51 px di 641, 12-21 px di kertas 700/718
+     proforma 10 size 3 warna    terbelah di SEMUA lebar, termasuk desktop 1300 px & kertas A4 (`424/2`: rincian
+                                 10 size memeras kolom Qty)
+     surat jalan potongan        A33 Qty `15/40` di 360-480 px, `154/0` di 600-760; 10 size sampai 1300 px & A4
+   SEBAB ANGKA: sama dengan PF-25 -- .ck-dok-tabel tanpa pembungkus penggulir. Lebar minimum tabel proforma sesudah
+     `word-break: normal` 338 px (10 size 355) > ruang dokumen 286 px di 360 px, jadi pola PF-19 saja meluberkan
+     halaman. Pembungkus .ck-sj-gulir dipakai ulang (markup di ckRenderProforma & ckRenderSuratJalanPotongan) dengan
+     pengubah .ck-gulir-lepas untuk margin 20 px; sisa `Dust/y` di 320 px ditutup `overflow-wrap: normal` di atas.
+   SEBAB LUBER HALAMAN: WATERMARK .ck-pro-wm, bukan tabel -- kotak miringnya 414 px (58 px) di HP dan 742 px (104 px)
+     di > 640 px & kertas, lebih lebar daripada kartunya; disembunyikan = luber 0 di semua lebar. Di cetak A4
+     SUNGGUHAN (page.pdf) luber 12 px itu membuat Chrome MENGECILKAN seluruh halaman: huruf sel 9,61 pt, bukan 9,75.
+     min(104px, 12vw) / min(58px, 12vw): kotak miringnya 0,857 vw, selalu di dalam kartu; desktop >= 867 px dan
+     484-640 px tidak berubah. `vw` saat MENCETAK = lebar HALAMAN, bukan layar (terukur dari PDF: 64,8 pt = 12% x
+     720 px, dicetak dari layar 1300 maupun 390), jadi aturan yang sama berlaku di kertas: A4 86 px.
+   AKIBAT YANG DIUKUR & DITANGANI: tanpa pengecilan itu proforma 2 item tanpa catatan pindah dari 1 ke 2 halaman dan
+     blok tanda tangannya TERBELAH -- keterbelahan yang di v391 sudah terjadi pada 3 dari 10 bentuk (1-5 item, dengan
+     & tanpa catatan). `break-inside: avoid` pada tanda tangan proforma: nol terbelah di 10 bentuk, jumlah halaman
+     selain bentuk itu tidak berubah.
+   TERUKUR SESUDAH (berkas ini): nol kata/angka terbelah, nol luber halaman, nol rupiah membungkus di 4 bentuk x 12
+     lebar/kertas; geometri A33 di desktop & kertas identik v392. ONGKOS YANG DITERIMA, sama dengan PF-25: proforma
+     menggulir di < 412 px (A33) / < 430 px (10 size) -- di 360 px 52 px kolom Subtotal ada di balik geseran --,
+     surat jalan potongan hanya di 320 px. Pemadatan tabel di HP = keputusan Femri. Penjaga: uji/jalan136.py.
+   ============================================================ */
 /* Kolom subtotal di matriks invoice. Harga satuan tidak jadi kolom -- sudah
    jadi judul blok, karena satu blok = satu harga. */
 .ck-inv-sub { min-width: 108px; font-weight: 600; }

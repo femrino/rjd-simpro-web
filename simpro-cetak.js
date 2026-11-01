@@ -989,10 +989,12 @@ function ckRenderSuratJalanPotongan(d){
         '<b>Perhatian:</b> yang diserahkan adalah <b>potongan kain</b>, bukan barang jadi. ' +
         'Penjahitan dan penyelesaiannya di luar tanggung jawab RJD Apparel.' +
       '</div>' +
-      '<table class="ck-dok-tabel">' +
+      // @PF-26: pembungkus penggulir .ck-sj-gulir (lihat simpro-cetak.css) -- tanpa itu qty terbelah di HP, dan
+      // rincian 10 size memeras kolom Qty bahkan di desktop & kertas A4.
+      '<div class="ck-sj-gulir ck-gulir-lepas"><table class="ck-dok-tabel">' +
         '<thead><tr><th>Artikel</th><th>Warna</th><th>Rincian Size</th><th class="num">Qty</th></tr></thead>' +
         '<tbody>' + rows + '</tbody>' +
-      '</table>' +
+      '</table></div>' +
       '<div style="text-align:right;font-weight:700;font-size:14px;margin-bottom:20px">Total: ' +
         (d.totalQty || 0) + ' pcs</div>' +
       (d.catatan ? '<div class="ck-dok-catatan"><b>Catatan:</b> ' + rjdEscapeHtml_(d.catatan) + '</div>' : '') +
@@ -2078,9 +2080,11 @@ function ckRenderProforma(d){
         "Kode Order: " + rjdEscapeHtml_(d.kodeOrder) +
         '<br/>Produk: ' + rjdEscapeHtml_(d.namaProduk || "-") +
         '<br/>Berlaku sampai: <b>' + rjdEscapeHtml_(d.berlakuSampai || "-") + '</b>') +
-      '<table class="ck-dok-tabel"><thead><tr>' +
+      // @PF-26: pembungkus penggulir .ck-sj-gulir (lihat simpro-cetak.css) -- tanpa itu angka terbelah di HP, dan
+      // rincian 10 size memeras kolom Qty bahkan di desktop & kertas A4.
+      '<div class="ck-sj-gulir ck-gulir-lepas"><table class="ck-dok-tabel"><thead><tr>' +
         '<th>Deskripsi</th><th class="num">Qty</th><th class="num">Harga Satuan</th><th class="num">Subtotal</th>' +
-      '</tr></thead><tbody>' + barisItem + '</tbody></table>' +
+      '</tr></thead><tbody>' + barisItem + '</tbody></table></div>' +
       '<div class="ck-dok-ringkasan">' +
         // Rekening SELALU tampil di proforma -- sama seperti Konfirmasi Order,
         // beda dari invoice. Dokumen ini justru diterbitkan UNTUK meminta DP;
