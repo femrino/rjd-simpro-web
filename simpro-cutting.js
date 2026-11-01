@@ -7,6 +7,9 @@
  * dengan nomor roll sama (sisa hanya di yang terakhir), End cut dari kumpulan sisa per kain/warna.
  * v395 (permintaan Femri sesudah mencoba MANSL 288): form satu-entri DIGANTI tabel isian banyak baris + tempel dari
  * Excel, satu tombol Simpan semua -- baris dikirim berurutan ke rute yang SAMA (lihat kepala bagian tabel isian).
+ * v397 (permintaan Femri): SISA diketik dalam METER (hasil meteran di lantai) dan dikirim apa adanya ber-satuanSisa "m" --
+ * server menyimpannya di kolom Satuan Sisa (v204), bukan angka yard hasil konversi layar. Panjang roll tetap yard (label).
+ * Semua perbandingan antar-satuan di layar memakai CR_YD; neraca tetap yard, dengan angka ukur asli "(12,5 m)" di sel sisa.
  *
  * KERANGKA HALAMAN DISUSUN BERKAS INI, BUKAN TEMPLATE. Template Blogger v340 tidak punya cabang untuk /p/cutting.html,
  * jadi body-nya kosong; menambah cabang = tempel template (langkah manual). Header, menu, hero, kotak login dan wadah
@@ -278,8 +281,13 @@ function crResolusi_() {
     if (st.selesaiDi !== null) r.galat.push("Roll " + no + " sudah ditandai selesai di baris " + (st.selesaiDi + 1) + " -- sisa hanya di baris terakhir roll itu.");
     if (String(b.sisa).trim()) {
       const s = crParse_(b.sisa);
-      if (isNaN(s) || s < 0) r.galat.push("Sisa harus angka yard (0 kalau habis).");
-      else { r.sisa = s; st.selesaiDi = i; if (st.panjang !== null && s > st.panjang + 0.01) r.galat.push("Sisa lebih panjang dari roll (" + crAngka_(st.panjang) + " yd)."); else kolam += s; }
+      if (isNaN(s) || s < 0) r.galat.push("Sisa harus angka METER hasil meteran (0 kalau habis).");
+      else {
+        const sYd = s / CR_YD;   // sisa diukur meter, roll & kumpulan sisa dalam yard
+        r.sisa = s; st.selesaiDi = i;
+        if (st.panjang !== null && sYd > st.panjang + 0.01) r.galat.push("Sisa " + crAngka_(s) + " m lebih panjang dari roll (" + crAngka_(st.panjang) + " yd = " + crAngka_(Math.round(st.panjang * CR_YD * 100) / 100) + " m).");
+        else kolam += sYd;
+      }
     }
     r.panjangRoll = st.panjang;
     if (r.yd) {
@@ -305,9 +313,9 @@ function crRenderForm_() {
     '<div class="cr-baris"><label class="cr-f cr-f-tgl">Tanggal potong<input id="cr-tanggal" type="date"/></label>' +
     '<label class="cr-f cr-f-kode">Kode kain (semua baris)<input id="cr-kode" type="text" autocomplete="off" placeholder="opsional"/></label></div>' +
     '<p class="cr-info cr-petunjuk">Satu baris = satu marker &#215; lapis dari satu roll. No roll yang sama di beberapa baris = satu roll: panjang cukup di baris pertamanya, ' +
-    'sisa diisi di baris terakhir saat roll habis (0 kalau habis). Ketik <b>End cut</b> di No roll untuk gelaran dari kumpulan sisa.</p>' +
+    '<b>sisa dalam METER</b> (hasil meteran) diisi di baris terakhir saat roll habis (0 kalau habis). Ketik <b>End cut</b> di No roll untuk gelaran dari kumpulan sisa.</p>' +
     '<datalist id="cr-daftar-roll">' + crRollTerbuka_().map(function (r) { return '<option value="' + crEsc_(r.noRoll) + '"></option>'; }).join("") + '<option value="End cut"></option></datalist>' +
-    '<div class="cr-gulir"><table class="cr-tabel cr-isian"><thead><tr><th class="num">#</th><th>No roll</th><th>Panjang (yd)</th><th>Marker</th><th>Lapis</th><th>Sisa (yd)</th><th>Hasil</th><th></th></tr></thead>' +
+    '<div class="cr-gulir"><table class="cr-tabel cr-isian"><thead><tr><th class="num">#</th><th>No roll</th><th>Panjang (yd)</th><th>Marker</th><th>Lapis</th><th>Sisa (m)</th><th>Hasil</th><th></th></tr></thead>' +
     '<tbody id="cr-isian-body">' + CR.baris.map(function (b, i) { return crBarisHtml_(b, i, marker); }).join("") + '</tbody></table></div>' +
     '<div class="cr-aksi"><button class="cr-btn" id="cr-tambah" type="button">+ 5 baris</button>' +
     '<button class="cr-btn" id="cr-tempel-buka" type="button">Tempel dari Excel</button>' +
@@ -365,7 +373,7 @@ function crPerbaruiTabel_() {
     let h = "";
     if (r.ok) h = '<span class="cr-ok">' + crEsc_(r.b.hasil) + '</span>';
     else if (!r.kosong) {
-      if (r.yd) h += '<b>' + r.pcs + ' pcs</b> &#183; ' + crAngka_(r.yd) + ' yd' + (r.perkiraanSisa !== undefined ? ' &#183; sisa &#8776; ' + crAngka_(r.perkiraanSisa) : "") + (r.sisa !== undefined ? ' &#183; <b>SELESAI</b>' : "");
+      if (r.yd) h += '<b>' + r.pcs + ' pcs</b> &#183; ' + crAngka_(r.yd) + ' yd' + (r.perkiraanSisa !== undefined ? ' &#183; sisa &#8776; ' + crAngka_(r.perkiraanSisa) + ' yd (' + crAngka_(Math.round(r.perkiraanSisa * CR_YD * 100) / 100) + ' m)' : "") + (r.sisa !== undefined ? ' &#183; <b>SELESAI</b>' : "");
       if (r.awas.length) h += ' <span class="cr-awas">' + crEsc_(r.awas.join("; ")) + '</span>';
       const sebab = r.b.pesan ? [r.b.pesan] : r.galat;
       if (sebab.length) h += '<div class="cr-galat">' + crEsc_(sebab.join(" ")) + '</div>';
@@ -390,7 +398,7 @@ function crPayload_(r, idRollBaru) {
     if (r.ada) p.idRoll = r.ada.idRoll;
     else if (r.pertamaBaru) p.rollBaru = { noRoll: String(r.b.noRoll).trim(), panjangYd: r.panjangRoll };
     else p.idRoll = idRollBaru[r.kunci];
-    if (r.sisa !== undefined) { p.rollSelesai = true; p.sisaYd = r.sisa; }
+    if (r.sisa !== undefined) { p.rollSelesai = true; p.sisa = r.sisa; p.satuanSisa = "m"; }
   }
   return p;
 }
@@ -422,7 +430,7 @@ async function crSimpanSemua() {
       if (r.pertamaBaru && d.idRoll) idRollBaru[r.kunci] = d.idRoll;
       b.status = "ok"; b.pesan = "";
       b.hasil = (d.sudahTercatat ? "sudah tercatat sebelumnya " : "") + (d.idGelaran || "") + (d.totalPotongan !== undefined ? " · " + d.totalPotongan + " pcs" : "") +
-        (d.kainTerpakaiYd !== undefined ? " · " + crAngka_(d.kainTerpakaiYd) + " yd" : "") + (d.rollSelesai ? " · roll selesai" : "") + (d.peringatan ? " -- PERHATIAN: " + d.peringatan : "");
+        (d.kainTerpakaiYd !== undefined ? " · " + crAngka_(d.kainTerpakaiYd) + " yd" : "") + (d.rollSelesai ? " · roll selesai" + (d.sisa !== undefined && d.sisa !== null ? ", sisa " + crAngka_(d.sisa) + " " + (d.satuanSisa || "m") : "") : "") + (d.peringatan ? " -- PERHATIAN: " + d.peringatan : "");
       ok++;
     } catch (e) {
       if (!e.jaringan && typeof rjdKunciLepas_ === "function") rjdKunciLepas_(nama);
@@ -447,7 +455,7 @@ async function crSimpanSemua() {
  * kalau tidak dari urutan; tebakannya selalu bisa diubah sebelum dimasukkan. Nomor roll TIDAK dikarang kalau kolomnya
  * tidak ada: keputusan Femri, nomor = tulisan di label roll -- barisnya merah sampai diketik. Rasio dicocokkan ke kode
  * marker ("1" -> "Rasio 1 - ..."); yang tidak cocok TEPAT SATU marker dibiarkan kosong (dipilih orang), tidak ditebak. */
-const CR_PETA_KOLOM = [["", "(abaikan)"], ["noRoll", "No roll"], ["panjang", "Panjang (yd)"], ["rasio", "Rasio / marker"], ["lapis", "Lapis"], ["sisa", "Sisa (yd)"]];
+const CR_PETA_KOLOM = [["", "(abaikan)"], ["noRoll", "No roll"], ["panjang", "Panjang (yd)"], ["rasio", "Rasio / marker"], ["lapis", "Lapis"], ["sisa", "Sisa (m)"], ["sisaYd", "Sisa (yd, dikonversi ke m)"]];
 function crTempelBuka_() {
   const el = crEl_("cr-tempel"); if (!el) return;
   el.classList.remove("hidden");
@@ -473,10 +481,11 @@ function crTebakKolom_(judul, i, kolom) {
   if (judul) {
     const t = crNorm_(judul[i]);
     if (/no\.? ?roll|nomor roll|^roll$/.test(t)) return "noRoll";
-    if (/kirim|panjang roll/.test(t)) return "panjang";
+    const meter = /\(m\)|meter/.test(t);   // lembar MANSL: "BAHAN KIRIM (m)", "SISA BAHAN (m)" = kolom input meteran
+    if (/kirim|panjang roll/.test(t)) return meter ? "" : "panjang";
     if (/rasio|marker/.test(t)) return "rasio";
     if (/(layer|lapis)/.test(t) && !/qty|per ?layer|per ?lapis/.test(t)) return "lapis";
-    if (/sisa/.test(t) && !/akhir/.test(t)) return "sisa";
+    if (/sisa/.test(t) && !/akhir/.test(t)) return meter ? "sisa" : "sisaYd";
     return "";
   }
   const urut = kolom === 4 ? ["noRoll", "panjang", "lapis", "sisa"] : ["noRoll", "panjang", "rasio", "lapis", "sisa"];
@@ -517,7 +526,13 @@ function crTempelMasukkan_() {
   const marker = crMarkerCocok_(), bawaan = crEl_("cr-tempel-marker") ? crEl_("cr-tempel-marker").value : "";
   const ambil = function (c, k) { return peta[k] === undefined ? "" : (c[peta[k]] || ""); };
   const baru = u.data.map(function (c) {
-    return crBarisBaru_({ noRoll: ambil(c, "noRoll"), panjang: ambil(c, "panjang"), lapis: ambil(c, "lapis"), sisa: ambil(c, "sisa"),
+    // Sisa: kolom meter dipakai apa adanya; hanya kalau yang ada cuma kolom yard, ia dikonversi (2 desimal, koma).
+    let sisa = ambil(c, "sisa");
+    if (peta.sisa === undefined && peta.sisaYd !== undefined) {
+      const v = crParse_(ambil(c, "sisaYd"));
+      sisa = isNaN(v) ? ambil(c, "sisaYd") : String(Math.round(v * CR_YD * 100) / 100).replace(".", ",");
+    }
+    return crBarisBaru_({ noRoll: ambil(c, "noRoll"), panjang: ambil(c, "panjang"), lapis: ambil(c, "lapis"), sisa: sisa,
       idMarker: peta.rasio === undefined ? bawaan : crCocokRasio_(ambil(c, "rasio"), marker) });
   }).filter(function (b) { return !crBarisKosong_(b); });
   CR.baris = CR.baris.filter(function (b) { return b.status === "ok" || !crBarisKosong_(b); }).concat(baru);
@@ -552,7 +567,7 @@ function crRenderLaporan_() {
         g.roll.map(function (r) {
           return '<tr><td class="cr-no">' + crEsc_(r.noRoll || "-") + '</td><td class="num">' + sel(r.kirimYd) + '</td><td>' +
             (r.pemakaian.length ? r.pemakaian.map(function (x) { return crTeksPakai_(x); }).join("<br>") : "-") + '</td>' +
-            '<td class="num">' + sel(r.aktualYd) + '</td><td class="num">' + sel(r.sisaYd) + '</td><td class="num' + kelasSel(r.selisihYd) + '">' + sel(r.selisihYd) + '</td>' +
+            '<td class="num">' + sel(r.aktualYd) + '</td><td class="num">' + sel(r.sisaYd) + (r.satuanUkur === "m" ? ' <small class="cr-ukur">(' + crAngka_(r.sisaUkur) + ' m)</small>' : "") + '</td><td class="num' + kelasSel(r.selisihYd) + '">' + sel(r.selisihYd) + '</td>' +
             '<td class="num">' + (r.pcs || 0) + '</td><td><span class="cr-st cr-st-' + crNorm_(r.status).replace(/[^a-z]+/g, "-") + '">' + crEsc_(r.status) + '</span></td></tr>';
         }).join("") +
         (g.endCut && g.endCut.gelaran && g.endCut.gelaran.length ? '<tr class="cr-endcut"><td class="cr-no">End cut</td><td class="num">-</td><td>' + g.endCut.gelaran.map(function (x) { return crTeksPakai_(x); }).join("<br>") +
