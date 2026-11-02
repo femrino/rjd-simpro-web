@@ -23,8 +23,16 @@
  * (cadangan) -> loader berubah -> tempel sekali.
  *
  * Keadaan yang bisa dibaca dari konsol / harness: window.SIMPRO_VERSI =
- * { versi, sumber: "VERSI.json"|"cadangan", halaman, dimuat: [...], gagal: [...] }
- * dan atribut data-simpro-versi pada <html>.
+ * { versi, sumber: "VERSI.json"|"cadangan", asal: "raw"|"jsdelivr"|"atribut"|"", halaman, dimuat: [...], gagal: [...] }
+ * dan atribut data-simpro-versi / data-simpro-asal pada <html>.
+ *
+ * v408 (PF-15 opsi 1b, keputusan Femri 3 Nov 2026): VERSI.json dibaca dari raw.githubusercontent.com DULU, baru jsDelivr @main.
+ * "Cache-buster per menit" di butir 1 di atas TIDAK PERNAH bekerja -- jsDelivr menormalkan query untuk path gh (terukur 16 Sep
+ * 2026), jadi VERSI.json@main bisa basi sampai 12 jam, dan purge bisa MEMUNDURKAN versi. Terukur 3 Nov 2026: v406 & v407
+ * tidak terlihat berjam-jam (VERSI.json@main tertahan v405 walau pemetaan main sudah benar) sementara raw menjawab v407 dengan
+ * cache-control max-age=300 dan access-control-allow-origin: *. Tiga lapis: raw -> jsDelivr @main (perilaku lama) ->
+ * data-versi-cadangan. Lapis kedua dipertahankan karena raw adalah host tunggal: kalau tak terjangkau di jaringan seseorang,
+ * yang dimuat tetap versi dari jsDelivr, bukan langsung cadangan template (bentuk gagal opsi 1a yang ditolak).
  */
 (function () {
   var DASAR = "https://cdn.jsdelivr.net/gh/femrino/rjd-simpro-web@";
@@ -44,26 +52,40 @@
     "/p/jadwal.html": { "css": ["simpro-jadwal.css"], "js": ["simpro-jadwal.js"] },
     "/p/kas.html": { "css": ["simpro-kas.css"], "js": ["simpro-kas.js"] },
     "/p/upah.html": { "css": ["simpro-upah.css"], "js": ["simpro-upah.js"] },
+    "/p/cutting.html": { "css": ["simpro-cutting.css"], "js": ["simpro-cutting.js"] },   // v408: rute 1 Nov 2026 belum ada di cadangan
     "/p/produksi.html": { "css": ["simpro-spk.css", "simpro-qc.css", "simpro-sop.css"], "js": ["simpro-sop.js", "simpro-spk.js"] }
   };
   var me = document.currentScript;
   var cadangan = (me && me.getAttribute("data-versi-cadangan")) || "";
-  var sumberVersi = (me && me.getAttribute("data-sumber-versi")) || (DASAR + "main/VERSI.json");
-  var keadaan = { versi: "", sumber: "", halaman: null, dimuat: [], gagal: [] };
+  var atributSumber = (me && me.getAttribute("data-sumber-versi")) || "";
+  // v408: urutan sumber VERSI.json -- lihat kepala berkas. Atribut data-sumber-versi (kalau diisi di template) tetap menang.
+  var SUMBER_VERSI = atributSumber ? [["atribut", atributSumber]]
+    : [["raw", "https://raw.githubusercontent.com/femrino/rjd-simpro-web/main/VERSI.json"], ["jsdelivr", DASAR + "main/VERSI.json"]];
+  var keadaan = { versi: "", sumber: "", asal: "", halaman: null, dimuat: [], gagal: [] };
   window.SIMPRO_VERSI = keadaan;
 
   // ---- 1. versi ----
   var manifest = null;
-  try {
-    var t = new Date();
-    var pad = function (n) { return (n < 10 ? "0" : "") + n; };
-    var menit = "" + t.getUTCFullYear() + pad(t.getUTCMonth() + 1) + pad(t.getUTCDate()) + pad(t.getUTCHours()) + pad(t.getUTCMinutes());
-    var x = new XMLHttpRequest();
-    x.open("GET", sumberVersi + (sumberVersi.indexOf("?") === -1 ? "?" : "&") + "t=" + menit, false);   // sinkron: CSS harus ada sebelum body
-    x.send(null);
-    if (x.status === 200) manifest = JSON.parse(x.responseText);
-  } catch (e) { manifest = null; }
-  if (manifest && /^v\d+$/.test(String(manifest.web || ""))) {
+  var t = new Date();
+  var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+  var menit = "" + t.getUTCFullYear() + pad(t.getUTCMonth() + 1) + pad(t.getUTCDate()) + pad(t.getUTCHours()) + pad(t.getUTCMinutes());
+  // `t=` menyegarkan cache BROWSER per menit (URL berbeda); di jsDelivr ia tidak membusting apa pun (lihat kepala berkas).
+  var baca = function (alamat) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open("GET", alamat + (alamat.indexOf("?") === -1 ? "?" : "&") + "t=" + menit, false);   // sinkron: CSS harus ada sebelum body
+      x.send(null);
+      if (x.status !== 200) return null;
+      var m = JSON.parse(x.responseText);
+      return (m && /^v\d+$/.test(String(m.web || ""))) ? m : null;
+    } catch (e) { return null; }
+  };
+  for (var k = 0; k < SUMBER_VERSI.length && !manifest; k++) {
+    manifest = baca(SUMBER_VERSI[k][1]);
+    if (manifest) keadaan.asal = SUMBER_VERSI[k][0];
+    else if (window.console && console.warn && k < SUMBER_VERSI.length - 1) console.warn("[simpro-loader] VERSI.json dari " + SUMBER_VERSI[k][0] + " tidak terbaca; mencoba " + SUMBER_VERSI[k + 1][0]);
+  }
+  if (manifest) {
     keadaan.versi = manifest.web; keadaan.sumber = "VERSI.json";
     keadaan.halaman = (manifest.halaman && typeof manifest.halaman === "object") ? manifest.halaman : HALAMAN_CADANGAN;
   } else {
@@ -76,6 +98,7 @@
   }
   document.documentElement.setAttribute("data-simpro-versi", keadaan.versi);
   document.documentElement.setAttribute("data-simpro-sumber", keadaan.sumber);
+  document.documentElement.setAttribute("data-simpro-asal", keadaan.asal);
 
   // ---- 2. daftar berkas halaman ini ----
   var jalur = (me && me.getAttribute("data-jalur")) || location.pathname || "/";
