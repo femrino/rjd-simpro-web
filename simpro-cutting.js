@@ -13,6 +13,8 @@
  * v400 (permintaan Femri, bentuk lembar tim "HASIL CUTTING (PER-SIZE)"): neraca memecah hasil tiap roll PER SIZE -- kolom
  * size yang ada hasilnya di kelompok itu + Total, menggantikan kolom Pcs -- dan mendapat baris Total (jumlah kolom).
  * Data per size sudah dikirim server sejak @428 (perSize per roll / End cut / ringkasan); tidak butuh gs baru.
+ * v401 (permintaan Femri: satu tempelan memuat beberapa hari kerja): TANGGAL PER BARIS -- kosong = ikut baris di atasnya, tempel
+ * mengenali kolom DATE/TANGGAL (lihat crTanggal_ di kepala bagian tabel isian). Server tidak berubah: tiap baris kiriman sendiri.
  *
  * KERANGKA HALAMAN DISUSUN BERKAS INI, BUKAN TEMPLATE. Template Blogger v340 tidak punya cabang untuk /p/cutting.html,
  * jadi body-nya kosong; menambah cabang = tempel template (langkah manual). Header, menu, hero, kotak login dan wadah
@@ -231,8 +233,36 @@ function crRollTerbuka_() {
  * Baris lanjutan yang baris pertamanya GAGAL ditunda, bukan dikirim sebagai roll tanpa identitas.
  * Kunci kiriman per BARIS (rjdKunciIsian_ "cutting-roll:<uid>"): kiriman ulang baris yang jawabannya hilang = kunci sama. */
 function crBarisBaru_(isi) {
-  return Object.assign({ uid: ++CR.uid, noRoll: "", panjang: "", idMarker: "", lapis: "", sisa: "", status: "", pesan: "", hasil: "" }, isi || {});
+  return Object.assign({ uid: ++CR.uid, tanggal: "", tglMentah: "", noRoll: "", panjang: "", idMarker: "", lapis: "", sisa: "", status: "", pesan: "", hasil: "" }, isi || {});
 }
+/* Tanggal PER BARIS (v401, permintaan Femri: satu tabel/tempelan bisa memuat beberapa hari kerja). b.tanggal kosong = IKUT
+ * baris di atasnya (baris pertama ikut kotak "Tanggal potong") -- bentuk sel DATE yang digabung per hari di lembar tim, yang
+ * saat disalin hanya membawa tanggal di baris pertama harinya. Server tidak berubah: tiap baris memang kiriman sendiri. */
+const CR_BULAN = { jan: 1, feb: 2, mar: 3, apr: 4, mei: 5, may: 5, jun: 6, jul: 7, agu: 8, agt: 8, aug: 8, sep: 9, okt: 10, oct: 10, nov: 11, des: 12, dec: 12 };
+/** Teks tanggal tempelan -> "yyyy-mm-dd"; "" kalau kosong; null kalau tidak terbaca. Angka dibaca HARI/BULAN (lembar Indonesia);
+ *  tanpa tahun = tahun kotak Tanggal potong; nama bulan Indonesia/Inggris; jam di belakang dibuang; serial Excel 5 digit. */
+function crTanggal_(teks, tahunBawaan) {
+  const t = String(teks === null || teks === undefined ? "" : teks).trim().toLowerCase().replace(/\s+\d{1,2}[:.]\d{2}([:.]\d{2})?$/, "");
+  if (!t) return "";
+  const jadi = function (y, m, d) {
+    y = Number(y); m = Number(m); d = Number(d); if (y < 100) y += 2000;
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    if (!y || dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+    return y + "-" + (m < 10 ? "0" : "") + m + "-" + (d < 10 ? "0" : "") + d;
+  };
+  let a;
+  if ((a = t.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/))) return jadi(a[1], a[2], a[3]);
+  if ((a = t.match(/^(\d{1,2})[-/.](\d{1,2})(?:[-/.](\d{2}|\d{4}))?$/))) return jadi(a[3] || tahunBawaan, a[2], a[1]);
+  if ((a = t.match(/^(?:[a-z]+,?\s+)?(\d{1,2})[\s\-/.]+([a-z]+)\.?(?:[\s\-/.,]+(\d{2}|\d{4}))?$/))) {
+    const m = CR_BULAN[a[2].slice(0, 3)]; return m ? jadi(a[3] || tahunBawaan, m, a[1]) : null;
+  }
+  if (/^\d{5}$/.test(t) && Number(t) > 36526 && Number(t) < 73051) {
+    const dt = new Date(Date.UTC(1899, 11, 30) + Number(t) * 864e5); return jadi(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate());
+  }
+  return null;
+}
+function crTglTeks_(iso) { const a = String(iso || "").split("-"); return a.length === 3 ? a[2] + "/" + a[1] + "/" + a[0] : String(iso || ""); }
+function crTglBawaan_() { return (crEl_("cr-tanggal") && crEl_("cr-tanggal").value) || crHariIni_(); }
 function crBarisKosong_(b) { return !String(b.noRoll).trim() && !String(b.panjang).trim() && !String(b.lapis).trim() && !String(b.sisa).trim(); }
 function crAdaIsian_() { return (CR.baris || []).some(function (b) { return b.status !== "ok" && !crBarisKosong_(b); }); }
 function crTambahBaris_(n) {
@@ -246,12 +276,17 @@ function crEndCut_(teks) { return /^(end ?cut|ec)$/i.test(String(teks || "").tri
 
 /** Hitung & periksa seluruh tabel. Satu fungsi untuk tampilan DAN pengiriman -- yang dikirim persis yang dilihat. */
 function crResolusi_() {
-  const g = crGrupAktif_(), marker = crMarkerCocok_(), perRoll = {};
-  let kolam = g && g.ringkasan ? Number(g.ringkasan.sisaAkhirYd) || 0 : 0;
+  const g = crGrupAktif_(), marker = crMarkerCocok_(), perRoll = {}, hariIni = crHariIni_();
+  let kolam = g && g.ringkasan ? Number(g.ringkasan.sisaAkhirYd) || 0 : 0, tglAtas = crTglBawaan_();
   return (CR.baris || []).map(function (b, i) {
     const r = { b: b, i: i, galat: [], awas: [] };
+    // Rantai tanggal berjalan lewat SEMUA baris (yang tersimpan memegang tanggal kirimannya, baris kosong boleh jadi pemisah hari).
+    if (b.tanggal) tglAtas = b.tanggal;
+    r.tanggal = b.tglMentah ? "" : tglAtas; r.ikut = !b.tanggal && !b.tglMentah;
     if (b.status === "ok") { r.ok = true; return r; }
     if (crBarisKosong_(b)) { r.kosong = true; return r; }
+    if (b.tglMentah) r.galat.push("Tanggal \"" + b.tglMentah + "\" tidak terbaca -- pilih di kotak Tanggal.");
+    else if (r.tanggal > hariIni) r.galat.push("Tanggal " + crTglTeks_(r.tanggal) + " belum terjadi.");
     const no = String(b.noRoll).trim();
     r.endCut = crEndCut_(no);
     r.m = marker.filter(function (m) { return m.idMarker === b.idMarker; })[0] || null;
@@ -268,8 +303,13 @@ function crResolusi_() {
     if (!no) { r.galat.push("No roll wajib (tulisan di label roll), atau ketik End cut."); return r; }
     r.kunci = crNorm_(no);
     const ada = g ? g.roll.filter(function (x) { return crNorm_(x.noRoll) === r.kunci; })[0] : null;
-    const st = perRoll[r.kunci] || (perRoll[r.kunci] = { ada: ada, pertama: null, panjang: ada ? Number(ada.kirimYd) : null, akum: ada ? Number(ada.aktualYd) || 0 : 0, selesaiDi: null });
+    const st = perRoll[r.kunci] || (perRoll[r.kunci] = { ada: ada, pertama: null, panjang: ada ? Number(ada.kirimYd) : null, akum: ada ? Number(ada.aktualYd) || 0 : 0, selesaiDi: null, tgl: "" });
     r.ada = ada || null;
+    // Satu roll dipotong MAJU: sisa dicatat di baris terakhirnya, jadi tanggal baris berikutnya tidak boleh lebih awal.
+    if (r.tanggal) {
+      if (st.tgl && r.tanggal < st.tgl) r.galat.push("Tanggal mundur: baris sebelumnya roll " + no + " bertanggal " + crTglTeks_(st.tgl) + ".");
+      else st.tgl = r.tanggal;
+    }
     if (ada && ada.status !== "Belum dipakai" && ada.status !== "Dipakai") {
       r.galat.push("Roll " + no + " sudah selesai di neraca -- sisa yang dipakai lagi dicatat sebagai End cut.");
     }
@@ -316,9 +356,10 @@ function crRenderForm_() {
     '<div class="cr-baris"><label class="cr-f cr-f-tgl">Tanggal potong<input id="cr-tanggal" type="date"/></label>' +
     '<label class="cr-f cr-f-kode">Kode kain (semua baris)<input id="cr-kode" type="text" autocomplete="off" placeholder="opsional"/></label></div>' +
     '<p class="cr-info cr-petunjuk">Satu baris = satu marker &#215; lapis dari satu roll. No roll yang sama di beberapa baris = satu roll: panjang cukup di baris pertamanya, ' +
-    '<b>sisa dalam METER</b> (hasil meteran) diisi di baris terakhir saat roll habis (0 kalau habis). Ketik <b>End cut</b> di No roll untuk gelaran dari kumpulan sisa.</p>' +
+    '<b>sisa dalam METER</b> (hasil meteran) diisi di baris terakhir saat roll habis (0 kalau habis). Ketik <b>End cut</b> di No roll untuk gelaran dari kumpulan sisa. ' +
+    '<b>Tanggal</b> abu-abu = ikut baris di atasnya (baris pertama ikut Tanggal potong); ganti di baris pertama tiap hari, kosongkan untuk kembali ikut.</p>' +
     '<datalist id="cr-daftar-roll">' + crRollTerbuka_().map(function (r) { return '<option value="' + crEsc_(r.noRoll) + '"></option>'; }).join("") + '<option value="End cut"></option></datalist>' +
-    '<div class="cr-gulir"><table class="cr-tabel cr-isian"><thead><tr><th class="num">#</th><th>No roll</th><th>Panjang (yd)</th><th>Marker</th><th>Lapis</th><th>Sisa (m)</th><th>Hasil</th><th></th></tr></thead>' +
+    '<div class="cr-gulir"><table class="cr-tabel cr-isian"><thead><tr><th class="num">#</th><th>Tanggal</th><th>No roll</th><th>Panjang (yd)</th><th>Marker</th><th>Lapis</th><th>Sisa (m)</th><th>Hasil</th><th></th></tr></thead>' +
     '<tbody id="cr-isian-body">' + CR.baris.map(function (b, i) { return crBarisHtml_(b, i, marker); }).join("") + '</tbody></table></div>' +
     '<div class="cr-aksi"><button class="cr-btn" id="cr-tambah" type="button">+ 5 baris</button>' +
     '<button class="cr-btn" id="cr-tempel-buka" type="button">Tempel dari Excel</button>' +
@@ -326,6 +367,7 @@ function crRenderForm_() {
     '<div class="cr-pesan hidden" id="cr-pesan"></div></div>' +
     '<div class="cr-tempel hidden" id="cr-tempel"></div></div>';
   crEl_("cr-tanggal").value = tglLama || crHariIni_();
+  crEl_("cr-tanggal").addEventListener("input", function () { crPerbaruiTabel_(); });   // baris yang ikut berganti tanggal
   crEl_("cr-kode").value = kodeLama;
   const body = crEl_("cr-isian-body");
   body.addEventListener("input", crUbahSel_);
@@ -345,6 +387,7 @@ function crRenderForm_() {
 function crBarisHtml_(b, i, marker) {
   const kunci = b.status === "ok" ? " disabled" : "";
   return '<tr data-uid="' + b.uid + '"><td class="num cr-nomor">' + (i + 1) + '</td>' +
+    '<td><input class="cr-in cr-in-tgl" data-f="tanggal" type="date" value="' + crEsc_(b.tanggal) + '"' + kunci + '/></td>' +
     '<td><input class="cr-in cr-in-no" data-f="noRoll" list="cr-daftar-roll" type="text" autocomplete="off" value="' + crEsc_(b.noRoll) + '"' + kunci + '/></td>' +
     '<td><input class="cr-in cr-in-yd" data-f="panjang" type="text" inputmode="decimal" autocomplete="off" value="' + crEsc_(b.panjang) + '"' + kunci + '/></td>' +
     '<td><select class="cr-in cr-in-marker" data-f="idMarker"' + kunci + '><option value="">-- marker --</option>' + marker.map(function (m) {
@@ -360,6 +403,7 @@ function crUbahSel_(ev) {
   const tr = el.closest("tr"), uid = tr ? tr.getAttribute("data-uid") : "";
   const b = CR.baris.filter(function (x) { return String(x.uid) === uid; })[0]; if (!b || b.status === "ok") return;
   b[f] = el.value;
+  if (f === "tanggal") b.tglMentah = "";   // dipilih orang: tempelan yang tak terbaca tidak berlaku lagi; kosong = ikut atas
   if (b.status === "gagal" || b.status === "tunda") { b.status = ""; b.pesan = ""; }   // isian berubah: sebab lama kedaluwarsa
   crPerbaruiTabel_();
 }
@@ -368,7 +412,12 @@ function crPerbaruiTabel_() {
   const R = crResolusi_(), body = crEl_("cr-isian-body"); if (!body) return R;
   R.forEach(function (r) {
     const tr = body.querySelector('tr[data-uid="' + r.b.uid + '"]'); if (!tr) return;
-    const pj = tr.querySelector('[data-f="panjang"]'), sisa = tr.querySelector('[data-f="sisa"]'), hasil = tr.querySelector(".cr-hasil");
+    const pj = tr.querySelector('[data-f="panjang"]'), sisa = tr.querySelector('[data-f="sisa"]'), hasil = tr.querySelector(".cr-hasil"), tg = tr.querySelector('[data-f="tanggal"]');
+    // Kotak tanggal menampilkan tanggal YANG DIPAKAI (milik sendiri atau ikut atas, abu-abu); kotak yang sedang diketik tidak ditimpa.
+    if (tg && !r.ok) {
+      if (tg !== document.activeElement) tg.value = r.b.tglMentah ? "" : (r.b.tanggal || r.tanggal || "");
+      tg.classList.toggle("cr-tgl-ikut", !!r.ikut);
+    }
     const pjTerkunci = !r.ok && !r.kosong && (r.endCut || !!r.ada || r.lanjutan !== undefined);
     if (pj && !r.ok) { pj.disabled = pjTerkunci; pj.placeholder = pjTerkunci ? (r.endCut ? "-" : crAngka_(r.panjangRoll)) : "roll baru"; }
     if (sisa && !r.ok) { sisa.disabled = !!r.endCut; sisa.placeholder = r.endCut ? "-" : "jika habis"; }
@@ -395,7 +444,7 @@ function crPayload_(r, idRollBaru) {
   const kw = crKwAktif_(), m = r.m;
   const item = ((CR.konteks && CR.konteks.daftarItem) || []).filter(function (it) { return !m.style || crNorm_(it.style) === crNorm_(m.style); })[0] || {};
   const p = { idPurchaseOrder: CR.po, jenisKain: kw.kain, warna: kw.warna, idMarker: m.idMarker, jumlahLapis: r.lapis,
-    tanggalPotong: (crEl_("cr-tanggal") && crEl_("cr-tanggal").value) || crHariIni_(), kodeKain: String((crEl_("cr-kode") && crEl_("cr-kode").value) || "").trim(),
+    tanggalPotong: r.tanggal || crTglBawaan_(), kodeKain: String((crEl_("cr-kode") && crEl_("cr-kode").value) || "").trim(),
     brand: m.brand || item.brand || "", artikel: m.artikel || item.artikel || "", style: m.style || item.style || "", sumber: r.endCut ? "End cut" : "Roll" };
   if (!r.endCut) {
     if (r.ada) p.idRoll = r.ada.idRoll;
@@ -431,7 +480,7 @@ async function crSimpanSemua() {
       const d = await crKirim_("simpanCuttingRoll", { payload: p });
       if (typeof rjdKunciLepas_ === "function") rjdKunciLepas_(nama);
       if (r.pertamaBaru && d.idRoll) idRollBaru[r.kunci] = d.idRoll;
-      b.status = "ok"; b.pesan = "";
+      b.status = "ok"; b.pesan = ""; b.tanggal = p.tanggalPotong;   // tersimpan: tanggalnya beku, tidak ikut perubahan di atasnya
       b.hasil = (d.sudahTercatat ? "sudah tercatat sebelumnya " : "") + (d.idGelaran || "") + (d.totalPotongan !== undefined ? " · " + d.totalPotongan + " pcs" : "") +
         (d.kainTerpakaiYd !== undefined ? " · " + crAngka_(d.kainTerpakaiYd) + " yd" : "") + (d.rollSelesai ? " · roll selesai" + (d.sisa !== undefined && d.sisa !== null ? ", sisa " + crAngka_(d.sisa) + " " + (d.satuanSisa || "m") : "") : "") + (d.peringatan ? " -- PERHATIAN: " + d.peringatan : "");
       ok++;
@@ -458,7 +507,7 @@ async function crSimpanSemua() {
  * kalau tidak dari urutan; tebakannya selalu bisa diubah sebelum dimasukkan. Nomor roll TIDAK dikarang kalau kolomnya
  * tidak ada: keputusan Femri, nomor = tulisan di label roll -- barisnya merah sampai diketik. Rasio dicocokkan ke kode
  * marker ("1" -> "Rasio 1 - ..."); yang tidak cocok TEPAT SATU marker dibiarkan kosong (dipilih orang), tidak ditebak. */
-const CR_PETA_KOLOM = [["", "(abaikan)"], ["noRoll", "No roll"], ["panjang", "Panjang (yd)"], ["rasio", "Rasio / marker"], ["lapis", "Lapis"], ["sisa", "Sisa (m)"], ["sisaYd", "Sisa (yd, dikonversi ke m)"]];
+const CR_PETA_KOLOM = [["", "(abaikan)"], ["tanggal", "Tanggal"], ["noRoll", "No roll"], ["panjang", "Panjang (yd)"], ["rasio", "Rasio / marker"], ["lapis", "Lapis"], ["sisa", "Sisa (m)"], ["sisaYd", "Sisa (yd, dikonversi ke m)"]];
 function crTempelBuka_() {
   const el = crEl_("cr-tempel"); if (!el) return;
   el.classList.remove("hidden");
@@ -480,19 +529,31 @@ function crTempelUrai_(teks) {
   const data = judul ? baris.slice(1) : baris;
   return { judul: judul, data: data, kolom: Math.max.apply(null, baris.map(function (c) { return c.length; })) };
 }
-function crTebakKolom_(judul, i, kolom) {
+/** Kolom berisi TANGGAL menurut isinya (v401): tiap sel terisi terbaca tanggal DAN bertanda "/" "-" atau nama bulan --
+ *  "6.10" (panjang gelaran) juga terbaca tanggal, jadi titik saja tidak dihitung. */
+function crKolomTanggal_(data, i) {
+  const isi = (data || []).map(function (c) { return String(c[i] || "").trim(); }).filter(function (x) { return x; });
+  return isi.length > 0 && isi.every(function (x) { return /[-/]|[a-z]{3}/i.test(x) && !!crTanggal_(x, "2000"); });
+}
+function crTebakKolom_(judul, i, kolom, data) {
   if (judul) {
     const t = crNorm_(judul[i]);
+    if (/^(date|tanggal|tgl)\b/.test(t)) return "tanggal";
     if (/no\.? ?roll|nomor roll|^roll$/.test(t)) return "noRoll";
     const meter = /\(m\)|meter/.test(t);   // lembar MANSL: "BAHAN KIRIM (m)", "SISA BAHAN (m)" = kolom input meteran
     if (/kirim|panjang roll/.test(t)) return meter ? "" : "panjang";
     if (/rasio|marker/.test(t)) return "rasio";
     if (/(layer|lapis)/.test(t) && !/qty|per ?layer|per ?lapis/.test(t)) return "lapis";
     if (/sisa/.test(t) && !/akhir/.test(t)) return meter ? "sisa" : "sisaYd";
-    return "";
+    return crKolomTanggal_(data, i) ? "tanggal" : "";
   }
-  const urut = kolom === 4 ? ["noRoll", "panjang", "lapis", "sisa"] : ["noRoll", "panjang", "rasio", "lapis", "sisa"];
-  return urut[i] || "";
+  // Tanpa judul: kolom tanggal (dikenali dari isinya) dilewati, sisanya urutan bawaan.
+  let tgl = -1;
+  for (let k = 0; k < kolom; k++) if (crKolomTanggal_(data, k)) { tgl = k; break; }
+  if (i === tgl) return "tanggal";
+  const j = tgl !== -1 && i > tgl ? i - 1 : i, n = tgl !== -1 ? kolom - 1 : kolom;
+  const urut = n === 4 ? ["noRoll", "panjang", "lapis", "sisa"] : ["noRoll", "panjang", "rasio", "lapis", "sisa"];
+  return urut[j] || "";
 }
 function crTempelBaca_() {
   const u = crTempelUrai_(crEl_("cr-tempel-teks").value), el = crEl_("cr-tempel-peta");
@@ -501,7 +562,7 @@ function crTempelBaca_() {
   const marker = crMarkerCocok_();
   let h = '<p class="cr-info">' + u.data.length + ' baris terbaca' + (u.judul ? " (baris judul dilewati)" : "") + '. Periksa arti tiap kolom:</p><div class="cr-tempel-kolom">';
   for (let i = 0; i < u.kolom; i++) {
-    const tebak = crTebakKolom_(u.judul, i, u.kolom);
+    const tebak = crTebakKolom_(u.judul, i, u.kolom, u.data);
     h += '<label class="cr-f">' + crEsc_(u.judul ? (u.judul[i] || "Kolom " + (i + 1)) : "Kolom " + (i + 1)) +
       '<select data-kolom="' + i + '">' + CR_PETA_KOLOM.map(function (k) { return '<option value="' + k[0] + '"' + (k[0] === tebak ? " selected" : "") + '>' + k[1] + '</option>'; }).join("") + '</select>' +
       '<small>' + crEsc_(u.data.slice(0, 3).map(function (c) { return c[i] || "-"; }).join(" · ")) + '</small></label>';
@@ -528,7 +589,10 @@ function crTempelMasukkan_() {
   Array.prototype.forEach.call(document.querySelectorAll("#cr-tempel-peta select[data-kolom]"), function (s) { if (s.value) peta[s.value] = Number(s.getAttribute("data-kolom")); });
   const marker = crMarkerCocok_(), bawaan = crEl_("cr-tempel-marker") ? crEl_("cr-tempel-marker").value : "";
   const ambil = function (c, k) { return peta[k] === undefined ? "" : (c[peta[k]] || ""); };
+  const tahun = crTglBawaan_().slice(0, 4);
+  let tglBawa = "";   // baris yang isinya CUMA tanggal (pemisah hari di lembar) menurunkan tanggalnya ke baris data berikutnya
   const baru = u.data.map(function (c) {
+    const mentah = String(ambil(c, "tanggal")).trim(), iso = crTanggal_(mentah, tahun);
     // Sisa: kolom meter dipakai apa adanya; hanya kalau yang ada cuma kolom yard, ia dikonversi (2 desimal, koma).
     let sisa = ambil(c, "sisa");
     if (peta.sisa === undefined && peta.sisaYd !== undefined) {
@@ -536,8 +600,14 @@ function crTempelMasukkan_() {
       sisa = isNaN(v) ? ambil(c, "sisaYd") : String(Math.round(v * CR_YD * 100) / 100).replace(".", ",");
     }
     return crBarisBaru_({ noRoll: ambil(c, "noRoll"), panjang: ambil(c, "panjang"), lapis: ambil(c, "lapis"), sisa: sisa,
+      tanggal: iso || "", tglMentah: iso === null ? mentah : "",
       idMarker: peta.rasio === undefined ? bawaan : crCocokRasio_(ambil(c, "rasio"), marker) });
-  }).filter(function (b) { return !crBarisKosong_(b); });
+  }).filter(function (b) {
+    if (crBarisKosong_(b)) { if (b.tanggal) tglBawa = b.tanggal; return false; }
+    if (!b.tanggal && !b.tglMentah && tglBawa) b.tanggal = tglBawa;
+    tglBawa = "";
+    return true;
+  });
   CR.baris = CR.baris.filter(function (b) { return b.status === "ok" || !crBarisKosong_(b); }).concat(baru);
   CR.tempel = null;
   CR.pesan = { teks: baru.length + " baris dari Excel masuk tabel -- periksa (baris merah belum lengkap), lalu Simpan semua.", ok: true };

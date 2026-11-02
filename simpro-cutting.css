@@ -106,6 +106,9 @@
 .cr-in-yd { width: 104px; }
 .cr-in-lapis { width: 72px; }
 .cr-in-marker { min-width: 210px; }
+/* v401 tanggal per baris: abu-abu = ikut baris di atasnya (bukan isian sendiri). Lebar dari kotak date 16 px + ikon kalender. */
+.cr-in-tgl { width: 150px; }
+.cr-in.cr-tgl-ikut { color: var(--ink-soft, #6B7280); }
 .cr-isian .cr-hasil { min-width: 200px; font-size: 13px; }
 .cr-isian .cr-nomor { color: var(--ink-soft, #6B7280); }
 .cr-baris-ok td { background: #EAF5EF; }
