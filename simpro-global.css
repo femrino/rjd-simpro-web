@@ -1687,3 +1687,8 @@ body[data-bagian~="lintas"] .rjd-bagian-lain { display: none; }
 @media (max-width: 640px) {
   .rjd-beli-form { grid-template-columns: 1fr; }
 }
+
+/* v405 (3 Nov 2026): tautan Cutting per roll DISISIPKAN simpro-global.js (rjdSisipkanMenuCutting_) ke menu template; ia berarea
+   produksi (RJD_AREA_HALAMAN), jadi ikut disembunyikan selama peran belum diketahui -- pola yang sama dengan daftar
+   body:not([data-peran]) di <b:skin> template. Tanpa ini peran finance sempat melihatnya sekejap sebelum penyaring berjalan. */
+body:not([data-peran]) .rjd-menu-panel a[href='/p/cutting.html'] { display: none !important; }

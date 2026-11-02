@@ -143,3 +143,10 @@
   .cr-kartu { padding: 14px 12px; }
   .cr-hero { padding: 40px 12px 14px; }
 }
+
+/* v405 (3 Nov 2026, laporan Femri: halaman cutting tanpa hamburger). <b:skin> template menyembunyikan details.rjd-menu secara
+   bawaan dan baru menampilkannya kalau tombol Keluar header halaman itu sudah tidak .hidden -- daftar id-nya ditulis tangan per
+   halaman (#sp-nav-logout, #ks-nav-logout, ...), dan #cr-nav-logout tidak pernah masuk: markup hamburgernya ada, tampilnya tidak
+   pernah. Persis nisan v222 di template ("empat halaman yang lahir SETELAH daftar di atas ditulis"). Ditaruh di sini, bukan di
+   template, supaya tidak butuh tempel. Spesifisitas (1,2,1) mengalahkan details.rjd-menu{display:none} (0,1,1). */
+#cr-nav-logout:not(.hidden) ~ details.rjd-menu { display: block; }

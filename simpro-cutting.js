@@ -57,9 +57,12 @@ function crHariIni_() { const d = new Date(); const p = function (n) { return (n
 // ---------- kerangka ----------
 function crPasangKerangka_() {
   if (crEl_("cr-wrap")) return;
+  // v405: isi & urutan = menu template halaman lain (+ Cutting per roll di bawah Produksi, seperti yang disisipkan simpro-global.js
+  // di sana); tautan yang tidak berhak disembunyikan penyaring peran global (rjdPasangMenuPeran_, dipanggil satpam).
   const menu = [["/", "Beranda"], null, ["https://www.rjdapparel.id/", "Profil"], ["/p/dashboard.html", "Dashboard"], ["/p/order-list.html", "Orderan"],
     ["/p/produksi.html", "Produksi"], ["/p/cutting.html", "Cutting per roll", true], ["/p/jadwal.html", "Jadwal Produksi"], ["/p/pengiriman.html", "Pengiriman"],
-    ["/p/invoice.html", "Invoice"], ["/p/kas.html", "Buku Kas"], null, ["/p/sop.html", "SOP Produksi"], ["/p/upah.html", "Upah Borongan"]];
+    ["/p/invoice.html", "Invoice"], ["/p/kas.html", "Buku Kas"], null, ["/p/laporan-omset.html", "Laporan SPT"], ["/p/sop.html", "SOP Produksi"],
+    ["/p/upah.html", "Upah Borongan"], ["/p/kalkulator-harga.html", "Kalkulator Harga"], null, ["/p/order.html", "Form Order"], ["/p/tracking.html", "Portal Klien"]];
   const div = document.createElement("div");
   div.innerHTML =
     '<div class="bg-canvas"><div class="bg-gradient"></div><div class="float-shape s1"></div><div class="float-shape s2"></div></div>' +

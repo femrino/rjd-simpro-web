@@ -3863,6 +3863,9 @@ function omHapus(idOrderRequest){
 
 /** Halaman -> area yang dibutuhkan. Halaman tanpa entri = boleh semua. */
 var RJD_AREA_HALAMAN = {
+  // v405 (3 Nov 2026, permintaan Femri): tautan Cutting per roll disisipkan JS ke menu template (rjdSisipkanMenuCutting_);
+  // halamannya dijaga satpam berarea produksi, jadi peran tanpa produksi (finance) tidak ditawari tautan yang pasti menolaknya.
+  "/p/cutting.html":       "produksi",
   // v172: Upah Borongan BELUM DIPUBLIKASIKAN ke tim. Sistem tarifnya masih
   // disetel (Master Operator belum dibuat, CT masih terangkat oleh magang),
   // dan halaman upah yang dibuka sebelum angkanya benar akan menimbulkan
@@ -3906,6 +3909,28 @@ var RJD_AREA_HALAMAN = {
   // sebagian tab di dalamnya (Order Masuk, Edit PO) -- dan itu ditangani JS
   // halaman masing-masing, bukan dari sini.
 };
+
+/**
+ * v405 (3 Nov 2026, permintaan Femri): pintasan halaman Cutting per roll di menu hamburger SEMUA halaman staf.
+ * Menu itu markup TEMPLATE (13 salinan, satu per cabang halaman) -- menambah tautan di sana = tempel template. Disisipkan dari
+ * sini saja: tepat di bawah "Produksi", di setiap panel yang punya tautan Produksi dan belum punya tautan Cutting (halaman cutting
+ * menyusun menunya sendiri dan sudah memuatnya). Idempoten. Dipanggil saat DOM siap DAN di awal rjdPasangMenuPeran_, supaya
+ * tautannya sudah ada sebelum penyaring peran berjalan (urutan panggilnya berbeda per halaman). Penyembunyian awal sebelum peran
+ * diketahui ada di simpro-global.css (pola body:not([data-peran]) milik template).
+ */
+function rjdSisipkanMenuCutting_() {
+  try {
+    document.querySelectorAll(".rjd-menu-panel").forEach(function (panel) {
+      if (panel.querySelector("a[href='/p/cutting.html']")) return;
+      var produksi = panel.querySelector("a[href='/p/produksi.html']");
+      if (!produksi) return;
+      var a = document.createElement("a");
+      a.href = "/p/cutting.html";
+      a.textContent = "Cutting per roll";
+      produksi.parentNode.insertBefore(a, produksi.nextSibling);
+    });
+  } catch (e) { /* menu tanpa pintasan lebih ringan daripada halaman yang jatuh */ }
+}
 
 /**
  * API URL untuk keperluan menu. SENGAJA tidak memakai lpApiUrlUniversal_():
@@ -4087,6 +4112,7 @@ rjdSaatDomSiap_(function () {
   // sebelum berubah. Sekarang penyembunyian awal ditangani CSS
   // (body:not([data-peran])), jadi tidak ada lagi yang perlu ditunggu --
   // JS cukup melepasnya begitu peran diketahui.
+  rjdSisipkanMenuCutting_();   // v405
   rjdTerapkanPeranKeMenu();
 });
 
@@ -4293,6 +4319,7 @@ function rjdAmbilPeran_(apiUrl, idToken) {
  */
 function rjdPasangMenuPeran_(d) {
   var area = (d && d.area) || [];
+  rjdSisipkanMenuCutting_();   // v405: tautan disisipkan SEBELUM penyaring peran membacanya
 
   // Klien biasa: bukan staff DAN tanpa area khusus. Menu mereka memang versi
   // ringkas tanpa tautan staff, jadi tidak ada yang perlu disembunyikan.
