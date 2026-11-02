@@ -15,6 +15,7 @@
  * Data per size sudah dikirim server sejak @428 (perSize per roll / End cut / ringkasan); tidak butuh gs baru.
  * v401 (permintaan Femri: satu tempelan memuat beberapa hari kerja): TANGGAL PER BARIS -- kosong = ikut baris di atasnya, tempel
  * mengenali kolom DATE/TANGGAL (lihat crTanggal_ di kepala bagian tabel isian). Server tidak berubah: tiap baris kiriman sendiri.
+ * v402 (permintaan Femri): PO dipilih dengan MENGETIK (pola cari PO halaman Produksi) -- lihat kepala bagian kotak PO.
  *
  * KERANGKA HALAMAN DISUSUN BERKAS INI, BUKAN TEMPLATE. Template Blogger v340 tidak punya cabang untuk /p/cutting.html,
  * jadi body-nya kosong; menambah cabang = tempel template (langkah manual). Header, menu, hero, kotak login dan wadah
@@ -70,7 +71,9 @@ function crPasangKerangka_() {
     '<div class="cr-kotak-login hidden" id="cr-login-box"><h2>Masuk dulu</h2><p>Halaman ini untuk staf produksi RJD Apparel.</p><div id="cr-google-btn"></div></div>' +
     '<div class="hidden" id="cr-loading"><p class="cr-info">Memuat...</p></div>' +
     '<div class="hidden" id="cr-isi">' +
-    '<div class="cr-kartu cr-pilih"><label class="cr-f cr-f-po">Purchase Order<select id="cr-po"><option value="">Memuat daftar PO...</option></select></label>' +
+    '<div class="cr-kartu cr-pilih"><div class="cr-f cr-f-po"><label for="cr-po">Purchase Order</label><div class="cr-po-kotak">' +
+    '<input id="cr-po" type="search" autocomplete="off" spellcheck="false" placeholder="Memuat daftar PO..." disabled role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cr-po-daftar"/>' +
+    '<div class="cr-po-daftar hidden" id="cr-po-daftar" role="listbox"></div></div></div>' +
     '<label class="cr-f cr-f-kw">Kain &#183; warna<select id="cr-kw" disabled><option value="">Pilih PO dulu</option></select></label></div>' +
     '<div class="cr-pesan hidden" id="cr-pesan-muat"></div>' +
     '<div id="cr-form"></div><div id="cr-laporan"></div></div></div>';
@@ -79,10 +82,73 @@ function crPasangKerangka_() {
   document.body.insertBefore(frag, document.body.firstChild);
   crEl_("cr-nav-logout").addEventListener("click", crLogout);
   crEl_("cr-menu-logout").addEventListener("click", crLogout);
-  // Isian tabel milik SATU PO + kain . warna: berganti = tabelnya dibuang, jadi ditanya dulu kalau ada yang belum disimpan.
-  const buang = function () { return !crAdaIsian_() || window.confirm("Isian tabel yang BELUM disimpan akan dibuang. Lanjut?"); };
-  crEl_("cr-po").addEventListener("change", function () { if (CR.menyimpan || !buang()) { this.value = CR.po; return; } CR.baris = []; crPilihPO_(this.value); });
-  crEl_("cr-kw").addEventListener("change", function () { if (CR.menyimpan || !buang()) { this.value = CR.kw; return; } CR.kw = this.value; CR.baris = []; CR.pesan = null; crRenderForm_(); crRenderLaporan_(); });
+  crPoPasang_();
+  crEl_("cr-kw").addEventListener("change", function () { if (CR.menyimpan || !crBuangIsian_()) { this.value = CR.kw; return; } CR.kw = this.value; CR.baris = []; CR.pesan = null; crRenderForm_(); crRenderLaporan_(); });
+}
+// Isian tabel milik SATU PO + kain . warna: berganti = tabelnya dibuang, jadi ditanya dulu kalau ada yang belum disimpan.
+function crBuangIsian_() { return !crAdaIsian_() || window.confirm("Isian tabel yang BELUM disimpan akan dibuang. Lanjut?"); }
+
+/* ---------- kotak PO yang bisa DIKETIK (v402, permintaan Femri: daftar PO panjang) ----------
+ * Pola halaman Produksi (spCariPO): ketik -> daftar PO yang cocok -> pilih. Bedanya: kotak yang diklik tanpa ketikan langsung
+ * menampilkan SEMUA PO aktif (pengganti daftar <select> lama), ketikan dipecah per kata dan SEMUA kata harus ada (urutan bebas:
+ * "guru nooha"), dan bisa dipilih dengan panah + Enter. PO Selesai / Dibatalkan tetap tidak ditawarkan (sama dengan v394).
+ * Isi kotak sesudah memilih = nomor PO; ketikan yang tidak dipilih dikembalikan ke PO terpilih saat kotak ditinggalkan.
+ * Nomor PO yang diketik UTUH lalu Enter / ditinggalkan juga memilihnya (event change). */
+function crPoSaring_(q) {
+  const kata = crNorm_(q).split(" ").filter(function (x) { return x; });
+  return (CR.daftarPO || []).filter(function (p) {
+    const teks = crNorm_([p.idPurchaseOrder, p.noSO, p.namaKlien, (p.artikel || []).join(" ")].join(" "));
+    return kata.every(function (k) { return teks.indexOf(k) !== -1; });
+  });
+}
+function crPoBuka_(q) {
+  const dd = crEl_("cr-po-daftar"), inp = crEl_("cr-po"); if (!dd || !inp) return;
+  CR.poHasil = crPoSaring_(q).slice(0, 50); CR.poSorot = CR.poHasil.length ? 0 : -1;
+  dd.innerHTML = CR.poHasil.length ? CR.poHasil.map(function (p, i) {
+    const sub = [p.namaKlien, (p.artikel || []).join(", ")].filter(function (x) { return x; }).join(" · ");
+    return '<div class="cr-po-opsi' + (i === CR.poSorot ? " aktif" : "") + '" role="option" data-id="' + crEsc_(p.idPurchaseOrder) + '"><b>' + crEsc_(p.idPurchaseOrder) + '</b>' +
+      (sub ? '<span class="cr-po-sub">' + crEsc_(sub) + '</span>' : "") + '</div>';
+  }).join("") : '<div class="cr-po-kosong">Tidak ada PO aktif yang cocok. PO Selesai / Dibatalkan tidak ditampilkan.</div>';
+  dd.classList.remove("hidden"); inp.setAttribute("aria-expanded", "true");
+}
+function crPoTutup_() {
+  const dd = crEl_("cr-po-daftar"), inp = crEl_("cr-po");
+  if (dd) dd.classList.add("hidden"); if (inp) inp.setAttribute("aria-expanded", "false");
+}
+function crPoSorot_(n) {
+  const dd = crEl_("cr-po-daftar"); if (!dd || !CR.poHasil || !CR.poHasil.length) return;
+  CR.poSorot = (n + CR.poHasil.length) % CR.poHasil.length;
+  Array.prototype.forEach.call(dd.querySelectorAll(".cr-po-opsi"), function (el, i) { el.classList.toggle("aktif", i === CR.poSorot); if (i === CR.poSorot && el.scrollIntoView) el.scrollIntoView({ block: "nearest" }); });
+}
+function crPoPilih_(id) {
+  const inp = crEl_("cr-po"); crPoTutup_();
+  if (!id || id === CR.po) { if (inp) inp.value = CR.po; return; }
+  if (CR.menyimpan || !crBuangIsian_()) { if (inp) inp.value = CR.po; return; }
+  if (inp) inp.value = id;
+  CR.baris = []; crPilihPO_(id);
+}
+function crPoPasang_() {
+  const inp = crEl_("cr-po"), dd = crEl_("cr-po-daftar");
+  inp.addEventListener("focus", function () { if (inp.disabled) return; inp.select(); crPoBuka_(""); });
+  inp.addEventListener("input", function () { crPoBuka_(inp.value); });
+  inp.addEventListener("keydown", function (ev) {
+    const buka = !dd.classList.contains("hidden");
+    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") { ev.preventDefault(); if (!buka) crPoBuka_(inp.value); else crPoSorot_(CR.poSorot + (ev.key === "ArrowDown" ? 1 : -1)); }
+    else if (ev.key === "Enter" && buka) { ev.preventDefault(); const p = (CR.poHasil || [])[CR.poSorot]; if (p) crPoPilih_(p.idPurchaseOrder); }
+    else if (ev.key === "Escape") { ev.preventDefault(); crPoTutup_(); inp.value = CR.po; }   // bawaan type=search: Escape MENGOSONGKAN kotak
+  });
+  // Sesudah memilih, kotak masih terfokus -- klik berikutnya tidak memicu focus, jadi daftar dibuka dari sini.
+  inp.addEventListener("click", function () { if (!inp.disabled && dd.classList.contains("hidden")) { inp.select(); crPoBuka_(""); } });
+  // mousedown, bukan click: click datang SESUDAH blur, saat daftarnya sudah ditutup.
+  dd.addEventListener("mousedown", function (ev) {
+    const o = ev.target.closest ? ev.target.closest(".cr-po-opsi") : null; if (!o) return;
+    ev.preventDefault(); crPoPilih_(o.getAttribute("data-id"));
+  });
+  inp.addEventListener("change", function () {
+    const t = crNorm_(inp.value), p = (CR.daftarPO || []).filter(function (x) { return crNorm_(x.idPurchaseOrder) === t; })[0];
+    if (p) crPoPilih_(p.idPurchaseOrder);
+  });
+  inp.addEventListener("blur", function () { setTimeout(function () { if (document.activeElement === inp) return; crPoTutup_(); inp.value = CR.po; }, 150); });
 }
 function crShow(id) {
   ["cr-login-box", "cr-loading", "cr-isi"].forEach(function (x) { const el = crEl_(x); if (el) el.classList.add("hidden"); });
@@ -134,17 +200,15 @@ function crPesanMuat_(teks) {
 
 // ---------- daftar PO ----------
 function crMuatDaftarPO_() {
-  const sel = crEl_("cr-po");
+  const inp = crEl_("cr-po");
   crKirim_("getDaftarPO").then(function (d) {
     CR.daftarPO = (d.daftar || []).filter(function (p) { return !/batal|cancel|selesai/i.test(String(p.status || "")); });
     let simpan = ""; try { simpan = localStorage.getItem("cr_po") || ""; } catch (e) { /* private mode */ }
-    sel.innerHTML = '<option value="">-- pilih PO --</option>' + CR.daftarPO.map(function (p) {
-      return '<option value="' + crEsc_(p.idPurchaseOrder) + '">' + crEsc_([p.idPurchaseOrder, p.namaKlien, (p.artikel || []).join(", ")].filter(function (x) { return x; }).join(" · ")) + '</option>';
-    }).join("");
+    inp.disabled = false; inp.placeholder = "Ketik nomor PO, klien, atau artikel";
     crPesanMuat_("");
-    if (simpan && CR.daftarPO.some(function (p) { return p.idPurchaseOrder === simpan; })) { sel.value = simpan; crPilihPO_(simpan); }
+    if (simpan && CR.daftarPO.some(function (p) { return p.idPurchaseOrder === simpan; })) { inp.value = simpan; crPilihPO_(simpan); }
   }).catch(function (e) {
-    sel.innerHTML = '<option value="">Daftar PO gagal dimuat</option>';
+    inp.placeholder = "Daftar PO gagal dimuat";
     crPesanMuat_("Daftar PO gagal dimuat: " + e.message + " Muat ulang halaman untuk mencoba lagi.");
   });
 }
