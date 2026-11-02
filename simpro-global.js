@@ -12,6 +12,157 @@
  * JANGAN diunggah ke Apps Script. Ini kode BROWSER, bukan server.
  */
 
+/* ============================================================================
+ * SESI SIMPRO PERANGKAT (v404, keputusan Femri 2 Nov 2026; butuh gs >= @433 sesi-login.js)
+ *
+ * Token Google berumur ~1 jam; staf lantai memakai HP/tablet bersama sepanjang shift. Sisi server (sesi-login.js) menukar login
+ * Google SEKALI dengan sesi SIMPRO per KELAS: lantai (halaman produksi, 30 hari bergeser, tanpa keuangan/pajak/penggajian) dan
+ * kantor (halaman yang memanggil aksi keuangan, 12 jam bergeser). Bagian perangkatnya ada DI SINI untuk semua halaman staf,
+ * tanpa menyentuh kode login tiap halaman:
+ *   - Semua halaman staf membaca login dari localStorage "db_session" {token, exp} lalu mengirim token itu sebagai idToken.
+ *     Blok ini berjalan SEBELUM skrip halaman (global dimuat lebih dulu) dan menaruh sesi perangkat untuk KELAS halaman ini ke
+ *     db_session dengan exp jauh -- halaman menganggap dirinya sudah masuk dan mengirim token sesi. Umur sebenarnya dijaga server.
+ *   - Sesi kelas LAIN tidak pernah dipakai (halaman kantor tidak memakai sesi lantai): db_session dikembalikan ke login Google
+ *     yang masih berlaku, atau dikosongkan sehingga halaman meminta login.
+ *   - Login Google baru (ditulis halaman ke db_session) disimpan di "rjd_google" dan ditukar SEKALI per kelas oleh penjaga
+ *     fetch (rjdSesiTukar_) pada panggilan API pertama; sesudahnya penjaga mengganti idToken setiap permintaan dengan sesi.
+ *   - Kelas yang DIBERIKAN server bisa lebih luas dari yang diminta (gs @434: owner/admin/finance selalu kantor, karena
+ *     halaman lantai memanggil Edit PO & Setujui Order yang berarea keuangan). Sesi disimpan menurut kelas yang diberikan;
+ *     halaman lantai memakai sesi lantai ATAU kantor, halaman kantor hanya kantor.
+ *   - Jawaban sesiHabis -> lapisan "Sesi perangkat berakhir"; sesiLuarLingkup -> dicoba ulang SEKALI dengan login Google.
+ *   - Keluar di halaman mana pun = localStorage.removeItem("db_session") -> sesi perangkat ikut dibuang dan dicabut di server.
+ * Halaman yang tidak terdaftar (beranda, portal klien, form order) tidak disentuh sama sekali.
+ * ========================================================================== */
+var RJD_SESI_HALAMAN = {
+  "/p/produksi.html": "lantai", "/p/jadwal.html": "lantai", "/p/pengiriman.html": "lantai", "/p/cutting.html": "lantai", "/p/sop.html": "lantai",
+  "/p/kas.html": "kantor", "/p/invoice.html": "kantor", "/p/dashboard.html": "kantor", "/p/kalkulator-harga.html": "kantor",
+  "/p/laporan-omset.html": "kantor", "/p/upah.html": "kantor", "/p/order-list.html": "kantor"
+};
+// /p/cetak.html: kelas menurut jenis dokumennya -- invoice/proforma/konfirmasi order memanggil aksi keuangan (getInvoiceCetak dst.)
+var RJD_SESI_CETAK_KANTOR = { invoice: 1, proforma: 1, konfirmasiorder: 1 };
+var RJD_SESI_EXP_JAUH = 4102444800;   // 1 Jan 2100: bagi pembaca halaman "belum kedaluwarsa"; umur sebenarnya dijaga server
+function rjdSesiKelas_() {
+  try {
+    var p = window.location.pathname;
+    if (p === "/p/cetak.html") {
+      var j = String(new URLSearchParams(window.location.search).get("jenis") || "").toLowerCase();
+      return RJD_SESI_CETAK_KANTOR[j] ? "kantor" : "lantai";
+    }
+    return RJD_SESI_HALAMAN[p] || null;
+  } catch (e) { return null; }
+}
+function rjdSesiAdalah_(t) { return /^sesi\.[0-9a-f]{64}$/.test(String(t || "")); }
+function rjdSesiBaca_(kelas) {
+  try { var o = JSON.parse(localStorage.getItem("rjd_sesi_" + kelas) || "null"); return o && rjdSesiAdalah_(o.token) ? o : null; } catch (e) { return null; }
+}
+/** Sesi yang boleh dipakai halaman berkelas ini -> { kelas, o } atau null. Kantor membuka semua area, jadi ia sah di halaman lantai. */
+function rjdSesiUntukHalaman_(kelas) {
+  var urut = kelas === "lantai" ? ["lantai", "kantor"] : [kelas];
+  for (var i = 0; i < urut.length; i++) { var o = rjdSesiBaca_(urut[i]); if (o) return { kelas: urut[i], o: o }; }
+  return null;
+}
+function rjdSesiSimpan_(kelas, o) { try { localStorage.setItem("rjd_sesi_" + kelas, JSON.stringify(o)); } catch (e) { /* private mode */ } }
+/** db_session berisi sesi perangkat kelas ini (email ikut: token sesi tidak bisa dibongkar seperti JWT untuk kunci cache). */
+function rjdSesiTulisDb_(kelas, o) {
+  try { localStorage.setItem("db_session", JSON.stringify({ token: o.token, exp: RJD_SESI_EXP_JAUH, email: o.email || "", sesiSimpro: kelas })); } catch (e) { /* private mode */ }
+}
+function rjdSesiGoogle_() {
+  try { var g = JSON.parse(localStorage.getItem("rjd_google") || "null"); return g && g.token && g.exp * 1000 > Date.now() ? g : null; } catch (e) { return null; }
+}
+// Hapus db_session TANPA dianggap "keluar" (pemasang di bawah memakai ini saat menukar sesi kelas lain).
+var rjdSesiHapusDiam_ = function (k) { try { window.__rjdSesiDiam = true; localStorage.removeItem(k); } catch (e) { /* private mode */ } finally { window.__rjdSesiDiam = false; } };
+
+(function rjdSesiPasang_() {
+  var kelas = rjdSesiKelas_();
+  if (!kelas) return;
+  try {
+    // Migrasi v403: sesi halaman cutting (cr_sesi_simpro, lingkup "cutting" = lantai di gs @433).
+    var lama = localStorage.getItem("cr_sesi_simpro");
+    if (rjdSesiAdalah_(lama) && !rjdSesiBaca_("lantai")) rjdSesiSimpan_("lantai", { token: lama, email: "" });
+    if (lama !== null) localStorage.removeItem("cr_sesi_simpro");
+    // Login Google yang masih dipegang db_session disimpan terpisah: ia yang ditukar, dan cadangan untuk aksi luar lingkup.
+    var raw = null; try { raw = JSON.parse(localStorage.getItem("db_session") || "null"); } catch (e) { raw = null; }
+    if (raw && raw.token && !rjdSesiAdalah_(raw.token) && raw.exp * 1000 > Date.now()) localStorage.setItem("rjd_google", JSON.stringify({ token: raw.token, exp: raw.exp }));
+    var s = rjdSesiUntukHalaman_(kelas);
+    if (s) { rjdSesiTulisDb_(s.kelas, s.o); return; }
+    if (raw && rjdSesiAdalah_(raw.token)) {
+      // db_session memegang sesi yang tidak sah di sini (sesi lantai di halaman kantor): jangan dipakai.
+      var g = rjdSesiGoogle_();
+      if (g) localStorage.setItem("db_session", JSON.stringify({ token: g.token, exp: g.exp })); else rjdSesiHapusDiam_("db_session");
+    }
+  } catch (e) { /* private mode / storage mati: halaman berjalan dengan login Google biasa */ }
+})();
+
+/** Keluar: buang sesi perangkat SEMUA kelas + login Google tersimpan, dan cabut sesinya di server (tidak ditunggu). */
+function rjdSesiKeluar_() {
+  var url = null; try { url = typeof rjdApiUrlMenu_ === "function" ? rjdApiUrlMenu_() : null; } catch (e) { url = null; }
+  ["lantai", "kantor"].forEach(function (kelas) {
+    var s = rjdSesiBaca_(kelas);
+    if (!s) return;
+    try { localStorage.removeItem("rjd_sesi_" + kelas); } catch (e) { /* private mode */ }
+    if (url) { try { window.fetch(url, { method: "POST", keepalive: true, body: JSON.stringify({ idToken: s.token, action: "akhiriSesiLogin" }) }).catch(function () {}); } catch (e) { /* luring */ } }
+  });
+  try { localStorage.removeItem("rjd_google"); localStorage.removeItem("cr_sesi_simpro"); } catch (e) { /* private mode */ }
+}
+// Semua halaman staf keluar lewat localStorage.removeItem("db_session") (12 tempat, satu pola). Menyadapnya DI SINI lebih kecil
+// risikonya daripada mengubah 12 fungsi logout: lupa satu = tombol Keluar yang tidak mengeluarkan perangkat bersama.
+(function rjdSesiSadapKeluar_() {
+  try {
+    var asli = Storage.prototype.removeItem;
+    Storage.prototype.removeItem = function (k) {
+      try { if (k === "db_session" && this === window.localStorage && !window.__rjdSesiDiam) rjdSesiKeluar_(); } catch (e) { /* jangan menahan logout */ }
+      return asli.apply(this, arguments);
+    };
+  } catch (e) { /* lingkungan tanpa Storage.prototype: logout tetap membuang db_session */ }
+})();
+
+function rjdSesiTokenBody_(opts) { try { return String(JSON.parse(opts && opts.body).idToken || ""); } catch (e) { return ""; } }
+function rjdSesiGantiToken_(opts, token) {
+  try { var b = JSON.parse(opts.body); b.idToken = token; return Object.assign({}, opts, { body: JSON.stringify(b) }); } catch (e) { return opts; }
+}
+/** Email pemilik login di db_session: dari JWT Google, atau dari catatan sesi perangkat (token sesi tidak bisa dibongkar). */
+function rjdEmailLogin_() {
+  try {
+    var t = rjdBacaTokenStaff_(); if (!t) return "";
+    if (rjdSesiAdalah_(t)) return String((JSON.parse(localStorage.getItem("db_session") || "null") || {}).email || "");
+    return String(JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).email || "");
+  } catch (e) { return ""; }
+}
+/** Sesi ditolak server (dicabut / kedaluwarsa / tak dikenal): buang dari perangkat TANPA dianggap "keluar" (sesi kelas lain tetap). */
+function rjdSesiBuangToken_(token) {
+  ["lantai", "kantor"].forEach(function (k) { var o = rjdSesiBaca_(k); if (o && o.token === token) { try { localStorage.removeItem("rjd_sesi_" + k); } catch (e) { /* private mode */ } } });
+  try { localStorage.removeItem("rjd_google"); var d = JSON.parse(localStorage.getItem("db_session") || "null"); if (d && d.token === token) rjdSesiHapusDiam_("db_session"); } catch (e) { /* private mode */ }
+}
+
+/** Login Google -> sesi kelas ini, SEKALI per pemuatan halaman (dipanggil penjaga fetch pada panggilan API pertama). */
+var RJD_SESI_TUKAR = {};
+function rjdSesiTukar_(kelas, tokenGoogle, url) {
+  if (RJD_SESI_TUKAR[kelas] || !url) return;
+  RJD_SESI_TUKAR[kelas] = true;
+  try {
+    window.fetch(url, { method: "POST", body: JSON.stringify({ idToken: tokenGoogle, action: "buatSesiLogin",
+      payload: { lingkup: kelas, perangkat: String((navigator && navigator.userAgent) || "").slice(0, 120) } }) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.success || !rjdSesiAdalah_(d.token)) return;   // server lama / ditolak: halaman tetap berjalan dengan login Google
+        // Keluar (atau ganti akun) SELAGI penukaran berjalan: db_session tidak lagi memegang login yang ditukar. Sesi baru itu
+        // tidak boleh disimpan -- perangkat yang sudah keluar akan masuk lagi pada muatan berikutnya -- jadi langsung dicabut.
+        var kini = null; try { kini = JSON.parse(localStorage.getItem("db_session") || "null"); } catch (e) { kini = null; }
+        if (!kini || kini.token !== tokenGoogle) {
+          try { window.fetch(url, { method: "POST", keepalive: true, body: JSON.stringify({ idToken: d.token, action: "akhiriSesiLogin" }) }).catch(function () {}); } catch (e) { /* luring */ }
+          return;
+        }
+        var diberi = d.lingkup === "kantor" || d.lingkup === "lantai" ? d.lingkup : kelas;   // server boleh menaikkan lantai -> kantor
+        var o = { token: d.token, email: d.email || "", umur: d.umur || "" };
+        rjdSesiSimpan_(diberi, o);
+        try { localStorage.setItem("rjd_google", JSON.stringify({ token: kini.token, exp: kini.exp })); } catch (e) { /* private mode */ }
+        var pakai = rjdSesiUntukHalaman_(kelas);
+        if (pakai) rjdSesiTulisDb_(pakai.kelas, pakai.o);
+      })
+      .catch(function () { /* jaringan: dicoba lagi pada pemuatan halaman berikutnya */ });
+  } catch (e) { /* abaikan */ }
+}
+
 /**
  * ============ FUNGSI BERSAMA: label pembayaran invoice ============
  * Aturan penamaan uang yang sudah diterima, dipakai di 2 tempat: kartu invoice
@@ -4079,12 +4230,7 @@ var RJD_PERAN_CACHE = { token: null, janji: null };
 var RJD_PERAN_UMUR_MENIT = 60;
 
 function rjdPeranKunci_() {
-  var email = "";
-  try {
-    var t = rjdBacaTokenStaff_();
-    if (t) email = String(JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).email || "");
-  } catch (e) { /* token tak terbaca -> kunci tanpa email */ }
-  return "rjd_peran:" + email;
+  return "rjd_peran:" + rjdEmailLogin_();   // v404: token sesi perangkat membawa email di db_session, bukan di tokennya
 }
 function rjdPeranSimpan_(d) {
   try { localStorage.setItem(rjdPeranKunci_(), JSON.stringify({ t: Date.now(), d: d })); }
@@ -4470,9 +4616,7 @@ function rjdJagaHalaman(idToken, apiUrl, saatLolos) {
    service worker (Blogger tidak bisa menyimpan file di akar domain).
    Kunci dipisah per email supaya dua staf di satu HP tidak saling melihat. */
 function rjdSnapshotKunci_(nama) {
-  var email = "";
-  try { var t = rjdBacaTokenStaff_(); if (t) email = String(JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).email || ""); } catch (e) { /* token tak terbaca */ }
-  return "rjd_snap:" + nama + ":" + email;
+  return "rjd_snap:" + nama + ":" + rjdEmailLogin_();
 }
 function rjdSnapshotSimpan_(nama, data) {
   var isi = null;
@@ -4620,21 +4764,27 @@ function rjdJamPendek_(d) { return String(d.getHours()).padStart(2, "0") + "." +
   // rjdDaftarApi_() dan dipakai bersama rjdApiUrlMenu_. Dua daftar untuk satu
   // hal sudah terbukti melewatkan halaman yang berbeda-beda.
 
-  window.rjdSesiHabis_ = function () {
+  // v404: opsi { judul, teks } untuk sesi perangkat yang berakhir (teksnya dari server: dicabut / tidak dipakai sekian lama).
+  // z-index 10000: lapisan ini muncul SEBELUM halaman memproses jawaban yang sama, jadi layar "Gagal memeriksa akses" milik
+  // satpam (z 9999) yang dipasang sesudahnya tidak boleh menutupinya.
+  window.rjdSesiHabis_ = function (opsi) {
     if (sudahTampil || document.getElementById("rjd-sesi-habis")) return;
     sudahTampil = true;
+    const o = opsi || {}, esc = function (t) { return String(t).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; }); };
     const layar = document.createElement("div");
     layar.id = "rjd-sesi-habis";
-    layar.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(23,33,47,.55);" +
+    layar.style.cssText = "position:fixed;inset:0;z-index:10000;background:rgba(23,33,47,.55);" +
       "display:flex;align-items:center;justify-content:center;padding:20px";
     layar.innerHTML =
       '<div style="background:#fff;border-radius:16px;max-width:420px;padding:28px 24px;text-align:center;font-family:inherit">' +
-      '<h3 style="margin:0 0 10px">Sesi login berakhir</h3>' +
-      '<p style="color:#5F6B7A;margin:0 0 18px">Login Google berumur sekitar satu jam. Data yang belum disimpan tidak terkirim &#8212; login lagi lalu ulangi langkah terakhirmu.</p>' +
+      '<h3 style="margin:0 0 10px">' + esc(o.judul || "Sesi login berakhir") + '</h3>' +
+      '<p style="color:#5F6B7A;margin:0 0 18px">' + (o.teks ? esc(o.teks) + " " : "Login Google berumur sekitar satu jam. ") +
+      'Data yang belum disimpan tidak terkirim &#8212; login lagi lalu ulangi langkah terakhirmu.</p>' +
       '<button id="rjd-sesi-ulang" style="width:100%;padding:13px 0;background:#17212F;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer" type="button">Login ulang</button></div>';
     document.body.appendChild(layar);
     document.getElementById("rjd-sesi-ulang").onclick = function () {
-      try { localStorage.removeItem("db_session"); } catch (e) { /* private mode */ }
+      // Hapus DIAM (bukan "keluar"): login Google yang habis di satu halaman tidak boleh mencabut sesi perangkat kelas lain.
+      rjdSesiHapusDiam_("db_session");
       window.location.reload();
     };
   };
@@ -4667,7 +4817,19 @@ function rjdJamPendek_(d) { return String(d.getHours()).padStart(2, "0") + "." +
     const apiKita = rjdDaftarApi_().indexOf(alamatAwal) !== -1;
     const aksi = apiKita ? rjdAksiDariBody_(opts) : "";
     const bacaSaja = /^(get|cek|diagnosa|hitung|ambil|cari)/i.test(aksi);
-    const kirim = function () { return fetchAsli(url, opts); };
+
+    // v404 SESI PERANGKAT (kepala berkas): halaman yang memegang login Google sejak sebelum penukaran tetap mengirim token
+    // Google -- diganti di sini dengan sesi kelas halaman ini; belum ada sesi -> ditukar sekali (tidak ditunggu). Aksi KOSONG
+    // ikut: rute utama dashboard dikirim tanpa action ({ idToken, page: "dashboard" }).
+    let optsKirim = opts, tokenSesi = "";
+    const kelasSesi = apiKita && aksi !== "buatSesiLogin" && aksi !== "akhiriSesiLogin" ? rjdSesiKelas_() : null;
+    if (kelasSesi) {
+      const tok = rjdSesiTokenBody_(opts), sesi = rjdSesiUntukHalaman_(kelasSesi);
+      if (rjdSesiAdalah_(tok)) tokenSesi = tok;
+      else if (sesi && tok) { optsKirim = rjdSesiGantiToken_(opts, sesi.o.token); if (optsKirim !== opts) tokenSesi = sesi.o.token; }
+      else if (tok && tok.split(".").length === 3) rjdSesiTukar_(kelasSesi, tok, alamatAwal);
+    }
+    const kirim = function () { return fetchAsli(url, optsKirim); };
 
     let p = kirim();
     if (apiKita && bacaSaja) {
@@ -4679,6 +4841,23 @@ function rjdJamPendek_(d) { return String(d.getHours()).padStart(2, "0") + "." +
       }).catch(function (e2) {
         if (!(e2 instanceof TypeError)) throw e2;
         return rjdTunggu_(3000).then(kirim);
+      });
+    }
+
+    if (tokenSesi) {
+      // Jawaban untuk token sesi diperiksa SEBELUM diserahkan ke halaman: sesiHabis -> sesi dibuang + lapisan login ulang;
+      // sesiLuarLingkup -> dicoba ulang SEKALI dengan login Google yang masih berlaku (kalau tidak ada, jawabannya diteruskan).
+      p = p.then(function (r) {
+        if (!r || typeof r.clone !== "function") return r;
+        return r.clone().json().then(function (d) {
+          if (d && d.sesiHabis) {
+            rjdSesiBuangToken_(tokenSesi);
+            window.rjdSesiHabis_({ judul: "Sesi perangkat berakhir", teks: String(d.error || "Sesi perangkat ini tidak berlaku lagi.") });
+            return r;
+          }
+          const g = d && d.sesiLuarLingkup ? rjdSesiGoogle_() : null;
+          return g ? fetchAsli(url, rjdSesiGantiToken_(opts, g.token)) : r;
+        }, function () { return r; });
       });
     }
 

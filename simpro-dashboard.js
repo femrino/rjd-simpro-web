@@ -39,8 +39,13 @@ function dbGetCachedToken(){
     return data.token;
   }catch(e){ return null; }
 }
-function dbClearCachedToken(){
-  try{ localStorage.removeItem("db_session"); }catch(e){}
+// v404: diam = galat server pada rute utama, BUKAN keluar. removeItem("db_session") disadap simpro-global.js sebagai "keluar"
+// (sesi perangkat semua kelas dicabut di server); galat biasa (server sibuk, sheet terkunci) tidak boleh mengeluarkan perangkat.
+function dbClearCachedToken(diam){
+  try{
+    if(diam && typeof rjdSesiHapusDiam_ === "function") rjdSesiHapusDiam_("db_session");
+    else localStorage.removeItem("db_session");
+  }catch(e){}
 }
 
 function dbHandleGoogleLogin(response){
@@ -1195,7 +1200,7 @@ function dbFetchIsi_() {
   .then(function(r){ return r.json(); })
   .then(function(data){
     if(data.error){
-      dbClearCachedToken();
+      dbClearCachedToken(true);
       document.getElementById("db-error-message").textContent = data.error;
       const navLogoutErr = document.getElementById("db-nav-logout");
       if(navLogoutErr) navLogoutErr.classList.add("hidden");
@@ -1259,7 +1264,7 @@ function dbRefreshData(){
   .then(function(r){ return r.json(); })
   .then(function(data){
     if(data.error){
-      dbClearCachedToken();
+      dbClearCachedToken(true);
       document.getElementById("db-error-message").textContent = data.error;
       const navLogoutErr = document.getElementById("db-nav-logout");
       if(navLogoutErr) navLogoutErr.classList.add("hidden");

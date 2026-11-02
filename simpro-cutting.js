@@ -17,7 +17,9 @@
  * mengenali kolom DATE/TANGGAL (lihat crTanggal_ di kepala bagian tabel isian). Server tidak berubah: tiap baris kiriman sendiri.
  * v402 (permintaan Femri): PO dipilih dengan MENGETIK (pola cari PO halaman Produksi) -- lihat kepala bagian kotak PO.
  * v403 (keputusan Femri, butuh gs >= @432): SESI SIMPRO -- login Google sekali, lalu HP ini tetap masuk 30 hari sejak terakhir
- * dipakai; tidak ada lagi "Sesi login berakhir" tiap jam. Lihat kepala bagian sesi SIMPRO.
+ * dipakai; tidak ada lagi "Sesi login berakhir" tiap jam.
+ * v404 (perluasan ke semua halaman staf, butuh gs >= @434): mekanisme sesinya PINDAH ke simpro-global.js (kepala berkas, "SESI
+ * SIMPRO PERANGKAT") -- halaman ini kembali ke alur login standar; lihat nisan di bagian sesi.
  *
  * KERANGKA HALAMAN DISUSUN BERKAS INI, BUKAN TEMPLATE. Template Blogger v340 tidak punya cabang untuk /p/cutting.html,
  * jadi body-nya kosong; menambah cabang = tempel template (langkah manual). Header, menu, hero, kotak login dan wadah
@@ -70,8 +72,8 @@ function crPasangKerangka_() {
     '<header class="hero cr-hero"><div class="cr-hero-isi"><div class="eyebrow">Produksi</div><h1>Cutting <em>per roll</em>.</h1>' +
     '<p class="lead">Catat tiap gelaran dari roll yang dipakai. Sisa dicatat saat roll habis; selisih per roll terhitung sendiri.</p></div></header>' +
     '<div class="cr-wrap" id="cr-wrap">' +
-    '<div class="cr-kotak-login hidden" id="cr-login-box"><h2>Masuk dulu</h2><p>Halaman ini untuk staf produksi RJD Apparel. Cukup sekali: HP ini tetap masuk selama dipakai ' +
-    '(berakhir kalau 30 hari tidak dipakai atau dicabut admin).</p><p class="cr-galat hidden" id="cr-login-pesan"></p><div id="cr-google-btn"></div></div>' +
+    '<div class="cr-kotak-login hidden" id="cr-login-box"><h2>Masuk dulu</h2><p>Halaman ini untuk staf produksi RJD Apparel. Cukup sekali: perangkat ini tetap masuk selama dipakai ' +
+    '(berakhir kalau 30 hari tidak dipakai -- 12 jam untuk akun yang membuka keuangan -- atau dicabut admin).</p><p class="cr-galat hidden" id="cr-login-pesan"></p><div id="cr-google-btn"></div></div>' +
     '<div class="hidden" id="cr-loading"><p class="cr-info">Memuat...</p></div>' +
     '<div class="hidden" id="cr-isi">' +
     '<div class="cr-kartu cr-pilih"><div class="cr-f cr-f-po"><label for="cr-po">Purchase Order</label><div class="cr-po-kotak">' +
@@ -165,18 +167,13 @@ function crBacaSesi_() {
 function crSimpanSesi_(token) {
   try { const p = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))); localStorage.setItem("db_session", JSON.stringify({ token: token, exp: p.exp })); } catch (e) { /* private mode */ }
 }
-/* ---------- SESI SIMPRO (v403, butuh gs >= @432 sesi-login.js; keputusan Femri 2 Nov 2026: opsi 1) ----------
- * Token Google berumur ~1 jam dan HP cutting dipakai BERSAMA sepanjang shift, jadi tiap jam pekerjaan terputus. Login Google
- * kini cuma bukti identitas SEKALI: ia ditukar (buatSesiLogin) dengan token sesi "sesi.<64 hex>" yang berlaku 30 hari sejak
- * TERAKHIR dipakai, disimpan di HP ini (CR_KUNCI_SESI) dan dikirim lewat medan idToken yang sama. Lingkupnya hanya aksi halaman
- * ini; penjaga peran & bagian di server tetap berjalan. Sesi yang dicabut/kedaluwarsa dijawab sesiHabis -> kotak login (bukan
- * lapisan "Login Google berumur sekitar satu jam" milik simpro-global.js). Login Google yang masih berlaku dari halaman lain
- * (db_session) ditukar tanpa klik. */
-const CR_KUNCI_SESI = "cr_sesi_simpro";
-function crAdalahSesi_(t) { return /^sesi\.[0-9a-f]{64}$/.test(String(t || "")); }
-function crBacaSesiSimpro_() { try { const t = localStorage.getItem(CR_KUNCI_SESI) || ""; return crAdalahSesi_(t) ? t : null; } catch (e) { return null; } }
-function crSimpanSesiSimpro_(t) { try { localStorage.setItem(CR_KUNCI_SESI, t); } catch (e) { /* private mode: sesi berlaku sampai halaman ditutup */ } }
-function crBuangSesiSimpro_() { try { localStorage.removeItem(CR_KUNCI_SESI); } catch (e) { /* private mode */ } }
+/* NISAN v404: sesi SIMPRO v403 milik halaman ini (CR_KUNCI_SESI "cr_sesi_simpro", crTukarSesi_, crSesiHabis_, pemeriksaan
+ * getPeranSaya sebelum satpam) DIPINDAH ke simpro-global.js supaya berlaku di semua halaman staf tanpa menyalin kode ke tiap
+ * halaman: global menaruh sesi perangkat ke db_session SEBELUM skrip ini berjalan (crBacaSesi_ membacanya seperti login
+ * Google), menukar login Google baru pada panggilan API pertama, dan menangani sesiHabis dengan lapisan "Sesi perangkat
+ * berakhir" (z-index di atas layar satpam -- jadi pemeriksaan-dulu v403 tidak dibutuhkan lagi). Sesi lama di
+ * "cr_sesi_simpro" dipindah global ke kelas lantai sekali jalan. Keluar = removeItem("db_session"), yang disadap global
+ * untuk mencabut sesi perangkat di server. */
 /** Kotak login (+ pesan sebabnya kalau ada); tombol Google dipasang, pustakanya dimuat sekali. */
 function crTampilLogin_(pesan) {
   crShow("cr-login-box");
@@ -188,29 +185,9 @@ function crTampilLogin_(pesan) {
   s.onload = function () { if (!CR_ID_TOKEN) crPasangTombolGoogle_(); };
   document.head.appendChild(s);
 }
-/** Tukar token Google yang sah dengan sesi SIMPRO, lalu masuk. */
-function crTukarSesi_(tokenGoogle) {
-  crShow("cr-loading");
-  CR_ID_TOKEN = tokenGoogle;
-  return crKirim_("buatSesiLogin", { payload: { lingkup: "cutting", perangkat: String((navigator && navigator.userAgent) || "").slice(0, 120) } })
-    .then(function (d) {
-      if (!crAdalahSesi_(d.token)) throw new Error("Server tidak mengirim sesi yang sah.");
-      crSimpanSesiSimpro_(d.token); CR_ID_TOKEN = d.token; crMulai();
-    })
-    .catch(function (e) { CR_ID_TOKEN = null; crTampilLogin_("Login belum berhasil: " + e.message); });
-}
-/** Server menjawab sesiHabis (dicabut / 30 hari tak dipakai / tak dikenal): buang sesi HP ini, buka login dengan sebabnya. */
-function crSesiHabis_(pesan) {
-  crBuangSesiSimpro_(); CR_ID_TOKEN = null;
-  crTampilLogin_(pesan || "Sesi HP ini sudah berakhir. Login ulang dengan Google.");
-}
-function crHandleGoogleLogin(response) { crSimpanSesi_(response.credential); crTukarSesi_(response.credential); }
+function crHandleGoogleLogin(response) { CR_ID_TOKEN = response.credential; crSimpanSesi_(response.credential); crMulai(); }
 function crLogout() {
-  const t = CR_ID_TOKEN;
-  // Keluar = cabut sesinya di server juga (akhiriSesiLogin); jawabannya tidak ditunggu -- yang menentukan HP ini keluar adalah
-  // sesi lokal yang dibuang di bawah, dan sesi server yang gagal dicabut tetap mati sendiri sesudah 30 hari tak dipakai.
-  if (crAdalahSesi_(t)) { try { fetch(CR_API_URL, { method: "POST", body: JSON.stringify({ idToken: t, action: "akhiriSesiLogin" }) }).catch(function () {}); } catch (e) { /* luring */ } }
-  CR_ID_TOKEN = null; crBuangSesiSimpro_(); try { localStorage.removeItem("db_session"); } catch (e) { /* private mode */ }
+  CR_ID_TOKEN = null; try { localStorage.removeItem("db_session"); } catch (e) { /* private mode */ }
   if (typeof google !== "undefined" && google.accounts) google.accounts.id.disableAutoSelect();
   crTampilLogin_("");
 }
@@ -221,12 +198,7 @@ function crPasangTombolGoogle_() {
   return true;
 }
 function crMulai() {
-  const jalan = function () { if (typeof rjdJagaHalaman === "function") rjdJagaHalaman(CR_ID_TOKEN, CR_API_URL, crMulaiIsi_); else crMulaiIsi_(); };
-  if (!crAdalahSesi_(CR_ID_TOKEN)) { jalan(); return; }
-  // Sesi SIMPRO diperiksa DULU lewat crKirim_: satpam global menelan sebab penolakan dan menampilkan "Gagal memeriksa akses" +
-  // muat ulang -- untuk sesi yang dicabut itu putaran tanpa ujung. sesiHabis -> crSesiHabis_ sudah membuka login. Galat lain
-  // (jaringan) -> satpam berjalan dan menangani kegagalannya sendiri seperti biasa.
-  crKirim_("getPeranSaya").then(jalan, function (e) { if (!e.sesiHabis) jalan(); });
+  if (typeof rjdJagaHalaman === "function") rjdJagaHalaman(CR_ID_TOKEN, CR_API_URL, crMulaiIsi_); else crMulaiIsi_();
 }
 function crMulaiIsi_() {
   const b = crEl_("cr-nav-logout"); if (b) b.classList.remove("hidden");
@@ -242,7 +214,7 @@ function crKirim_(action, muatan) {
       let d; try { d = JSON.parse(teks); } catch (e) { throw new Error("Jawaban server tidak terbaca: " + String(teks).replace(/<[^>]*>/g, " ").trim().slice(0, 80)); }
       if (!d || !d.success) {
         const g = new Error((d && d.error) || "Permintaan ditolak server."); g.server = true;
-        if (d && d.sesiHabis) { g.sesiHabis = true; crSesiHabis_(g.message); }   // v403: sesi SIMPRO tidak berlaku -> login
+        if (d && d.sesiHabis) g.sesiHabis = true;   // lapisan "Sesi perangkat berakhir" dipasang penjaga fetch global
         throw g;
       }
       return d;
@@ -793,10 +765,8 @@ function crRenderLaporan_() {
 // ---------- mulai ----------
 function crMulaiHalaman_() {
   crPasangKerangka_();
-  const sesi = crBacaSesiSimpro_();
-  if (sesi) { CR_ID_TOKEN = sesi; crMulai(); return; }
-  const tokenGoogle = crBacaSesi_();   // login Google yang masih berlaku (mis. dari halaman lain) -> ditukar tanpa klik
-  if (tokenGoogle) { crTukarSesi_(tokenGoogle); return; }
+  const t = crBacaSesi_();   // sesi perangkat (ditaruh simpro-global.js) atau login Google yang masih berlaku
+  if (t) { CR_ID_TOKEN = t; crMulai(); return; }
   crTampilLogin_("");
 }
 if (typeof rjdSaatDomSiap_ === "function") rjdSaatDomSiap_(crMulaiHalaman_);
