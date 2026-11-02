@@ -275,3 +275,14 @@
 .ks-kpi-tabel td:nth-child(2) { white-space: normal; min-width: 120px; }
 .ks-kpi-kaki { margin: 8px 0 0; font-size: 11.5px; }
 @media (max-width: 640px) { .ks-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .ks-kpi-nilai { font-size: 17px; } }
+
+/* v406: pindah periode lebih cepat (lihat KS_INGATAN di simpro-kas.js). Judul bulan = pemilih: <select> transparan di atasnya
+   (font 16px supaya iOS tidak nge-zoom saat diketuk), panah kecil penanda bisa diklik. Selama bulan lain dimuat, data bulan
+   lama diredupkan dan tidak bisa diklik -- tetap terlihat, bukan layar kosong. */
+.ks-bulan-pilih { position: relative; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; border-radius: 8px; padding: 2px 4px; }
+.ks-bulan-pilih:hover { background: rgba(23, 33, 47, .06); }
+.ks-bulan-pilih::after { content: "\25BE"; font-size: 13px; color: var(--ink-soft, #5F6B7A); }
+.ks-bulan-pilih select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; border: 0; margin: 0; }
+.ks-badge.ks-badge-muat { background: #F4EFE6; color: #7A5B1E; }
+.ks-memuat { opacity: .45; pointer-events: none; transition: opacity .15s ease; }
+@media print { .ks-bulan-pilih::after { content: none; } .ks-bulan-pilih select { display: none; } }

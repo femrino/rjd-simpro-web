@@ -140,6 +140,8 @@ function ksMulaiIsi_() {
 
 // ---------- API ----------
 function ksKirim_(action, muatan) {
+  // v406: aksi apa pun selain get* bisa mengubah buku -> ingatan per bulan dibuang SEBELUM dikirim (lihat KS_INGATAN).
+  if (!/^get/.test(String(action || ""))) { KS_INGATAN = {}; KS_INGATAN_GEN++; }
   return fetch(KS_API_URL, { method: "POST", body: JSON.stringify(Object.assign({ idToken: KS_ID_TOKEN, action: action }, muatan || {})) })
     .then(function (r) { return r.text(); })
     .then(function (teks) {
@@ -211,6 +213,25 @@ function ksMuatPertama_() {
 let KS_MUAT_URUT = 0;
 let KS_PRA_TULIS = false;
 
+/* v406 (3 Nov 2026, permintaan Femri, opsi 2): PINDAH PERIODE LEBIH CEPAT.
+   Dulu: tombol < > menggeser SATU bulan dan tiap geser mengosongkan seluruh halaman ("Memuat buku kas...") sampai server
+   menjawab -- Oktober ke Agustus = 2 kali menunggu, lalu ke November 3 kali lagi, dan selama menunggu tombolnya ikut hilang.
+   Sekarang:
+   (1) judul bulan adalah PEMILIH (<select> tak terlihat di atas judul): langsung lompat ke bulan mana pun, satu kali tunggu;
+   (2) saat memuat halaman TIDAK dikosongkan: data lama tetap tampil REDUP (pointer mati) dengan judul bulan tujuan + "Memuat...",
+       dan tombol/pemilih tetap hidup -- lompatan berikutnya dihitung dari bulan TUJUAN (KS_BULAN_TUJU), jawaban yang disusul
+       dibuang KS_MUAT_URUT seperti biasa;
+   (3) INGATAN per bulan (KS_INGATAN): bulan yang pernah dimuat di halaman ini tampil SEKETIKA saat dibuka lagi (paling tua
+       KS_INGATAN_MS), bertanda "Memperbarui...", lalu disegarkan dari server di latar. Ingatan DIBUANG SELURUHNYA setiap ada
+       aksi selain get* yang dikirim (ksKirim_: catat, koreksi, batal, tutup bulan, rekonsiliasi, opname, ...) -- satu tempat,
+       bukan daftar pemanggil -- dan jawaban getKas yang diminta SEBELUM pembuangan tidak boleh mengisinya lagi
+       (KS_INGATAN_GEN). Aturannya sama dengan snapshot halaman ini: angka lama tidak pernah tampil sesudah tulis. */
+let KS_BULAN_TUJU = null;      // bulan yang sedang dimuat lewat geser/pemilih; null = tidak ada
+let KS_INGATAN = {};           // "yyyy-MM" -> { d: jawaban getKas, t: ms diterima, urut: KS_MUAT_URUT permintaannya }
+let KS_INGATAN_GEN = 0;        // naik tiap ingatan dibuang; jawaban milik generasi lama tidak disimpan
+let KS_DARI_INGATAN = 0;       // > 0 = yang tampil berasal dari ingatan (ms umurnya) dan sedang disegarkan
+const KS_INGATAN_MS = 15 * 60000;
+
 function ksBilahPraTulis_(pasang) {
   let bar = document.getElementById("ks-pra-tulis");
   if (!pasang) { if (bar) bar.remove(); return; }
@@ -230,9 +251,14 @@ function ksMuat(bulan, opsi) {
   // berjalan. Dibutuhkan karena snapshot sudah mengisi KS_BULAN dengan bulan
   // terakhir yang dilihat, dan itu belum tentu bulan sekarang. Pemanggil lama
   // (ksMuat(), ksMuat(KS_BULAN), ksMuat(ksGeserBulan(...))) tidak berubah.
+  const gen = KS_INGATAN_GEN;
   return ksKirim_("getKas", { bulan: (bulan === null ? undefined : (bulan || KS_BULAN || undefined)) })
     .then(function (d) {
+      // v406: disimpan juga kalau sudah disusul -- jawabannya tetap benar untuk bulannya -- KECUALI ingatan dibuang sesudah dikirim.
+      // Jawaban yang lebih TUA (nomor urut lebih kecil) tidak boleh menimpa yang lebih baru untuk bulan yang sama (@K17 WK-5 lomba).
+      if (gen === KS_INGATAN_GEN && d && d.bulan && !(KS_INGATAN[d.bulan] && KS_INGATAN[d.bulan].urut > urut)) KS_INGATAN[d.bulan] = { d: d, t: Date.now(), urut: urut };
       if (urut !== KS_MUAT_URUT) return;   // @K17 WK-5: jawaban permintaan yang sudah disusul
+      KS_DARI_INGATAN = 0;
       KS_DATA = d; KS_BULAN = d.bulan; ksShow("ks-isi"); ksRender();
       KS_SUDAH_SEGAR = true; KS_SNAP_WAKTU = null;
       KS_PRA_TULIS = false; ksBilahPraTulis_(false);
@@ -248,6 +274,13 @@ function ksMuat(bulan, opsi) {
       if (urut !== KS_MUAT_URUT) return;   // @K17 WK-5
       ksShow("ks-isi");
       if (KS_PRA_TULIS) ksBilahPraTulis_(true);
+      if (KS_DATA) ksRenderBulan_();   // v406: lepas tanda "Memuat..."/redup; judul kembali ke bulan yang datanya tampil
+      if (KS_DARI_INGATAN) {
+        // v406: yang tampil isi ingatan bulan ITU -- dipertahankan, dan dikatakan bahwa ia bukan yang terbaru.
+        const umur = KS_DARI_INGATAN; KS_DARI_INGATAN = 0;
+        if (typeof rjdSnapshotBarGagal_ === "function") rjdSnapshotBarGagal_("ks-saldo", new Date(umur));   // ia menuntut Date (rjdJamPendek_)
+        return;
+      }
       document.getElementById("ks-buku").innerHTML = '<div class="ks-kartu"><p class="ks-galat">' + ksEsc_(e.message || "Gagal memuat.") + '</p></div>';
       // v229: kalau yang tampil di atas adalah SALDO TERSIMPAN, katakan begitu.
       // ksRender menulis ulang #ks-saldo, jadi bilahnya dipasang SESUDAH ini.
@@ -637,10 +670,75 @@ function ksKirimKoreksi_(data) {
 }
 
 function ksRenderBulan_() {
+  KS_BULAN_TUJU = null;
+  KS_MEMUAT_WADAH.forEach(function (id) { const x = document.getElementById(id); if (x) x.classList.remove("ks-memuat"); });
   const el = document.getElementById("ks-bulan-judul"); if (el) el.textContent = ksNamaBulan(KS_BULAN);
   const badge = document.getElementById("ks-bulan-status");
-  if (badge) { badge.textContent = KS_DATA.tertutup ? "Ditutup" : "Terbuka"; badge.classList.toggle("ks-badge-tutup", !!KS_DATA.tertutup); }
+  if (badge) { badge.textContent = KS_DATA.tertutup ? "Ditutup" : "Terbuka"; badge.classList.toggle("ks-badge-tutup", !!KS_DATA.tertutup); badge.classList.remove("ks-badge-muat"); }
+  ksPasangPilihBulan_();
   ksBilahArsip_();
+}
+
+/* v406: wadah yang diredupkan selama bulan lain dimuat (data bulan lama). Form & bilah bulan TIDAK -- tetap bisa dipakai. */
+const KS_MEMUAT_WADAH = ["ks-saldo", "ks-buku", "ks-arus", "ks-rekon"];
+
+/** v406: daftar bulan pemilih = batas buku (awal arsip / awal buku) s.d. bulan berjalan, terbaru di atas. */
+function ksDaftarBulan_() {
+  const d = KS_DATA || {}, pola = /^\d{4}-\d{2}$/;
+  const awal = String(d.tanggalArsip || d.tanggalMulai || "").slice(0, 7), kini = String(d.hariIni || "").slice(0, 7);
+  const daftar = [];
+  if (pola.test(awal) && pola.test(kini)) for (let b = kini; b >= awal && daftar.length < 120; b = ksGeserBulan(b, -1)) daftar.push(b);
+  [KS_BULAN_TUJU, KS_BULAN].forEach(function (b) { if (b && pola.test(b) && daftar.indexOf(b) === -1) daftar.push(b); });   // bulan di luar rentang yang sedang dibuka
+  return daftar.sort().reverse();
+}
+/**
+ * v406: pemilih bulan. Judul (#ks-bulan-judul, template) dibungkus dan ditimpa <select> transparan selebar judulnya: yang
+ * terlihat tetap judul (dan textContent-nya tetap dibaca harness/kode lain), yang diklik daftar bulan bawaan perangkat.
+ * Dipasang sekali; opsinya dibangun ulang hanya kalau daftarnya berubah.
+ */
+function ksPasangPilihBulan_() {
+  const judul = document.getElementById("ks-bulan-judul"); if (!judul || !judul.parentNode || !KS_DATA) return;
+  let sel = document.getElementById("ks-bulan-pilih");
+  if (!sel) {
+    const bungkus = document.createElement("span"); bungkus.className = "ks-bulan-pilih";
+    judul.parentNode.insertBefore(bungkus, judul); bungkus.appendChild(judul);
+    sel = document.createElement("select"); sel.id = "ks-bulan-pilih"; sel.setAttribute("aria-label", "Pilih bulan buku kas");
+    sel.addEventListener("change", function () { if (this.value && this.value !== (KS_BULAN_TUJU || KS_BULAN)) ksBukaBulan_(this.value); });
+    bungkus.appendChild(sel);
+  }
+  const mulai = String(KS_DATA.tanggalMulai || "").slice(0, 7), daftar = ksDaftarBulan_(), kunci = daftar.join(",") + "|" + mulai;
+  if (sel.dataset.kunci !== kunci) {
+    sel.innerHTML = daftar.map(function (b) {
+      return '<option value="' + ksEsc_(b) + '">' + ksEsc_(ksNamaBulan(b)) + (KS_DATA.tanggalArsip && mulai && b < mulai ? " (arsip)" : "") + '</option>';
+    }).join("");
+    sel.dataset.kunci = kunci;
+  }
+  sel.value = KS_BULAN_TUJU || KS_BULAN;
+}
+/** v406: tanda "bulan ini sedang dimuat". segar=true: isi bulan itu sudah tampil dari ingatan, hanya disegarkan (tanpa redup). */
+function ksTandaMemuat_(bulan, segar) {
+  KS_BULAN_TUJU = bulan;
+  const el = document.getElementById("ks-bulan-judul"); if (el) el.textContent = ksNamaBulan(bulan);
+  ksPasangPilihBulan_();
+  const badge = document.getElementById("ks-bulan-status");
+  if (badge) { badge.textContent = segar ? "Memperbarui..." : "Memuat..."; badge.classList.remove("ks-badge-tutup"); badge.classList.add("ks-badge-muat"); }
+  KS_MEMUAT_WADAH.forEach(function (id) { const x = document.getElementById(id); if (x) x.classList.toggle("ks-memuat", !segar); });
+}
+/** v406: buka bulan (geser atau pemilih): dari ingatan kalau ada & belum basi, lalu SELALU disegarkan dari server. */
+function ksBukaBulan_(tujuan) {
+  if (!tujuan) return null;
+  ksPesan_("");
+  const c = KS_INGATAN[tujuan];
+  if (c && Date.now() - c.t < KS_INGATAN_MS) {
+    KS_DATA = c.d; KS_BULAN = tujuan; KS_DARI_INGATAN = c.t;
+    // jurnal milik bulan lain dibuang -- pola ksMuat (@K18): jurnal basi di sebelah buku bulan lain = dua angka yang saling membantah
+    KS_JURNAL = null; KS_JURNAL_STATUS = ""; KS_JURNAL_URUT++;
+    ksShow("ks-isi"); ksRender();
+    ksTandaMemuat_(tujuan, true);
+  } else {
+    ksTandaMemuat_(tujuan, false);
+  }
+  return ksMuat(tujuan);
 }
 
 /**
@@ -659,7 +757,8 @@ function ksBilahArsip_() {
   saldo.parentNode.insertBefore(bar, saldo);
 }
 function ksGeser(n) {
-  const tujuan = ksGeserBulan(KS_BULAN, n);
+  // v406: dihitung dari bulan TUJUAN yang sedang dimuat -- dua ketukan cepat = dua bulan, bukan dua kali bulan yang sama.
+  const tujuan = ksGeserBulan(KS_BULAN_TUJU || KS_BULAN, n);
   // @K19: mundur berhenti di batas arsip. Bulan sebelum itu selalu kosong (pelunasan pun tidak dibaca), dan layar
   // kosong tanpa sebab terbaca seperti data hilang.
   const batas = (KS_DATA && KS_DATA.tanggalArsip) ? KS_DATA.tanggalArsip.slice(0, 7) : "";
@@ -668,8 +767,7 @@ function ksGeser(n) {
   // merah) lalu '>' memindahkan layar ke bulan berikutnya sementara pesan batasnya tetap menempel -- terbaca seperti
   // bulan baru itu yang bermasalah. Berlaku untuk pesan apa pun: ganti bulan = layar baru, dan konfirmasi "Tercatat"
   // milik bulan sebelumnya tidak menerangkan apa yang sedang dilihat.
-  ksPesan_("");
-  ksShow("ks-loading"); ksMuat(tujuan);
+  ksBukaBulan_(tujuan);   // v406: TIDAK lagi ksShow("ks-loading") -- halaman tidak dikosongkan selama menunggu
 }
 
 /**
