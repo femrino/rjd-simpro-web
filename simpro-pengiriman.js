@@ -529,27 +529,34 @@ function krRenderFormKirim() {
           'hasil produksinya melebihi pesanan (cadangan).'
         : '') +
       (d.izinkanLebihDariOrder
-        ? '<br/><b>Plafon qty order DIMATIKAN.</b> Batasnya sekarang qty hasil produksi. ' +
-          'Klien akan ditagih sesuai yang dikirim.'
+        ? (d.batasTerbuka
+            // v407 (butuh gs >= @435): PO tanpa catatan produksi per size -- izin membuka batasnya sepenuhnya.
+            ? '<br/><b>Plafon qty PO DIBUKA.</b> PO ini tidak punya catatan produksi per size, jadi qty kirim tidak dibatasi. ' +
+              'Kelebihan di atas PO wajib beralasan dan tercatat di surat jalan; klien ditagih sesuai yang dikirim.'
+            : '<br/><b>Plafon qty order DIMATIKAN.</b> Batasnya sekarang qty hasil produksi. ' +
+              'Klien akan ditagih sesuai yang dikirim.')
         : '') +
     '</div>' +
-    // Panel bypass hanya muncul kalau MEMANG ada baris yang terpotong, atau
-    // bypass-nya sedang aktif. Kalau produksi pas dengan order, opsi ini tidak
-    // perlu ada -- tombol yang jarang relevan justru rawan salah klik.
-    ((d.jumlahDibatasiOrder || d.izinkanLebihDariOrder)
-      ? '<div class="kr-buat-bypass">' +
-          '<label><input type="checkbox" id="kr-buat-izin-lebih"' +
-            (d.izinkanLebihDariOrder ? ' checked' : '') + '/> ' +
-            'Izinkan kirim melebihi qty order</label>' +
-          '<div class="kr-buat-bypass-ket">Dipakai kalau klien minta cadangan ikut dikirim. ' +
-            'Tagihan akan mengikuti jumlah yang dikirim, bukan qty order.</div>' +
-          (d.izinkanLebihDariOrder
-            ? '<input type="text" id="kr-buat-alasan-lebih" class="kr-buat-alasan" ' +
-              'placeholder="Alasan (wajib) &#8212; mis. klien minta cadangan ikut dikirim" ' +
-              'value="' + rjdEscapeHtml_(window.KR_ALASAN_LEBIH || "") + '"/>'
-            : '') +
-        '</div>'
-      : '');
+    // NISAN v407 (opsi 1 Femri, 3 Nov 2026): panel ini dulu hanya muncul kalau ada baris yang hasil produksinya MELEBIHI
+    // order ("tombol yang jarang relevan rawan salah klik"). Terukur (sensusBatasKirim): 100 dari 121 PO terbuka tidak punya
+    // catatan produksi per size, jadi panelnya TIDAK PERNAH muncul di sana dan satu-satunya jalan keluar yang dipakai orang
+    // adalah mengubah qty PO (MANSL 288). Sekarang selalu ada; alasan & tanda surat jalan hanya diminta server kalau ada baris
+    // yang BENAR-BENAR melewati qty PO, jadi centang yang tidak dipakai tidak meninggalkan jejak.
+    '<div class="kr-buat-bypass">' +
+      '<label><input type="checkbox" id="kr-buat-izin-lebih"' +
+        (d.izinkanLebihDariOrder ? ' checked' : '') + '/> ' +
+        'Izinkan kirim melebihi qty PO</label>' +
+      '<div class="kr-buat-bypass-ket">Dipakai kalau klien minta kelebihan produksi ikut dikirim. ' +
+        'Tagihan akan mengikuti jumlah yang dikirim, bukan qty PO. ' +
+        (d.sumberBatas === "order"
+          ? 'PO ini belum punya catatan produksi per size, jadi izin membuka batasnya sepenuhnya.'
+          : 'Batasnya tetap qty hasil produksi.') + '</div>' +
+      (d.izinkanLebihDariOrder
+        ? '<input type="text" id="kr-buat-alasan-lebih" class="kr-buat-alasan" ' +
+          'placeholder="Alasan (wajib kalau melebihi PO) &#8212; mis. klien minta kelebihan ikut dikirim" ' +
+          'value="' + rjdEscapeHtml_(window.KR_ALASAN_LEBIH || "") + '"/>'
+        : '') +
+    '</div>';
   document.getElementById("kr-buat-ringkas").classList.remove("hidden");
 
   // Mencentang = muat ulang rincian dengan plafon dimatikan, supaya kolom Sisa
@@ -593,7 +600,8 @@ function krRenderFormKirim() {
         rjdEscapeHtml_([bagian[1], bagian[2]].filter(Boolean).join(" / ")) + krSetPOLencana_(d, rows[0].b) + '</td></tr>';
       return head + rows.map(function (x) {
         const b = x.b, i = x.i;
-        const habis = b.sisa <= 0;
+        // v407: baris BEBAS (izin + PO tanpa catatan produksi) tetap bisa diisi walau sisa terhadap PO-nya 0, tanpa max.
+        const habis = b.sisa <= 0 && !b.bebas;
         return '<tr' + (habis ? ' class="kr-habis"' : '') + '>' +
           '<td class="kr-buat-size">' + rjdEscapeHtml_(b.size || "-") +
             (b.idDetailOrder ? '' : ' <span class="kr-buat-tanda" title="tanpa ID Detail Order, harga di invoice perlu diisi manual">!</span>') +
@@ -602,12 +610,13 @@ function krRenderFormKirim() {
           '<td class="num">' + b.terkirim + '</td>' +
           '<td class="num">' + b.sisa + '</td>' +
           '<td class="num">' + (habis ? '<span class="kr-buat-kosong">selesai</span>'
-            : '<input class="kr-kirim-qty" type="number" min="0" max="' + b.sisa + '"' +
+            : '<input class="kr-kirim-qty" type="number" min="0"' + (b.bebas ? ' data-bebas="1"' : ' max="' + b.sisa + '"') +
               ' data-i="' + i + '" oninput="krHitungTotalKirim()" placeholder="0"/>') + '</td>' +
         '</tr>';
       }).join("");
     }).join("") +
-    '</tbody></table></div>';
+    '</tbody></table></div>' +
+    '<p class="kr-buat-lebih-info hidden" id="kr-buat-lebih-info"></p>';   // v407: kelebihan di atas PO, per ketikan
 
   const t = new Date();
   const inp = document.getElementById("kr-buat-tanggal");
@@ -619,14 +628,32 @@ function krRenderFormKirim() {
   krHitungTotalKirim();
 }
 
+/** v407: baris yang total kirimnya (terkirim + ketikan) melewati qty PO -> ["Butter S +5", ...]. Sama dengan hitungan server. */
+function krLebihPO_() {
+  const d = window.KR_BUAT, hasil = [];
+  if (!d) return hasil;
+  document.querySelectorAll(".kr-kirim-qty").forEach(function (inp) {
+    const v = Number(inp.value) || 0; if (v <= 0) return;
+    const b = d.baris[Number(inp.dataset.i)]; if (!b) return;
+    const lebih = (b.terkirim || 0) + v - (b.qtyOrder || 0);
+    if (lebih > 0) hasil.push((b.warna || "-") + " " + (b.size || "-") + " +" + lebih);
+  });
+  return hasil;
+}
+
 function krHitungTotalKirim() {
   let total = 0;
   document.querySelectorAll(".kr-kirim-qty").forEach(function (inp) {
     const v = Number(inp.value) || 0;
-    const maks = Number(inp.max) || 0;
-    inp.classList.toggle("kr-lebih", v > maks);
+    // v407: kotak baris bebas tidak punya max -- ia tidak pernah "melebihi sisa" (Number("") = 0 akan menandai semuanya).
+    inp.classList.toggle("kr-lebih", inp.hasAttribute("max") && v > (Number(inp.max) || 0));
     total += v;
   });
+  const lebih = krLebihPO_(), info = document.getElementById("kr-buat-lebih-info");
+  if (info) {
+    info.textContent = lebih.length ? "Melebihi qty PO: " + lebih.join(", ") + " -- alasan wajib diisi, tercatat di surat jalan." : "";
+    info.classList.toggle("hidden", !lebih.length);
+  }
   const el = document.getElementById("kr-buat-total");
   if (el) el.textContent = total;
   const btn = document.getElementById("kr-buat-simpan-btn");
@@ -657,12 +684,13 @@ function krSimpanPengiriman() {
 
   // Diperiksa di sini JUGA, bukan cuma di backend -- supaya admin tidak
   // kehilangan isian yang sudah diketik gara-gara ditolak server.
-  const cbIzinSimpan = document.getElementById("kr-buat-izin-lebih");
-  if (cbIzinSimpan && cbIzinSimpan.checked) {
+  // v407: alasan hanya kalau ada baris yang BENAR-BENAR melewati qty PO (sama dengan server @435).
+  const cbIzinSimpan = document.getElementById("kr-buat-izin-lebih"), lebihPO = krLebihPO_();
+  if (cbIzinSimpan && cbIzinSimpan.checked && lebihPO.length) {
     const alasan = ((document.getElementById("kr-buat-alasan-lebih") || {}).value || "").trim();
     if (alasan.length < 5) {
-      alert("Mengirim melebihi qty order wajib disertai alasan (minimal 5 karakter).\n\n" +
-        "Contoh: klien minta cadangan ikut dikirim");
+      alert("Mengirim melebihi qty PO wajib disertai alasan (minimal 5 karakter): " + lebihPO.join(", ") + ".\n\n" +
+        "Contoh: klien minta kelebihan ikut dikirim");
       return;
     }
   }

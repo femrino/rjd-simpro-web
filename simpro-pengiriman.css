@@ -286,3 +286,6 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   font-size: 12.5px; word-break: normal; overflow-wrap: break-word; }
 .kr-setpo-lencana { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--paper-2);
   font-size: 11px; font-weight: 600; color: var(--navy); white-space: nowrap; }
+
+/* v407: kelebihan di atas qty PO (izin kirim-lebih), dihitung per ketikan -- alasan wajib kalau ada. */
+.kr-buat-lebih-info { margin: 10px 0 0; padding: 8px 12px; border-radius: 8px; background: #FFF4E5; color: #8A4B08; font-size: 13px; font-weight: 600; }
