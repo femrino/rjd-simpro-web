@@ -5252,6 +5252,27 @@ function dbBukaEditPO(idPO){
   return false;
 }
 
+/**
+ * v409 (3 Nov 2026, keputusan Femri; butuh gs >= @436): izin "pesanan di bawah yang sudah dikirim/ditagih". Muncul HANYA
+ * sesudah server menolak penurunan qty karena lantai terkirim/tertagih -- kasus MANSL 288: pesanan asli M 408, dikirim 455
+ * atas permintaan klien, qty PO dulu dinaikkan tangan supaya surat jalan lolos. Tidak ditampilkan dari awal: penjaga lantai
+ * tetap menahan salah ketik, dan izin baru ditawarkan saat orang memang sedang menurunkan ke angka pesanan.
+ */
+function dbEditPOIzinTampil_(){
+  if(document.getElementById("db-editpo-izin")) return;
+  const foot = document.querySelector("#db-editpo-overlay .rjd-modal-foot");
+  if(!foot) return;
+  const div = document.createElement("div");
+  div.id = "db-editpo-izin"; div.className = "db-editpo-izin";
+  div.innerHTML =
+    '<label><input type="checkbox" id="db-editpo-izin-cek"/> Pesanan klien memang lebih kecil dari yang sudah dikirim/ditagih ' +
+      '(kelebihan dikirim atas permintaan klien)</label>' +
+    '<input type="text" id="db-editpo-izin-alasan" class="db-editpo-izin-alasan" placeholder="Alasan (wajib) &#8212; mis. klien minta kelebihan produksi ikut dikirim"/>' +
+    '<div class="db-editpo-izin-ket">Qty PO turun ke angka pesanan; surat jalan &amp; invoice yang sudah terbit tidak berubah. ' +
+      'Kelebihannya tercatat di Log Edit PO.</div>';
+  foot.appendChild(div);
+}
+
 function dbTutupEditPO(){
   const ov = document.getElementById("db-editpo-overlay");
   if(ov) ov.remove();
@@ -6129,6 +6150,14 @@ async function dbSimpanEditPO(){
     }
   }
 
+  // v409 (butuh gs >= @436): izin pesanan di bawah terkirim/tertagih -- alasan diperiksa SEBELUM tombol dikunci.
+  const izinBawah = document.getElementById("db-editpo-izin-cek");
+  const alasanBawah = ((document.getElementById("db-editpo-izin-alasan") || {}).value || "").trim();
+  if(izinBawah && izinBawah.checked && alasanBawah.length < 5){
+    statusEl.textContent = "Isi alasan (minimal 5 huruf) untuk menurunkan pesanan di bawah yang sudah dikirim/ditagih.";
+    return;
+  }
+
   kunciTombol();
 
   // ---- Data ARTIKEL (lintas order) ----
@@ -6269,6 +6298,8 @@ async function dbSimpanEditPO(){
         hapusBaris: hapusBaris,
         warnaBaru: warnaBaru,
         artikel: artikel,
+        izinkanDiBawahTerkirim: !!(izinBawah && izinBawah.checked),
+        alasanDiBawahTerkirim: izinBawah && izinBawah.checked ? alasanBawah : "",
         kunciKirim: window.OL_EDITPO_KUNCI || (window.OL_EDITPO_KUNCI = rjdKunciKirimBaru_())
       }
     })
@@ -6279,14 +6310,17 @@ async function dbSimpanEditPO(){
     if(d && d.success){
       window.OL_EDITPO_KUNCI = "";
       // @P16-C OR-4: kiriman ulang yang ternyata sudah tersimpan -- katakan begitu, bukan "Tersimpan." polos.
+      const lebih = (d.pesananDiBawahTerkirim || []);
       statusEl.textContent = d.sudahTercatat
         ? "Sudah tersimpan sebelumnya (jawaban pertama tidak sampai ke layar). Tidak ada yang disimpan dua kali."
-        : "Tersimpan.";
+        : "Tersimpan." + (lebih.length ? " Tercatat dikirim/ditagih melebihi pesanan: " + lebih.join(", ") + "." : "");
       // Daftar halaman dimuat ulang (lewat sambungan halaman) supaya angka & deadline di tabel ikut segar.
       rjdEditPOSesudahSimpan_();
-      setTimeout(dbTutupEditPO, 700);
+      setTimeout(dbTutupEditPO, lebih.length ? 2600 : 700);   // v409: kalimat kelebihan perlu waktu dibaca
     } else {
       statusEl.textContent = (d && d.error) || "Gagal menyimpan.";
+      // v409: penolakan lantai terkirim/tertagih -> tawarkan izin tercatat (gs @436). Teks pesan itu dari periksaQtyEditPO_.
+      if(d && /tidak bisa diturunkan ke/.test(String(d.error || ""))) dbEditPOIzinTampil_();
     }
   })
   .catch(function(){

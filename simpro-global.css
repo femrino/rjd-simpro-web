@@ -1692,3 +1692,9 @@ body[data-bagian~="lintas"] .rjd-bagian-lain { display: none; }
    produksi (RJD_AREA_HALAMAN), jadi ikut disembunyikan selama peran belum diketahui -- pola yang sama dengan daftar
    body:not([data-peran]) di <b:skin> template. Tanpa ini peran finance sempat melihatnya sekejap sebelum penyaring berjalan. */
 body:not([data-peran]) .rjd-menu-panel a[href='/p/cutting.html'] { display: none !important; }
+
+/* v409: izin Edit PO "pesanan di bawah yang sudah dikirim/ditagih" -- satu baris penuh di kaki modal (yang sudah flex-wrap). */
+.db-editpo-izin { flex-basis: 100%; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px; background: #FFF4E5; color: #6B3D06; font-size: 13px; }
+.db-editpo-izin label { display: flex; gap: 8px; align-items: flex-start; font-weight: 600; cursor: pointer; }
+.db-editpo-izin-alasan { font: inherit; font-size: 16px; padding: 8px 10px; border: 1px solid #E8C79A; border-radius: 8px; background: #fff; width: 100%; box-sizing: border-box; }
+.db-editpo-izin-ket { font-size: 12px; color: #8A5A1C; }
