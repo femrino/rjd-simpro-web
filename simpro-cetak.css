@@ -796,3 +796,7 @@ body:has(nav) { padding-top: 0; }
 .ck-set-catatan { font-size: 12px; color: var(--ink-soft); margin: 0 0 18px; padding: 8px 12px;
   border: 1px dashed var(--line); border-radius: 8px; word-break: normal; overflow-wrap: break-word; }
 .ck-set-galat { font-size: 12px; color: #8A5D1F; background: #FCF3E3; border-radius: 8px; padding: 8px 12px; margin: 0 0 18px; }
+
+/* v412: Ringkasan per rasio (laporan cutting per roll) -- pengganti baris Subtotal di tabel per roll. */
+.ck-lc-rr-judul { font-family: 'Archivo', sans-serif; font-size: 12.5px; font-weight: 700; margin: 14px 0 6px; }
+.ck-lc-rr td.ck-lc-rr-persen { font-weight: 700; }
