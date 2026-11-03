@@ -130,7 +130,9 @@ function ckFetchData(){
     "sjpotongan",
     // v210: laporan cutting per PO -- ringkasan potong, konsumsi kain, sisa
     // roll, rincian gelaran, mutu potong. ?id= = ID Purchase Order.
-    "laporancutting"];
+    "laporancutting",
+    // v410: laporan produksi per PO (rantai potong -> line -> setor -> QC -> kirim -> tagih), butuh gs >= @437.
+    "laporanproduksi"];
   // "rekapline" identitasnya di ?line=, BUKAN ?id= -- dokumennya milik LINE,
   // bukan milik satu order. Jadi syarat CK_ID sengaja dilonggarkan khusus dia.
   const punyaIdentitas = CK_JENIS === "rekapline" ? !!CK_LINE : !!CK_ID;
@@ -138,7 +140,7 @@ function ckFetchData(){
     ckTampilkanError("Link tidak lengkap/valid -- buka halaman ini lewat tombol Cetak di Portal Klien atau Dashboard, bukan diketik manual.");
     return;
   }
-  const CK_ACTION_MAP = { invoice: "getInvoiceCetak", proforma: "getProformaCetak", suratjalan: "getSuratJalanCetak", konfirmasiorder: "getKonfirmasiOrderCetak", spk: "getSPKCetak", rekapline: "getRekapLineCetak", sjpotongan: "getSuratJalanPotonganCetak", laporancutting: "getLaporanCuttingCetak" };
+  const CK_ACTION_MAP = { invoice: "getInvoiceCetak", proforma: "getProformaCetak", suratjalan: "getSuratJalanCetak", konfirmasiorder: "getKonfirmasiOrderCetak", spk: "getSPKCetak", rekapline: "getRekapLineCetak", sjpotongan: "getSuratJalanPotonganCetak", laporancutting: "getLaporanCuttingCetak", laporanproduksi: "getLaporanProduksi" };
   const action = CK_ACTION_MAP[CK_JENIS];
   fetch(CK_API_URL, {
     method: "POST",
@@ -164,6 +166,7 @@ function ckFetchData(){
       else if(CK_JENIS === "rekapline") ckRenderRekapLine(data.data);
       else if(CK_JENIS === "sjpotongan") ckRenderSuratJalanPotongan(data.data);
       else if(CK_JENIS === "laporancutting") ckRenderLaporanCutting(data.data);
+      else if(CK_JENIS === "laporanproduksi") ckRenderLaporanProduksi(data.data);
       else { CK_SPK_DATA = data.data; ckRenderSPK(); }
     }catch(errRender){
       console.error("Gagal menggambar dokumen:", errRender);
@@ -913,6 +916,25 @@ function ckLcPerRoll_(d, PR){
     '<p class="ck-lc-catatan">Aktual = panjang gelaran &#215; lapis. Selisih = aktual + sisa &#8722; kirim (negatif = kurang dari bahan kirim). ' +
     '% = selisih &#247; kirim: wajar sampai ' + (a.wajar || 3) + '%, di atas ' + (a.periksa || 7) + '% periksa. Total: kirim = material, aktual = konsumsi (roll + end cut), sisa = sisa akhir.' +
     (PR.gugur ? ' ' + PR.gugur + ' pemakaian roll tidak dihitung (gelarannya dibatalkan).' : '') + '</p></div>';
+}
+
+/**
+ * v410: LAPORAN PRODUKSI per PO (butuh gs >= @437). Isinya dirender rjdLaporanProduksiHtml_ (simpro-global.js) -- SATU perender
+ * dengan halaman produksi, supaya kertas dan layar tidak bisa bercerita berbeda. Di sini cuma kepala dokumen & tanda tangan.
+ */
+function ckRenderLaporanProduksi(d){
+  const html =
+    '<div class="ck-dok">' +
+      ckHeaderHtml("LAPORAN PRODUKSI", rjdEscapeHtml_(d.idPurchaseOrder || ""), "Dicetak " + rjdLpTgl_(String(d.dihitungPada || "").slice(0, 10))) +
+      rjdLaporanProduksiHtml_(d, { cetak: true }) +
+      '<div class="ck-dok-ttd ck-lc-ttd">' +
+        '<div class="kolom">Kepala Produksi,<div class="garis"></div><div class="nama-ttd">&nbsp;</div></div>' +
+        '<div class="kolom">Packing / Gudang,<div class="garis"></div><div class="nama-ttd">&nbsp;</div></div>' +
+        '<div class="kolom">Diperiksa,<div class="garis"></div><div class="nama-ttd">Owner</div></div>' +
+      '</div>' +
+    '</div>';
+  document.getElementById("ck-isi").innerHTML = html;
+  document.title = "Laporan Produksi " + (d.idPurchaseOrder || "") + " -- RJD Apparel";
 }
 
 function ckRenderLaporanCutting(d){

@@ -6362,3 +6362,205 @@ function rjdSetPasanganWarna_(warnaPerAnggota){
   if(!sama.length) return null;
   return function(i, warna){ return sama.indexOf(warna) !== -1 ? warna : null; };
 }
+
+/* ============================================================
+ * LAPORAN PRODUKSI per PO -- v410 (butuh gs >= @437; keputusan Femri 3 Nov 2026)
+ * ============================================================
+ * SATU perender untuk DUA tempat: halaman cetak (cetak.html?jenis=laporanproduksi) dan halaman produksi (fase Laporan,
+ * subtab "Laporan per PO"). Isi & susunannya mengikuti pratinjau MANSL 288 yang disetujui Femri. Semua angka datang dari
+ * rute getLaporanProduksi (laporan-produksi.js) -- di sini tidak ada hitungan rantai, cuma penyajian.
+ * Kelas rlp-* di simpro-global.css (lp-* sudah milik dashboard). Peringatan, BUKAN pemblokir: laporan menunjukkan selisih
+ * dan tindak lanjutnya; tidak ada tombol di halaman mana pun yang dikunci karenanya.
+ */
+const RJD_LP_TAHAP = [
+  ["order", "Order", "Detail PO"],
+  ["potong", "Dipotong (gelaran)", "set lengkap, sama dengan laporan cutting"],
+  ["hasilPotong", "Hasil potong dicatat", "SD Hasil Cutting, basis Bagi ke Line"],
+  ["keluar", "Potongan keluar", "keluar dari pool sebelum dibagi"],
+  ["dibagi", "Dibagi ke line", "neto, pengembalian sudah dikurangkan"],
+  ["kembali", "Dikembalikan line", "keterangan, sudah termasuk di dibagi"],
+  ["setor", "Disetor sewing", "jadi baju"],
+  ["lolos", "Lolos QC finishing", "qty lolos per size"],
+  ["kirim", "Terkirim", "surat jalan"],
+  ["tagih", "Ditagih", "invoice"]
+];
+/** Temuan -> baris tahap yang diberi tanda di tabel per size. */
+const RJD_LP_TAHAP_TEMUAN = { dibagiLebih: "dibagi", potongTakTercatat: "dibagi", catatanPotongBeda: "hasilPotong", diTangan: "setor", setorLebih: "setor",
+  belumQC: "lolos", lolosLebih: "lolos", belumKirim: "kirim", kirimLebih: "kirim", tagihLebih: "tagih" };
+const RJD_LP_TINDAK = {
+  dibagiLebih: "Salah satu catatan keliru: periksa Bagi ke Line dan hasil potong. Batalkan baris pembagian yang salah, atau catat potong yang kurang.",
+  potongTakTercatat: "Potongnya belum dicatat lengkap (pembagian memakai qty order). Lengkapi gelaran / hasil potong supaya laporan cutting benar.",
+  catatanPotongBeda: "Samakan SD Hasil Cutting dengan gelaran (lembar tim cutting): koreksi catatan yang salah.",
+  diTangan: "Tanyakan line pemegangnya: setor, kembalikan, atau batalkan pembagiannya kalau barangnya memang tidak pernah ada.",
+  setorLebih: "Setoran melebihi yang dibagi: periksa setoran dan pembagian yang terlewat dicatat.",
+  belumQC: "Catat QC finishing untuk setoran ini (lolos, afkir, atau ditahan).",
+  lolosLebih: "Lolos QC melebihi setoran: periksa sesi QC finishing.",
+  belumKirim: "Hitung fisik di packing. Ada barangnya: kirim susulan atau simpan sebagai stok. Tidak ada (ikut terkirim): koreksi surat jalan.",
+  kirimLebih: "Terkirim melebihi lolos QC: catat QC finishing yang terlewat, atau periksa surat jalan.",
+  tagihLebih: "Ditagih melebihi terkirim: periksa invoice (keuangan)."
+};
+/** Arah selisih di sel tahap yang ditandai: tahap ini KURANG dari sebelumnya (-) atau LEBIH (+, bawaan). */
+const RJD_LP_ARAH = { diTangan: -1, belumQC: -1, belumKirim: -1 };
+const RJD_LP_TINGKAT = { merah: "Harus diperbaiki", kuning: "Perlu ditelusuri", proses: "Masih berjalan", info: "Keterangan" };
+
+function rjdLpAngka_(v) { return (Number(v) || 0).toLocaleString("id-ID"); }
+function rjdLpTanda_(v) { const n = Number(v) || 0; return (n > 0 ? "+" : n < 0 ? "−" : "") + rjdLpAngka_(Math.abs(n)); }
+function rjdLpTgl_(iso) {
+  const B = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+  return m ? (Number(m[3]) + " " + B[Number(m[2]) - 1] + " " + m[1]) : "&#8212;";
+}
+function rjdLpRentang_(r) {
+  if (!r || !r.mulai) return "&#8212;";
+  return r.mulai === r.selesai ? rjdLpTgl_(r.mulai) : rjdLpTgl_(r.mulai) + " &#8211; " + rjdLpTgl_(r.selesai);
+}
+
+/** Isi laporan (tanpa kepala dokumen). d = jawaban getLaporanProduksi; opsi.cetak = keterangan lain langsung terbuka (kertas tidak bisa diklik). */
+function rjdLaporanProduksiHtml_(d, opsi) {
+  const E = rjdEscapeHtml_, A = rjdLpAngka_;
+  const sz = d.sizeKolom || [], baris = d.baris || [], temuan = d.temuan || [], ada = d.tahapAda || {}, tot = d.total || {};
+  const URUT_TINGKAT = { merah: 0, kuning: 1, proses: 2, info: 3 };
+  const hitung = d.hitung || {};
+  const lencana = hitung.merah ? '<span class="rlp-lencana rlp-merah">' + hitung.merah + ' harus diperbaiki</span>' : '';
+  const lencana2 = hitung.kuning ? '<span class="rlp-lencana rlp-kuning">' + hitung.kuning + ' perlu ditelusuri</span>' : '';
+  const status = d.seimbang
+    ? '<span class="rlp-lencana rlp-hijau">' + (d.tuntas ? 'Seimbang' : 'Berjalan, tanpa selisih') + '</span>'
+    : lencana + lencana2;
+
+  // ---------- kepala ----------
+  const meta = '<div class="rlp-meta">' + [
+    ["Klien", E(d.namaKlien || d.idKlien || "-")], ["Produk", E(d.produk || "-")], ["Artikel", E(d.artikel || "-")],
+    ["No SO", E(d.noSO || "-")], ["Status PO", E(d.status || "-") + (d.tuntas ? ' <small>(terkirim penuh)</small>' : '')],
+    ["Rantai", status]
+  ].map(function (x) { return '<div><span>' + x[0] + '</span><b>' + x[1] + '</b></div>'; }).join("") + '</div>';
+
+  // ---------- 1. rantai ----------
+  const tandaTahap = {};   // tahap -> tingkat terburuk (bukan info)
+  temuan.forEach(function (t) {
+    const th = RJD_LP_TAHAP_TEMUAN[t.jenis];
+    if (!th || t.tingkat === "info") return;
+    if (!tandaTahap[th] || URUT_TINGKAT[t.tingkat] < URUT_TINGKAT[tandaTahap[th]]) tandaTahap[th] = t.tingkat;
+  });
+  const KARTU = ["order", "potong", "hasilPotong", "dibagi", "setor", "lolos", "kirim", "tagih"].filter(function (t) { return t === "order" || ada[t]; });
+  const namaTahap = {}; RJD_LP_TAHAP.forEach(function (x) { namaTahap[x[0]] = x; });
+  const kartu = KARTU.map(function (t, i) {
+    const sebelum = i ? KARTU[i - 1] : null, beda = sebelum ? (tot[t] || 0) - (tot[sebelum] || 0) : null;
+    const tk = tandaTahap[t];
+    return '<div class="rlp-kartu' + (tk ? ' rlp-' + tk : '') + '" data-tahap="' + t + '"><div class="lbl">' + E(namaTahap[t][1]) + '</div>' +
+      '<div class="nilai">' + A(tot[t]) + ' <small>pcs</small></div><div class="sub">' + E(namaTahap[t][2]) + '</div>' +
+      (beda === null ? '' : '<div class="rlp-beda">' + (beda ? rjdLpTanda_(beda) + ' dari tahap sebelumnya' : 'sama dengan tahap sebelumnya') + '</div>') + '</div>';
+  }).join("");
+  const rantai = '<div class="rlp-rantai">' + kartu + '</div>' +
+    '<p class="rlp-catatan">Tiap tahap seharusnya sama dengan tahap sebelumnya, kecuali potong (allowance) dan yang tercatat keluar, afkir, atau masih berjalan. ' +
+    'Kartu bertanda = ada temuan di tahap itu.</p>';
+
+  // ---------- 2. per size ----------
+  const tandaSel = {};   // "tahap|baris|size" -> {tingkat, n}
+  temuan.forEach(function (t) {
+    const th = RJD_LP_TAHAP_TEMUAN[t.jenis];
+    if (!th || t.tingkat === "info") return;
+    (t.sel || []).forEach(function (c) { tandaSel[th + "|" + c.baris + "|" + c.size] = { tingkat: t.tingkat, n: (RJD_LP_ARAH[t.jenis] || 1) * c.n }; });
+  });
+  const kepalaSz = '<tr><th>Tahap</th>' + sz.map(function (s) { return '<th class="num">' + E(s) + '</th>'; }).join("") + '<th class="num">Total</th></tr>';
+  const jumlah = function (o) { return Object.keys(o || {}).reduce(function (a, k) { return a + (Number(o[k]) || 0); }, 0); };
+  const tabelBaris = baris.map(function (b) {
+    const n = b.nilai || {};
+    const isiBaris = RJD_LP_TAHAP.filter(function (x) { return x[0] === "order" || (ada[x[0]] && n[x[0]]) || (ada[x[0]] && x[0] !== "keluar" && x[0] !== "kembali"); })
+      .map(function (x) {
+        const v = n[x[0]] || {};
+        return '<tr class="' + (x[0] === "kembali" ? 'rlp-redup' : '') + '"><td><b>' + E(x[1]) + '</b><div class="rlp-kecil">' + E(x[2]) + '</div></td>' +
+          sz.map(function (s) {
+            const tn = tandaSel[x[0] + "|" + b.label + "|" + s];
+            return '<td class="num' + (tn ? ' rlp-sel-' + tn.tingkat : (x[0] === "order" ? ' rlp-redup' : '')) + '"' + (tn ? ' title="' + E(RJD_LP_TINGKAT[tn.tingkat]) + '"' : '') + '>' +
+              A(v[s]) + (tn ? '<span>' + rjdLpTanda_(tn.n) + '</span>' : '') + '</td>';
+          }).join("") + '<td class="num"><b>' + A(jumlah(v)) + '</b></td></tr>';
+      }).join("");
+    const divisi = Object.keys(n).filter(function (k) { return k.indexOf("dr:") === 0; });
+    const barisDr = divisi.length ? '<tr class="rlp-subkepala"><td colspan="' + (sz.length + 2) + '">Daily report: pencatatan operator di proses terakhir tiap divisi, bukan hitungan barang</td></tr>' +
+      divisi.map(function (k) {
+        const v = n[k] || {}, ref = n[k === "dr:Sewing" ? "setor" : "lolos"] || {};
+        return '<tr class="rlp-baris-info"><td><b>Daily report ' + E(k.slice(3)) + '</b></td>' + sz.map(function (s) {
+          return '<td class="num' + ((v[s] || 0) !== (ref[s] || 0) && (k === "dr:Sewing" || k === "dr:Finishing") ? ' rlp-sel-info' : '') + '">' + A(v[s]) + '</td>';
+        }).join("") + '<td class="num">' + A(jumlah(v)) + '</td></tr>';
+      }).join("") : '';
+    return '<h3 class="rlp-sub">' + E(b.label) + '</h3><div class="rlp-gulir"><table class="rlp-tabel rlp-matriks"><thead>' + kepalaSz + '</thead><tbody>' + isiBaris + barisDr + '</tbody></table></div>';
+  }).join("");
+  const perSize = (tabelBaris || '<p class="rlp-kosong">Belum ada catatan produksi untuk PO ini.</p>') +
+    '<p class="rlp-catatan"><span class="rlp-kotak rlp-sel-merah"></span> harus diperbaiki &#183; <span class="rlp-kotak rlp-sel-kuning"></span> perlu ditelusuri &#183; ' +
+    '<span class="rlp-kotak rlp-sel-proses"></span> masih berjalan. Angka kecil = selisihnya terhadap tahap sebelumnya.</p>';
+
+  // ---------- 3. temuan ----------
+  const kartuTemuan = function (t, i) {
+    const sel = (t.sel || []).map(function (c) { return E(c.baris) + ' ' + E(c.size) + ' <b>' + (t.jenis === "catatanPotongBeda" ? rjdLpTanda_(c.n) : A(c.n)) + '</b>' +
+      (c.line && c.line.length ? ' (' + c.line.map(E).join(", ") + ')' : ''); }).join(" &#183; ");
+    return '<div class="rlp-temuan rlp-' + t.tingkat + '" data-jenis="' + E(t.jenis) + '"><div class="rlp-temuan-judul"><span class="rlp-no">' + (i + 1) + '</span>' + E(t.judul) +
+      ' <span class="rlp-temuan-n">' + A(t.total) + ' pcs</span> <span class="rlp-tingkat">' + E(RJD_LP_TINGKAT[t.tingkat]) + '</span></div>' +
+      '<div class="rlp-temuan-sel">' + sel + (t.catatan ? ' &#8212; ' + E(t.catatan) : '') + '</div>' +
+      (RJD_LP_TINDAK[t.jenis] && t.tingkat !== "proses" ? '<div class="rlp-temuan-tindak"><b>Tindak lanjut:</b> ' + E(RJD_LP_TINDAK[t.jenis]) + '</div>' : '') + '</div>';
+  };
+  const pokok = temuan.filter(function (t) { return t.tingkat !== "info"; }), info = temuan.filter(function (t) { return t.tingkat === "info"; });
+  const blokTemuan = (pokok.length ? pokok.map(kartuTemuan).join("") : '<p class="rlp-ok">Tidak ada selisih yang perlu ditindaklanjuti.</p>') +
+    (info.length ? '<details class="rlp-info"' + (opsi && opsi.cetak ? ' open' : '') + '><summary>Keterangan lain (' + info.length + '): bukan selisih barang</summary>' +
+      info.map(function (t, i) { return kartuTemuan(t, pokok.length + i); }).join("") + '</details>' : '') +
+    '<p class="rlp-catatan">Peringatan, bukan pemblokir: pekerjaan dan PO tetap bisa berjalan; selisih tetap terlihat di laporan dan di Daftar Selisih sampai catatannya dibetulkan.</p>';
+
+  // ---------- 4. sewing per line ----------
+  const lines = d.line || [];
+  const blokLine = lines.length ? '<div class="rlp-gulir"><table class="rlp-tabel"><thead><tr><th>Line</th><th>Dibagi per size</th><th class="num">Dibagi</th>' +
+    '<th class="num">Disetor</th><th class="num">Dikembalikan</th><th class="num">Di tangan</th><th class="num">Lolos QC</th></tr></thead><tbody>' +
+    lines.map(function (l) {
+      const rinci = (l.perSize || []).filter(function (x) { return x.dibagi; }).map(function (x) { return (baris.length > 1 ? E(x.baris) + ' ' : '') + E(x.size) + ' ' + A(x.dibagi); }).join(" &#183; ");
+      return '<tr><td><b>' + E(l.idLine) + '</b><div class="rlp-kecil">' + E(l.namaLine || "") + '</div></td><td>' + (rinci || "-") + '</td><td class="num">' + A(l.dibagi) + '</td>' +
+        '<td class="num">' + A(l.setor) + '</td><td class="num">' + A(l.kembali) + '</td><td class="num' + (l.diTangan ? ' rlp-sel-' + (d.tuntas ? 'kuning' : 'proses') : '') + '">' + A(l.diTangan) + '</td>' +
+        '<td class="num">' + A(l.lolosQC) + '</td></tr>';
+    }).join("") + '</tbody></table></div><p class="rlp-catatan">Dibagi = neto (pengembalian sudah dikurangkan); di tangan = dibagi &#8722; disetor.</p>'
+    : '<p class="rlp-kosong">Belum ada pembagian ke line.</p>';
+
+  // ---------- 5. QC ----------
+  const qc = d.qc || {};
+  const blokQC = '<div class="rlp-gulir"><table class="rlp-tabel"><thead><tr><th>Tahap QC</th><th class="num">Sesi</th><th class="num">Diperiksa</th><th class="num">Lolos</th>' +
+    '<th class="num">Diperbaiki</th><th class="num">Afkir</th><th class="num">Ditahan</th></tr></thead><tbody>' +
+    ["Potong", "Jahit", "Finishing"].concat(Object.keys(qc).filter(function (t) { return ["Potong", "Jahit", "Finishing"].indexOf(t) === -1; })).map(function (t) {
+      const q = qc[t];
+      if (!q) return '<tr class="rlp-baris-info"><td><b>' + E(t) + '</b></td><td colspan="6" class="rlp-redup">tidak ada sesi QC tercatat</td></tr>';
+      return '<tr><td><b>' + E(t) + '</b></td><td class="num">' + A(q.sesi) + '</td><td class="num">' + A(q.diperiksa) + '</td><td class="num">' + A(q.lolos) + '</td>' +
+        '<td class="num">' + A(q.diperbaiki) + '</td><td class="num">' + A(q.afkir) + '</td><td class="num">' + A(q.ditahan) + '</td></tr>';
+    }).join("") + '</tbody></table></div>';
+
+  // ---------- 6. kirim & tagih ----------
+  const kirim = d.kirim || [];
+  const ambilSz = function (daftar, label, s) { return (daftar || []).filter(function (x) { return x.baris === label && x.size === s; }).reduce(function (a, x) { return a + x.n; }, 0); };
+  const blokKirim = (kirim.length ? '<div class="rlp-gulir"><table class="rlp-tabel"><thead><tr><th>Surat jalan</th><th>Tanggal</th>' + (baris.length > 1 ? '<th>Warna</th>' : '') +
+    sz.map(function (s) { return '<th class="num">' + E(s) + '</th>'; }).join("") + '<th class="num">Total</th></tr></thead><tbody>' +
+    kirim.map(function (p) {
+      return baris.filter(function (b) { return sz.some(function (s) { return ambilSz(p.perSize, b.label, s); }); }).map(function (b, j) {
+        return '<tr><td>' + (j ? '' : '<b>' + E(p.idPengiriman) + '</b>') + '</td><td>' + (j ? '' : rjdLpTgl_(p.tanggal)) + '</td>' + (baris.length > 1 ? '<td>' + E(b.label) + '</td>' : '') +
+          sz.map(function (s) { return '<td class="num">' + A(ambilSz(p.perSize, b.label, s)) + '</td>'; }).join("") +
+          '<td class="num"><b>' + A(sz.reduce(function (a, s) { return a + ambilSz(p.perSize, b.label, s); }, 0)) + '</b></td></tr>';
+      }).join("");
+    }).join("") +
+    baris.map(function (b) {
+      const lol = (b.nilai || {}).lolos || {}, kir = (b.nilai || {}).kirim || {};
+      if (!ada.lolos) return '';
+      return '<tr class="rlp-kaki"><td>Sisa siap kirim</td><td class="rlp-kecil">lolos QC &#8722; terkirim</td>' + (baris.length > 1 ? '<td>' + E(b.label) + '</td>' : '') +
+        sz.map(function (s) { const x = (lol[s] || 0) - (kir[s] || 0); return '<td class="num' + (x ? ' rlp-sel-' + (d.tuntas ? 'kuning' : 'proses') : '') + '">' + A(x) + '</td>'; }).join("") +
+        '<td class="num">' + A(jumlah(lol) - jumlah(kir)) + '</td></tr>';
+    }).join("") + '</tbody></table></div>' : '<p class="rlp-kosong">Belum ada surat jalan.</p>') +
+    '<p class="rlp-catatan">Invoice: ' + ((d.invoice || []).length ? d.invoice.map(function (v) { return E(v.idInvoice) + ' ' + A(v.total) + ' pcs'; }).join(" &#183; ") : 'belum ada') +
+    '. Terkirim ' + A(tot.kirim) + ' dari order ' + A(tot.order) + ' pcs.</p>';
+
+  // ---------- 7. daily report & waktu ----------
+  const dr = d.dailyReport || [], w = d.waktu || {};
+  const blokWaktu = '<div class="rlp-waktu">' + [
+    ["Pesanan", rjdLpTgl_(d.tanggalPesanan)], ["Potong (gelaran)", rjdLpRentang_(w.potong)], ["Bagi ke line", rjdLpRentang_(w.dibagi)],
+    ["Setor sewing", rjdLpRentang_(w.setor)], ["QC finishing", rjdLpRentang_(w.qc)], ["Kirim", rjdLpRentang_(w.kirim)], ["Deadline", rjdLpTgl_(d.deadline)]
+  ].map(function (x) { return '<div><span>' + x[0] + '</span><b>' + x[1] + '</b></div>'; }).join("") + '</div>' +
+    (dr.length ? '<p class="rlp-catatan">Daily report: ' + dr.map(function (x) { return E(x.divisi) + ' proses #' + x.nomor + ' ' + E(x.proses) + ' = ' + A(x.total) + ' pcs (' + rjdLpRentang_(x) + ')'; }).join(" &#183; ") + '.</p>' : '');
+
+  const blok = function (no, judul, isi) { return '<div class="rlp-blok"><h2>' + no + '. ' + judul + '</h2>' + isi + '</div>'; };
+  return '<div class="rlp">' + meta +
+    blok(1, "Rantai kuantitas", rantai) + blok(2, "Per size, per tahap", perSize) + blok(3, "Selisih &amp; tindak lanjut", blokTemuan) +
+    blok(4, "Sewing per line", blokLine) + blok(5, "Mutu (QC)", blokQC) + blok(6, "Pengiriman &amp; penagihan", blokKirim) + blok(7, "Waktu", blokWaktu) +
+    '<p class="rlp-kaki-dok">Dihitung ' + E(d.dihitungPada || "") + ' oleh ' + E(d.dicetakOleh || "") +
+    (d.ms ? ' dalam ' + (Math.round(d.ms / 100) / 10).toString().replace(".", ",") + ' detik' : '') + '.</p></div>';
+}

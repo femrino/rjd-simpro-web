@@ -1698,3 +1698,82 @@ body:not([data-peran]) .rjd-menu-panel a[href='/p/cutting.html'] { display: none
 .db-editpo-izin label { display: flex; gap: 8px; align-items: flex-start; font-weight: 600; cursor: pointer; }
 .db-editpo-izin-alasan { font: inherit; font-size: 16px; padding: 8px 10px; border: 1px solid #E8C79A; border-radius: 8px; background: #fff; width: 100%; box-sizing: border-box; }
 .db-editpo-izin-ket { font-size: 12px; color: #8A5A1C; }
+
+
+/* ============================================================
+ * v410: LAPORAN PRODUKSI per PO (rjdLaporanProduksiHtml_, simpro-global.js) -- dipakai halaman cetak DAN halaman produksi,
+ * jadi gayanya di sini, tidak di simpro-cetak.css / simpro-spk.css. Prefiks rlp- (lp- sudah milik dashboard).
+ * Tabel per size di dalam .rlp-gulir (penggulir mendatar di layar sempit) dan sel `word-break: normal` -- bundel CSS Blogger
+ * memasang body{word-break:break-word} yang memecah angka/kata di sel sempit (PF-19). Di kertas penggulir dikembalikan
+ * visible: kertas tidak bisa digulir (aturan @media print di bawah).
+ * ============================================================ */
+.rlp { font-size: 13px; color: var(--ink); }
+.rlp-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 18px; margin: 0 0 18px; }
+.rlp-meta div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rlp-meta span { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+.rlp-meta b { font-size: 13px; }
+.rlp-meta small { font-weight: 500; color: var(--ink-soft); }
+/* (0,2,1) > `.rlp-meta span` (0,1,1): tanpa itu lencana ikut berhuruf mono kapital abu (terlihat di potret v410) */
+.rlp-meta span.rlp-lencana, .rlp-lencana { display: inline-block; border-radius: 999px; padding: 2px 10px; font-family: 'Inter', sans-serif; font-size: 11.5px; font-weight: 700;
+  letter-spacing: normal; text-transform: none; margin: 0 4px 2px 0; color: #fff; }
+.rlp-lencana.rlp-merah { background: var(--thread); }
+.rlp-lencana.rlp-kuning { background: var(--amber); }
+.rlp-lencana.rlp-hijau { background: var(--emerald); }
+.rlp-blok { margin-bottom: 22px; }
+.rlp-blok h2 { font-family: 'Archivo', sans-serif; font-size: 14px; font-weight: 800; margin: 0 0 8px; padding-bottom: 5px; border-bottom: 1.5px solid var(--ink); }
+.rlp-sub { font-family: 'Archivo', sans-serif; font-size: 13px; font-weight: 700; margin: 10px 0 6px; }
+/* Kisi yang MEMBUNGKUS, bukan deret yang menggulir: 8 kartu di 1000 px menyembunyikan kartu Ditagih di balik penggulir
+   (potret v410). Urutan tahap dibaca dari kiri-atas; kalimat "dari tahap sebelumnya" di tiap kartu yang menyambungkannya. */
+.rlp-rantai { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
+.rlp-kartu { min-width: 0; background: var(--cream); border-radius: 10px; padding: 9px 10px; border: 1.5px solid transparent; }
+.rlp-kartu .lbl { font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); line-height: 1.25; min-height: 24px; }
+.rlp-kartu .nilai { font-family: 'Archivo', sans-serif; font-size: 18px; font-weight: 800; margin-top: 3px; white-space: nowrap; }
+.rlp-kartu .nilai small { font-size: 10px; font-weight: 600; color: var(--ink-soft); }
+.rlp-kartu .sub, .rlp-beda { font-size: 10.5px; color: var(--ink-soft); line-height: 1.35; }
+.rlp-beda { margin-top: 4px; }
+.rlp-kartu.rlp-merah { border-color: var(--thread); background: #FCEFEC; }
+.rlp-kartu.rlp-merah .rlp-beda { color: var(--thread); font-weight: 700; }
+.rlp-kartu.rlp-kuning { border-color: var(--amber); background: #FFF6E6; }
+.rlp-kartu.rlp-kuning .rlp-beda { color: #8A5A1C; font-weight: 700; }
+.rlp-kartu.rlp-proses { border-color: var(--sky); background: #EEF4FB; }
+.rlp-gulir { overflow-x: auto; margin-bottom: 6px; }
+.rlp-tabel { width: 100%; border-collapse: collapse; font-size: 12px; }
+.rlp-tabel th, .rlp-tabel td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; word-break: normal; overflow-wrap: normal; }
+.rlp-tabel th { background: var(--cream); font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
+.rlp-tabel .num { text-align: right; white-space: nowrap; }
+.rlp-tabel td:first-child { white-space: nowrap; }
+.rlp-tabel td.num span { display: block; font-size: 9.5px; font-weight: 600; }
+.rlp-tabel tr.rlp-kaki td { font-weight: 700; background: var(--cream); }
+.rlp-tabel tr.rlp-baris-info td { color: var(--ink-soft); background: #FAFAF8; }
+.rlp-tabel tr.rlp-subkepala td { font-size: 10.5px; color: var(--ink-soft); background: #F4F2EE; font-style: italic; white-space: normal; }
+.rlp-redup { color: var(--ink-soft); }
+.rlp-kecil { font-size: 10.5px; color: var(--ink-soft); font-weight: 400; }
+.rlp-sel-merah, .rlp-kotak.rlp-sel-merah { background: #FCEFEC; color: var(--thread); font-weight: 700; }
+.rlp-sel-kuning, .rlp-kotak.rlp-sel-kuning { background: #FFF1D6; color: #8A5A1C; font-weight: 700; }
+.rlp-sel-proses, .rlp-kotak.rlp-sel-proses { background: #EEF4FB; color: #2E5E8F; font-weight: 700; }
+.rlp-sel-info { font-style: italic; background: #F3F1EC; }
+.rlp-kotak { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; border: 1px solid var(--line); }
+.rlp-catatan { font-size: 11.5px; color: var(--ink-soft); margin: 4px 0 0; line-height: 1.5; }
+.rlp-kosong, .rlp-ok { font-size: 12.5px; color: var(--ink-soft); }
+.rlp-ok { color: var(--emerald); font-weight: 600; }
+.rlp-temuan { border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; border-left: 4px solid #B8B2A6; background: #F4F2EE; }
+.rlp-temuan.rlp-merah { background: #FCEFEC; border-color: var(--thread); }
+.rlp-temuan.rlp-kuning { background: #FFF6E6; border-color: var(--amber); }
+.rlp-temuan.rlp-proses { background: #EEF4FB; border-color: var(--sky); }
+.rlp-temuan-judul { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13px; margin-bottom: 4px; }
+.rlp-no { display: inline-flex; align-items: center; justify-content: center; width: 19px; height: 19px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 10.5px; margin-right: 6px; vertical-align: 1px; }
+.rlp-temuan-n { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 11.5px; color: var(--ink-soft); margin-left: 4px; }
+.rlp-tingkat { font-family: 'Inter', sans-serif; font-size: 10.5px; font-weight: 600; color: var(--ink-soft); margin-left: 6px; }
+.rlp-temuan-sel, .rlp-temuan-tindak { font-size: 12.5px; line-height: 1.55; }
+.rlp-temuan-tindak { margin-top: 4px; }
+.rlp-info summary { cursor: pointer; font-size: 12.5px; color: var(--ink-soft); margin: 6px 0; }
+.rlp-waktu { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px 16px; }
+.rlp-waktu div { display: flex; flex-direction: column; gap: 2px; }
+.rlp-waktu span { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+.rlp-waktu b { font-size: 12.5px; }
+.rlp-kaki-dok { font-size: 11px; color: var(--ink-soft); margin-top: 14px; }
+@media print {
+  .rlp-gulir { overflow: visible; }
+  .rlp-blok { page-break-inside: auto; }
+  .rlp-temuan, .rlp-tabel tr { page-break-inside: avoid; }
+}

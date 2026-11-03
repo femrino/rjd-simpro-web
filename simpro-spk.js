@@ -266,12 +266,17 @@ function spPoFormSah_(idPoForm, apa) {
    tiap blok memancarkan datalistnya sendiri dari SATU daftar bawaan. */
 /* v345 (PF-9): peta alias panel ditulis dua kali (spSwitchTab & spRenderSub_) --
    nilai yang sama, jadi salah satu pasti tertinggal saat tab bermode ditambah. */
-const SP_ALIAS_PANEL = { konfpot: "konf", konfset: "konf", qcring: "qc", qcpot: "qc", qcjahit: "qc", mwarna: "master", msize: "master", mkain: "master", pbeli: "beli", terima: "beli", gudang: "beli", mrp: "beli" };
+const SP_ALIAS_PANEL = { konfpot: "konf", konfset: "konf", qcring: "qc", qcpot: "qc", qcjahit: "qc", mwarna: "master", msize: "master", mkain: "master", pbeli: "beli", terima: "beli", gudang: "beli", mrp: "beli",
+  lprpo: "laporan", lprselisih: "laporan" };   // v410: fase Laporan, satu panel fisik sp-panel-laporan
 /** v379: subtab master -> jenis master (rute getMasterERP). Peta ini juga yang dipakai spSwitchTab mengenali tab master. */
 const SP_MASTER_TAB = { mwarna: "warna", msize: "size", mkain: "kain" };
 /** v380 (Tahap 2C): subtab beli -> jenis; keadaannya di sini juga (bukan di blok ujung berkas) karena alasan yang sama. */
 const SP_BELI_TAB = { pbeli: "pb", terima: "gr", gudang: "st", mrp: "kb" };   // mrp (v387): Tahap 7B, pemuat sendiri (spMuatMRP_)   // gudang (v381) memakai data & pemuatnya sendiri (spMuatGudang_)
-let SP_BELI = null, SP_BELI_URUT = 0, SP_BELI_STATUS = "", SP_BELI_PESAN = {};   // pesan per form BERTAHAN melewati muat ulang
+let SP_BELI = null, SP_BELI_URUT = 0, SP_BELI_STATUS = "", SP_BELI_PESAN = {};
+/** v410 (butuh gs >= @437): fase Laporan -- laporan produksi per PO & daftar selisih. Keadaan di atas berkas, alasan sama dengan SP_BELI_TAB. */
+const SP_LAPORAN_TAB = { lprpo: "po", lprselisih: "selisih" };
+const SP_LPR = { po: "", data: null, status: "", urut: 0 };
+const SP_LPS = { data: null, status: "", urut: 0, hari: 90, semua: false };   // pesan per form BERTAHAN melewati muat ulang
 /** Panel master dibuat sekali, disisipkan sesudah panel terakhir supaya ikut disapu toggle [id^=sp-panel-]. */
 function spPanelMaster_() {
   let p = document.getElementById("sp-panel-master");
@@ -1517,6 +1522,9 @@ const SP_FASE_PETA = [
   ["sewing",     "Sewing",        [["konfpot", "Konfirmasi Potongan"], ["qcjahit", "QC Jahit"], ["setor", "Setoran ke Finishing"]]],
   ["finishing",  "Finishing",     [["konfset", "Konfirmasi Setoran"], ["qc", "QC Finishing"], ["qcring", "Ringkasan QC"]]],
   ["packing",    "Packing & Kirim", [["stok", "Stok Siap Kirim"], ["terkirim", "Terkirim"]]],
+  // v410 (butuh gs >= @437, keputusan Femri 3 Nov 2026): ujung rantai -- laporan produksi per PO (sama dengan dokumen cetak) dan
+  // daftar PO yang rantainya belum seimbang. Sesudah Packing karena ia merangkum semua fase sebelumnya; baca saja.
+  ["laporan",    "Laporan",       [["lprpo", "Laporan per PO"], ["lprselisih", "Daftar Selisih"]]],
   ["riw",        "Riwayat",       [["riw", "Riwayat"]]],
   // ROADMAP-ERP Tahap 1 sub-rilis C (v379): master berkode yang dirujuk semua transaksi sejak gs @411.
   // Paling kanan karena ia data RUJUKAN, bukan langkah kerja; semua staf boleh melihat, yang boleh
@@ -2382,6 +2390,7 @@ function spSwitchTab(tab) {
   // internal (sakelar lama dipensiunkan, lihat spMuatKonfMode_).
   if (SP_MASTER_TAB[tab]) spPanelMaster_();   // v379: panel master harus ADA sebelum toggle di bawah
   if (SP_BELI_TAB[tab]) spPanelBeli_();       // v380: panel beli, sama
+  if (SP_LAPORAN_TAB[tab]) spPanelLaporan_(); // v410: panel laporan, sama
   const SP_PANEL_ALIAS = SP_ALIAS_PANEL;
   const idPanelTujuan = "sp-panel-" + (SP_PANEL_ALIAS[tab] || tab);
   document.querySelectorAll("[id^='sp-panel-']").forEach(function (p) {
@@ -2413,7 +2422,7 @@ function spSwitchTab(tab) {
   // paling telanjang di antara semuanya: isi tab itu justru order yang BELUM
   // punya PO. Kartu pemilih PO di atasnya cuma mengundang salah paham.
   if (kartuPO) kartuPO.classList.toggle("hidden",
-    tab === "riw" || tab === "sop" || tab === "orderan" || tab === "ordermasuk" || !!SP_MASTER_TAB[tab] || !!SP_BELI_TAB[tab]);
+    tab === "riw" || tab === "sop" || tab === "orderan" || tab === "ordermasuk" || !!SP_MASTER_TAB[tab] || !!SP_BELI_TAB[tab] || tab === "lprselisih");
 
   if (tab === "konfpot") { spMuatKonfMode_("potongan"); return; }
   if (tab === "konfset") { spMuatKonfMode_("setoran"); return; }
@@ -2450,6 +2459,7 @@ function spSwitchTab(tab) {
   if (tab === "riw") { spMuatRiwayat(); return; }
   if (SP_MASTER_TAB[tab]) { spMuatMaster_(tab); return; }   // v379
   if (SP_BELI_TAB[tab]) { spMuatBeli_(tab); return; }       // v380
+  if (SP_LAPORAN_TAB[tab]) { spMuatLaporan_(tab); return; } // v410
   if (tab === "setor") { spMuatLineSetoran_(); spMuatSetoran(); return; }
   if (!window.SP_PO_AKTIF) return;
   if (tab === "cutting" && !window.SP_CUT) spMuatCutting();
@@ -12727,4 +12737,122 @@ function spMrpRender_() {
         '<td>' + E(b.saranBeli || "-") + (b.leadTime ? '<div class="sp-mrp-sub">lead ' + b.leadTime + ' hr</div>' : '') + '</td><td>' + E(b.status) + '</td><td class="rjd-beli-kode-sel">' + E(b.idPB || "") + '</td></tr>';
     }).join("") + '</tbody></table></div>' : '<p class="sp-info" id="sp-mrp-kosong">' + (d.segar ? 'PO ini tidak punya baris Detail PO -- tidak ada yang bisa dihitung.' : 'Cache kebutuhan bahan kosong. Tekan <b>Hitung ulang semua</b>.') + '</p>';
   W.innerHTML = alat + ringkas + pesan + janji + catatanPO + tabel;
+}
+
+
+/* ==========================================================================
+ * v410 -- FASE LAPORAN: laporan produksi per PO + daftar selisih (butuh gs >= @437; keputusan Femri 3 Nov 2026)
+ * ==========================================================================
+ * Laporan per PO = isi yang SAMA dengan dokumen cetak (rjdLaporanProduksiHtml_, simpro-global.js), plus tombol cetak.
+ * Daftar Selisih = PO yang rantainya belum seimbang (merah: catatan mustahil; kuning: barang belum jelas sesudah PO
+ * terkirim penuh), lintas PO -- kartu Pilih PO disembunyikan di sana. Peringatan, bukan pemblokir: tidak ada form lain yang
+ * dikunci karena selisih. Panel dibuat JS (pola spPanelBeli_), template tidak disentuh. Keadaan dideklarasikan di ATAS
+ * berkas (SP_LAPORAN_TAB, SP_LPR, SP_LPS) karena alasan zona mati yang sama dengan SP_BELI_TAB.
+ */
+function spPanelLaporan_() {
+  let p = document.getElementById("sp-panel-laporan");
+  if (p) return p;
+  const semua = document.querySelectorAll("[id^='sp-panel-']"), akhir = semua[semua.length - 1];
+  if (!akhir || !akhir.parentNode) return null;
+  p = document.createElement("div"); p.id = "sp-panel-laporan"; p.className = "hidden";
+  p.innerHTML = '<div class="sp-card"><div id="sp-lpr-isi"></div></div>';
+  akhir.parentNode.insertBefore(p, akhir.nextSibling);
+  return p;
+}
+function spMuatLaporan_(tab, paksa) {
+  if (!SP_LAPORAN_TAB[tab] || !spPanelLaporan_()) return;
+  if (tab === "lprselisih") spMuatSelisih_(paksa); else spMuatLaporanPO_(paksa);
+}
+/** Satu fetch baca untuk fase ini; galat jaringan ditandai seperti rantai fetch lain (spTandaiJaringan_). */
+function spLprAmbil_(aksi, payload) {
+  return fetch(SP_API_URL, { method: "POST", body: JSON.stringify({ idToken: SP_ID_TOKEN, action: aksi, payload: payload }) })
+    .then(function (r) { return r.text(); }, spTandaiJaringan_)
+    .then(function (teks) {
+      let d; try { d = JSON.parse(teks); } catch (e) { throw new SyntaxError("Jawaban server tidak terbaca."); }
+      if (!d || !d.success) throw new Error((d && d.error) || "Permintaan ditolak server.");
+      return d.data;
+    });
+}
+
+// ---------- laporan per PO ----------
+function spMuatLaporanPO_(paksa) {
+  const po = window.SP_PO_AKTIF || "";
+  if (!po) { SP_LPR.po = ""; SP_LPR.data = null; SP_LPR.status = ""; spRenderLaporanPO_(); return; }
+  if (!paksa && SP_LPR.po === po && (SP_LPR.data || SP_LPR.status === "memuat")) { spRenderLaporanPO_(); return; }
+  const urut = ++SP_LPR.urut;
+  SP_LPR.po = po; SP_LPR.data = null; SP_LPR.status = "memuat"; spRenderLaporanPO_();
+  spLprAmbil_("getLaporanProduksi", { idPurchaseOrder: po })
+    .then(function (d) { if (urut !== SP_LPR.urut) return; SP_LPR.data = d; SP_LPR.status = ""; spRenderLaporanPO_(); })
+    .catch(function (e) { if (urut !== SP_LPR.urut) return; SP_LPR.status = spPesanGalat_(e, "Memuat laporan produksi"); spRenderLaporanPO_(); });
+}
+function spRenderLaporanPO_() {
+  const W = document.getElementById("sp-lpr-isi"); if (!W || window.SP_TAB !== "lprpo") return;
+  const E = spEsc_, po = SP_LPR.po;
+  if (!po) {
+    W.innerHTML = '<h3 class="sp-judul">Laporan produksi</h3><p class="sp-info" id="sp-lpr-kosong">Pilih PO di kotak <b>Pilih PO</b> di atas, atau buka dari subtab <b>Daftar Selisih</b>.</p>';
+    return;
+  }
+  const alat = '<div class="sp-lpr-alat">' +
+    '<button type="button" class="sp-btn" id="sp-lpr-muat" onclick="spMuatLaporanPO_(true)"' + (SP_LPR.status === "memuat" ? ' disabled' : '') + '>' + (SP_LPR.status === "memuat" ? 'Menyusun...' : 'Muat ulang') + '</button>' +
+    (SP_LPR.data ? spTombolDok_("sp-spk-btn utama", "&#128438; Cetak Laporan Produksi", "/p/cetak.html?jenis=laporanproduksi&id=" + encodeURIComponent(po),
+      "Laporan Produksi " + po, "rantai potong, line, setor, QC, kirim, tagih + selisih") : '') + '</div>';
+  const judul = '<h3 class="sp-judul">Laporan produksi &#8212; ' + E(po) + '</h3>';
+  if (SP_LPR.status === "memuat") { W.innerHTML = judul + alat + '<p class="sp-info" id="sp-lpr-status">Menyusun laporan dari semua catatan produksi PO ini (bisa sampai 15 detik)...</p>'; return; }
+  if (SP_LPR.status) { W.innerHTML = judul + alat + '<p class="sp-info sp-lpr-galat" id="sp-lpr-status">' + E(SP_LPR.status) + '</p>'; return; }
+  W.innerHTML = judul + alat + rjdLaporanProduksiHtml_(SP_LPR.data);
+}
+
+// ---------- daftar selisih ----------
+function spMuatSelisih_(paksa) {
+  if (!paksa && (SP_LPS.data || SP_LPS.status === "memuat")) { spRenderSelisih_(); return; }
+  const urut = ++SP_LPS.urut;
+  SP_LPS.status = "memuat"; spRenderSelisih_();
+  spLprAmbil_("getDaftarSelisihProduksi", { hari: SP_LPS.hari, semua: SP_LPS.semua })
+    .then(function (d) { if (urut !== SP_LPS.urut) return; SP_LPS.data = d; SP_LPS.status = ""; spRenderSelisih_(); })
+    .catch(function (e) { if (urut !== SP_LPS.urut) return; SP_LPS.status = spPesanGalat_(e, "Memuat daftar selisih"); spRenderSelisih_(); });
+}
+function spLpsAtur_(hari, semua) {
+  SP_LPS.hari = Number(hari) || 90; SP_LPS.semua = !!semua; SP_LPS.data = null;
+  spMuatSelisih_(true);
+}
+/** Buka laporan satu PO dari daftar: PO aktif diganti lewat pemilih yang sama dengan kartu Pilih PO, lalu subtab laporan. */
+function spLprBuka_(btn) {
+  const po = btn && btn.dataset ? btn.dataset.po : "";
+  if (!po) return;
+  window.SP_TAB = "lprpo";
+  spPilihPO(po);
+}
+function spRenderSelisih_() {
+  const W = document.getElementById("sp-lpr-isi"); if (!W || window.SP_TAB !== "lprselisih") return;
+  const E = spEsc_, A = rjdLpAngka_, d = SP_LPS.data, memuat = SP_LPS.status === "memuat";
+  const pilihan = [30, 90, 180, 365].map(function (h) { return '<option value="' + h + '"' + (h === SP_LPS.hari ? ' selected' : '') + '>' + h + ' hari</option>'; }).join("");
+  const alat = '<div class="sp-lpr-alat">' +
+    '<label>PO selesai dalam <select id="sp-lps-hari" onchange="spLpsAtur_(this.value, document.getElementById(\'sp-lps-semua\').checked)">' + pilihan + '</select></label>' +
+    '<label class="sp-lps-cek"><input type="checkbox" id="sp-lps-semua"' + (SP_LPS.semua ? ' checked' : '') + ' onchange="spLpsAtur_(document.getElementById(\'sp-lps-hari\').value, this.checked)"/> tampilkan juga yang seimbang</label>' +
+    '<button type="button" class="sp-btn" id="sp-lps-muat" onclick="spMuatSelisih_(true)"' + (memuat ? ' disabled' : '') + '>' + (memuat ? 'Menghitung...' : 'Muat ulang') + '</button></div>';
+  const judul = '<h3 class="sp-judul">Daftar selisih produksi</h3><p class="sp-info">PO yang rantai potong &#8594; line &#8594; setor &#8594; QC &#8594; kirim &#8594; tagih-nya belum seimbang. ' +
+    'Semua PO yang belum selesai ikut dihitung; yang sudah selesai hanya dalam periode di bawah. Peringatan, bukan pemblokir.</p>';
+  if (memuat) { W.innerHTML = judul + alat + '<p class="sp-info" id="sp-lps-status">Menghitung rantai semua PO...</p>'; return; }
+  if (SP_LPS.status) { W.innerHTML = judul + alat + '<p class="sp-info sp-lpr-galat" id="sp-lps-status">' + E(SP_LPS.status) + '</p><button type="button" class="sp-btn" onclick="spMuatSelisih_(true)">Coba lagi</button>'; return; }
+  if (!d) { W.innerHTML = judul + alat; return; }
+  const h = d.hitung || {};
+  const ringkas = '<div class="sp-lps-ringkas" id="sp-lps-ringkas"><div>PO dihitung<b>' + A(h.dihitung) + '</b></div><div class="sp-lps-merah">Harus diperbaiki<b>' + A(h.merah) + '</b></div>' +
+    '<div class="sp-lps-kuning">Perlu ditelusuri<b>' + A(h.kuning) + '</b></div><div class="sp-lps-hijau">Seimbang<b>' + A(h.seimbang) + '</b></div></div>';
+  const baris = (d.daftar || []).map(function (x) {
+    const temuan = (x.temuan || []).map(function (t) {
+      return '<div class="sp-lps-t rlp-' + E(t.tingkat) + '"><b>' + E(t.judul) + '</b> ' + A(t.total) + ' pcs' +
+        (t.sel && t.sel.length ? '<span class="rlp-kecil"> &#8212; ' + t.sel.map(E).join(", ") + (t.lebih ? ', +' + t.lebih + ' lagi' : '') + '</span>' : '') + '</div>';
+    }).join("") || '<span class="rlp-ok">seimbang</span>';
+    const tt = x.total || {};
+    return '<tr data-po="' + E(x.idPurchaseOrder) + '"><td><b>' + E(x.idPurchaseOrder) + '</b><div class="rlp-kecil">' + E(x.namaKlien || "") + '</div></td>' +
+      '<td>' + E(x.status || "-") + (x.tuntas ? '<div class="rlp-kecil">terkirim penuh</div>' : '') + '</td>' +
+      '<td class="num">' + A(tt.order) + '</td><td class="num">' + A(Math.max(tt.potong || 0, tt.hasilPotong || 0)) + '</td><td class="num">' + A(tt.kirim) + '</td>' +
+      '<td class="sp-lps-temuan">' + temuan + '</td>' +
+      '<td><button type="button" class="sp-btn" data-po="' + E(x.idPurchaseOrder) + '" onclick="spLprBuka_(this)">Buka laporan</button></td></tr>';
+  }).join("");
+  const tabel = baris
+    ? '<div class="rlp-gulir"><table class="rlp-tabel sp-lps-tabel" id="sp-lps-tabel"><thead><tr><th>PO</th><th>Status</th><th class="num">Order</th><th class="num">Potong</th><th class="num">Kirim</th><th>Temuan</th><th></th></tr></thead><tbody>' + baris + '</tbody></table></div>'
+    : '<p class="rlp-ok" id="sp-lps-kosong">Tidak ada PO berselisih dalam periode ini.</p>';
+  W.innerHTML = judul + alat + ringkas + tabel + ((d.gagal || []).length ? '<p class="sp-info sp-lpr-galat">Gagal dihitung: ' + d.gagal.map(E).join("; ") + '</p>' : '') +
+    '<p class="rlp-catatan">Dihitung ' + E(d.dihitungPada || "") + ' &#183; ' + A(d.calon) + ' PO calon &#183; ' + (Math.round((d.ms || 0) / 100) / 10).toString().replace(".", ",") + ' detik.</p>';
 }
