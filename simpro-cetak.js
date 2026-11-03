@@ -188,7 +188,11 @@ function ckHeaderHtml(judul, nomor, tanggal){
   return '<div class="ck-dok-header">' +
     '<div>' +
       '<div class="ck-dok-brand">RJD<span>.</span>APPAREL</div>' +
-      '<div class="ck-dok-brand-info">Piyungan, Bantul, D.I. Yogyakarta<br/>WA 0856-292-1464 &#183; order@rjdapparel.id</div>' +
+      // v411 (keputusan Femri 3 Nov 2026): alamat LENGKAP (invoice = dokumen tagihan, surat jalan dipegang kurir) dan situs, bukan
+      // order@rjdapparel.id -- domain itu tidak punya MX (terukur dns.google), jadi surel ke sana ditolak. app.rjdapparel.id
+      // SENGAJA tidak dipakai: itu aplikasi kerja (halaman login), bukan informasi perusahaan.
+      '<div class="ck-dok-brand-info">Jl. Wonosari KM 12,5, Payak Tengah, Srimulyo, Piyungan<br/>Bantul, D.I. Yogyakarta 55792<br/>' +
+        'WA 0856-292-1464 &#183; www.rjdapparel.id</div>' +
     '</div>' +
     '<div class="ck-dok-title">' +
       '<h1>' + judul + '</h1>' +
