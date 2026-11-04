@@ -704,6 +704,12 @@ body.jm-fokus .jm-wrap{ max-width: none; padding-left: 12px; padding-right: 12px
 /* Panel peringatan + catatan */
 .jm-peringatan-blok + .jm-peringatan-blok{ margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,.12); }
 .jm-catatan li.jm-catatan-kunci-belum-pindah{ font-weight: 600; }
+/* v413: blok catatan server DILIPAT jadi satu baris ringkasan (jmRingkasCatatan_). Penanda buka/tutup teks, bukan segitiga bawaan
+   browser -- segitiga <summary> tampil beda di tiap browser dan tidak terbaca sebagai tombol di HP. */
+.jm-catatan > summary { cursor: pointer; list-style: none; }
+.jm-catatan > summary::-webkit-details-marker { display: none; }
+.jm-catatan-lihat::after { content: "lihat"; margin-left: 8px; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.jm-catatan[open] .jm-catatan-lihat::after { content: "tutup"; }
 .jm-btn-kecil{ padding: 2px 10px; font-size: 12px; height: auto; margin-left: 6px; vertical-align: middle; }
 
 /* ---------- v257: item rencana = request cepat dari form jadwal ---------- */

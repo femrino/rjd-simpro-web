@@ -46,6 +46,7 @@ let JM_SUDAH_GULIR_AWAL = false;   // v289 (AUDIT FE-7): gulir ke "hari ini" han
 let JM_GULIR_TERAKHIR = null;      // v289 (AUDIT FE-7): scrollLeft matriks sebelum innerHTML diganti
 let JM_GEN_DATA = 0;               // v289 (AUDIT FE-11): generasi permintaan data; jawaban yang lebih tua dibuang
 let JM_DARI_SNAPSHOT = false; // v226: tampilan saat ini berasal dari snapshot lokal
+let JM_CATATAN_BUKA = null;   // v413: blok catatan dibuka/ditutup orang (null = bawaan); bertahan melewati render ulang tiap filter
 const JM_ANTREAN_KUNCI = "jm_antrean";   // v226: kotak keluar (localStorage)
 let JM_PENGIRIM_ANTREAN = null;
 
@@ -1255,10 +1256,20 @@ function jmRenderPeringatan_() {
           (x.tahap ? ' (' + jmEsc_(x.tahap) + ')' : '') + ': ' + jmEsc_(x.pesan) + '</li>';
       }).join("") + '</ul></div>';
   }
+  // v413 (permintaan Femri 4 Nov 2026): catatan server DILIPAT jadi satu baris ringkasan -- enam pengingat "request N hari tanpa
+  // keputusan" memakan ~260 px di atas matriks (kasus v265 deviasi, keluarga yang sama). Isinya tetap satu klik di bawah, dan
+  // jenis yang berarti DATANYA tidak terbaca (sumber, realisasi, dihapus) membuat blok TERBUKA sendiri -- peringatan semacam itu
+  // tidak boleh terlipat. Blok baris rusak / bar Minggu / bar batal TIDAK dilipat: bertombol tindakan dan jarang muncul.
   if (c.length) {
-    html += '<div class="jm-peringatan-blok jm-catatan"><b>' + c.length + ' catatan</b><ul>' + c.map(function (x) {
+    const ringkas = jmRingkasCatatan_(c);
+    const buka = JM_CATATAN_BUKA === null ? ringkas.penting : JM_CATATAN_BUKA;
+    // Pilihan orang dicatat dari KLIK ringkasan (Enter/Spasi juga memicu klik), bukan `ontoggle`: toggle ikut berbunyi saat blok
+    // dirender TERBUKA oleh bawaan, dan bawaan tidak boleh terbaca sebagai pilihan.
+    html += '<details class="jm-peringatan-blok jm-catatan"' + (buka ? ' open' : '') + '>' +
+      '<summary onclick="JM_CATATAN_BUKA=!this.parentNode.open"><b>' + c.length + ' catatan</b><span class="jm-catatan-ringkas"> · ' + jmEsc_(ringkas.teks) + '</span>' +
+      '<span class="jm-catatan-lihat"></span></summary><ul>' + c.map(function (x) {
       return '<li class="jm-catatan-' + jmEsc_(x.jenis || "") + '">' + jmEsc_(x.pesan) + '</li>';
-    }).join("") + '</ul></div>';
+    }).join("") + '</ul></details>';
   }
   if (minggu.length) {
     html += '<div class="jm-peringatan-blok jm-catatan-minggu"><b>' + minggu.length + ' bar hanya jatuh pada hari Minggu</b> -- tidak punya kolom untuk digambar:' +
@@ -1274,6 +1285,30 @@ function jmRenderPeringatan_() {
       'Tidak dihapus otomatis. <button type="button" class="jm-btn jm-btn-kecil" id="jm-btn-bersih-batal" onclick="jmBersihkanBatal_()">Bersihkan bar batal</button></div>';
   }
   el.innerHTML = html;
+}
+
+/**
+ * v413: ringkasan satu baris untuk blok catatan yang dilipat -- per JENIS, bukan per baris -- dan apakah ada jenis yang
+ * berarti data TIDAK terbaca (blok dibuka sendiri). Jenis dari server: getJadwalManual_ (jadwal-manual.js); realisasi dari
+ * jmRenderPeringatan_. Jenis yang belum dikenal tetap terhitung ("N lainnya"), tidak hilang dari ringkasan.
+ */
+function jmRingkasCatatan_(c) {
+  const per = {};
+  c.forEach(function (x) { const j = x.jenis || "lain"; (per[j] = per[j] || []).push(x); });
+  const bagian = [], dikenal = {};
+  const tambah = function (j, teks) { if (per[j]) { bagian.push(teks(per[j])); dikenal[j] = true; } };
+  tambah("sumber", function () { return "SD Order Request tidak terbaca"; });
+  tambah("realisasi", function () { return "realisasi laporan harian TIDAK AKTIF"; });
+  tambah("dihapus", function () { return "kolom Dihapus perlu diperiksa"; });
+  tambah("rencana-diam", function (a) {
+    const h = a.map(function (x) { return Number(x.hari) || 0; }), lo = Math.min.apply(null, h), hi = Math.max.apply(null, h);
+    return a.length + " request belum diputuskan (" + (lo === hi ? lo : lo + "–" + hi) + " hari)";
+  });
+  tambah("kunci-belum-pindah", function (a) { return a.length + " request disetujui, bar belum pindah ke PO"; });
+  tambah("kunci-lama", function (a) { return "kunci lama " + ((a[0] && a[0].jumlah) || a.length) + " baris"; });
+  const lain = Object.keys(per).filter(function (j) { return !dikenal[j]; }).reduce(function (s, j) { return s + per[j].length; }, 0);
+  if (lain) bagian.push(lain + " lainnya");
+  return { teks: bagian.join(" · "), penting: !!(per.sumber || per.realisasi || per.dihapus) };
 }
 
 /** Susun kolom hari kerja (Senin-Sabtu) untuk jendela yang dilihat. */
