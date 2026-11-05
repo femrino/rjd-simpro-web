@@ -245,7 +245,7 @@ function crMuatDaftarPO_() {
 }
 
 function crPilihPO_(po) {
-  CR.po = po || ""; CR.konteks = null; CR.lap = null; CR.kw = ""; CR.pesan = null; CR.baris = [];
+  CR.po = po || ""; CR.konteks = null; CR.lap = null; CR.kw = ""; CR.pesan = null; CR.baris = []; CR.ukurSisa = null;
   try { if (CR.po) localStorage.setItem("cr_po", CR.po); } catch (e) { /* private mode */ }
   const kw = crEl_("cr-kw");
   kw.disabled = true; kw.innerHTML = '<option value="">' + (CR.po ? "Memuat..." : "Pilih PO dulu") + '</option>';
@@ -851,9 +851,171 @@ function crSizeKolom_(perSize) {
   const pos = function (z) { const i = urut.indexOf(z); return i === -1 ? 999 : i; };
   return Object.keys(perSize || {}).filter(function (z) { return perSize[z]; }).sort(function (a, b) { return pos(a) - pos(b) || a.localeCompare(b); });
 }
+/* ---------- UKUR SISA AKHIR sesudah End cut (opsi 2 Femri, 5 Nov 2026; butuh gs >= @444) ----------
+ * "Sisa potongan" di ringkasan adalah HITUNGAN (sisa roll selesai - End cut); klien MANSL 288 membacanya sebagai kain utuh. Di sini
+ * yang benar-benar tersisa diukur per WUJUD -- potongan >= 1 yd dihitung & diukur panjangnya, potongan kecil & perca ditimbang --
+ * beserta tujuannya, lewat rute simpanUkurSisaCutting (cutting-roll.js, SD Ukur Sisa Kain). Angka hitungan TIDAK diganti: keduanya
+ * tampil berdampingan dan selisihnya disebut, supaya ukuran yang meleset (lebih panjang dari hitungan) langsung terlihat.
+ * g.ukurSisa (server, pengukuran TERBARU per kain . warna): { idUkur, tanggal, oleh, catatan, baris: [{ wujud, potong, panjang, berat, tujuan }] }
+ * panjang dalam yard (neraca halaman ini yard), berat kg. Daftar wujud & tujuan SAMA PERSIS dengan WUJUD_UKUR_SISA / TUJUAN_UKUR_SISA
+ * di server -- wujud lain ditolak di sana. Blok ditaruh di bawah kotak ringkasan, bukan di bawah tabel roll (MANSL 288: 48 roll). */
+const CR_UKUR_WUJUD = [
+  { wujud: "Potongan ≥ 1 yd", ukur: "panjang", ket: "hitung jumlahnya, ukur panjang totalnya" },
+  { wujud: "Potongan kecil & perca", ukur: "berat", ket: "timbang semuanya" }
+];
+const CR_UKUR_TUJUAN = ["Dikembalikan ke klien", "Disimpan di gudang", "Dibuang", "Belum ditentukan"];
+function crUkurSisaAda_(v) { return v !== null && v !== undefined && v !== "" && !isNaN(Number(v)); }
+function crUkurSisaJumlah_(baris) {
+  const j = { panjang: 0, berat: 0, potong: 0, adaPj: false, adaKg: false };
+  (baris || []).forEach(function (b) {
+    if (crUkurSisaAda_(b.panjang)) { j.panjang += Number(b.panjang); j.adaPj = true; }
+    if (crUkurSisaAda_(b.berat)) { j.berat += Number(b.berat); j.adaKg = true; }
+    if (crUkurSisaAda_(b.potong)) j.potong += Number(b.potong);
+  });
+  j.panjang = Math.round(j.panjang * 100) / 100; j.berat = Math.round(j.berat * 100) / 100;
+  return j;
+}
+/** Kalimat banding hitungan vs ukur -- satu sumber untuk isian (berubah saat mengetik) dan ringkasan sesudah disimpan. */
+function crUkurSisaBanding_(hitung, j) {
+  if (!j.adaPj && !j.adaKg) return { kelas: "", teks: "Isi hasil ukur. Sisa potongan hitungan: " + crAngka_(hitung) + " yd." };
+  const sisa = Math.round((hitung - j.panjang) * 100) / 100;
+  if (sisa < -0.005) return { kelas: "cr-us-awas", teks: "Panjang terukur " + crAngka_(j.panjang) + " yd LEBIH dari hitungan " + crAngka_(hitung) +
+    " yd (+" + crAngka_(-sisa) + " yd). Periksa sisa per roll atau gelaran End cut sebelum menyimpan." };
+  return { kelas: "", teks: "Hitungan " + crAngka_(hitung) + " yd − panjang terukur " + crAngka_(j.panjang) + " yd = " + crAngka_(sisa) + " yd tidak diukur panjangnya" +
+    (j.adaKg ? " — wujudnya potongan kecil & perca yang ditimbang " + crAngka_(j.berat) + " kg." : " — isi berat potongan kecil & perca (0 kalau memang tidak ada).") };
+}
+function crUkurSisaRing_(g) {
+  const u = g.ukurSisa; if (!u) return "";
+  const j = crUkurSisaJumlah_(u.baris);
+  return '<small class="cr-us-ring">terukur ' + [j.adaPj ? crAngka_(j.panjang) + " yd" : "", j.adaKg ? crAngka_(j.berat) + " kg" : ""].filter(Boolean).join(" + ") + '</small>';
+}
+/** Isian -> baris angka (null = kosong, NaN = tidak terbaca). Hanya untuk banding di layar; yang dikirim teks ketikan apa adanya. */
+function crUkurSisaBaca_(v) {
+  const angka = function (t) { return String(t || "").trim() === "" ? null : crParse_(t); };
+  return CR_UKUR_WUJUD.map(function (w, i) {
+    return { wujud: w.wujud, potong: w.ukur === "panjang" ? angka(v["potong" + i]) : null, panjang: w.ukur === "panjang" ? angka(v["panjang" + i]) : null,
+      berat: w.ukur === "berat" ? angka(v["berat" + i]) : null, tujuan: v["tujuan" + i] || CR_UKUR_TUJUAN[0] };
+  });
+}
+function crUkurSisaIsian_(g, st) {
+  const s = g.ringkasan || {}, hitung = Number(s.sisaAkhirYd) || 0, v = st.nilai || {};
+  const tujuan = function (i) { return '<select data-us="tujuan" data-i="' + i + '">' + CR_UKUR_TUJUAN.map(function (t) {
+    return '<option' + ((v["tujuan" + i] || CR_UKUR_TUJUAN[0]) === t ? ' selected' : '') + '>' + crEsc_(t) + '</option>'; }).join("") + '</select>'; };
+  const kotak = function (f, i, lbl, mode, kelas) { return '<label class="cr-f ' + kelas + '">' + lbl + '<input type="text" inputmode="' + mode + '" data-us="' + f + '" data-i="' + i +
+    '" value="' + crEsc_(v[f + i] || "") + '"/></label>'; };
+  const baris = CR_UKUR_WUJUD.map(function (w, i) {
+    return '<div class="cr-us-wujud"><div class="cr-us-nama"><b>' + crEsc_(w.wujud) + '</b><small>' + crEsc_(w.ket) + '</small></div>' +
+      (w.ukur === "panjang" ? kotak("potong", i, "Potong", "numeric", "cr-us-f-potong") + kotak("panjang", i, "Panjang total (yd)", "decimal", "cr-us-f-angka")
+        : kotak("berat", i, "Berat (kg)", "decimal", "cr-us-f-angka")) +
+      '<label class="cr-f cr-us-f-tujuan">Tujuan' + tujuan(i) + '</label></div>';
+  }).join("");
+  const b = crUkurSisaBanding_(hitung, crUkurSisaJumlah_(crUkurSisaBaca_(v)));
+  const belum = s.rollBelumSelesai ? '<p class="cr-us-ket">' + s.rollBelumSelesai + ' roll belum selesai digelar &#8212; sisanya belum termasuk.</p>' : "";
+  return '<div class="cr-us cr-us-isian" data-kw="' + crEsc_(st.k) + '"><div class="cr-us-kepala"><b>Ukur sisa akhir</b> <span>semua yang tersisa sesudah End cut</span></div>' + belum +
+    '<label class="cr-f cr-us-f-tgl">Tanggal ukur<input type="date" data-us="tanggal" max="' + crHariIni_() + '" value="' + crEsc_(v.tanggal || crHariIni_()) + '"/></label>' +
+    baris +
+    '<p class="cr-us-banding ' + b.kelas + '" data-us-banding="1">' + crEsc_(b.teks) + '</p>' +
+    '<label class="cr-f cr-us-f-catatan">Catatan<input type="text" maxlength="200" data-us="catatan" placeholder="mis. perca dibuang atas persetujuan klien" value="' + crEsc_(v.catatan || "") + '"/></label>' +
+    '<p class="cr-pesan hidden" data-us-pesan="1" role="status"></p>' +
+    '<div class="cr-aksi"><button class="cr-btn" type="button" data-ukur-batal="1">Batal</button><button class="cr-btn cr-btn-utama" type="button" data-ukur-simpan="1">Simpan ukur sisa</button></div></div>';
+}
+function crUkurSisaBlok_(g) {
+  const s = g.ringkasan || {}, k = crKunciKw_(g.jenisKain, g.warna);
+  if (!(s.rollSelesai > 0)) return "";
+  if (CR.ukurSisa && CR.ukurSisa.k === k) return crUkurSisaIsian_(g, CR.ukurSisa);
+  const hitung = Number(s.sisaAkhirYd) || 0, u = g.ukurSisa;
+  const belum = s.rollBelumSelesai ? ' <span class="cr-us-ket">' + s.rollBelumSelesai + ' roll belum selesai digelar &#8212; ukur sesudah semuanya selesai.</span>' : "";
+  if (!u) return '<div class="cr-us cr-us-belum"><p><b>Sisa akhir belum diukur.</b> Sisa potongan ' + crAngka_(hitung) + ' yd di atas adalah hitungan. ' +
+    'Sesudah End cut selesai, ukur yang benar-benar tersisa supaya laporan memakai angka ukur.' + belum + '</p>' +
+    '<button class="cr-btn" type="button" data-ukur-sisa="' + crEsc_(k) + '">Ukur sisa akhir</button></div>';
+  const j = crUkurSisaJumlah_(u.baris), b = crUkurSisaBanding_(hitung, j);
+  return '<div class="cr-us cr-us-sudah"><div class="cr-us-kepala"><b>Sisa akhir terukur</b> <span>' + crEsc_(crTglTeks_(u.tanggal)) + ' &#183; ' + crEsc_(u.oleh || "-") + '</span></div>' +
+    '<ul class="cr-us-daftar">' + (u.baris || []).map(function (x) {
+      const ukur = [crUkurSisaAda_(x.potong) ? crAngka_(x.potong) + ' potong' : '', crUkurSisaAda_(x.panjang) ? crAngka_(x.panjang) + ' yd' : '',
+        crUkurSisaAda_(x.berat) ? crAngka_(x.berat) + ' kg' : ''].filter(Boolean).join(', ');
+      return '<li><b>' + crEsc_(x.wujud) + '</b>: ' + ukur + ' <span class="cr-us-tujuan">&#8594; ' + crEsc_(x.tujuan) + '</span></li>';
+    }).join("") + '</ul>' +
+    (u.catatan ? '<p class="cr-us-ket">Catatan: ' + crEsc_(u.catatan) + '</p>' : '') +
+    '<p class="cr-us-banding ' + b.kelas + '">' + crEsc_(b.teks) + '</p>' +
+    '<div class="cr-aksi"><button class="cr-btn" type="button" data-ukur-sisa="' + crEsc_(k) + '">Ukur ulang</button></div></div>';
+}
+function crUkurSisaGrup_(k) { return ((CR.lap && CR.lap.kain) || []).filter(function (x) { return crKunciKw_(x.jenisKain, x.warna) === k; })[0] || null; }
+function crUkurSisaPesan_(teks, ok) {
+  const p = document.querySelector(".cr-us-isian [data-us-pesan]"); if (!p) return;
+  p.className = "cr-pesan " + (ok ? "cr-pesan-ok" : "cr-pesan-galat"); p.textContent = teks;   // pola crKoreksiPesan_
+}
+/** Pemeriksaan layar SEBELUM kirim (server memeriksa ulang semuanya): angka terbaca, potong bulat & berpanjang, ada yang diisi, tanggal sudah lewat. */
+function crUkurSisaPeriksa_(v) {
+  const salah = [];
+  CR_UKUR_WUJUD.forEach(function (w, i) {
+    (w.ukur === "panjang" ? ["potong", "panjang"] : ["berat"]).forEach(function (f) {
+      const t = String(v[f + i] || "").trim();
+      if (t && !(crParse_(t) >= 0)) salah.push(w.wujud + ": '" + t + "' bukan angka");
+    });
+    if (w.ukur === "panjang") {
+      const pt = String(v["potong" + i] || "").trim(), pj = String(v["panjang" + i] || "").trim();
+      if (pt && crParse_(pt) >= 0 && Math.floor(crParse_(pt)) !== crParse_(pt)) salah.push("jumlah potong harus bilangan bulat");
+      if (pt && !pj) salah.push("panjang total " + w.wujud + " belum diisi");
+    }
+  });
+  if (salah.length) return "Periksa isian: " + salah.join("; ") + ".";
+  if (!crUkurSisaBaca_(v).some(function (b) { return b.panjang !== null || b.berat !== null; })) return "Isi hasil ukur dulu -- panjang potongan atau berat perca (0 kalau memang tidak ada).";
+  if ((v.tanggal || crHariIni_()) > crHariIni_()) return "Tanggal ukur belum terjadi.";
+  return "";
+}
+async function crUkurSisaSimpan_(tombol) {
+  const st = CR.ukurSisa; if (!st || st.mengirim) return;
+  const g = crUkurSisaGrup_(st.k); if (!g) return;
+  const v = st.nilai, galat = crUkurSisaPeriksa_(v);
+  if (galat) { crUkurSisaPesan_(galat, false); return; }
+  // Teks ketikan dikirim APA ADANYA ("5,5"): server membacanya dengan pembaca desimal yang sama untuk semua form (desimalWajib_).
+  const p = { idPurchaseOrder: CR.po, jenisKain: g.jenisKain, warna: g.warna, tanggal: v.tanggal || crHariIni_(), catatan: String(v.catatan || "").trim(),
+    baris: CR_UKUR_WUJUD.map(function (w, i) {
+      const t = function (f) { return String(v[f + i] || "").trim(); };
+      return w.ukur === "panjang" ? { wujud: w.wujud, potong: t("potong"), panjang: t("panjang"), tujuan: v["tujuan" + i] || CR_UKUR_TUJUAN[0] }
+        : { wujud: w.wujud, berat: t("berat"), tujuan: v["tujuan" + i] || CR_UKUR_TUJUAN[0] };
+    }) };
+  const nama = "ukur-sisa:" + CR.po + ":" + st.k;
+  p.idPermintaan = typeof rjdKunciIsian_ === "function" ? rjdKunciIsian_(nama, p) : String(Date.now()) + "-us";
+  st.mengirim = true; tombol.disabled = true; tombol.textContent = "Menyimpan...";
+  crUkurSisaPesan_("Menyimpan hasil ukur...", true);
+  try {
+    const d = await crKirim_("simpanUkurSisaCutting", { payload: p });
+    if (typeof rjdKunciLepas_ === "function") rjdKunciLepas_(nama);
+    CR.ukurSisa = null;
+    const teks = "Sisa akhir terukur tersimpan" + (d.sudahTercatat ? " (sudah tercatat sebelumnya)" : "") + ".";
+    CR.pesan = { teks: teks, ok: true }; crTampilPesan_(teks, true);   // bertahan sesudah crMuatPO_ menggambar ulang (pola koreksi)
+    crMuatPO_(false);
+  } catch (e) {
+    if (!e.jaringan && typeof rjdKunciLepas_ === "function") rjdKunciLepas_(nama);
+    st.mengirim = false; tombol.disabled = false; tombol.textContent = "Simpan ukur sisa";
+    crUkurSisaPesan_(e.jaringan ? "Jawaban server tidak sampai -- hasil ukur MUNGKIN sudah tersimpan. Simpan lagi TANPA mengubah isian: server mengenali kiriman yang sama."
+      : "Tidak tersimpan: " + e.message, false);
+  }
+}
+function crUkurSisaKlik_(e) {
+  const t = e.target && e.target.closest ? e.target.closest("[data-ukur-sisa],[data-ukur-batal],[data-ukur-simpan]") : null; if (!t) return;
+  if (t.hasAttribute("data-ukur-simpan")) { crUkurSisaSimpan_(t); return; }
+  if (CR.ukurSisa && CR.ukurSisa.mengirim) return;
+  if (t.hasAttribute("data-ukur-sisa")) { CR.ukurSisa = { k: t.getAttribute("data-ukur-sisa"), nilai: {}, mengirim: false }; crRenderLaporan_(); return; }
+  CR.ukurSisa = null; crRenderLaporan_();
+}
+/** Ketikan TIDAK merender ulang (kotak yang sedang diketik tidak boleh dibongkar): nilai disimpan di CR.ukurSisa, kalimat banding diganti. */
+function crUkurSisaKetik_(e) {
+  const f = e.target && e.target.getAttribute ? e.target.getAttribute("data-us") : null; if (!f || !CR.ukurSisa) return;
+  CR.ukurSisa.nilai[f + (e.target.getAttribute("data-i") || "")] = e.target.value;
+  const g = crUkurSisaGrup_(CR.ukurSisa.k), wadah = e.target.closest(".cr-us-isian"), p = wadah && wadah.querySelector("[data-us-banding]"); if (!g || !p) return;
+  const b = crUkurSisaBanding_(Number((g.ringkasan || {}).sisaAkhirYd) || 0, crUkurSisaJumlah_(crUkurSisaBaca_(CR.ukurSisa.nilai)));
+  p.textContent = b.teks; p.className = "cr-us-banding " + b.kelas;
+}
+
+/** Keterangan kotak 'Masih di roll': jumlah roll utuh / sedang dipotong / lain (gs >= @445, susunLaporanCuttingRoll_). */
+function crMasihSub_(s) { return [s.rollUtuh ? s.rollUtuh + " utuh" : "", s.rollSedang ? s.rollSedang + " sedang" : "", s.rollLain ? s.rollLain + " lain" : ""].filter(Boolean).join(" · "); }
+
 function crRenderLaporan_() {
   const el = crEl_("cr-laporan"); if (!el) return;
   if (el && !el.dataset.koreksiPasang) { el.addEventListener("click", crKoreksiKlik_); el.dataset.koreksiPasang = "1"; }   // 5 Nov 2026: tombol koreksi
+  if (!el.dataset.ukurSisaPasang) { el.addEventListener("click", crUkurSisaKlik_); el.addEventListener("input", crUkurSisaKetik_); el.addEventListener("change", crUkurSisaKetik_); el.dataset.ukurSisaPasang = "1"; }   // 5 Nov 2026: ukur sisa akhir
   const L = CR.lap; if (!L) { el.innerHTML = ""; return; }
   const grup = (L.kain || []).slice().sort(function (a, b) { return (crKunciKw_(b.jenisKain, b.warna) === CR.kw) - (crKunciKw_(a.jenisKain, a.warna) === CR.kw); });
   if (!grup.length) { el.innerHTML = '<div class="cr-kartu"><p class="cr-info">Belum ada roll maupun gelaran tercatat untuk PO ini.</p></div>'; return; }
@@ -883,8 +1045,12 @@ function crRenderLaporan_() {
         '<span><small>End cut</small><b>' + sel(s.endCutYd) + (s.endCutPcs ? " &#183; " + s.endCutPcs + " pcs" : "") + '</b></span>' +
         // 5 Nov 2026 (opsi 1 Femri): "Sisa akhir" -> "Sisa potongan" -- satu istilah dengan laporan cetak; klien MANSL 288 membaca
         // "sisa akhir 98,52 yd" sebagai kain utuh, padahal itu potongan pendek (sisa roll selesai - End cut), hasil hitungan.
-        '<span class="' + kelasSel(s.sisaAkhirYd < 0 ? s.sisaAkhirYd : 0) + '" title="Potongan pendek sisa roll selesai dikurangi End cut -- bukan kain utuh, hasil hitungan"><small>Sisa potongan</small><b>' + sel(s.sisaAkhirYd) + '</b></span>' +
+        '<span class="' + kelasSel(s.sisaAkhirYd < 0 ? s.sisaAkhirYd : 0) + '" title="Potongan pendek sisa roll selesai dikurangi End cut -- bukan kain utuh, hasil hitungan"><small>Sisa potongan</small><b>' + sel(s.sisaAkhirYd) + '</b>' + crUkurSisaRing_(g) + '</span>' +
+        // 5 Nov 2026 (MCONX A34): roll belum selesai -- utuh + sedang dipotong -- dulu tidak muncul di kotak mana pun (butuh gs >= @445).
+        (s.rollBelumSelesai && s.masihDiRollYd !== undefined ? '<span class="cr-ring-masih" title="Roll yang belum selesai digelar: utuh + sedang dipotong (panjang roll dikurangi yang sudah tergelar)"><small>Masih di roll</small><b>' +
+          sel(s.masihDiRollYd) + '</b><small class="cr-ring-sub">' + crEsc_(crMasihSub_(s)) + '</small></span>' : '') +
         '<span><small>Hasil</small><b>' + (s.pcs || 0) + ' pcs</b></span></div>' +
+        crUkurSisaBlok_(g) +
         '<div class="cr-gulir"><table class="cr-tabel"><thead><tr><th rowspan="2">Roll</th><th rowspan="2" class="num">Kirim</th><th rowspan="2">Marker &#215; lapis</th><th rowspan="2" class="num">Aktual</th><th rowspan="2" class="num">Sisa</th><th rowspan="2" class="num">Selisih</th>' +
         '<th colspan="' + (sz.length + 1) + '" class="cr-sz-kepala">Hasil cutting per size (pcs)</th><th rowspan="2">Status</th></tr><tr>' +
         sz.map(function (z) { return '<th class="num cr-sz">' + crEsc_(z) + '</th>'; }).join("") + '<th class="num cr-sz-total">Total</th></tr></thead><tbody>' +

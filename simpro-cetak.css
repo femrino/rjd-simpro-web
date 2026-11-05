@@ -803,3 +803,25 @@ body:has(nav) { padding-top: 0; }
 /* v412: Ringkasan per rasio (laporan cutting per roll) -- pengganti baris Subtotal di tabel per roll. */
 .ck-lc-rr-judul { font-family: 'Archivo', sans-serif; font-size: 12.5px; font-weight: 700; margin: 14px 0 6px; }
 .ck-lc-rr td.ck-lc-rr-persen { font-weight: 700; }
+
+/* ---------- 5 Nov 2026 (permintaan Femri): sisa akhir terukur (opsi 2), set lengkap, masih di roll, versi untuk klien (opsi 3) ---------- */
+.ck-lc-us { margin: 0 0 6px; }
+.ck-lc-us-judul { font-size: 12px; margin: 0 0 4px; }
+.ck-lc-us-tabel, .ck-lck .ck-lck-neraca, .ck-lck .ck-lck-sisa { max-width: 640px; }
+.ck-lc-us-tabel td.num, .ck-lck .ck-lck-neraca td.num, .ck-lck .ck-lck-sisa td.num { white-space: nowrap; }
+.ck-lck .ck-lck-neraca td:first-child { width: 70%; }
+/* Enam kartu (dengan "Masih di roll") = 3 x 2, bukan 5 + 1 yang menyisakan satu kartu sendirian. Spesifisitas (0,2,0) mengalahkan aturan
+   cetak `.ck-lc-ringkasan { repeat(5) }` (kertas ikut 3 x 2) -- jadi HP wajib diturunkan lagi di bawah dengan spesifisitas yang sama. */
+.ck-lc-ringkasan.ck-lc-ringkasan-6 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 640px) { .ck-lc-ringkasan.ck-lc-ringkasan-6 { grid-template-columns: repeat(2, 1fr); } }
+.ck-lc-os tr.ck-lc-os-set > td:first-child { background: #F2F8F4; }
+.ck-lc-versi { margin-bottom: 14px; }
+.ck-lck-terima { border: 1px solid var(--line, #E5E0D6); border-radius: 10px; padding: 12px 16px 4px; margin: 12px 0 0; max-width: 640px; font-size: 12.5px; break-inside: avoid; page-break-inside: avoid; }
+.ck-lck-terima p { margin: 6px 0; }
+.ck-lck-terima ul { margin: 4px 0 10px; padding-left: 18px; }
+.ck-lck-isian { display: flex; gap: 8px; align-items: flex-end; margin: 4px 0 0; }
+.ck-lck-isian span:first-child { white-space: nowrap; }
+.ck-lck-titik { flex: 0 1 220px; border-bottom: 1px dotted var(--ink, #172134); height: 16px; }
+.ck-lck-ttd { margin-top: 14px; }
+.ck-lck-ttd .garis { height: 54px; }
+.ck-lck-ttd-akhir { max-width: 640px; }

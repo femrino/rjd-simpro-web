@@ -168,3 +168,37 @@
    pernah. Persis nisan v222 di template ("empat halaman yang lahir SETELAH daftar di atas ditulis"). Ditaruh di sini, bukan di
    template, supaya tidak butuh tempel. Spesifisitas (1,2,1) mengalahkan details.rjd-menu{display:none} (0,1,1). */
 #cr-nav-logout:not(.hidden) ~ details.rjd-menu { display: block; }
+
+/* ---------- ukur sisa akhir sesudah End cut (opsi 2 Femri, 5 Nov 2026) ---------- di bawah kotak ringkasan, bukan di bawah tabel roll
+   (MANSL 288: 48 roll = blok tidak terlihat tanpa menggulir jauh). Kotak isian 16 px dari .cr-f (zoom iOS). */
+.cr-ring .cr-us-ring { display: block; font-size: 11px; font-weight: 600; color: #1F6B48; margin-top: 1px; white-space: nowrap; }
+/* "Masih di roll" (5 Nov 2026, MCONX A34): roll belum selesai -- utuh + sedang dipotong. Keterangannya baris kecil abu di bawah angka. */
+.cr-ring .cr-ring-sub { display: block; font-size: 11px; color: var(--ink-soft, #6B7280); margin-top: 1px; white-space: nowrap; }
+.cr-us { border: 1px solid var(--line, #E5E0D6); border-radius: 12px; padding: 12px 14px; margin: 0 0 14px; font-size: 13.5px; }
+.cr-us p { margin: 0 0 8px; }
+.cr-us-belum { background: #FFF8EC; border-color: #EBC98A; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; }
+.cr-us-belum p { flex: 1 1 320px; margin: 0; }
+.cr-us-sudah { background: #F2F8F4; border-color: #BFDCCB; }
+.cr-us-isian { border-color: var(--sky, #3B7BBF); background: #fff; }
+.cr-us-kepala { margin: 0 0 10px; }
+.cr-us-kepala span { color: var(--ink-soft, #6B7280); font-size: 12.5px; }
+.cr-us-ket { color: var(--ink-soft, #6B7280); font-size: 12.5px; }
+.cr-us-daftar { margin: 0 0 8px; padding-left: 18px; }
+.cr-us-daftar li { margin: 3px 0; }
+.cr-us-tujuan { color: var(--ink-soft, #6B7280); white-space: nowrap; }
+.cr-us-wujud { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; padding: 10px 0; border-top: 1px solid var(--line, #E5E0D6); }
+.cr-us-nama { flex: 1 1 200px; display: flex; flex-direction: column; align-self: center; }
+.cr-us-nama small { color: var(--ink-soft, #6B7280); font-size: 12px; }
+.cr-us-f-potong { flex: 0 1 90px; }
+.cr-us-f-angka { flex: 0 1 150px; }
+.cr-us-f-tujuan { flex: 1 1 200px; }
+.cr-us-f-tgl { max-width: 200px; margin-bottom: 4px; }
+.cr-us-f-catatan { margin: 0 0 10px; }
+.cr-us .cr-pesan { flex: none; margin: 0 0 10px; }
+.cr-us-banding { background: var(--cream, #F9F7F2); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.cr-us-sudah .cr-us-banding { background: #fff; }
+.cr-us-banding.cr-us-awas { background: #FBEDEB; color: #9A2B1E; }
+.cr-us .cr-aksi { justify-content: flex-end; }
+/* HP: nama wujud selebar baris, lalu Potong + Panjang berdampingan, Tujuan di baris sendiri (terukur 390 px di pratinjau: tanpa ini nama
+   berbagi baris dengan Potong dan Panjang jatuh sendirian ke baris kedua). */
+@media (max-width: 560px) { .cr-us-nama { flex-basis: 100%; } .cr-us-f-angka { flex: 1 1 130px; } }
