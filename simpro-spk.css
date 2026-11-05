@@ -2344,3 +2344,57 @@ button.sp-cetak-btn { border: 0; font-family: inherit; cursor: pointer; line-hei
 .sp-lps-t.rlp-merah { border-color: var(--thread); background: #FCEFEC; }
 .sp-lps-t.rlp-kuning { border-color: var(--amber); background: #FFF6E6; }
 .sp-lps-t.rlp-proses { border-color: var(--sky); background: #EEF4FB; }
+
+/* ============================================================
+   SUBTAB PACKING (SPEC-PACKING rilis 1C, 5 Nov 2026; butuh gs >= @447)
+   Panel dibuat JS (#sp-panel-kemas). Kotak isian mewarisi aturan luas panel (16px, padding 12/14 -- PF-12);
+   di sini cuma LEBAR dan tata letaknya. Tombol aksi baris memakai .sp-btn-kecil dengan kotak sentuh 32px
+   (bukan 26px -- temuan PF-7), karena di lantai packing tombolnya ditekan dengan tangan yang memegang barang.
+   Kelas .sp-btn TIDAK dipakai: ia tidak pernah didefinisikan (nisan di atas, Marker & Gelaran).
+   ============================================================ */
+.sp-kms-sub { display: block; font-size: 11.5px; color: var(--ink-soft); font-weight: 400; margin-top: 2px; }
+h4 .sp-kms-sub { display: inline; margin-left: 6px; }
+.sp-kms-minus { color: var(--thread); font-weight: 700; }
+.sp-pesan.sp-kms-ok { background: #EAF4EC; border: 1px solid #9FCBA9; color: #2C6B3F; }
+.sp-tabel tr.sp-kms-luar td { background: #FCF6E8; }
+.sp-kms-siap td:first-child { min-width: 150px; }
+.sp-kms-daftar { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.sp-kms-pk { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 44px; padding: 8px 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--white); font: inherit; font-size: 13px; color: var(--ink);
+  cursor: pointer; text-align: left; }
+.sp-kms-pk.aktif { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.sp-kms-st { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 6px; background: #F4F2EE; color: var(--ink-soft); }
+.sp-kms-st-draft, .sp-kms-st-terbuka { background: #FFF6E6; color: #7A5410; }
+.sp-kms-st-ditutup, .sp-kms-st-tertutup, .sp-kms-st-terbit, .sp-kms-st-diterima { background: #EAF4EC; color: #2C6B3F; }
+.sp-kms-st-batal { background: #F4F2EE; color: #8A8478; text-decoration: line-through; }
+.sp-kms-blok { border-top: 1px solid var(--line-soft); padding-top: 14px; margin-top: 14px; }
+.sp-kms-blok h4 { font-size: 13.5px; font-weight: 700; margin: 0 0 10px; color: var(--ink); }
+.sp-kms-form { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: flex-end; }
+.sp-kms-f { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--ink-soft); min-width: 0; }
+.sp-kms-f input, .sp-kms-f select { width: 100%; }
+.sp-kms-form .sp-kms-f { flex: 1 1 160px; }
+.sp-kms-form .sp-kms-f-item { flex: 2 1 260px; }
+.sp-kms-form .sp-kms-f-angka { flex: 0 1 120px; }
+.sp-kms-kr { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: flex-end; justify-content: space-between;
+  padding: 10px 0; border-bottom: 1px solid var(--line-soft); font-size: 13px; }
+.sp-kms-kr-aksi { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.sp-kms-kr-aksi .sp-kms-f-angka { width: 92px; }
+/* NISAN (5 Nov 2026): '.sp-kms-blok .sp-btn-kecil { min-height: 32px }' dibuang -- terukur NO-OP, .sp-btn-kecil halaman ini sudah
+   padding 8px (aturan 'tombol' di atas), jadi >= 32px tanpa bantuan; sabotase yang mencabutnya tetap hijau. Penjaganya asersi L jalan144. */
+.sp-kms-blok .sp-simpan-btn, .sp-card > .sp-simpan-btn { margin-top: 12px; }
+.sp-kms-pl td:last-child { white-space: nowrap; }
+.sp-kms-blok h4.sp-kms-ring-judul { margin-top: 14px; }
+.sp-tabel.sp-kms-ring tfoot td { border-top: 1.5px solid var(--line); }
+/* Mode kartu (< 761 px) untuk dua tabel packing. Di tabel siap kartu itu WAJIB: sebagai tabel biasa kolom Siap -- angka yang dicari --
+   terdorong ke balik penggeser di 390 px (terlihat di foto, asersi L sekarang menuntut semua sel terlihat). td.num dikembalikan rata kiri:
+   '.sp-tabel td.num' (0,2,1) mengalahkan '.sp-tabel-kartu td' (0,1,1) dan label kolomnya tergeser ke tengah. */
+@media (max-width: 760px) {
+  .sp-tabel-kartu td.sp-kms-kosong { display: none; }
+  .sp-kms-siap.sp-tabel-kartu td.num, .sp-kms-pl.sp-tabel-kartu td.num { text-align: left; }
+  .sp-kms-siap.sp-tabel-kartu td[data-label="Siap"] { font-weight: 700; }
+  .sp-tabel-kartu tr.sp-kms-luar { background: #FCF6E8; }
+}
+.sp-kms-putus .sp-kms-f { max-width: 320px; margin-bottom: 4px; }
+/* NISAN (5 Nov 2026): blok '@media (max-width: 640px) { .sp-kms-kr { flex-direction: column } .sp-kms-kr-aksi .sp-kms-f-angka { flex: 1 1 80px } }'
+   dibuang -- terukur tidak menahan apa pun: isi aksi karung Terbuka lebih panjang dari satu baris HP, jadi blok itu SUDAH membungkus
+   selebar baris tanpa bantuan (sabotase S18 dua kali hijau); efek satu-satunya melebarkan tombol Buka karung Tertutup. */
