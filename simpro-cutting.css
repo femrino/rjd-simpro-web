@@ -88,6 +88,9 @@
 .cr-tabel .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .cr-tabel .cr-no { font-weight: 700; white-space: nowrap; }
 .cr-endcut td { background: var(--cream, #F9F7F2); }
+/* 5 Nov 2026: roll dengan beberapa pemakaian = beberapa baris (crPakaiBaris_). Garis DI DALAM satu roll putus-putus; sel Roll/Kirim
+   yang digabung (rowspan) bergaris penuh di bawah baris terakhir, jadi batas antar roll tetap tegas. */
+.cr-tabel tr.cr-roll-dalam td:not([rowspan]) { border-bottom-style: dashed; }
 .cr-st { font-size: 12px; white-space: nowrap; }
 .cr-st-selesai { color: #1F6B48; font-weight: 600; }
 .cr-st-dipakai { color: var(--sky, #3B7BBF); font-weight: 600; }

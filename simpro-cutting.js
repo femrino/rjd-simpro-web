@@ -301,6 +301,23 @@ function crNamaMarker_(id) {
 /** "kode x lapis" satu kesatuan: spasi TAK-PUTUS (chr 160) supaya lapisnya tidak jatuh ke baris sendiri di HP. */
 const CR_NBSP = String.fromCharCode(160);
 function crTeksPakai_(x) { return crEsc_(crNamaMarker_(x.idMarker)) + CR_NBSP + "×" + CR_NBSP + crEsc_(x.lapis); }
+/**
+ * 5 Nov 2026 (permintaan Femri): baris neraca untuk roll / End cut dengan BEBERAPA pemakaian -- satu <tr> per pemakaian.
+ * `kepala` = sel yang digabung (rowspan: Roll & Kirim), hanya di baris pertama. `ekor` (Sisa + Selisih) dan `status` hanya di
+ * baris TERAKHIR; baris lain sel kosong. Pemakaian penutup roll (rollSelesai) SELALU terakhir, urutan lain dipertahankan.
+ * Baris yang bukan terakhir bergaris putus-putus supaya satu roll tetap terbaca satu kelompok.
+ */
+function crPakaiBaris_(pakai, kepala, ekor, status, sel, selSz, kelas) {
+  const urut = pakai.map(function (x, i) { return { x: x, i: i }; })
+    .sort(function (a, b) { return ((a.x.rollSelesai ? 1 : 0) - (b.x.rollSelesai ? 1 : 0)) || (a.i - b.i); }).map(function (o) { return o.x; });
+  return urut.map(function (x, i) {
+    const akhir = i === urut.length - 1;
+    const k = [kelas, akhir ? "" : "cr-roll-dalam"].filter(function (c) { return c; }).join(" ");
+    return '<tr' + (k ? ' class="' + k + '"' : '') + '>' + (i === 0 ? kepala : '') + '<td>' + crTeksPakai_(x) + '</td>' +
+      '<td class="num">' + sel(x.aktualYd) + '</td>' + (akhir ? ekor : '<td class="num"></td><td class="num"></td>') +
+      selSz(x.perSize, x.pcs) + (akhir ? status : '<td></td>') + '</tr>';
+  }).join("");
+}
 function crKwAktif_() { return (CR.kwDaftar || []).filter(function (x) { return x.k === CR.kw; })[0] || null; }
 function crGrupAktif_() { return ((CR.lap && CR.lap.kain) || []).filter(function (g) { return crKunciKw_(g.jenisKain, g.warna) === CR.kw; })[0] || null; }
 function crMarkerCocok_() {
@@ -753,13 +770,26 @@ function crRenderLaporan_() {
         '<th colspan="' + (sz.length + 1) + '" class="cr-sz-kepala">Hasil cutting per size (pcs)</th><th rowspan="2">Status</th></tr><tr>' +
         sz.map(function (z) { return '<th class="num cr-sz">' + crEsc_(z) + '</th>'; }).join("") + '<th class="num cr-sz-total">Total</th></tr></thead><tbody>' +
         g.roll.map(function (r) {
-          return '<tr><td class="cr-no">' + crEsc_(r.noRoll || "-") + '</td><td class="num">' + sel(r.kirimYd) + '</td><td>' +
-            (r.pemakaian.length ? r.pemakaian.map(function (x) { return crTeksPakai_(x); }).join("<br>") : "-") + '</td>' +
-            '<td class="num">' + sel(r.aktualYd) + '</td><td class="num">' + sel(r.sisaYd) + (r.satuanUkur === "m" ? ' <small class="cr-ukur">(' + crAngka_(r.sisaUkur) + ' m)</small>' : "") + '</td><td class="num' + kelasSel(r.selisihYd) + '">' + sel(r.selisihYd) + '</td>' +
-            selSz(r.perSize, r.pcs) + '<td><span class="cr-st cr-st-' + crNorm_(r.status).replace(/[^a-z]+/g, "-") + '">' + crEsc_(r.status) + '</span></td></tr>';
+          const sisaSel = '<td class="num">' + sel(r.sisaYd) + (r.satuanUkur === "m" ? ' <small class="cr-ukur">(' + crAngka_(r.sisaUkur) + ' m)</small>' : "") + '</td><td class="num' + kelasSel(r.selisihYd) + '">' + sel(r.selisihYd) + '</td>';
+          const statusSel = '<td><span class="cr-st cr-st-' + crNorm_(r.status).replace(/[^a-z]+/g, "-") + '">' + crEsc_(r.status) + '</span></td>';
+          if (r.pemakaian.length <= 1) {
+            return '<tr><td class="cr-no">' + crEsc_(r.noRoll || "-") + '</td><td class="num">' + sel(r.kirimYd) + '</td><td>' +
+              (r.pemakaian.length ? r.pemakaian.map(function (x) { return crTeksPakai_(x); }).join("<br>") : "-") + '</td>' +
+              '<td class="num">' + sel(r.aktualYd) + '</td>' + sisaSel + selSz(r.perSize, r.pcs) + statusSel + '</tr>';
+          }
+          // 5 Nov 2026 (permintaan Femri): roll yang digelar beberapa marker/rasio = SATU BARIS PER PEMAKAIAN. Yang digabung
+          // (rowspan) HANYA Roll & Kirim; Aktual & hasil per size milik pemakaiannya; Sisa, Selisih & Status milik ROLL -> di
+          // baris terakhir (baris penutup roll, seperti lembar tim). Dulu satu baris dengan marker ber-<br> dan angka dijumlah:
+          // roll 10 MCONX A34 'Inner Rasio 1 x 4 + Inner Rasio 2 x 8' terbaca 100,61 yd / S 20 tanpa bisa dipisah per rasio.
+          return crPakaiBaris_(r.pemakaian, '<td class="cr-no"' + ' rowspan="' + r.pemakaian.length + '">' + crEsc_(r.noRoll || "-") + '</td><td class="num" rowspan="' +
+            r.pemakaian.length + '">' + sel(r.kirimYd) + '</td>', sisaSel, statusSel, sel, selSz, "");
         }).join("") +
-        (g.endCut && g.endCut.gelaran && g.endCut.gelaran.length ? '<tr class="cr-endcut"><td class="cr-no">End cut</td><td class="num">-</td><td>' + g.endCut.gelaran.map(function (x) { return crTeksPakai_(x); }).join("<br>") +
+        (g.endCut && g.endCut.gelaran && g.endCut.gelaran.length === 1 ? '<tr class="cr-endcut"><td class="cr-no">End cut</td><td class="num">-</td><td>' + g.endCut.gelaran.map(function (x) { return crTeksPakai_(x); }).join("<br>") +
           '</td><td class="num">' + sel(g.endCut.yd) + '</td><td class="num">-</td><td class="num">-</td>' + selSz(g.endCut.perSize, g.endCut.pcs) + '<td><span class="cr-st">dari kumpulan sisa</span></td></tr>' : "") +
+        // End cut beberapa gelaran: pola yang sama (satu baris per gelaran, label & kirim digabung, keterangan di baris terakhir).
+        (g.endCut && g.endCut.gelaran && g.endCut.gelaran.length > 1 ? crPakaiBaris_(g.endCut.gelaran, '<td class="cr-no" rowspan="' + g.endCut.gelaran.length +
+          '">End cut</td><td class="num" rowspan="' + g.endCut.gelaran.length + '">-</td>', '<td class="num">-</td><td class="num">-</td>',
+          '<td><span class="cr-st">dari kumpulan sisa</span></td>', sel, selSz, "cr-endcut") : "") +
         '</tbody>' + kaki + '</table></div>' +
         (tanpa.length ? '<p class="cr-catatan">Tanpa roll (dicatat lewat form gelaran lama, tidak masuk neraca roll): ' + crEsc_(tanpa.join("; ")) + '.</p>' : "") +
         '</div>';
