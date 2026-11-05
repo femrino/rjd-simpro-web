@@ -313,10 +313,128 @@ function crPakaiBaris_(pakai, kepala, ekor, status, sel, selSz, kelas) {
   return urut.map(function (x, i) {
     const akhir = i === urut.length - 1;
     const k = [kelas, akhir ? "" : "cr-roll-dalam"].filter(function (c) { return c; }).join(" ");
-    return '<tr' + (k ? ' class="' + k + '"' : '') + '>' + (i === 0 ? kepala : '') + '<td>' + crTeksPakai_(x) + '</td>' +
+    return '<tr' + (k ? ' class="' + k + '"' : '') + '>' + (i === 0 ? kepala : '') + '<td>' + crTeksPakaiKoreksi_(x) + '</td>' +
       '<td class="num">' + sel(x.aktualYd) + '</td>' + (akhir ? ekor : '<td class="num"></td><td class="num"></td>') +
       selSz(x.perSize, x.pcs) + (akhir ? status : '<td></td>') + '</tr>';
   }).join("");
+}
+/* ============================================================
+ * KOREKSI BARIS NERACA (5 Nov 2026, permintaan Femri: "perlu solusi untuk edit jika ada kesalahan input"; butuh gs >= @442)
+ * Tombol pensil di sel Marker x lapis tiap pemakaian (roll & End cut) membuka panel berisi nilai LAMA. Yang dikirim ke
+ * koreksiCuttingRoll HANYA medan yang diubah: server mengganti gelaran (pengganti ditulis dulu, lama dibatalkan) atau menimpa
+ * sisa / data roll dengan jejak, dan mencatat Log Koreksi Cutting. Sisa hanya di baris PENUTUP roll; End cut tanpa sisa/roll;
+ * kirim (yd) hanya untuk roll yang dicatat dalam yard. Alasan wajib (server juga menolak). Kunci kiriman terikat isian
+ * (rjdKunciIsian_) dan tombol dikunci selama mengirim: jawaban yang hilang -> Simpan lagi TANPA mengubah = kiriman yang sama.
+ * Ikon SVG (bukan teks): textContent sel tidak berubah, jadi pencocokan teks marker di tempat lain tetap utuh.
+ * ============================================================ */
+const CR_KOREKSI_IKON = '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false"><path d="M11.3 1.9a1.5 1.5 0 0 1 2.1 0l.7.7a1.5 1.5 0 0 1 0 2.1L5.6 13.2 2 14l.8-3.6 8.5-8.5zM10.6 3.7l1.7 1.7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+function crTombolKoreksi_(x) {
+  if (!x || !x.idPemakaian) return "";
+  return '<button class="cr-koreksi-btn" type="button" data-koreksi="' + crEsc_(x.idPemakaian) + '" aria-label="Koreksi ' + crEsc_(crNamaMarker_(x.idMarker)) +
+    ' &#215; ' + crEsc_(x.lapis) + '" title="Koreksi baris ini">' + CR_KOREKSI_IKON + '</button>';
+}
+/** Teks marker x lapis + tombol koreksi dalam SATU kotak tak terputus: tanpa itu tombol turun ke baris kedua di sel yang teks markernya
+ *  panjang (MOTIFPANELDEPANBELAKANGXL x 20) dan baris neraca meninggi 21 px -- terukur jalan137 J. */
+function crTeksPakaiKoreksi_(x) { return '<span class="cr-pakai">' + crTeksPakai_(x) + crTombolKoreksi_(x) + '</span>'; }
+function crCariPakai_(id) {
+  let hasil = null;
+  ((CR.lap && CR.lap.kain) || []).forEach(function (g) {
+    (g.roll || []).forEach(function (r) { (r.pemakaian || []).forEach(function (x) { if (x.idPemakaian === id) hasil = { g: g, r: r, x: x, endCut: false }; }); });
+    ((g.endCut && g.endCut.gelaran) || []).forEach(function (x) { if (x.idPemakaian === id) hasil = { g: g, r: null, x: x, endCut: true }; });
+  });
+  return hasil;
+}
+function crDesimalTeks_(v) { return v === null || v === undefined || v === "" ? "" : String(v).replace(".", ","); }
+function crKoreksiKlik_(ev) {
+  const t = ev.target.closest ? ev.target.closest("[data-koreksi]") : null;
+  if (!t) return;
+  crKoreksiBuka_(t.getAttribute("data-koreksi"));
+}
+function crKoreksiTutup_() { const el = crEl_("cr-koreksi-latar"); if (el && !(CR.koreksi && CR.koreksi.mengirim)) { el.remove(); CR.koreksi = null; } }
+function crKoreksiBuka_(id) {
+  const k = crCariPakai_(id); if (!k) return;
+  const lama = crEl_("cr-koreksi-latar"); if (lama) lama.remove();
+  const x = k.x, r = k.r, g = k.g, penutup = !!(r && x.rollSelesai), kirimYd = !!(r && (!r.satuanAsli || /^y/i.test(r.satuanAsli)));
+  const sisaAwal = penutup ? (r.satuanUkur === "m" ? crDesimalTeks_(r.sisaUkur) : crDesimalTeks_(r.sisaYd)) : "", satuanAwal = penutup ? (r.satuanUkur === "m" ? "m" : "yds") : "";
+  // Marker: kain kelompok ini (atau marker tanpa kain), bukan Batal / Digantikan -- pagar yang sama dengan form (crMarkerCocok_).
+  const marker = ((CR.konteks && CR.konteks.marker) || []).filter(function (m) {
+    const st = crNorm_(m.status);
+    return !(st === "batal" || st === "digantikan" || !(m.pcsPerLapis > 0)) && (!m.jenisKain || crNorm_(m.jenisKain) === crNorm_(g.jenisKain));
+  });
+  if (!marker.some(function (m) { return m.idMarker === x.idMarker; })) marker.unshift({ idMarker: x.idMarker, kodeMarker: crNamaMarker_(x.idMarker) + " (marker sekarang)" });
+  CR.koreksi = { id: id, awal: { tanggal: x.tanggal || "", idMarker: x.idMarker || "", lapis: String(x.lapis), sisa: sisaAwal, satuan: satuanAwal, noRoll: r ? String(r.noRoll || "") : "",
+    kirim: r ? crDesimalTeks_(r.kirimYd) : "" }, penutup: penutup, roll: !!r, kirimYd: kirimYd, mengirim: false };
+  const judul = (k.endCut ? "End cut" : "Roll " + crEsc_(r.noRoll || "-")) + " &#183; " + crTeksPakai_(x);
+  const el = document.createElement("div");
+  el.id = "cr-koreksi-latar"; el.className = "cr-koreksi-latar";
+  el.innerHTML = '<div class="cr-koreksi" role="dialog" aria-modal="true" aria-labelledby="crk-judul">' +
+    '<h3 id="crk-judul">Koreksi &#8212; ' + judul + '</h3>' +
+    '<p class="cr-koreksi-ket">Catatan lama tidak dihapus: gelaran lama dibatalkan dan diganti, sisa &amp; data roll lama tersimpan di catatannya. Yang dikirim hanya isian yang kamu ubah.</p>' +
+    '<div class="cr-koreksi-isian">' +
+    '<label class="cr-f">Tanggal potong<input id="crk-tanggal" type="date" value="' + crEsc_(CR.koreksi.awal.tanggal) + '"/></label>' +
+    '<label class="cr-f">Marker<select id="crk-marker">' + marker.map(function (m) { return '<option value="' + crEsc_(m.idMarker) + '"' + (m.idMarker === x.idMarker ? " selected" : "") + '>' +
+      crEsc_(m.kodeMarker || m.idMarker) + '</option>'; }).join("") + '</select></label>' +
+    '<label class="cr-f">Lapis<input id="crk-lapis" type="text" inputmode="numeric" value="' + crEsc_(x.lapis) + '"/></label>' +
+    (penutup ? '<label class="cr-f">Sisa roll<span class="cr-koreksi-sisa"><input id="crk-sisa" type="text" inputmode="decimal" value="' + crEsc_(sisaAwal) + '"/>' +
+      '<select id="crk-satuan"><option value="m"' + (satuanAwal === "m" ? " selected" : "") + '>m</option><option value="yds"' + (satuanAwal === "yds" ? " selected" : "") + '>yd</option></select></span></label>' : '') +
+    (r ? '<label class="cr-f">No roll<input id="crk-noroll" type="text" value="' + crEsc_(r.noRoll || "") + '"/></label>' +
+      (kirimYd ? '<label class="cr-f">Kirim (yd)<input id="crk-kirim" type="text" inputmode="decimal" value="' + crEsc_(CR.koreksi.awal.kirim) + '"/></label>' : '') : '') +
+    '<label class="cr-f cr-koreksi-alasan">Alasan koreksi<input id="crk-alasan" type="text" maxlength="200" placeholder="mis. salah ketik lapis 18 jadi 16"/></label>' +
+    '</div><p class="cr-pesan hidden" id="crk-pesan" role="status"></p>' +
+    '<div class="cr-aksi"><button class="cr-btn" id="crk-batal" type="button">Batal</button><button class="cr-btn cr-btn-utama" id="crk-simpan" type="button">Simpan koreksi</button></div></div>';
+  document.body.appendChild(el);
+  el.addEventListener("click", function (ev) { if (ev.target === el) crKoreksiTutup_(); });
+  el.addEventListener("keydown", function (ev) { if (ev.key === "Escape") crKoreksiTutup_(); });
+  crEl_("crk-batal").addEventListener("click", crKoreksiTutup_);
+  crEl_("crk-simpan").addEventListener("click", crKoreksiSimpan_);
+  const fokus = crEl_("crk-lapis"); if (fokus) fokus.focus();
+}
+function crKoreksiPesan_(teks, ok) {
+  const el = crEl_("crk-pesan"); if (!el) return;
+  el.className = "cr-pesan " + (ok ? "cr-pesan-ok" : "cr-pesan-galat"); el.textContent = teks;
+}
+function crKoreksiPayload_() {
+  const K = CR.koreksi, a = K.awal, nilai = function (id) { const e = crEl_(id); return e ? String(e.value || "").trim() : null; };
+  const p = { idPemakaian: K.id, alasan: nilai("crk-alasan") || "" };
+  const tgl = nilai("crk-tanggal"), mk = nilai("crk-marker"), lapis = nilai("crk-lapis");
+  if (tgl !== null && tgl !== a.tanggal) p.tanggalPotong = tgl;
+  if (mk !== null && mk !== a.idMarker) p.idMarker = mk;
+  if (lapis !== null && lapis !== a.lapis) p.jumlahLapis = lapis;
+  if (K.penutup) {
+    const sisa = nilai("crk-sisa"), sat = nilai("crk-satuan");
+    if (sisa !== a.sisa || sat !== a.satuan) { p.sisa = sisa; p.satuanSisa = sat; }
+  }
+  if (K.roll) {
+    const no = nilai("crk-noroll"), kirim = nilai("crk-kirim");
+    if (no !== null && no !== a.noRoll) p.noRoll = no;
+    if (K.kirimYd && kirim !== null && kirim !== a.kirim) p.panjangYd = kirim;
+  }
+  return p;
+}
+async function crKoreksiSimpan_() {
+  const K = CR.koreksi; if (!K || K.mengirim) return;
+  const p = crKoreksiPayload_();
+  const berubah = Object.keys(p).filter(function (k) { return k !== "idPemakaian" && k !== "alasan"; });
+  if (!berubah.length) { crKoreksiPesan_("Belum ada yang diubah -- ganti isian yang salah dulu.", false); return; }
+  if (String(p.alasan).length < 5) { crKoreksiPesan_("Isi alasan koreksi (minimal 5 huruf), mis. 'salah ketik lapis 18 jadi 16'.", false); crEl_("crk-alasan").focus(); return; }
+  const nama = "koreksi-cr:" + K.id;
+  p.idPermintaan = typeof rjdKunciIsian_ === "function" ? rjdKunciIsian_(nama, p) : String(Date.now()) + "-" + K.id;
+  const tombol = crEl_("crk-simpan"); K.mengirim = true; tombol.disabled = true; tombol.textContent = "Menyimpan...";
+  crKoreksiPesan_("Menyimpan koreksi...", true);
+  try {
+    const d = await crKirim_("koreksiCuttingRoll", { payload: p });
+    if (typeof rjdKunciLepas_ === "function") rjdKunciLepas_(nama);
+    K.mengirim = false; crKoreksiTutup_();
+    // CR.pesan supaya pesannya bertahan: crMuatPO_ menggambar ulang form (crRenderForm_ menampilkan CR.pesan) -- pola crSimpanSemua.
+    CR.pesan = { teks: "Koreksi tersimpan" + (d.sudahTercatat ? " (sudah tercatat sebelumnya)" : "") + ((d.perubahan || []).length ? ": " + d.perubahan.join("; ") : "") + ".", ok: true };
+    crTampilPesan_("Koreksi tersimpan" + (d.sudahTercatat ? " (sudah tercatat sebelumnya)" : "") + ((d.perubahan || []).length ? ": " + d.perubahan.join("; ") : "") + ".", true);
+    crMuatPO_(false);
+  } catch (e) {
+    if (!e.jaringan && typeof rjdKunciLepas_ === "function") rjdKunciLepas_(nama);
+    K.mengirim = false; tombol.disabled = false; tombol.textContent = "Simpan koreksi";
+    crKoreksiPesan_(e.jaringan ? "Jawaban server tidak sampai -- koreksi MUNGKIN sudah tersimpan. Simpan lagi TANPA mengubah isian: server mengenali kiriman yang sama."
+      : "Tidak tersimpan: " + e.message, false);
+  }
 }
 function crKwAktif_() { return (CR.kwDaftar || []).filter(function (x) { return x.k === CR.kw; })[0] || null; }
 function crGrupAktif_() { return ((CR.lap && CR.lap.kain) || []).filter(function (g) { return crKunciKw_(g.jenisKain, g.warna) === CR.kw; })[0] || null; }
@@ -735,6 +853,7 @@ function crSizeKolom_(perSize) {
 }
 function crRenderLaporan_() {
   const el = crEl_("cr-laporan"); if (!el) return;
+  if (el && !el.dataset.koreksiPasang) { el.addEventListener("click", crKoreksiKlik_); el.dataset.koreksiPasang = "1"; }   // 5 Nov 2026: tombol koreksi
   const L = CR.lap; if (!L) { el.innerHTML = ""; return; }
   const grup = (L.kain || []).slice().sort(function (a, b) { return (crKunciKw_(b.jenisKain, b.warna) === CR.kw) - (crKunciKw_(a.jenisKain, a.warna) === CR.kw); });
   if (!grup.length) { el.innerHTML = '<div class="cr-kartu"><p class="cr-info">Belum ada roll maupun gelaran tercatat untuk PO ini.</p></div>'; return; }
@@ -774,7 +893,7 @@ function crRenderLaporan_() {
           const statusSel = '<td><span class="cr-st cr-st-' + crNorm_(r.status).replace(/[^a-z]+/g, "-") + '">' + crEsc_(r.status) + '</span></td>';
           if (r.pemakaian.length <= 1) {
             return '<tr><td class="cr-no">' + crEsc_(r.noRoll || "-") + '</td><td class="num">' + sel(r.kirimYd) + '</td><td>' +
-              (r.pemakaian.length ? r.pemakaian.map(function (x) { return crTeksPakai_(x); }).join("<br>") : "-") + '</td>' +
+              (r.pemakaian.length ? r.pemakaian.map(function (x) { return crTeksPakaiKoreksi_(x); }).join("<br>") : "-") + '</td>' +
               '<td class="num">' + sel(r.aktualYd) + '</td>' + sisaSel + selSz(r.perSize, r.pcs) + statusSel + '</tr>';
           }
           // 5 Nov 2026 (permintaan Femri): roll yang digelar beberapa marker/rasio = SATU BARIS PER PEMAKAIAN. Yang digabung
@@ -784,7 +903,7 @@ function crRenderLaporan_() {
           return crPakaiBaris_(r.pemakaian, '<td class="cr-no"' + ' rowspan="' + r.pemakaian.length + '">' + crEsc_(r.noRoll || "-") + '</td><td class="num" rowspan="' +
             r.pemakaian.length + '">' + sel(r.kirimYd) + '</td>', sisaSel, statusSel, sel, selSz, "");
         }).join("") +
-        (g.endCut && g.endCut.gelaran && g.endCut.gelaran.length === 1 ? '<tr class="cr-endcut"><td class="cr-no">End cut</td><td class="num">-</td><td>' + g.endCut.gelaran.map(function (x) { return crTeksPakai_(x); }).join("<br>") +
+        (g.endCut && g.endCut.gelaran && g.endCut.gelaran.length === 1 ? '<tr class="cr-endcut"><td class="cr-no">End cut</td><td class="num">-</td><td>' + g.endCut.gelaran.map(function (x) { return crTeksPakaiKoreksi_(x); }).join("<br>") +
           '</td><td class="num">' + sel(g.endCut.yd) + '</td><td class="num">-</td><td class="num">-</td>' + selSz(g.endCut.perSize, g.endCut.pcs) + '<td><span class="cr-st">dari kumpulan sisa</span></td></tr>' : "") +
         // End cut beberapa gelaran: pola yang sama (satu baris per gelaran, label & kirim digabung, keterangan di baris terakhir).
         (g.endCut && g.endCut.gelaran && g.endCut.gelaran.length > 1 ? crPakaiBaris_(g.endCut.gelaran, '<td class="cr-no" rowspan="' + g.endCut.gelaran.length +
