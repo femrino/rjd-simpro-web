@@ -902,6 +902,11 @@ function ckLcPerRoll_(d, PR){
       if (!R.kode) return '<tr class="ck-lc-rr-belum"><td><b>Roll belum dipakai</b><div class="ck-lc-kecil">belum digelar / diukur</div></td>' +
         '<td class="num">' + ckAngka_(t.roll || (R.roll || []).length, 0) + '</td><td class="num">' + ckAngka_(t.kirim) + '</td>' +
         '<td class="num">&#8212;</td><td class="num">&#8212;</td><td class="num">&#8212;</td><td></td>' + selSz({}, 0) + '</tr>';
+      // 5 Nov 2026: rasio yang HANYA dipotong di roll yang ditutup rasio lain (MCONX A34 Outer Rasio 3: roll 10 Ceruty) -- roll 0, kirim/sisa/short
+      // milik rasio penutup, jadi '--' di sini; aktual & hasilnya tetap dihitung ke rasio ini.
+      if (!(R.roll || []).length) return '<tr class="ck-lc-rr-numpang"><td><b>' + rjdEscapeHtml_(R.kode) + '</b><div class="ck-lc-kecil">' +
+        (R.panjang ? ckAngka_(R.panjang) + CK_NBSP + u + (R.pcsPerLapis ? ' &#183; ' + R.pcsPerLapis + ' pcs/lapis' : '') + ' &#183; ' : '') + 'hanya di roll rasio lain</div></td>' +
+        '<td class="num">0</td><td class="num">&#8212;</td><td class="num">' + ckAngka_(t.aktual) + '</td><td class="num">&#8212;</td><td class="num">&#8212;</td><td></td>' + selSz(t.perSize, t.pcs) + '</tr>';
       return '<tr><td><b>' + rjdEscapeHtml_(R.kode) + '</b>' + (R.panjang ? '<div class="ck-lc-kecil">' + ckAngka_(R.panjang) + CK_NBSP + u + (R.pcsPerLapis ? ' &#183; ' + R.pcsPerLapis + ' pcs/lapis' : '') + '</div>' : '') + '</td>' +
         '<td class="num">' + ckAngka_(t.roll || (R.roll || []).length, 0) + '</td><td class="num">' + ckAngka_(t.kirim) + '</td><td class="num">' + ckAngka_(t.aktual) + '</td>' +
         '<td class="num">' + ckAngka_(t.sisa) + '</td><td class="num' + (t.selisih < 0 ? ' ck-lc-merah' : '') + '">' + ckTanda_(t.selisih) + '</td>' +
@@ -922,6 +927,7 @@ function ckLcPerRoll_(d, PR){
       'Tiap kolom: rasio + End cut = Total (End cut dipotong dari sisa roll, jadi sisanya tercatat negatif). ' +
       '<b>Sisa di baris Total = sisa potongan</b> (potongan pendek, bukan kain utuh -- lihat Neraca kain).</p>' : '';
     const baris = rasioUrut.map(function(R){
+      if (!(R.roll || []).length) return '';   // 5 Nov 2026: rasio tanpa roll sendiri (dipotong di roll rasio lain) -- barisnya ada di roll itu
       const kepala = '<tr class="ck-lc-rasio"><td colspan="' + nk + '"><b>' + (R.kode ? rjdEscapeHtml_(R.kode) : 'Roll belum dipakai') + '</b>' +
         (R.panjang ? ' &#183; panjang gelaran ' + ckAngka_(R.panjang) + CK_NBSP + u : '') + (R.pcsPerLapis ? ' &#183; ' + R.pcsPerLapis + ' pcs/lapis' : '') +
         ' &#183; ' + (R.roll || []).length + ' roll</td></tr>';
@@ -930,6 +936,22 @@ function ckLcPerRoll_(d, PR){
         const pakai = (x.pakai || []).length ? x.pakai.map(function(p){ return rjdEscapeHtml_(p.kode) + CK_NBSP + '&#215;' + CK_NBSP + rjdEscapeHtml_(p.lapis); }).join('<br>') : '&#8212;';
         const pct = x.selisih === null || x.selisih === undefined ? '<span class="ck-lc-kecil">' + rjdEscapeHtml_(String(x.status || '').toLowerCase()) + '</span>'
           : ckAngka_(x.persen, 1) + '%' + (x.tanda === "periksa" || x.tanda === "perhatikan" ? '<div class="ck-lc-kecil">' + x.tanda + '</div>' : '');
+        // 5 Nov 2026 (permintaan Femri, roll 10 MCONX A34): roll beberapa marker/rasio = SATU BARIS PER PEMAKAIAN; hanya Roll & Kirim
+        // digabung (rowspan); aktual & hasil per size milik pemakaiannya; Sisa / Selisih / % milik roll -> di baris penutup (terakhir,
+        // server sudah mengurutkannya). Butuh gs >= @441 (pakai[].aktual); tanpa itu tetap satu baris seperti dulu.
+        const pk = x.pakai || [];
+        if (pk.length > 1 && pk.every(function(p){ return p.aktual !== undefined && p.aktual !== null; })) {
+          const n = pk.length, tanda = x.tanda === "periksa" ? "ck-lc-periksa" : (x.tanda === "perhatikan" ? "ck-lc-perhatikan" : "");
+          return pk.map(function(p, i){
+            const akhir = i === n - 1, kls = [tanda, akhir ? '' : 'ck-lc-roll-dalam'].filter(function(c){ return c; }).join(' ');
+            return '<tr' + (kls ? ' class="' + kls + '"' : '') + '>' + (i === 0 ? '<td class="ck-lc-no" rowspan="' + n + '">' + rjdEscapeHtml_(x.noRoll || '-') + '</td>' : '') +
+              '<td>' + rjdEscapeHtml_(p.kode) + CK_NBSP + '&#215;' + CK_NBSP + rjdEscapeHtml_(p.lapis) + '</td>' +
+              (i === 0 ? '<td class="num" rowspan="' + n + '">' + ckAngka_(x.kirim) + '</td>' : '') + '<td class="num">' + ckAngka_(p.aktual) + '</td>' +
+              (akhir ? '<td class="num">' + (x.sisa === null || x.sisa === undefined ? '&#8212;' : ckAngka_(x.sisa) + ckUkurAsli_(x, u)) + '</td>' +
+                '<td class="num' + (x.selisih < 0 ? ' ck-lc-merah' : '') + '">' + (x.selisih === null || x.selisih === undefined ? '&#8212;' : ckTanda_(x.selisih)) + '</td>' +
+                '<td class="num">' + pct + '</td>' : '<td class="num"></td><td class="num"></td><td class="num"></td>') + selSz(p.perSize, p.pcs) + '</tr>';
+          }).join("");
+        }
         return '<tr' + kelas + '><td class="ck-lc-no">' + rjdEscapeHtml_(x.noRoll || '-') + '</td><td>' + pakai + '</td>' +
           '<td class="num">' + ckAngka_(x.kirim) + '</td><td class="num">' + ckAngka_(x.aktual) + '</td>' +
           '<td class="num">' + (x.sisa === null || x.sisa === undefined ? '&#8212;' : ckAngka_(x.sisa) + ckUkurAsli_(x, u)) + '</td>' +
@@ -964,6 +986,8 @@ function ckLcPerRoll_(d, PR){
   return '<div class="ck-lc-blok"><h2>3. Rincian per roll</h2>' + isi +
     '<p class="ck-lc-catatan">Aktual = panjang gelaran &#215; lapis. Selisih = aktual + sisa &#8722; kirim (negatif = kurang dari bahan kirim). ' +
     '% = selisih &#247; kirim: wajar sampai ' + (a.wajar || 3) + '%, di atas ' + (a.periksa || 7) + '% periksa. Total: kirim = material, aktual = konsumsi (roll + end cut), sisa = sisa potongan. ' +
+    'Roll yang digelar beberapa rasio: satu baris per rasio (roll &amp; kirim digabung; sisa, selisih &amp; % di baris penutup), tampil di kelompok rasio ' +
+    'tempat roll itu ditutup; di Ringkasan per rasio hasil tiap pemakaian dihitung ke rasionya sendiri. ' +
     'Sisa per roll = potongan yang tersisa saat roll itu selesai digelar; sebagian besar lalu dipakai lagi oleh End cut.' +
     (PR.gugur ? ' ' + PR.gugur + ' pemakaian roll tidak dihitung (gelarannya dibatalkan).' : '') + '</p></div>';
 }

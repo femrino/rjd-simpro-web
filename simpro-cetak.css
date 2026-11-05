@@ -745,6 +745,9 @@ body:has(nav) { padding-top: 0; }
 .ck-lc-pr th.ck-lc-sz-kepala { text-align: center; }
 .ck-lc-pr .ck-lc-sz { padding-left: 6px; padding-right: 6px; min-width: 2.4em; }
 .ck-lc-pr .ck-lc-sz-total { border-left: 1px solid var(--line); }
+/* 5 Nov 2026: roll beberapa rasio = beberapa baris di tabel per roll (ckLcPerRoll_). Garis DI DALAM satu roll putus-putus; sel Roll &
+   Kirim yang digabung (rowspan) bergaris penuh di bawah baris terakhir, jadi batas antar roll tetap tegas -- di layar maupun kertas. */
+.ck-lc-pr tr.ck-lc-roll-dalam td:not([rowspan]) { border-bottom-style: dashed; }
 /* Di KERTAS sel dirapatkan (4 px, size 3 px) -- kertas tidak bisa digeser, dan lebar minimum tabel ditentukan jumlah size
    DAN panjang kode marker ("kode x lapis" tak boleh putus). Terukur v400 (font asli, isi A4 718 px), tanpa -> dengan:
    kode pendek (MANSL 288) 5 size 656 -> 578, 7 size 739 -> 649, 9 size 822 -> 720 (~0,3% dikecilkan); kode panjang tanpa
