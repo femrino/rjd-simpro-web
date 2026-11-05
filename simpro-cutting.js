@@ -731,8 +731,8 @@ function crRenderLaporan_() {
       const selSz = function (ps, pcs) {
         return sz.map(function (z) { return '<td class="num cr-sz">' + (ps && ps[z] ? ps[z] : "") + '</td>'; }).join("") + '<td class="num cr-sz-total"><b>' + (pcs || 0) + '</b></td>';
       };
-      // Baris Total = JUMLAH KOLOM (sisa = sisa roll 353,24, bukan sisa akhir): sisa akhir sudah di kotak ringkasan. Laporan
-      // cetak memakai sisa akhir di barisnya dan menerangkannya di catatan kaki -- perbedaan yang disetujui Femri 2 Nov 2026.
+      // Baris Total = JUMLAH KOLOM (sisa = sisa roll 353,24, bukan sisa potongan): sisa potongan sudah di kotak ringkasan. Laporan
+      // cetak memakai sisa potongan di barisnya dan menerangkannya di catatan kaki -- perbedaan yang disetujui Femri 2 Nov 2026.
       const kaki = '<tfoot><tr class="cr-total"><td class="cr-no">Total</td><td class="num">' + sel(s.materialYd) + '</td><td></td><td class="num">' +
         sel(Math.round(((s.konsumsiRollYd || 0) + (s.endCutYd || 0)) * 100) / 100) + '</td><td class="num">' + sel(s.sisaRollYd) + '</td><td class="num' + kelasSel(s.shortYd) + '">' +
         sel(s.shortYd) + '</td>' + selSz(s.perSize, s.pcs) + '<td></td></tr></tfoot>';
@@ -745,7 +745,9 @@ function crRenderLaporan_() {
         '<span><small>Sisa roll</small><b>' + sel(s.sisaRollYd) + '</b></span>' +
         '<span class="cr-ring-short' + kelasSel(s.shortYd) + '"><small>Selisih (' + s.rollSelesai + ' roll selesai)</small><b>' + sel(s.shortYd) + (s.shortPersen === null || s.shortPersen === undefined ? "" : " (" + crAngka_(s.shortPersen) + "%)") + '</b></span>' +
         '<span><small>End cut</small><b>' + sel(s.endCutYd) + (s.endCutPcs ? " &#183; " + s.endCutPcs + " pcs" : "") + '</b></span>' +
-        '<span class="' + kelasSel(s.sisaAkhirYd < 0 ? s.sisaAkhirYd : 0) + '"><small>Sisa akhir</small><b>' + sel(s.sisaAkhirYd) + '</b></span>' +
+        // 5 Nov 2026 (opsi 1 Femri): "Sisa akhir" -> "Sisa potongan" -- satu istilah dengan laporan cetak; klien MANSL 288 membaca
+        // "sisa akhir 98,52 yd" sebagai kain utuh, padahal itu potongan pendek (sisa roll selesai - End cut), hasil hitungan.
+        '<span class="' + kelasSel(s.sisaAkhirYd < 0 ? s.sisaAkhirYd : 0) + '" title="Potongan pendek sisa roll selesai dikurangi End cut -- bukan kain utuh, hasil hitungan"><small>Sisa potongan</small><b>' + sel(s.sisaAkhirYd) + '</b></span>' +
         '<span><small>Hasil</small><b>' + (s.pcs || 0) + ' pcs</b></span></div>' +
         '<div class="cr-gulir"><table class="cr-tabel"><thead><tr><th rowspan="2">Roll</th><th rowspan="2" class="num">Kirim</th><th rowspan="2">Marker &#215; lapis</th><th rowspan="2" class="num">Aktual</th><th rowspan="2" class="num">Sisa</th><th rowspan="2" class="num">Selisih</th>' +
         '<th colspan="' + (sz.length + 1) + '" class="cr-sz-kepala">Hasil cutting per size (pcs)</th><th rowspan="2">Status</th></tr><tr>' +

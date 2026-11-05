@@ -841,6 +841,21 @@ function ckLcOrderSize_(d){
     : '<p class="ck-lc-kosong">Belum ada gelaran tercatat untuk PO ini.</p>') + '</div>';
 }
 
+/** Opsi 1 Femri (5 Nov 2026): kartu "Sisa akhir" terbaca sebagai stok kain UTUH -- klien MANSL 288 menuntut 98,52 yd dikembalikan,
+ *  padahal angkanya HITUNGAN (sisa roll yang sudah Selesai - End cut yang memakai lagi potongan itu) dan wujudnya potongan pendek.
+ *  Roll yang belum selesai tidak termasuk (server: sisaRollYd hanya dari roll Selesai), jadi disebut terpisah kalau ada. */
+function ckLcSisaKartuSub_(s){ return 'potongan pendek dari ' + (s.rollSelesai || 0) + ' roll &#8212; <b>bukan kain utuh</b>'; }
+function ckLcSisaCatatan_(s, u){
+  const ec = Number(s.endCut) || 0, n = s.rollSelesai || 0;
+  const awal = '<b>Sisa potongan</b> = sisa ' + n + ' roll saat selesai digelar (' + ckAngka_(s.sisaRoll) + CK_NBSP + u + ')';
+  const isi = ec > 0
+    ? awal + ' dikurangi End cut yang memakai lagi potongan itu (' + ckAngka_(ec) + CK_NBSP + u + '). Yang tertinggal berupa potongan-potongan pendek ' +
+      'yang tersebar di roll-roll tersebut, bukan kain utuh; angkanya hasil hitungan, belum diukur ulang.'
+    : awal + ', diukur per roll. Wujudnya potongan sisa tiap roll, bukan kain utuh.';
+  const belum = s.rollBelumSelesai ? ' ' + s.rollBelumSelesai + ' roll yang belum selesai tidak termasuk.' : '';
+  return '<p class="ck-lc-catatan ck-lc-sisa-ket">' + isi + belum + '</p>';
+}
+
 /** 2. Neraca kain per kelompok (satuan kirim roll). */
 function ckLcNeraca_(PR){
   const kartu = function (lbl, nilai, sub, kelas) {
@@ -854,9 +869,9 @@ function ckLcNeraca_(PR){
       kartu("Material", ckAngka_(s.material) + uh, (s.rollSelesai + s.rollBelumSelesai) + ' roll' + (s.rollBelumSelesai ? ' &#183; <span class="ck-lc-merah">' + s.rollBelumSelesai + ' belum selesai</span>' : '')) +
       kartu("Konsumsi", ckAngka_(s.konsumsi) + uh, 'roll ' + ckAngka_(s.konsumsiRoll) + ' + end cut ' + ckAngka_(s.endCut)) +
       kartu(kurang ? "Short" : "Lebih", ckAngka_(Math.abs(s.short || 0)) + uh, s.shortPersen === null || s.shortPersen === undefined ? '' : ckAngka_(Math.abs(s.shortPersen), 1) + '% dari kirim roll selesai', kurang ? 'kurang' : '') +
-      kartu("Sisa akhir", ckAngka_(s.sisaAkhir) + uh, 'sisa roll ' + ckAngka_(s.sisaRoll) + ' &#8722; end cut ' + ckAngka_(s.endCut)) +
+      kartu("Sisa potongan", ckAngka_(s.sisaAkhir) + uh, ckLcSisaKartuSub_(s)) +
       kartu("Hasil", ckAngka_(s.pcs, 0) + ' <small>pcs</small>', s.perPcs === null || s.perPcs === undefined ? '' : ckAngka_(s.perPcs, 3) + ' ' + u + '/pcs') +
-      '</div></div>';
+      '</div>' + ckLcSisaCatatan_(s, u) + '</div>';
   }).join("") + '</div>';
 }
 
@@ -893,7 +908,7 @@ function ckLcPerRoll_(d, PR){
         '<td class="num ck-lc-rr-persen">' + persenShort(t.selisih, t.kirim) + '</td>' + selSz(t.perSize, t.pcs) + '</tr>';
     }).join("");
     const ecR = g.endCut || {}, sR = g.ringkasan || {};
-    const ringkasEc = (ecR.gelaran || []).length ? '<tr class="ck-lc-ec"><td><b>End cut</b><div class="ck-lc-kecil">dari kumpulan sisa roll</div></td><td class="num">&#8212;</td><td class="num">&#8212;</td>' +
+    const ringkasEc = (ecR.gelaran || []).length ? '<tr class="ck-lc-ec"><td><b>End cut</b><div class="ck-lc-kecil">memakai lagi potongan sisa roll</div></td><td class="num">&#8212;</td><td class="num">&#8212;</td>' +
       '<td class="num">' + ckAngka_(ecR.aktual) + '</td><td class="num">' + ckTanda_(-(ecR.aktual || 0)) + '</td><td class="num">&#8212;</td><td></td>' + selSz(ecR.perSize, ecR.pcs) + '</tr>' : '';
     const ringkasTotal = '<tr class="ck-lc-kaki ck-lc-total"><td>Total</td><td class="num">' + ckAngka_(sR.rollSelesai !== undefined ? (sR.rollSelesai || 0) + (sR.rollBelumSelesai || 0) : '', 0) + '</td>' +
       '<td class="num">' + ckAngka_(sR.material) + '</td><td class="num">' + ckAngka_(sR.konsumsi) + '</td><td class="num">' + ckAngka_(sR.sisaAkhir) + '</td>' +
@@ -904,7 +919,8 @@ function ckLcPerRoll_(d, PR){
       szK.map(function(z){ return '<th class="num ck-lc-sz">' + rjdEscapeHtml_(z) + '</th>'; }).join('') + '<th class="num ck-lc-sz-total">Total</th></tr></thead>' +
       '<tbody>' + ringkas + ringkasEc + ringkasTotal + '</tbody></table></div>' +
       '<p class="ck-lc-catatan">% short = short &#247; kirim per rasio -- bandingkan antar rasio: yang jauh di atas Total patut diperiksa panjang gelaran atau batch rollnya. ' +
-      'Tiap kolom: rasio + End cut = Total (End cut dipotong dari sisa roll, jadi sisanya tercatat negatif).</p>' : '';
+      'Tiap kolom: rasio + End cut = Total (End cut dipotong dari sisa roll, jadi sisanya tercatat negatif). ' +
+      '<b>Sisa di baris Total = sisa potongan</b> (potongan pendek, bukan kain utuh -- lihat Neraca kain).</p>' : '';
     const baris = rasioUrut.map(function(R){
       const kepala = '<tr class="ck-lc-rasio"><td colspan="' + nk + '"><b>' + (R.kode ? rjdEscapeHtml_(R.kode) : 'Roll belum dipakai') + '</b>' +
         (R.panjang ? ' &#183; panjang gelaran ' + ckAngka_(R.panjang) + CK_NBSP + u : '') + (R.pcsPerLapis ? ' &#183; ' + R.pcsPerLapis + ' pcs/lapis' : '') +
@@ -923,7 +939,7 @@ function ckLcPerRoll_(d, PR){
       return kepala + rows;   // v412: subtotal pindah ke Ringkasan per rasio (lihat kepala fungsi)
     }).join("");
     const ec = g.endCut || { gelaran: [] };
-    const endCut = (ec.gelaran || []).length ? '<tr class="ck-lc-rasio"><td colspan="' + nk + '"><b>End cut</b> &#183; dari kumpulan sisa roll</td></tr>' +
+    const endCut = (ec.gelaran || []).length ? '<tr class="ck-lc-rasio"><td colspan="' + nk + '"><b>End cut</b> &#183; memakai lagi potongan sisa roll</td></tr>' +
       ec.gelaran.map(function(x){
         return '<tr class="ck-lc-ec"><td></td><td>' + rjdEscapeHtml_(x.kode) + CK_NBSP + '&#215;' + CK_NBSP + rjdEscapeHtml_(x.lapis) + '</td>' +
           '<td class="num">&#8212;</td><td class="num">' + ckAngka_(x.aktual) + '</td><td class="num">&#8212;</td><td class="num">&#8212;</td><td></td>' + selSz(x.perSize, x.pcs) + '</tr>';
@@ -947,7 +963,8 @@ function ckLcPerRoll_(d, PR){
   const a = PR.ambang || {};
   return '<div class="ck-lc-blok"><h2>3. Rincian per roll</h2>' + isi +
     '<p class="ck-lc-catatan">Aktual = panjang gelaran &#215; lapis. Selisih = aktual + sisa &#8722; kirim (negatif = kurang dari bahan kirim). ' +
-    '% = selisih &#247; kirim: wajar sampai ' + (a.wajar || 3) + '%, di atas ' + (a.periksa || 7) + '% periksa. Total: kirim = material, aktual = konsumsi (roll + end cut), sisa = sisa akhir.' +
+    '% = selisih &#247; kirim: wajar sampai ' + (a.wajar || 3) + '%, di atas ' + (a.periksa || 7) + '% periksa. Total: kirim = material, aktual = konsumsi (roll + end cut), sisa = sisa potongan. ' +
+    'Sisa per roll = potongan yang tersisa saat roll itu selesai digelar; sebagian besar lalu dipakai lagi oleh End cut.' +
     (PR.gugur ? ' ' + PR.gugur + ' pemakaian roll tidak dihitung (gelarannya dibatalkan).' : '') + '</p></div>';
 }
 
