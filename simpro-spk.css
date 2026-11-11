@@ -2412,3 +2412,6 @@ h4 .sp-kms-sub { display: inline; margin-left: 6px; }
 /* Nama item + label set dibungkus SATU elemen (.sp-kms-itemset, di JS): di mode kartu HP sel adalah flex baris, dan label set sebagai anak
    langsung terdesak ke SAMPING nama item (terlihat di foto 390 px, 11 Nov 2026). NISAN: '.sp-kms-itemset { display: block }' dibuang --
    terukur no-op (sabotase E21 hijau): pembungkus jadi satu item flex, dan label .sp-kms-sub yang block sudah jatuh ke bawah di dalamnya. */
+/* 2B (v422): tautan dokumen cetak packing di kepala detail. Kotak sentuh 32 px seperti tombol kecil lain di blok packing. */
+.sp-kms-cetak { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 0 0 12px; font-size: 12.5px; }
+.sp-kms-cetak a { text-decoration: none; min-height: 32px; display: inline-flex; align-items: center; }

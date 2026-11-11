@@ -825,3 +825,70 @@ body:has(nav) { padding-top: 0; }
 .ck-lck-ttd { margin-top: 14px; }
 .ck-lck-ttd .garis { height: 54px; }
 .ck-lck-ttd-akhir { max-width: 640px; }
+
+/* ============================================================
+   DOKUMEN PACKING (SPEC-PACKING §10 rilis 2B, 11 Nov 2026; butuh gs >= @450)
+   Lembar label diukur dalam mm. Ukurannya sengaja muat di DUA keadaan: halaman bernama kmslabel (margin 8 mm, Chrome 85+) dan margin
+   bawaan browser (10 mm, printable 190 x 277 mm) -- 2 x 95 mm lebar, 4 x 66 / 2 x 132 mm tinggi = 264 mm. Satu lembar = satu halaman kertas.
+   Cadangan 13 mm itu disengaja: versi pertama 272 mm + margin atas 40 px .ck-scr-main (ikut tercetak) TIDAK muat di halaman pertama, lembar
+   terdorong ke halaman kedua dan halaman pertama kosong (jalan147 H: label karung 2 halaman untuk 1 lembar). Margin itu kini juga dibuang
+   saat mencetak lembar label (:has, pola yang sudah dipakai 13x di proyek ini).
+   Garis putus-putus = garis potong. Warna peringatan ikut tercetak (print-color-adjust), merah = belum lengkap, amber = tidak seimbang.
+   ============================================================ */
+@page kmslabel { size: A4; margin: 8mm; }
+.ck-pk-dok h3.ck-pk-h3 { font-size: 13px; font-weight: 700; margin: 18px 0 8px; }
+.ck-pk-kecil { font-size: 11px; color: var(--ink-soft); }
+.ck-pk-mono, .ck-pk-kode, .ck-pk-order { font-family: 'IBM Plex Mono', monospace; }
+.ck-pk-merah { color: var(--thread); font-weight: 700; }
+.ck-pk-status { display: inline-block; padding: 0 6px; border: 1px solid var(--thread); border-radius: 4px; color: var(--thread); font-weight: 700; text-transform: uppercase; font-size: .85em; }
+.ck-pk-draft { margin: 0 0 14px; padding: 8px 12px; border: 1.5px dashed var(--thread); border-radius: 8px; color: var(--thread); font-weight: 700; font-size: 12.5px; }
+.ck-pk-awas, .ck-pk-set-awas { background: #FCF3E3; color: #8A5D1F; border-radius: 6px; }
+.ck-pk-awas { margin: 0 0 14px; padding: 8px 12px; font-size: 12.5px; }
+.ck-pk-ringkas { font-size: 13px; margin: 0 0 14px; }
+.ck-pk-tabel td, .ck-pk-tabel th, .ck-pk-rekap td, .ck-pk-rekap th, .ck-pk-isi td { word-break: normal; overflow-wrap: break-word; }
+.ck-pk-tabel .ck-pk-mono { white-space: nowrap; }
+.ck-pk-total td { border-top: 1.5px solid var(--ink); }
+.ck-pk-ttd3 { grid-template-columns: 1fr 1fr 1fr; }
+.ck-pk-set { font-size: 12px; padding: 3px 8px; margin: 2px 0; }
+.ck-pk-terima .ck-pk-isian { min-width: 90px; }
+.ck-pk-gulir { overflow-x: auto; }
+.ck-pk-saring { margin: 0 0 12px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ck-pk-saring input { width: 72px; font-size: 16px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; }
+.ck-pk-saring button { font: inherit; font-size: 13px; padding: 5px 12px; border: 1px solid var(--ink); border-radius: 6px; background: var(--white); cursor: pointer; }
+/* ---- lembar label ---- */
+.ck-pk-lembar { display: grid; width: 190mm; margin: 0 auto 10mm; background: var(--white); box-shadow: 0 0 0 1px var(--line); }
+.ck-pk-lembar.l8 { grid-template-columns: repeat(2, 95mm); grid-auto-rows: 66mm; }
+.ck-pk-lembar.l4 { grid-template-columns: repeat(2, 95mm); grid-auto-rows: 132mm; }
+.ck-pk-lembar.l2 { grid-template-columns: 190mm; grid-auto-rows: 132mm; }
+.ck-pk-lbl, .ck-pk-krl { box-sizing: border-box; border: 1px dashed #9AA3AE; padding: 4mm; overflow: hidden; display: flex; flex-direction: column; gap: 1.6mm;
+  font-size: 11.5px; line-height: 1.35; word-break: normal; overflow-wrap: break-word; }
+.ck-pk-lbl-atas { display: flex; justify-content: space-between; align-items: flex-start; gap: 3mm; }
+.ck-pk-kode { font-size: 19px; font-weight: 800; letter-spacing: .02em; white-space: nowrap; }
+.ck-pk-kode-besar { font-size: 30px; }
+.ck-pk-order { font-size: 10.5px; text-align: right; color: var(--ink-soft); }
+.ck-pk-lbl-item, .ck-pk-lbl-set { font-size: 13px; font-weight: 700; }
+.ck-pk-lbl-set { color: #2C4A6E; }
+.ck-pk-lbl-wz { font-size: 15px; }
+.ck-pk-lbl-wz b { font-size: 22px; }
+.ck-pk-lbl-qty { font-size: 13px; }
+.ck-pk-lbl-qty b { font-size: 24px; }
+.ck-pk-lbl-bawah { margin-top: auto; font-size: 9.5px; color: var(--ink-soft); }
+.ck-pk-lbl-k { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+.ck-pk-krl-tujuan { font-size: 14px; border: 1.5px solid var(--ink); border-radius: 6px; padding: 2mm 3mm; }
+.ck-pk-krl-meta { font-size: 11.5px; }
+.ck-pk-krl-total { margin-top: auto; font-size: 13px; border-top: 1px solid var(--line); padding-top: 1.5mm; }
+.ck-pk-isi { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.ck-pk-isi td { padding: 1px 3px; border-bottom: 1px solid #E8E2D6; vertical-align: top; }
+.ck-pk-isi td.num { text-align: right; white-space: nowrap; }
+.ck-pk-slip .ck-pk-kode { font-size: 17px; }
+.ck-pk-tanda-draft { color: var(--thread); letter-spacing: .06em; }
+@media print {
+  .ck-pk-gulir { overflow: visible !important; }
+  /* NISAN (11 Nov 2026): 'break-after: page' per lembar dibuang -- terukur no-op (sabotase W7 hijau): lembar penuh 264 mm tidak pernah muat
+     berdampingan di satu halaman, break-inside: avoid sudah memindahkannya. Jumlah halaman PDF dijaga jalan147 H. */
+  .ck-pk-lembar { page: kmslabel; margin: 0; box-shadow: none; break-inside: avoid; }
+  .ck-scr-main:has(.ck-pk-lembar) { margin-top: 0 !important; }
+  .ck-pk-draft, .ck-pk-awas, .ck-pk-set-awas, .ck-pk-status, .ck-pk-krl-tujuan { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .ck-pk-tabel tr, .ck-pk-rekap tr { break-inside: avoid; }
+  .ck-pk-tabel thead, .ck-pk-rekap thead { display: table-header-group; }
+}

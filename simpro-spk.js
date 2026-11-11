@@ -13043,7 +13043,13 @@ function spKmsDetailHtml_() {
       '<button class="sp-btn-kecil" type="button" data-kms-aksi="batal-packing"' + mati(putus, alasanPutus) + '>Batalkan packing</button>' : '<p class="sp-info">Tidak ada keputusan untuk status ' + esc(pk.status) + '.</p>')) +
     (putus ? '' : '<p class="sp-kms-sub">Tutup / buka / batal packing hanya untuk pemilik atau admin.</p>') + '</div>';
   const formSet = draft && ((d.set || []).length || d.setGalat) ? spKmsSetFormHtml_(d, pk, bolehIsi) : '';   // 1E
-  return '<div class="sp-card sp-kms-detail">' + kepala + form + formSet + karung + daftar + keputusan + '</div>';
+  // 2B (v422, butuh gs >= @450): dokumen cetak packing -- tab baru; cetak.html memuat datanya sendiri (getPackingCetak), jadi isian layar
+  // ini tidak tersentuh. Tautan, bukan tombol: membuka dokumen bukan menulis, dan mode baca-saja tidak menguncinya.
+  const cetak = '<div class="sp-kms-cetak"><b>Cetak:</b> ' + [["list", "Packing List"], ["labelplastik", "Label plastik"], ["labelkarung", "Label karung"],
+    ["slip", "Slip isi karung"], ["terima", "Tanda Terima"]].map(function (x) {
+      return '<a class="sp-btn-kecil" target="_blank" rel="noopener" data-kms-cetak="' + x[0] + '" href="' + esc('/p/cetak.html?jenis=packing&id=' + encodeURIComponent(pk.idPacking) + '&dok=' + x[0]) + '">' + x[1] + '</a>';
+    }).join(" ") + '</div>';
+  return '<div class="sp-card sp-kms-detail">' + kepala + cetak + form + formSet + karung + daftar + keputusan + '</div>';
 }
 /** Ringkasan isi (SPEC §9): pcs plastik AKTIF per item/warna/size x status barang, plus total. Status berurutan baku (Normal, Noda,
  *  Tanpa Label), status lain di belakangnya; sel nol ditulis "–" supaya angka yang ada menonjol. */
