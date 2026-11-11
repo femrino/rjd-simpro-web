@@ -743,13 +743,27 @@ function ckRenderSuratJalan(d){
     '</div>';
   }).join("");
 
+  // 3C (v423, butuh gs >= @452): SJ dari packing membawa no. packing + total karung/plastik; status barang selain Normal dirinci (angkanya
+  // SUDAH termasuk di tabel per warna x size); SJ batal tetap bisa dicetak staf, dengan tanda DIBATALKAN yang ikut tercetak.
+  const esc = rjdEscapeHtml_;
+  const batal = d.batal ? '<div class="ck-sj-batal"><b>DIBATALKAN</b>' + (d.waktuDibatalkan ? ' ' + esc(d.waktuDibatalkan) : '') +
+    (d.dibatalkanOleh ? ' oleh ' + esc(d.dibatalkanOleh) : '') + (d.alasanBatal ? '<br/>Alasan: ' + esc(d.alasanBatal) : '') +
+    '<br/>Surat jalan ini tidak berlaku; nomornya tidak dipakai ulang.</div>' : '';
+  const perStatus = {};
+  (d.items || []).forEach(function(it){
+    const s = String(it.statusBarang || "").trim(); if (!s || s === "Normal") return;
+    (perStatus[s] = perStatus[s] || []).push([it.warna, it.size].filter(Boolean).join(" ") + " " + (Number(it.jumlah) || 0));
+  });
+  const rincianStatus = Object.keys(perStatus).length ? '<div class="ck-sj-status"><b>Rincian status barang</b> (sudah termasuk di tabel di atas): ' +
+    Object.keys(perStatus).map(function(s){ return '<b>' + esc(s) + '</b>: ' + perStatus[s].map(esc).join(", "); }).join(" &#183; ") + '</div>' : '';
   const html =
     '<div class="ck-dok">' +
-      ckHeaderHtml("SURAT JALAN", d.idPengiriman, d.tanggal) +
+      ckHeaderHtml("SURAT JALAN", d.idPengiriman, d.tanggal) + batal +
       ckPihakHtml(d, "Detail Pengiriman", "Kode Order: " + rjdEscapeHtml_(d.kodeOrder) + '<br/>Produk: ' + rjdEscapeHtml_(d.namaProduk) +
         '<br/>Jenis: ' + rjdEscapeHtml_(d.jenisPengiriman) + '<br/>Metode: ' + rjdEscapeHtml_(d.metode) +
-        (d.noResi ? '<br/>No. Resi: ' + rjdEscapeHtml_(d.noResi) : '')) +
-      blokProduk +
+        (d.noResi ? '<br/>No. Resi: ' + rjdEscapeHtml_(d.noResi) : '') +
+        (d.idPacking ? '<br/>No. Packing: ' + esc(d.idPacking) + '<br/>Isi: ' + (Number(d.totalKarung) || 0) + ' karung &#183; ' + (Number(d.totalPlastik) || 0) + ' plastik' : '')) +
+      blokProduk + rincianStatus +
       '<div style="text-align:right;font-weight:700;font-size:14px;margin-bottom:20px">Total Dikirim: ' + d.jumlah + ' pcs' + ckSetTotalSJ_(gabSet) + '</div>' +
       ckSetCatatanHtml_(gabSet, d.setGalat) +
       (d.catatan ? '<div class="ck-dok-catatan"><b>Catatan:</b> ' + rjdEscapeHtml_(d.catatan) + '</div>' : '') +
@@ -760,7 +774,7 @@ function ckRenderSuratJalan(d){
     '</div>';
 
   document.getElementById("ck-isi").innerHTML = html;
-  document.title = "Surat Jalan " + d.idPengiriman + " -- RJD Apparel";
+  document.title = (d.batal ? "BATAL -- " : "") + "Surat Jalan " + d.idPengiriman + " -- RJD Apparel";
 }
 
 /**

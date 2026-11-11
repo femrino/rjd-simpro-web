@@ -297,7 +297,7 @@ function krRender(){
         '<td class="kr-deadline">' + rjdEscapeHtml_(p.deadline || "-") +
           (p.telatHari ? '<div class="kr-telat">telat ' + p.telatHari + " hari" + '</div>' : '') + '</td>' +
         '<td><span class="kr-status ' + kelasStatus + '">' + rjdEscapeHtml_(p.statusKirim) + '</span></td>' +
-        '<td class="kr-panah">' + (p.jumlahPengiriman ? '&#9662;' : '') + '</td>' +
+        '<td class="kr-panah">' + ((p.rincian || []).length ? '&#9662;' : '') + '</td>' +   // 3C: SJ batal tetap di rincian
       '</tr>' +
       '<tr class="kr-rincian hidden" id="kr-rincian-' + i + '"><td colspan="9">' +
         krRincianHtml_(p) +
@@ -324,15 +324,18 @@ function krRincianHtml_(p){
   // Tautan cetak TIDAK perlu stopPropagation: onclick buka-tutup dipasang di
   // <tr class="kr-baris">, sedangkan tabel ini ada di <tr class="kr-rincian">
   // yang terpisah, jadi kliknya tidak menyebar ke mana-mana.
+  // 3C (v423, butuh gs >= @452): SJ BATAL tetap tampil -- bertanda, berketerangan alasan, jumlahnya tidak dihitung terkirim (server) -- dan SJ
+  // aktif punya tombol Batalkan (keputusan: hanya pemilik/admin, diperiksa server; di sini cuma dinonaktifkan dengan alasannya).
+  const putus = krBolehPutus_();
   return '<table class="kr-subtabel"><thead><tr>' +
       '<th>Surat Jalan</th><th>Tanggal</th><th>Artikel</th><th class="num">Jumlah</th>' +
-      '<th>Jenis</th><th>Metode</th><th>Resi</th><th>Catatan</th>' +
+      '<th>Jenis</th><th>Metode</th><th>Resi</th><th>Catatan</th><th></th>' +
     '</tr></thead><tbody>' +
     p.rincian.map(function(k){
       const idSj = String(k.idPengiriman || "").trim();
-      return '<tr>' +
+      return '<tr' + (k.batal ? ' class="kr-sj-batal"' : '') + '>' +
         '<td>' + (idSj
-          ? '<b class="kr-sj-nomor">' + rjdEscapeHtml_(idSj) + '</b>' +
+          ? '<b class="kr-sj-nomor">' + rjdEscapeHtml_(idSj) + '</b>' + (k.batal ? '<span class="kr-batal-tanda">BATAL</span>' : '') +
             '<a class="kr-cetak-link" target="_blank" rel="noopener"' +
             ' href="/p/cetak.html?jenis=suratjalan&amp;id=' + encodeURIComponent(idSj) + '">' +
             '&#128424; Cetak</a>'
@@ -345,10 +348,43 @@ function krRincianHtml_(p){
         '<td>' + rjdEscapeHtml_(k.jenis || "-") + '</td>' +
         '<td>' + rjdEscapeHtml_(k.metode || "-") + '</td>' +
         '<td>' + rjdEscapeHtml_(k.resi || "-") + '</td>' +
-        '<td>' + rjdEscapeHtml_(k.catatan || "") + '</td>' +
+        '<td>' + rjdEscapeHtml_(k.catatan || "") + (k.batal ? '<div class="kr-batal-ket">Dibatalkan' +
+          (k.waktuDibatalkan ? ' ' + rjdEscapeHtml_(k.waktuDibatalkan) : '') + (k.dibatalkanOleh ? ' oleh ' + rjdEscapeHtml_(k.dibatalkanOleh) : '') +
+          (k.alasanBatal ? ': ' + rjdEscapeHtml_(k.alasanBatal) : '') + '</div>' : '') + '</td>' +
+        '<td class="kr-aksi-sj">' + (idSj && !k.batal ? '<button type="button" class="kr-batal-btn" data-sj="' + rjdEscapeHtml_(idSj) + '" onclick="krBatalSJ(this)"' +
+          (putus ? '' : ' disabled title="Hanya pemilik atau admin"') + '>Batalkan</button>' : '') + '</td>' +
       '</tr>';
     }).join("") +
     '</tbody></table>';
+}
+
+/** 3C: peran dari penanda body[data-peran] (simpro-global.js). Belum ditandai = tombol hidup -- penjaganya tetap di server. */
+function krBolehPutus_(){
+  const peran = document.body.getAttribute("data-peran");
+  return peran === null || peran === "full" || peran === "admin";
+}
+
+/** 3C (butuh gs >= @452): batalkan satu surat jalan. Alasan wajib; nomornya tidak dipakai ulang; packing tertautnya kembali Ditutup.
+ *  Kiriman ulang aman (server menjawab sudahBatal), jadi jawaban yang hilang cukup dicoba lagi. */
+function krBatalSJ(tombol){
+  const id = String(tombol.getAttribute("data-sj") || "").trim(); if(!id || tombol.disabled) return;
+  const alasan = window.prompt("Alasan membatalkan surat jalan " + id + " (minimal 5 huruf).\n\nNomornya tidak dipakai ulang. Surat jalan yang sudah ditagih invoice aktif tidak bisa dibatalkan.", "");
+  if(alasan === null) return;
+  if(String(alasan).trim().length < 5){ alert("Alasan batal wajib diisi (minimal 5 huruf)."); return; }
+  tombol.disabled = true; tombol.textContent = "Membatalkan...";
+  fetch(KR_API_URL, { method: "POST", body: JSON.stringify({ idToken: KR_ID_TOKEN, action: "batalkanSJ", payload: { idPengiriman: id, alasan: String(alasan).trim() } }) })
+  .then(function(r){ return r.json(); })
+  .then(function(h){
+    if(!h || !h.success){ tombol.disabled = false; tombol.textContent = "Batalkan"; alert((h && h.error) || "Surat jalan tidak dibatalkan."); return; }
+    alert("Surat jalan " + h.idPengiriman + (h.sudahBatal ? " sudah dibatalkan sebelumnya." : " dibatalkan.") + (h.packingKembali ? " Packing " + h.idPacking + " kembali Ditutup." : ""));
+    // Daftar berubah (terkirim & status kirim) -- dimuat ulang dari server, BUKAN dari snapshot (sesudah tulis, snapshot = keadaan lama).
+    window.KR_DAFTAR = null; KR_SUDAH_SEGAR = true;
+    krMuat();
+  })
+  .catch(function(){
+    tombol.disabled = false; tombol.textContent = "Batalkan";
+    alert("Jawaban server tidak sampai -- surat jalan BELUM PASTI dibatalkan.\n\nTekan Batalkan lagi: server mengenali surat jalan yang sudah dibatalkan.");
+  });
 }
 
 function krToggleRincian(i){

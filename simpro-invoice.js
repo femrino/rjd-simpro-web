@@ -993,7 +993,10 @@ function ivRenderDraft() {
     '</tr></thead><tbody>' +
     d.items.map(function (it, i) {
       return '<tr' + (it.hargaKosong ? ' class="iv-baris-perhatian"' : '') + '>' +
-        '<td>' + rjdEscapeHtml_([it.brand, it.artikel, it.style].filter(Boolean).join(" / ") || it.deskripsi || "-") + '</td>' +
+        '<td>' + rjdEscapeHtml_([it.brand, it.artikel, it.style].filter(Boolean).join(" / ") || it.deskripsi || "-") +
+          // 3C (v423, butuh gs >= @452): Status Barang selain Normal (Noda / Tanpa Label) dari surat jalan packing -- ikut sebagai KETERANGAN
+          // baris invoice (item draf dikirim apa adanya ke simpanInvoiceDariPengiriman); harganya tetap harga baris.
+          (it.keterangan ? ' <span class="iv-status-brg">' + rjdEscapeHtml_(it.keterangan) + '</span>' : '') + '</td>' +
         '<td>' + rjdEscapeHtml_(it.warna || "-") + '</td>' +
         '<td>' + rjdEscapeHtml_(it.size || "-") + '</td>' +
         // Qty: teks, BUKAN input. Diturunkan dari surat jalan.

@@ -413,3 +413,6 @@ tr.iv-baris-batal td { color: var(--ink-soft); }
 .iv-status-beda { color: #B4482F; font-weight: 600; }
 .iv-kartu-lebih { border-color: #E4C65A; background: #FFF9E0; }
 .iv-kartu-lebih .iv-kartu-angka { color: #7A5A00; }
+
+/* 3C (v423): label status barang (Noda / Tanpa Label) di baris draf invoice -- ikut sebagai keterangan baris. */
+.iv-status-brg { display: inline-block; margin-left: 4px; padding: 0 6px; border: 1px solid var(--thread); border-radius: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; }

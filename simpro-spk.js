@@ -12980,7 +12980,8 @@ function spRenderKemas_() {
   const kartuDaftar = '<div class="sp-card"><h3 class="sp-judul">Packing PO ini</h3>' +
     ((d.packing || []).length ? '<div class="sp-kms-daftar">' + d.packing.map(function (x) {
       return '<button type="button" class="sp-kms-pk sp-kms-baca' + (x.idPacking === SP_KMS.pilih ? ' aktif' : '') + '" data-kms-aksi="pilih" data-id="' + esc(x.idPacking) + '"><b>T' + x.kirimanKe + '</b> ' + esc(x.idPacking) +
-        ' <span class="sp-kms-st sp-kms-st-' + esc(String(x.status).toLowerCase()) + '">' + esc(x.status) + '</span><span class="sp-kms-sub">' + x.plastik + ' plastik &#183; ' + x.karung + ' karung &#183; ' + x.pcs + ' pcs</span></button>';
+        ' <span class="sp-kms-st sp-kms-st-' + esc(String(x.status).toLowerCase()) + '">' + esc(x.status) + '</span><span class="sp-kms-sub">' + x.plastik + ' plastik &#183; ' + x.karung + ' karung &#183; ' + x.pcs + ' pcs' +
+        (x.idPengiriman ? ' &#183; ' + esc(x.idPengiriman) : '') + '</span></button>';   // 3C: SJ yang terbit dari packing ini
     }).join("") + '</div>' : '<p class="sp-info">Belum ada packing untuk PO ini. Nomor kiriman (T1, T2, ...) ditentukan server -- surat jalan lama ikut dihitung.</p>') + tombolBuat + '</div>';
   w.innerHTML = kartuSiap + kartuDaftar + spKmsDetailHtml_();
   spKmsPratinjau_();
@@ -12993,7 +12994,9 @@ function spKmsDetailHtml_() {
   const kepala = '<h3 class="sp-judul">T' + pk.kirimanKe + ' &#183; ' + esc(pk.idPacking) + ' <span class="sp-kms-st sp-kms-st-' + esc(String(pk.status).toLowerCase()) + '">' + esc(pk.status) + '</span></h3>' +
     '<p class="sp-info">' + pk.plastik + ' plastik &#183; ' + pk.karung + ' karung &#183; <b>' + pk.pcs + ' pcs</b>' + (pk.beratKg ? ' &#183; ' + spKmsKg_(pk.beratKg) + ' kg' : '') +
     (pk.plastikTanpaKarung ? ' &#183; <span class="sp-kms-minus">' + pk.plastikTanpaKarung + ' plastik belum masuk karung</span>' : '') + (pk.karungTerbuka ? ' &#183; ' + pk.karungTerbuka + ' karung terbuka' : '') +
-    ' &#183; isi standar ' + pk.isiStandar + (pk.alasanBatal ? ' &#183; batal: ' + esc(pk.alasanBatal) : '') + '</p>' +
+    ' &#183; isi standar ' + pk.isiStandar + (pk.alasanBatal ? ' &#183; batal: ' + esc(pk.alasanBatal) : '') +
+    // 3C (butuh gs >= @452): SJ yang terbit dari packing ini, dengan tautan cetaknya
+    (pk.idPengiriman ? ' &#183; SJ <a class="sp-kms-sjlink" target="_blank" rel="noopener" href="' + esc('/p/cetak.html?jenis=suratjalan&id=' + encodeURIComponent(pk.idPengiriman)) + '">' + esc(pk.idPengiriman) + '</a>' : '') + '</p>' +
     (((dt.set || {}).peringatan || []).length ? '<div class="sp-kms-awas"><b>Karung tertutup tidak seimbang</b> (peringatan, bukan pemblokir): ' +
       dt.set.peringatan.map(function (x) { return esc(x); }).join("; ") + '</div>' : '');   // 1E
   const pilihan = (d.item || []).filter(function (o) { return o.siap > 0 && o.idDetailOrder; });
@@ -13035,12 +13038,27 @@ function spKmsDetailHtml_() {
     }).join("") + '</tbody></table></div>' : '<p class="sp-info">Belum ada plastik.</p>') +
     ((dt.plastik || []).some(function (x) { return x.status !== "Aktif"; }) ? '<p class="sp-kms-sub">' + dt.plastik.filter(function (x) { return x.status !== "Aktif"; }).length + ' plastik dibatalkan (nomornya tidak dipakai ulang).</p>' : '') + spKmsRingkasHtml_(dt.plastik || []) + spKmsRingkasSetHtml_(dt) + '</div>';
   const alasanPutus = "Hanya pemilik atau admin";
-  const keputusan = '<div class="sp-kms-blok sp-kms-putus"><h4>Keputusan</h4>' + (draft
+  // 3C (butuh gs >= @452): surat jalan TERBIT dari packing Ditutup -- isinya = plastik aktif, tidak bisa diedit di sini (SPEC §7); batal SJ
+  // mengembalikan packing ke Ditutup. Tanggal bawaan = hari ini (zona perangkat; server memeriksa periode bulannya).
+  const sekarang = new Date(), hariIni = sekarang.getFullYear() + "-" + String(sekarang.getMonth() + 1).padStart(2, "0") + "-" + String(sekarang.getDate()).padStart(2, "0");
+  const formTerbit = '<div class="sp-kms-terbit"><h4>Terbitkan surat jalan</h4><p class="sp-info">Isi surat jalan = <b>' + pk.pcs + ' pcs</b> dari ' + pk.plastik + ' plastik dalam ' + pk.karung +
+    ' karung &#8212; tidak bisa diubah di surat jalan. Kalau isinya salah, buka kembali packing-nya.</p><div class="sp-kms-form">' +
+    '<label class="sp-kms-f">Tanggal kirim<input id="sp-kms-sjtgl" type="date" value="' + hariIni + '"/></label>' +
+    '<label class="sp-kms-f">Metode<input id="sp-kms-sjmetode" type="text" maxlength="60" placeholder="mis. Ekspedisi / Diambil"/></label>' +
+    '<label class="sp-kms-f">Kurir<input id="sp-kms-sjkurir" type="text" maxlength="60"/></label>' +
+    '<label class="sp-kms-f">No. resi<input id="sp-kms-sjresi" type="text" maxlength="80"/></label>' +
+    '<label class="sp-kms-f sp-kms-f-item">Catatan<input id="sp-kms-sjcatatan" type="text" maxlength="300"/></label></div>' +
+    '<button class="sp-simpan-btn" type="button" data-kms-aksi="terbit-sj"' + mati(putus, alasanPutus) + '>Terbitkan surat jalan</button></div>';
+  const isiPutus = draft
     ? '<label class="sp-kms-f">Diperiksa oleh<input id="sp-kms-diperiksa" type="text" maxlength="60"/></label>' +
       '<button class="sp-simpan-btn" type="button" data-kms-aksi="tutup-packing"' + mati(putus, alasanPutus) + '>Tutup packing</button> ' +
       '<button class="sp-btn-kecil" type="button" data-kms-aksi="batal-packing"' + mati(putus, alasanPutus) + '>Batalkan packing</button>'
     : (pk.status === "Ditutup" ? '<button class="sp-btn-kecil" type="button" data-kms-aksi="buka-packing"' + mati(putus, alasanPutus) + '>Buka kembali</button> ' +
-      '<button class="sp-btn-kecil" type="button" data-kms-aksi="batal-packing"' + mati(putus, alasanPutus) + '>Batalkan packing</button>' : '<p class="sp-info">Tidak ada keputusan untuk status ' + esc(pk.status) + '.</p>')) +
+      '<button class="sp-btn-kecil" type="button" data-kms-aksi="batal-packing"' + mati(putus, alasanPutus) + '>Batalkan packing</button>' + formTerbit
+    : (pk.status === "Terbit" && pk.idPengiriman ? '<p class="sp-info">Surat jalan <b>' + esc(pk.idPengiriman) + '</b> sudah terbit. Batalkan hanya kalau surat jalannya salah dan BELUM ditagih: ' +
+      'packing kembali Ditutup, nomornya tidak dipakai ulang.</p><button class="sp-btn-kecil" type="button" data-kms-aksi="batal-sj" data-id="' + esc(pk.idPengiriman) + '"' + mati(putus, alasanPutus) + '>Batalkan surat jalan</button>'
+    : '<p class="sp-info">Tidak ada keputusan untuk status ' + esc(pk.status) + '.</p>'));
+  const keputusan = '<div class="sp-kms-blok sp-kms-putus"><h4>Keputusan</h4>' + isiPutus +
     (putus ? '' : '<p class="sp-kms-sub">Tutup / buka / batal packing hanya untuk pemilik atau admin.</p>') + '</div>';
   const formSet = draft && ((d.set || []).length || d.setGalat) ? spKmsSetFormHtml_(d, pk, bolehIsi) : '';   // 1E
   // 2B (v422, butuh gs >= @450): dokumen cetak packing -- tab baru; cetak.html memuat datanya sendiri (getPackingCetak), jadi isian layar
@@ -13280,5 +13298,27 @@ function spKmsKlik_(e) {
     if (alasan === null) return;
     if (String(alasan).trim().length < 5) { spKmsPesan_("Alasan batal wajib diisi (minimal 5 huruf).", false); return; }
     spKmsJalan_(t, "batalkanPacking", { idPacking: pk, alasan: String(alasan).trim() }, null, "Packing " + pk + " dibatalkan.");
+    return;
+  }
+  // 3C (butuh gs >= @452): terbit & batal surat jalan. Server menolak yang bukan pemilik/admin, packing yang bukan Ditutup, isi yang berubah
+  // sesudah ditutup, siap kirim minus, dan periode tertutup -- pemeriksaan di sini cuma menghemat satu putaran.
+  if (aksi === "terbit-sj") {
+    const tgl = spKmsNilai_("sp-kms-sjtgl");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(tgl)) { spKmsPesan_("Tanggal kirim wajib diisi.", false); return; }
+    if (!window.confirm("Terbitkan surat jalan untuk " + pk + " (" + dt.packing.pcs + " pcs, " + dt.packing.karung + " karung) bertanggal " + tgl + "?")) return;
+    spKmsJalan_(t, "terbitkanSJDariPacking", { idPacking: pk, tanggal: tgl, metodePengiriman: spKmsNilai_("sp-kms-sjmetode"), kurir: spKmsNilai_("sp-kms-sjkurir"),
+      noResi: spKmsNilai_("sp-kms-sjresi"), catatan: spKmsNilai_("sp-kms-sjcatatan") }, "kms-terbit:" + pk, function (d) {
+        if (d.sudahTerbit) return "Surat jalan " + d.idPengiriman + " sudah terbit sebelumnya -- tidak terbit dua kali.";
+        if (d.dilanjutkan) return "Surat jalan " + d.idPengiriman + " sudah tertulis sebelumnya; packing kini ditandai Terbit (tidak terbit dua kali).";
+        return "Surat jalan " + d.idPengiriman + " terbit: " + d.totalQty + " pcs, " + d.totalKarung + " karung, " + d.totalPlastik + " plastik." + ((d.info || []).length ? " Info: " + d.info.join("; ") + "." : "");
+      });
+    return;
+  }
+  if (aksi === "batal-sj") {
+    const alasan = window.prompt("Alasan membatalkan surat jalan " + id + " (minimal 5 huruf). Nomornya tidak dipakai ulang; packing kembali Ditutup.", "");
+    if (alasan === null) return;
+    if (String(alasan).trim().length < 5) { spKmsPesan_("Alasan batal wajib diisi (minimal 5 huruf).", false); return; }
+    spKmsJalan_(t, "batalkanSJ", { idPengiriman: id, alasan: String(alasan).trim() }, null, function (d) {
+      return "Surat jalan " + d.idPengiriman + (d.sudahBatal ? " sudah dibatalkan sebelumnya" : " dibatalkan") + (d.packingKembali ? "; packing kembali Ditutup." : "."); });
   }
 }
