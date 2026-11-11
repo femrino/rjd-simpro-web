@@ -2398,3 +2398,17 @@ h4 .sp-kms-sub { display: inline; margin-left: 6px; }
 /* NISAN (5 Nov 2026): blok '@media (max-width: 640px) { .sp-kms-kr { flex-direction: column } .sp-kms-kr-aksi .sp-kms-f-angka { flex: 1 1 80px } }'
    dibuang -- terukur tidak menahan apa pun: isi aksi karung Terbuka lebih panjang dari satu baris HP, jadi blok itu SUDAH membungkus
    selebar baris tanpa bantuan (sabotase S18 dua kali hijau); efek satu-satunya melebarkan tombol Buka karung Tertutup. */
+
+/* ============================================================
+   SUBTAB PACKING -- BARANG SET (rilis 1E, 11 Nov 2026; butuh gs >= @449). Peringatan = amber (bukan merah): karung tidak seimbang
+   itu sah (karung terakhir berisi sisa), merah dipakai untuk penolakan (.sp-pesan.sp-galat).
+   ============================================================ */
+.sp-kms-krsetwrap { flex: 1 1 100%; display: flex; flex-direction: column; gap: 4px; }
+.sp-kms-krset { font-size: 12.5px; color: var(--ink); }
+.sp-kms-krset-awas { color: #8A5D1F; background: #FCF3E3; border-radius: 7px; padding: 4px 8px; }
+.sp-kms-setring { display: flex; flex-direction: column; gap: 6px; }
+.sp-kms-awas { margin: 0 0 12px; padding: 8px 12px; border-radius: 9px; background: #FCF3E3; color: #8A5D1F; font-size: 12.5px; }
+.sp-kms-setform .sp-kms-form + .sp-kms-form { margin-top: 10px; }
+/* Nama item + label set dibungkus SATU elemen (.sp-kms-itemset, di JS): di mode kartu HP sel adalah flex baris, dan label set sebagai anak
+   langsung terdesak ke SAMPING nama item (terlihat di foto 390 px, 11 Nov 2026). NISAN: '.sp-kms-itemset { display: block }' dibuang --
+   terukur no-op (sabotase E21 hijau): pembungkus jadi satu item flex, dan label .sp-kms-sub yang block sudah jatuh ke bawah di dalamnya. */
