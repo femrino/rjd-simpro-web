@@ -282,6 +282,9 @@ nav{
 .lp-shipment-tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 9px;border-radius:20px;background:var(--paper-2);color:var(--ink-soft)}
 .lp-shipment-meta{font-size:13px;color:var(--ink-soft)}
 .lp-shipment-meta b{color:var(--ink)}
+.lp-shipment-terima{margin-top:2px}
+.lp-shipment-terima.lp-terima-ok{color:#2C6B3F}
+.lp-shipment-terima.lp-terima-ok b{color:#2C6B3F}
 
 .nav-links{margin-right:200px}
 /* Anti "APPA REL": item flex secara bawaan BOLEH menyusut (flex-shrink:1), dan

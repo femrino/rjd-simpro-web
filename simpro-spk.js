@@ -12846,8 +12846,9 @@ function spRenderSelisih_() {
     '<div class="sp-lps-kuning">Perlu ditelusuri<b>' + A(h.kuning) + '</b></div><div class="sp-lps-hijau">Seimbang<b>' + A(h.seimbang) + '</b></div></div>';
   const baris = (d.daftar || []).map(function (x) {
     const temuan = (x.temuan || []).map(function (t) {
-      return '<div class="sp-lps-t rlp-' + E(t.tingkat) + '"><b>' + E(t.judul) + '</b> ' + A(t.total) + ' pcs' +
-        (t.sel && t.sel.length ? '<span class="rlp-kecil"> &#8212; ' + t.sel.map(E).join(", ") + (t.lebih ? ', +' + t.lebih + ' lagi' : '') + '</span>' : '') + '</div>';
+      return '<div class="sp-lps-t rlp-' + E(t.tingkat) + '"><b>' + E(t.judul) + '</b> ' + A(t.total) + ' ' + E(t.satuan || "pcs") +
+        (t.sel && t.sel.length ? '<span class="rlp-kecil"> &#8212; ' + t.sel.map(E).join(", ") + (t.lebih ? ', +' + t.lebih + ' lagi' : '') + '</span>' : '') +
+        (t.catatan ? '<div class="rlp-kecil sp-lps-catatan">' + E(t.catatan) + '</div>' : '') + '</div>';   // 4C: catatan hanya temuan packing
     }).join("") || '<span class="rlp-ok">seimbang</span>';
     const tt = x.total || {};
     return '<tr data-po="' + E(x.idPurchaseOrder) + '"><td><b>' + E(x.idPurchaseOrder) + '</b><div class="rlp-kecil">' + E(x.namaKlien || "") + '</div></td>' +
@@ -12996,7 +12997,9 @@ function spKmsDetailHtml_() {
     (pk.plastikTanpaKarung ? ' &#183; <span class="sp-kms-minus">' + pk.plastikTanpaKarung + ' plastik belum masuk karung</span>' : '') + (pk.karungTerbuka ? ' &#183; ' + pk.karungTerbuka + ' karung terbuka' : '') +
     ' &#183; isi standar ' + pk.isiStandar + (pk.alasanBatal ? ' &#183; batal: ' + esc(pk.alasanBatal) : '') +
     // 3C (butuh gs >= @452): SJ yang terbit dari packing ini, dengan tautan cetaknya
-    (pk.idPengiriman ? ' &#183; SJ <a class="sp-kms-sjlink" target="_blank" rel="noopener" href="' + esc('/p/cetak.html?jenis=suratjalan&id=' + encodeURIComponent(pk.idPengiriman)) + '">' + esc(pk.idPengiriman) + '</a>' : '') + '</p>' +
+    (pk.idPengiriman ? ' &#183; SJ <a class="sp-kms-sjlink" target="_blank" rel="noopener" href="' + esc('/p/cetak.html?jenis=suratjalan&id=' + encodeURIComponent(pk.idPengiriman)) + '">' + esc(pk.idPengiriman) + '</a>' : '') +
+    // 4C (butuh gs >= @454): penerimaan -- tanggal & nama penerima dari Tanda Terima
+    (pk.status === "Diterima" ? ' &#183; <span class="sp-kms-diterima">diterima ' + rjdLpTgl_(pk.tanggalDiterima) + (pk.diterimaOleh ? ' oleh ' + esc(pk.diterimaOleh) : '') + '</span>' : '') + '</p>' +
     (((dt.set || {}).peringatan || []).length ? '<div class="sp-kms-awas"><b>Karung tertutup tidak seimbang</b> (peringatan, bukan pemblokir): ' +
       dt.set.peringatan.map(function (x) { return esc(x); }).join("; ") + '</div>' : '');   // 1E
   const pilihan = (d.item || []).filter(function (o) { return o.siap > 0 && o.idDetailOrder; });
@@ -13020,7 +13023,7 @@ function spKmsDetailHtml_() {
           '<button class="sp-btn-kecil" type="button" data-kms-aksi="tutup-karung" data-id="' + id + '"' + mati(bolehIsi, "Bukan bagian gudang/packing") + '>Tutup karung</button>' +
           (k.plastik ? '' : '<button class="sp-btn-kecil" type="button" data-kms-aksi="batal-karung" data-id="' + id + '"' + mati(bolehIsi, "Bukan bagian gudang/packing") + '>Batalkan</button>') + '</span>'
         : (k.status === "Tertutup" && draft ? '<button class="sp-btn-kecil" type="button" data-kms-aksi="buka-karung" data-id="' + id + '"' + mati(bolehIsi, "Bukan bagian gudang/packing") + '>Buka</button>' : '');
-      return '<div class="sp-kms-kr"><span><b>' + no + '</b> <span class="sp-kms-st sp-kms-st-' + esc(k.status.toLowerCase()) + '">' + esc(k.status) + '</span> ' + k.plastik + ' plastik &#183; ' + k.pcs + ' pcs' + (k.beratKg ? ' &#183; ' + spKmsKg_(k.beratKg) + ' kg' : '') + '</span>' + kanan +
+      return '<div class="sp-kms-kr"><span><b>' + no + '</b> <span class="sp-kms-st sp-kms-st-' + esc(k.status.toLowerCase()) + '">' + esc(k.status) + '</span> ' + k.plastik + ' plastik &#183; ' + k.pcs + ' pcs' + (k.beratKg ? ' &#183; ' + spKmsKg_(k.beratKg) + ' kg' : '') + spKmsKondisiHtml_(k) + '</span>' + kanan +
         ((k.set || []).length ? '<div class="sp-kms-krsetwrap">' + k.set.map(spKmsSetBarisHtml_).join("") + '</div>' : '') + '</div>';   // 1E
     }).join("") : '<p class="sp-info">Belum ada karung.</p>') +
     (draft ? '<button class="sp-simpan-btn" type="button" data-kms-aksi="karung-baru"' + mati(bolehIsi, "Bukan bagian gudang/packing") + '>+ Karung baru</button>' : '') + '</div>';
@@ -13056,8 +13059,15 @@ function spKmsDetailHtml_() {
     : (pk.status === "Ditutup" ? '<button class="sp-btn-kecil" type="button" data-kms-aksi="buka-packing"' + mati(putus, alasanPutus) + '>Buka kembali</button> ' +
       '<button class="sp-btn-kecil" type="button" data-kms-aksi="batal-packing"' + mati(putus, alasanPutus) + '>Batalkan packing</button>' + formTerbit
     : (pk.status === "Terbit" && pk.idPengiriman ? '<p class="sp-info">Surat jalan <b>' + esc(pk.idPengiriman) + '</b> sudah terbit. Batalkan hanya kalau surat jalannya salah dan BELUM ditagih: ' +
-      'packing kembali Ditutup, nomornya tidak dipakai ulang.</p><button class="sp-btn-kecil" type="button" data-kms-aksi="batal-sj" data-id="' + esc(pk.idPengiriman) + '"' + mati(putus, alasanPutus) + '>Batalkan surat jalan</button>'
-    : '<p class="sp-info">Tidak ada keputusan untuk status ' + esc(pk.status) + '.</p>'));
+      'packing kembali Ditutup, nomornya tidak dipakai ulang.</p><button class="sp-btn-kecil" type="button" data-kms-aksi="batal-sj" data-id="' + esc(pk.idPengiriman) + '"' + mati(putus, alasanPutus) + '>Batalkan surat jalan</button>' +
+      spKmsFormTerimaHtml_(dt, hariIni, mati(putus, alasanPutus))
+    : (pk.status === "Diterima" ? '<p class="sp-info">Diterima <b>' + rjdLpTgl_(pk.tanggalDiterima) + '</b>' + (pk.diterimaOleh ? ' oleh <b>' + esc(pk.diterimaOleh) + '</b>' : '') +
+      (pk.penerimaanDicatatOleh ? ' (dicatat ' + esc(pk.penerimaanDicatatOleh) + ')' : '') + (pk.karungBukanBaik ? ' &#183; <span class="sp-kms-minus">' + pk.karungBukanBaik + ' karung bukan Baik</span>' : '') +
+      '. Surat jalan ' + esc(pk.idPengiriman) + ' tidak bisa dibatalkan selama penerimaannya tercatat. Salah catat? Batalkan penerimaan: packing kembali Terbit, isi lama tersimpan di riwayat.</p>' +
+      '<button class="sp-btn-kecil" type="button" data-kms-aksi="batal-terima"' + mati(putus, alasanPutus) + '>Batalkan penerimaan</button>'
+    : '<p class="sp-info">Tidak ada keputusan untuk status ' + esc(pk.status) + '.</p>'))) +
+    (pk.riwayatPenerimaan ? '<details class="sp-kms-riwayat"><summary>Riwayat penerimaan yang dibatalkan (' + pk.riwayatPenerimaan.split("\n").length + ')</summary><div>' +
+      pk.riwayatPenerimaan.split("\n").map(function (x) { return '<p>' + esc(x) + '</p>'; }).join("") + '</div></details>' : '');
   const keputusan = '<div class="sp-kms-blok sp-kms-putus"><h4>Keputusan</h4>' + isiPutus +
     (putus ? '' : '<p class="sp-kms-sub">Tutup / buka / batal packing hanya untuk pemilik atau admin.</p>') + '</div>';
   const formSet = draft && ((d.set || []).length || d.setGalat) ? spKmsSetFormHtml_(d, pk, bolehIsi) : '';   // 1E
@@ -13068,6 +13078,35 @@ function spKmsDetailHtml_() {
       return '<a class="sp-btn-kecil" target="_blank" rel="noopener" data-kms-cetak="' + x[0] + '" href="' + esc('/p/cetak.html?jenis=packing&id=' + encodeURIComponent(pk.idPacking) + '&dok=' + x[0]) + '">' + x[1] + '</a>';
     }).join(" ") + '</div>';
   return '<div class="sp-card sp-kms-detail">' + kepala + cetak + form + formSet + karung + daftar + keputusan + '</div>';
+}
+/**
+ * 4C (butuh gs >= @454): form Catat penerimaan untuk packing Terbit -- isinya dari Tanda Terima yang ditandatangani penerima. Kondisi
+ * tiap karung SENGAJA kosong di awal (isian otomatis yang salah lebih berbahaya daripada kotak kosong, CLAUDE.md); "Semua Baik" mengisi
+ * HANYA yang masih kosong, atas permintaan. Catatan wajib bila bukan Baik (server juga menolak).
+ */
+const SP_KMS_KONDISI = ["Baik", "Terbuka", "Rusak", "Hilang"];
+function spKmsFormTerimaHtml_(dt, hariIni, mati) {
+  const esc = rjdEscapeHtml_, kr = (dt.karung || []).filter(function (k) { return k.status !== "Batal"; });
+  return '<div class="sp-kms-terima"><h4>Catat penerimaan</h4><p class="sp-info">Isi dari Tanda Terima yang ditandatangani penerima: kondisi tiap karung, nama penerima, ' +
+    'tanggal terima. Isi karung <b>Hilang</b> tidak dihitung diterima.</p><div class="sp-kms-form">' +
+    '<label class="sp-kms-f">Tanggal terima<input id="sp-kms-trtgl" type="date" value="' + hariIni + '"/></label>' +
+    '<label class="sp-kms-f">Nama penerima<input id="sp-kms-trnama" type="text" maxlength="80" placeholder="yang menandatangani"/></label></div>' +
+    '<div class="sp-kms-trdaftar">' + kr.map(function (k) {
+      const id = esc(k.idKarung);
+      return '<div class="sp-kms-trk"><span class="sp-kms-trkode"><b>K' + String(k.no).padStart(2, "0") + '</b><span class="sp-kms-sub">' + k.plastik + ' plastik &#183; ' + k.pcs + ' pcs</span></span>' +
+        '<select data-kms-kondisi="' + id + '" aria-label="Kondisi karung K' + String(k.no).padStart(2, "0") + '"><option value="">(pilih kondisi)</option>' +
+        SP_KMS_KONDISI.map(function (o) { return '<option>' + o + '</option>'; }).join("") + '</select>' +
+        '<input type="text" maxlength="200" data-kms-trcatatan="' + id + '" placeholder="catatan (wajib bila bukan Baik)"/></div>';
+    }).join("") + '</div>' +
+    '<button class="sp-btn-kecil" type="button" data-kms-aksi="terima-semua-baik">Semua Baik</button> ' +
+    '<button class="sp-simpan-btn" type="button" data-kms-aksi="terima"' + mati + '>Catat penerimaan</button></div>';
+}
+/** Tag kondisi terima satu karung (kosong = belum diterima: tidak ada apa pun, baris karung identik dengan v423). */
+function spKmsKondisiHtml_(k) {
+  if (!k.kondisiTerima) return "";
+  const esc = rjdEscapeHtml_;
+  return ' <span class="sp-kms-kond sp-kms-kond-' + esc(String(k.kondisiTerima).toLowerCase()) + '">' + esc(k.kondisiTerima) + '</span>' +
+    (k.catatanTerima ? ' <span class="sp-kms-kondket">' + esc(k.catatanTerima) + '</span>' : '');
 }
 /** Ringkasan isi (SPEC §9): pcs plastik AKTIF per item/warna/size x status barang, plus total. Status berurutan baku (Normal, Noda,
  *  Tanpa Label), status lain di belakangnya; sel nol ditulis "–" supaya angka yang ada menonjol. */
@@ -13312,6 +13351,44 @@ function spKmsKlik_(e) {
         if (d.dilanjutkan) return "Surat jalan " + d.idPengiriman + " sudah tertulis sebelumnya; packing kini ditandai Terbit (tidak terbit dua kali).";
         return "Surat jalan " + d.idPengiriman + " terbit: " + d.totalQty + " pcs, " + d.totalKarung + " karung, " + d.totalPlastik + " plastik." + ((d.info || []).length ? " Info: " + d.info.join("; ") + "." : "");
       });
+    return;
+  }
+  // 4C (butuh gs >= @454): penerimaan per karung. Server menolak yang bukan pemilik/admin, packing yang bukan Terbit, SJ batal, karung yang
+  // kurang/asing, catatan kosong untuk yang bukan Baik, dan tanggal sebelum SJ / di masa depan -- pemeriksaan di sini cuma menghemat putaran.
+  if (aksi === "terima-semua-baik") {
+    document.querySelectorAll("#sp-panel-kemas [data-kms-kondisi]").forEach(function (s) { if (!s.value) s.value = "Baik"; });
+    return;
+  }
+  if (aksi === "terima") {
+    const tgl = spKmsNilai_("sp-kms-trtgl"), nama = spKmsNilai_("sp-kms-trnama");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(tgl)) { spKmsPesan_("Tanggal terima wajib diisi.", false); return; }
+    if (!nama) { spKmsPesan_("Nama penerima wajib diisi (yang menandatangani Tanda Terima).", false); return; }
+    const kode = {}; (dt.karung || []).forEach(function (k) { kode[k.idKarung] = "K" + String(k.no).padStart(2, "0"); });
+    const karung = Array.prototype.map.call(document.querySelectorAll("#sp-panel-kemas [data-kms-kondisi]"), function (s) {
+      const idK = s.getAttribute("data-kms-kondisi"), c = document.querySelector('#sp-panel-kemas [data-kms-trcatatan="' + idK + '"]');
+      return { idKarung: idK, kondisi: s.value, catatan: c ? String(c.value || "").trim() : "" };
+    });
+    const kosong = karung.filter(function (x) { return !x.kondisi; }).map(function (x) { return kode[x.idKarung]; });
+    if (kosong.length) { spKmsPesan_("Kondisi belum dipilih untuk " + kosong.join(", ") + ".", false); return; }
+    const tanpaKet = karung.filter(function (x) { return x.kondisi !== "Baik" && x.catatan.length < 3; }).map(function (x) { return kode[x.idKarung] + " (" + x.kondisi + ")"; });
+    if (tanpaKet.length) { spKmsPesan_("Catatan wajib untuk karung bukan Baik: " + tanpaKet.join(", ") + ".", false); return; }
+    const bukan = karung.filter(function (x) { return x.kondisi !== "Baik"; }).map(function (x) { return kode[x.idKarung] + " " + x.kondisi; });
+    if (!window.confirm("Catat penerimaan " + pk + " (surat jalan " + dt.packing.idPengiriman + "): " + karung.length + " karung" + (bukan.length ? ", bukan Baik: " + bukan.join(", ") : ", semua Baik") +
+      ", diterima " + tgl + " oleh " + nama + "?\nSesudah dicatat, surat jalannya tidak bisa dibatalkan (kecuali penerimaannya dibatalkan)." )) return;
+    spKmsJalan_(t, "catatPenerimaanPacking", { idPacking: pk, tanggal: tgl, namaPenerima: nama, karung: karung }, "kms-terima:" + pk, function (d) {
+      if (d.sudahDiterima) return "Penerimaan " + pk + " sudah tercatat sebelumnya -- tidak dicatat dua kali.";
+      return "Penerimaan dicatat: " + d.karung + " karung, diterima " + d.pcsDiterima + " pcs" + (d.pcsHilang ? ", HILANG " + d.pcsHilang + " pcs" : "") +
+        ((d.bukanBaik || []).length ? "; bukan Baik: " + d.bukanBaik.map(function (b) { return b.kode + " " + b.kondisi; }).join(", ") : "") + ".";
+    });
+    return;
+  }
+  if (aksi === "batal-terima") {
+    const alasan = window.prompt("Alasan membatalkan penerimaan " + pk + " (minimal 5 huruf). Packing kembali Terbit; isi penerimaan lama tersimpan di riwayat.", "");
+    if (alasan === null) return;
+    if (String(alasan).trim().length < 5) { spKmsPesan_("Alasan batal wajib diisi (minimal 5 huruf).", false); return; }
+    spKmsJalan_(t, "batalkanPenerimaanPacking", { idPacking: pk, alasan: String(alasan).trim() }, null, function (d) {
+      return d.sudahDibatalkan ? "Penerimaan " + pk + " sudah dibatalkan sebelumnya" + (d.karungDibersihkan ? " (sisa kondisi " + d.karungDibersihkan + " karung dibersihkan)" : "") + "."
+        : "Penerimaan dibatalkan; packing kembali Terbit -- catat ulang penerimaannya, atau batalkan surat jalannya."; });
     return;
   }
   if (aksi === "batal-sj") {

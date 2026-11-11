@@ -680,6 +680,10 @@ function renderShipments(shipments, filter){
       '</div>' +
       '<div class="lp-shipment-meta">Order <b>' + rjdEscapeHtml_(s.kodeOrder) + '</b> &#183; ' + s.jumlah + ' pcs</div>' +
       '<div class="lp-shipment-meta">Metode: <b>' + rjdEscapeHtml_(s.metode) + '</b>' + (s.noResi ? ' &#183; Resi: ' + rjdEscapeHtml_(s.noResi) : '') + '</div>' +
+      // 4C (butuh gs >= @454; keputusan Femri 12 Nov 2026): SJ dari packing -- isi karung/plastik + status terima. SJ lama: kartu identik.
+      (s.idPacking ? '<div class="lp-shipment-meta">Isi: <b>' + (Number(s.totalKarung) || 0) + ' karung</b> &#183; ' + (Number(s.totalPlastik) || 0) + ' plastik</div>' +
+        '<div class="lp-shipment-meta lp-shipment-terima' + (s.diterima ? ' lp-terima-ok' : '') + '">' + (s.diterima ? 'Diterima <b>' + rjdEscapeHtml_(s.diterima.tanggal) + '</b>' +
+        (s.diterima.oleh ? ' oleh ' + rjdEscapeHtml_(s.diterima.oleh) : '') : 'Belum dikonfirmasi diterima') + '</div>' : '') +
       (s.catatan ? '<div class="lp-shipment-meta" style="margin-top:4px;font-style:italic">' + rjdEscapeHtml_(s.catatan) + '</div>' : '') +
       '<a class="lp-cetak-link" href="/p/cetak.html?jenis=suratjalan&id=' + encodeURIComponent(s.idPengiriman) + '" target="_blank">&#128424; Cetak Surat Jalan</a>';
     listEl.appendChild(card);
@@ -6602,12 +6606,15 @@ const RJD_LP_TAHAP = [
   ["kembali", "Dikembalikan line", "keterangan, sudah termasuk di dibagi"],
   ["setor", "Disetor sewing", "jadi baju"],
   ["lolos", "Lolos QC finishing", "qty lolos per size"],
+  ["packing", "Dipacking", "packing yang sudah ditutup"],   // 4C (butuh gs >= @454): hanya PO yang memakai packing
   ["kirim", "Terkirim", "surat jalan"],
+  ["terima", "Diterima", "packing diterima klien, karung Hilang tidak dihitung"],
   ["tagih", "Ditagih", "invoice"]
 ];
 /** Temuan -> baris tahap yang diberi tanda di tabel per size. */
 const RJD_LP_TAHAP_TEMUAN = { dibagiLebih: "dibagi", potongTakTercatat: "dibagi", catatanPotongBeda: "hasilPotong", diTangan: "setor", setorLebih: "setor",
-  belumQC: "lolos", lolosLebih: "lolos", belumKirim: "kirim", kirimLebih: "kirim", tagihLebih: "tagih" };
+  belumQC: "lolos", lolosLebih: "lolos", belumKirim: "kirim", kirimLebih: "kirim", tagihLebih: "tagih",
+  packingLebih: "packing", belumTerima: "terima", belumTerimaLama: "terima" };   // 4C
 const RJD_LP_TINDAK = {
   dibagiLebih: "Salah satu catatan keliru: periksa Bagi ke Line dan hasil potong. Batalkan baris pembagian yang salah, atau catat potong yang kurang.",
   potongTakTercatat: "Potongnya belum dicatat lengkap (pembagian memakai qty order). Lengkapi gelaran / hasil potong supaya laporan cutting benar.",
@@ -6618,10 +6625,16 @@ const RJD_LP_TINDAK = {
   lolosLebih: "Lolos QC melebihi setoran: periksa sesi QC finishing.",
   belumKirim: "Hitung fisik di packing. Ada barangnya: kirim susulan atau simpan sebagai stok. Tidak ada (ikut terkirim): koreksi surat jalan.",
   kirimLebih: "Terkirim melebihi lolos QC: catat QC finishing yang terlewat, atau periksa surat jalan.",
-  tagihLebih: "Ditagih melebihi terkirim: periksa invoice (keuangan)."
+  tagihLebih: "Ditagih melebihi terkirim: periksa invoice (keuangan).",
+  // 4C (butuh gs >= @454): temuan packing
+  packingLebih: "Dipacking melebihi lolos QC: catat QC finishing yang terlewat, atau batalkan plastik yang berlebih selagi packing masih Draft.",
+  belumTerbitPacking: "Packing sudah ditutup: terbitkan surat jalannya di subtab Packing, atau buka kembali kalau isinya salah.",
+  belumTerimaLama: "Minta Tanda Terima yang ditandatangani ke kurir atau klien, lalu catat penerimaan per karung di subtab Packing.",
+  karungBukanBaik: "Tindak lanjuti karung yang terbuka, rusak, atau hilang dengan klien atau ekspedisi. Isi karung Hilang tidak dihitung diterima.",
+  periksaPacking: "Buka subtab Packing PO ini: catatan packing, surat jalan, atau penerimaan yang tidak konsisten harus dibetulkan."
 };
 /** Arah selisih di sel tahap yang ditandai: tahap ini KURANG dari sebelumnya (-) atau LEBIH (+, bawaan). */
-const RJD_LP_ARAH = { diTangan: -1, belumQC: -1, belumKirim: -1 };
+const RJD_LP_ARAH = { diTangan: -1, belumQC: -1, belumKirim: -1, belumTerima: -1, belumTerimaLama: -1 };
 const RJD_LP_TINGKAT = { merah: "Harus diperbaiki", kuning: "Perlu ditelusuri", proses: "Masih berjalan", info: "Keterangan" };
 
 function rjdLpAngka_(v) { return (Number(v) || 0).toLocaleString("id-ID"); }
@@ -6634,6 +6647,28 @@ function rjdLpTgl_(iso) {
 function rjdLpRentang_(r) {
   if (!r || !r.mulai) return "&#8212;";
   return r.mulai === r.selesai ? rjdLpTgl_(r.mulai) : rjdLpTgl_(r.mulai) + " &#8211; " + rjdLpTgl_(r.selesai);
+}
+
+/**
+ * 4C (butuh gs >= @454): tabel Packing & penerimaan di bagian Pengiriman -- hanya kalau PO punya packing yang sudah ditutup (d.packing);
+ * PO tanpa packing: string kosong, laporan identik dengan v423. Karung bukan Baik disebut per karung beserta catatannya.
+ */
+function rjdLpPackingHtml_(d) {
+  const daftar = d.packing || []; if (!daftar.length) return "";
+  const E = rjdEscapeHtml_, A = rjdLpAngka_, perSJ = {};
+  (d.kirim || []).forEach(function (p) { if (p.packing) perSJ[p.idPengiriman] = p.packing; });
+  const bukan = [];
+  const baris = daftar.map(function (x) {
+    const s = perSJ[x.idPengiriman] || {};
+    (s.bukanBaik || []).forEach(function (b) { bukan.push(E(x.idPengiriman) + ' ' + E(b.kode) + ' <b>' + E(b.kondisi) + '</b> ' + A(b.pcs) + ' pcs' + (b.catatan ? ' (' + E(b.catatan) + ')' : '')); });
+    const terima = x.status === "Diterima" ? rjdLpTgl_(x.tanggalDiterima) + (x.diterimaOleh ? ' oleh ' + E(x.diterimaOleh) : '') + (s.pcsHilang ? ' <span class="rlp-sel-kuning">hilang ' + A(s.pcsHilang) + ' pcs</span>' : '')
+      : (x.status === "Terbit" ? 'belum' + (s.hariBelumDiterima === null || s.hariBelumDiterima === undefined ? '' : ' (' + A(s.hariBelumDiterima) + ' hari)') : '&#8212;');
+    return '<tr><td><b>T' + A(x.kirimanKe) + '</b> ' + E(x.idPacking) + '</td><td>' + E(x.status) + '</td><td>' + (x.idPengiriman ? E(x.idPengiriman) : '&#8212;') + '</td>' +
+      '<td class="num">' + A(x.pcs) + '</td><td class="num">' + A(x.karung) + '</td><td>' + terima + '</td></tr>';
+  }).join("");
+  return '<h3 class="rlp-sub">Packing &amp; penerimaan</h3><div class="rlp-gulir"><table class="rlp-tabel rlp-packing"><thead><tr><th>Packing</th><th>Status</th><th>Surat jalan</th>' +
+    '<th class="num">Pcs</th><th class="num">Karung</th><th>Diterima</th></tr></thead><tbody>' + baris + '</tbody></table></div>' +
+    (bukan.length ? '<p class="rlp-catatan">Karung bukan Baik: ' + bukan.join(" &#183; ") + '.</p>' : '');
 }
 
 /** Isi laporan (tanpa kepala dokumen). d = jawaban getLaporanProduksi; opsi.cetak = keterangan lain langsung terbuka (kertas tidak bisa diklik). */
@@ -6662,7 +6697,7 @@ function rjdLaporanProduksiHtml_(d, opsi) {
     if (!th || t.tingkat === "info") return;
     if (!tandaTahap[th] || URUT_TINGKAT[t.tingkat] < URUT_TINGKAT[tandaTahap[th]]) tandaTahap[th] = t.tingkat;
   });
-  const KARTU = ["order", "potong", "hasilPotong", "dibagi", "setor", "lolos", "kirim", "tagih"].filter(function (t) { return t === "order" || ada[t]; });
+  const KARTU = ["order", "potong", "hasilPotong", "dibagi", "setor", "lolos", "packing", "kirim", "terima", "tagih"].filter(function (t) { return t === "order" || ada[t]; });
   const namaTahap = {}; RJD_LP_TAHAP.forEach(function (x) { namaTahap[x[0]] = x; });
   const kartu = KARTU.map(function (t, i) {
     const sebelum = i ? KARTU[i - 1] : null, beda = sebelum ? (tot[t] || 0) - (tot[sebelum] || 0) : null;
@@ -6715,7 +6750,7 @@ function rjdLaporanProduksiHtml_(d, opsi) {
     const sel = (t.sel || []).map(function (c) { return E(c.baris) + ' ' + E(c.size) + ' <b>' + (t.jenis === "catatanPotongBeda" ? rjdLpTanda_(c.n) : A(c.n)) + '</b>' +
       (c.line && c.line.length ? ' (' + c.line.map(E).join(", ") + ')' : ''); }).join(" &#183; ");
     return '<div class="rlp-temuan rlp-' + t.tingkat + '" data-jenis="' + E(t.jenis) + '"><div class="rlp-temuan-judul"><span class="rlp-no">' + (i + 1) + '</span>' + E(t.judul) +
-      ' <span class="rlp-temuan-n">' + A(t.total) + ' pcs</span> <span class="rlp-tingkat">' + E(RJD_LP_TINGKAT[t.tingkat]) + '</span></div>' +
+      ' <span class="rlp-temuan-n">' + A(t.total) + ' ' + E(t.satuan || "pcs") + '</span> <span class="rlp-tingkat">' + E(RJD_LP_TINGKAT[t.tingkat]) + '</span></div>' +
       '<div class="rlp-temuan-sel">' + sel + (t.catatan ? ' &#8212; ' + E(t.catatan) : '') + '</div>' +
       (RJD_LP_TINDAK[t.jenis] && t.tingkat !== "proses" ? '<div class="rlp-temuan-tindak"><b>Tindak lanjut:</b> ' + E(RJD_LP_TINDAK[t.jenis]) + '</div>' : '') + '</div>';
   };
@@ -6768,14 +6803,14 @@ function rjdLaporanProduksiHtml_(d, opsi) {
         '<td class="num">' + A(jumlah(lol) - jumlah(kir)) + '</td></tr>';
     }).join("") + '</tbody></table></div>' : '<p class="rlp-kosong">Belum ada surat jalan.</p>') +
     '<p class="rlp-catatan">Invoice: ' + ((d.invoice || []).length ? d.invoice.map(function (v) { return E(v.idInvoice) + ' ' + A(v.total) + ' pcs'; }).join(" &#183; ") : 'belum ada') +
-    '. Terkirim ' + A(tot.kirim) + ' dari order ' + A(tot.order) + ' pcs.</p>';
+    '. Terkirim ' + A(tot.kirim) + ' dari order ' + A(tot.order) + ' pcs.</p>' + rjdLpPackingHtml_(d);
 
   // ---------- 7. daily report & waktu ----------
   const dr = d.dailyReport || [], w = d.waktu || {};
   const blokWaktu = '<div class="rlp-waktu">' + [
     ["Pesanan", rjdLpTgl_(d.tanggalPesanan)], ["Potong (gelaran)", rjdLpRentang_(w.potong)], ["Bagi ke line", rjdLpRentang_(w.dibagi)],
-    ["Setor sewing", rjdLpRentang_(w.setor)], ["QC finishing", rjdLpRentang_(w.qc)], ["Kirim", rjdLpRentang_(w.kirim)], ["Deadline", rjdLpTgl_(d.deadline)]
-  ].map(function (x) { return '<div><span>' + x[0] + '</span><b>' + x[1] + '</b></div>'; }).join("") + '</div>' +
+    ["Setor sewing", rjdLpRentang_(w.setor)], ["QC finishing", rjdLpRentang_(w.qc)], ["Kirim", rjdLpRentang_(w.kirim)]
+  ].concat(w.terima ? [["Diterima", rjdLpRentang_(w.terima)]] : []).concat([["Deadline", rjdLpTgl_(d.deadline)]]).map(function (x) { return '<div><span>' + x[0] + '</span><b>' + x[1] + '</b></div>'; }).join("") + '</div>' +
     (dr.length ? '<p class="rlp-catatan">Daily report: ' + dr.map(function (x) { return E(x.divisi) + ' proses #' + x.nomor + ' ' + E(x.proses) + ' = ' + A(x.total) + ' pcs (' + rjdLpRentang_(x) + ')'; }).join(" &#183; ") + '.</p>' : '');
 
   const blok = function (no, judul, isi) { return '<div class="rlp-blok"><h2>' + no + '. ' + judul + '</h2>' + isi + '</div>'; };

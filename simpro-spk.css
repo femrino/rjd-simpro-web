@@ -2418,3 +2418,21 @@ h4 .sp-kms-sub { display: inline; margin-left: 6px; }
 /* 3C (v423): form Terbitkan surat jalan di blok Keputusan packing Ditutup -- garis putus memisahkannya dari Buka kembali / Batalkan. */
 .sp-kms-terbit { border-top: 1px dashed var(--line-soft); margin-top: 12px; padding-top: 10px; }
 .sp-kms-terbit h4 { margin: 0 0 6px; }
+/* 4C (v424): penerimaan per karung. Satu baris per karung: kode + isi, kondisi, catatan -- membungkus di HP (kode+kondisi satu baris,
+   catatan selebar baris). Tag kondisi: Baik hijau, Terbuka/Rusak amber, Hilang merah (isinya tidak dihitung diterima). */
+.sp-kms-terima { border-top: 1px dashed var(--line-soft); margin-top: 12px; padding-top: 10px; }
+.sp-kms-terima h4 { margin: 0 0 6px; }
+.sp-kms-trdaftar { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.sp-kms-trk { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line-soft); }
+.sp-kms-trkode { flex: 0 0 120px; font-size: 13px; }
+.sp-kms-trk select { flex: 0 1 170px; min-width: 140px; }
+.sp-kms-trk input { flex: 1 1 200px; min-width: 0; }
+.sp-kms-kond { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 6px; margin-left: 4px; }
+.sp-kms-kond-baik { background: #EAF4EC; color: #2C6B3F; }
+.sp-kms-kond-terbuka, .sp-kms-kond-rusak { background: #FCF3E3; color: #8A5D1F; }
+.sp-kms-kond-hilang { background: #FBE9E7; color: #A23B2A; }
+.sp-kms-kondket { font-size: 12px; color: var(--ink-soft); }
+.sp-kms-diterima { color: #2C6B3F; font-weight: 600; }
+.sp-kms-riwayat { margin-top: 10px; font-size: 12px; color: var(--ink-soft); }
+.sp-kms-riwayat p { margin: 4px 0; }
+.sp-lps-catatan { margin-top: 2px; }
