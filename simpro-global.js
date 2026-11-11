@@ -5789,6 +5789,7 @@ function dbRenderEditPO(d){
   // terbaca sebagai form yang berbeda.
   document.getElementById("db-editpo-body").innerHTML =
     itemHtml +
+    dbSetPOHtml_(d) +   // v420 (butuh gs >= @448): panel Set -- kosong untuk gs lama
     '<div class="of-form-section" style="margin-top:4px">' +
       '<h4>Detail Pengiriman</h4>' +
       '<label style="display:block">Target Tanggal Kirim' +
@@ -6072,6 +6073,13 @@ async function dbSimpanEditPO(){
     btn.disabled = false;
     statusEl.textContent = "";
   };
+
+  // v420: tombol ini TIDAK menyimpan set. Editor set yang terbuka dengan isian belum disimpan -> berhenti di sini, bukan menutup
+  // modal sesudah simpan lalu membuang ketikan nama set diam-diam.
+  if (dbSetPOBelumDisimpan_()) {
+    statusEl.textContent = "Isian Set belum disimpan: tekan Simpan set (atau Batal) di panel Set dulu -- tombol ini tidak menyimpan set.";
+    return;
+  }
 
   const bacaSize = function(tr){
     // SEMUA ukuran yang tersedia dikirim, bukan cuma kolom yang tampil.
@@ -6361,6 +6369,219 @@ function rjdSetPasanganWarna_(warnaPerAnggota){
   const sama = w[0].filter(function(v){ return w.every(function(x){ return x.indexOf(v) !== -1; }); });
   if(!sama.length) return null;
   return function(i, warna){ return sama.indexOf(warna) !== -1 ? warna : null; };
+}
+
+/* ============================================================
+ * SET PO -- PANEL & EDITOR BERSAMA (6 Nov 2026, web v420)
+ * ============================================================
+ * Dipindah UTUH dari simpro-pengiriman.js (krSetPOPanelHtml_ / krSetPOBuka / krSetPOBatal / krSetPOSusun_ / krSetPOSimpan, 30 Okt
+ * 2026) supaya pintu KEDUA -- panel Set di modal Edit PO (permintaan Femri 6 Nov 2026, butuh gs >= @448) -- memakai editor, aturan
+ * nama, kunci kiriman, dan kalimat yang SAMA dengan form surat jalan. Dua salinan aturan "nama yang sama = satu set" adalah cara
+ * keduanya berbeda pendapat diam-diam. Form surat jalan memanggilnya lewat pembungkus krSetPO* (nama lama dipertahankan: harness
+ * jalan135 memanggilnya) dan HTML-nya IDENTIK byte dengan v419 (jalan145 B membandingkannya dengan git show v419). Yang beda per
+ * pintu hanya SAMBUNGANNYA: onclick tombol, API & token, dan apa yang terjadi sesudah tersimpan (form surat jalan memuat ulang
+ * dirinya sambil memulihkan qty; Edit PO menggambar ulang panelnya saja -- isian Edit PO yang belum disimpan TIDAK boleh hilang).
+ * CSS .kr-setpo-* ikut pindah dari simpro-pengiriman.css ke simpro-global.css dengan selektor IDENTIK.
+ * ============================================================ */
+
+/** Panel ringkas set. o: { set, galat, atur (onclick tombol Atur set), cek (wadah peringatan form surat jalan), boleh, alasan, tambahan (HTML) } */
+function rjdSetPOPanelHtml_(o){
+  const set = o.set || [], boleh = o.boleh !== false;
+  const daftar = set.length
+    ? '<ul class="kr-setpo-daftar">' + set.map(function (s) {
+        return '<li><b>' + rjdEscapeHtml_(s.nama) + '</b> = ' +
+          rjdEscapeHtml_(s.anggota.map(function (a) { return a.style || a.deskripsi || "-"; }).join(" + ")) + '</li>';
+      }).join("") + '</ul>'
+    : '<p class="kr-setpo-info">Belum ada set. Kalau beberapa style di PO ini dijual sebagai satu set (mis. Dress + Outer), ' +
+      'atur di sini supaya surat jalan dan invoice tercetak per set.</p>';
+  return '<div class="kr-setpo" id="kr-setpo">' +
+    '<div class="kr-setpo-kepala"><b>Set</b>' +
+      '<button type="button" class="kr-setpo-atur" id="kr-setpo-atur" onclick="' + o.atur + '"' +
+        (boleh ? '' : ' disabled="disabled" title="' + rjdEscapeHtml_(o.alasan || "Hanya bisa dilihat.") + '"') + '>Atur set</button></div>' +
+    daftar +
+    (o.tambahan || '') +
+    (o.galat ? '<p class="kr-setpo-galat">' + rjdEscapeHtml_(o.galat) + '</p>' : '') +
+    '<div class="kr-setpo-hasil" id="kr-setpo-hasil"></div>' +
+    '<div class="hidden" id="kr-setpo-editor"></div>' +
+    (o.cek ? '<div class="kr-setpo-cek" id="kr-setpo-cek"></div>' : '') +
+  '</div>';
+}
+
+/** Buka editor. item: [{brand, artikel, style, setNama}] (urutan tampil), set: set aktif (saran nama), aksi: { simpan, batal } (onclick). */
+function rjdSetPOBuka_(item, set, aksi){
+  const ed = document.getElementById("kr-setpo-editor");
+  if (!ed) return false;
+  window.RJD_SETPO_ITEM = item;
+  ed.innerHTML =
+    '<p class="kr-setpo-info">Ketik <b>nama set yang sama</b> di style-style yang dijual sebagai satu set. ' +
+      'Kosongkan style yang dijual sendiri. Data tetap per potong; yang berubah hanya cetakan surat jalan dan invoice.</p>' +
+    '<datalist id="kr-setpo-nama">' + (set || []).map(function (s) {
+      return '<option value="' + rjdEscapeHtml_(s.nama) + '"></option>'; }).join("") + '</datalist>' +
+    '<table class="kr-setpo-tabel"><tbody>' + item.map(function (it, i) {
+      return '<tr><td class="kr-setpo-style">' + rjdEscapeHtml_([it.artikel, it.style].filter(Boolean).join(" / ") || "-") + '</td>' +
+        '<td class="kr-setpo-isian"><input type="text" class="kr-setpo-input" data-i="' + i + '" list="kr-setpo-nama" maxlength="60" ' +
+          'placeholder="dijual sendiri" aria-label="Nama set" value="' + rjdEscapeHtml_(it.setNama) + '"/></td></tr>';
+    }).join("") + '</tbody></table>' +
+    '<div class="kr-setpo-tombol">' +
+      '<button type="button" class="kr-setpo-simpan" id="kr-setpo-simpan" onclick="' + aksi.simpan + '">Simpan set</button>' +
+      '<button type="button" class="kr-setpo-batal" onclick="' + aksi.batal + '">Batal</button></div>' +
+    '<div class="kr-setpo-pesan" id="kr-setpo-pesan"></div>';
+  ed.classList.remove("hidden");
+  const atur = document.getElementById("kr-setpo-atur");
+  if (atur) atur.classList.add("hidden");
+  return true;
+}
+
+function rjdSetPOBatal_(){
+  const ed = document.getElementById("kr-setpo-editor");
+  if (ed) { ed.classList.add("hidden"); ed.innerHTML = ""; }
+  const atur = document.getElementById("kr-setpo-atur");
+  if (atur) atur.classList.remove("hidden");
+}
+
+/** Nama set seperti yang dibandingkan: spasi dirapatkan. Huruf besar/kecil diabaikan oleh pemanggil (kunci grup). */
+function rjdSetPONama_(v){ return String(v || "").replace(/\s+/g, " ").trim(); }
+
+/** Susunan dari isian editor: nama yang sama (abaikan huruf besar & spasi ganda) = satu set. */
+function rjdSetPOSusun_(){
+  const item = window.RJD_SETPO_ITEM || [], grup = {}, urut = [];
+  document.querySelectorAll(".kr-setpo-input").forEach(function (inp) {
+    const it = item[Number(inp.getAttribute("data-i"))];
+    const nama = rjdSetPONama_(inp.value);
+    if (!it || !nama) return;
+    const k = nama.toLowerCase();
+    if (!grup[k]) { grup[k] = { nama: nama, anggota: [] }; urut.push(k); }
+    grup[k].anggota.push({ brand: it.brand, artikel: it.artikel, style: it.style });
+  });
+  return urut.map(function (k) { return grup[k]; });
+}
+
+/**
+ * Kirim susunan (rute simpanSetPO). c: { idPO, apiUrl, idToken (string), sesudah(h, teks, set) } -- sesudah dipanggil HANYA saat
+ * server menyimpan / mengenali kiriman; penolakan & jaringan ditulis di #kr-setpo-pesan dan editor tetap terbuka.
+ */
+function rjdSetPOSimpan_(c){
+  const pesan = document.getElementById("kr-setpo-pesan");
+  if (!c || !c.idPO || !pesan || window.RJD_SETPO_SIBUK) return;
+  const set = rjdSetPOSusun_();
+  const kurang = set.filter(function (s) { return s.anggota.length < 2; });
+  if (kurang.length) {
+    pesan.className = "kr-setpo-pesan galat";
+    pesan.textContent = "Set " + kurang.map(function (s) { return '"' + s.nama + '"'; }).join(", ") +
+      " baru berisi 1 style. Satu set butuh minimal 2 style: ketik nama yang sama di style pasangannya, atau kosongkan.";
+    return;
+  }
+  const payload = { idPurchaseOrder: c.idPO, set: set };
+  // Kunci terikat ISIAN (pola surat jalan, P18-A): jawaban hilang + Simpan lagi dengan isian sama = dikenali server.
+  payload.idPermintaan = rjdKunciIsian_("setpo", { idPurchaseOrder: payload.idPurchaseOrder, set: set });
+  window.RJD_SETPO_SIBUK = true;
+  const btn = document.getElementById("kr-setpo-simpan");
+  if (btn) btn.disabled = true;
+  pesan.className = "kr-setpo-pesan";
+  pesan.textContent = "Menyimpan...";
+  let jawabanTiba = false;
+  fetch(c.apiUrl, { method: "POST",
+    body: JSON.stringify({ idToken: c.idToken, action: "simpanSetPO", payload: payload }) })
+  .then(function (r) { jawabanTiba = true; return r.json(); })
+  .then(function (h) {
+    window.RJD_SETPO_SIBUK = false;
+    rjdKunciLepas_("setpo");   // server MENJAWAB (berhasil atau menolak): kunci tidak lagi dibutuhkan
+    if (!h || !h.success) {
+      if (btn) btn.disabled = false;
+      pesan.className = "kr-setpo-pesan galat";
+      pesan.textContent = (h && h.error) || "Set gagal disimpan.";
+      return;
+    }
+    const teks = h.tidakBerubah ? "Tidak ada perubahan: susunan set sama dengan yang tersimpan." :
+      (h.sudahTercatat ? "Set ini SUDAH tersimpan sebelumnya; kiriman ulang tidak menyimpan dua kali." :
+        (set.length ? "Set tersimpan. Surat jalan dan invoice PO ini kini tercetak per set." :
+          "Semua set PO ini dihapus. Cetakan kembali per potong."));
+    c.sesudah(h, teks, set);
+  })
+  .catch(function (e) {
+    window.RJD_SETPO_SIBUK = false;
+    if (btn) btn.disabled = false;
+    pesan.className = "kr-setpo-pesan galat";
+    // Sebelum jawaban tiba keadaannya TIDAK DIKETAHUI -- kuncinya sengaja disimpan, Simpan lagi itu aman.
+    pesan.textContent = (jawabanTiba ? "Jawaban server tidak terbaca" : "Jawaban server tidak sampai") +
+      " -- set BELUM PASTI tersimpan. Tekan Simpan set lagi tanpa mengubah isian: kiriman ulang dikenali, tidak tersimpan dua kali.";
+  });
+}
+
+/* ============================================================
+ * SET PO DI EDIT PO -- pintu kedua (6 Nov 2026, permintaan Femri; web v420, butuh gs >= @448)
+ * ============================================================
+ * Pintu pertama (form surat jalan) ada di ujung rantai, padahal laporan cutting (set lengkap, @445) sudah membutuhkan set jauh
+ * sebelum pengiriman -- MCONX A34 tercetak per potong karena setnya belum pernah dinyatakan. Panel ini memakai komponen bersama
+ * rjdSetPO* di atas; datanya setPO dari getPOUntukEdit_ (set-po.js setPoUntukEditPO_): item unik per kunci set + nama set tiap
+ * item, set aktif, anggota yang HILANG dari PO, dan izin mengubah yang dihitung dari tabel penjaga rute simpanSetPO (finance
+ * membuka Edit PO tapi tidak ber-area produksi -> baca saja, tombolnya mati beralasan, bukan ditolak sesudah diklik).
+ * Set disimpan SENDIRI (tombol Simpan set), terpisah dari Simpan Perubahan: sesudah tersimpan hanya panel ini yang digambar ulang
+ * -- isian Edit PO yang belum disimpan tidak tersentuh. Simpan Perubahan menolak jalan selagi editor set terbuka dengan isian yang
+ * belum disimpan: tanpa itu ketikan nama set hilang diam-diam saat modal tertutup sesudah simpan.
+ * gs lama (tanpa setPO): panel tidak ada sama sekali, modal lain utuh.
+ * ============================================================ */
+function dbSetPOHtml_(d){
+  const s = d && d.setPO;
+  if (!s || typeof s !== "object" || !Array.isArray(s.item)) return "";   // gs < @448
+  const esc = rjdEscapeHtml_;
+  const hilang = (s.hilang || []).length
+    ? '<p class="kr-setpo-galat dbep-setpo-hilang">Anggota set yang TIDAK ADA LAGI di PO ini (nama style diubah sesudah set dinyatakan?): ' +
+        s.hilang.map(function (h) { return esc(h.deskripsi) + ' (' + esc(h.nama) + ')'; }).join("; ") +
+        '. Cetakan tidak menganggapnya anggota set &#8212; atur set ulang.</p>'
+    : '';
+  const ket = s.bolehUbah === false
+    ? '<p class="kr-setpo-info">Hanya bisa dilihat: ' + esc(s.alasanTidakBoleh || "") + '</p>'
+    : '<p class="kr-setpo-info">Set disimpan sendiri dengan tombol Simpan set &#8212; tidak ikut tombol Simpan Perubahan di bawah.</p>';
+  return '<div class="dbep-setpo" id="db-editpo-setpo">' +
+    rjdSetPOPanelHtml_({ set: s.set, galat: s.galat, atur: "dbSetPOBuka()", boleh: s.bolehUbah !== false, alasan: s.alasanTidakBoleh, tambahan: hilang + ket }) +
+  '</div>';
+}
+
+function dbSetPOBuka(){
+  const s = (window.OL_EDITPO_DATA || {}).setPO;
+  if (!s || !Array.isArray(s.item) || s.bolehUbah === false) return;
+  rjdSetPOBuka_(s.item, s.set || [], { simpan: "dbSetPOSimpan()", batal: "dbSetPOBatal()" });
+}
+
+function dbSetPOBatal(){ rjdSetPOBatal_(); }
+
+function dbSetPOSimpan(){
+  const d = window.OL_EDITPO_DATA, idPO = window.OL_EDITPO_ID;
+  if (!d || !d.setPO || !idPO) return;
+  let cfg;
+  try { cfg = rjdEditPOCfg_(); } catch (e) { return; }
+  const panel = document.getElementById("db-editpo-setpo");
+  rjdSetPOSimpan_({ idPO: idPO, apiUrl: cfg.apiUrl, idToken: cfg.idToken(), sesudah: function (h, teks, set) {
+    // Jawaban milik form yang sudah ditutup, atau PO lain yang dibuka sesudahnya: jangan menulis ke form yang tampil sekarang.
+    // Dua syarat, bukan satu: identitas objek data saja TIDAK cukup (jalan145 M -- objek jawaban yang sama dipakai ulang membuat
+    // jawaban basi lolos); panel yang mengirim harus masih terpasang -- modal yang ditutup/dibuka ulang membuat panel baru.
+    if (window.OL_EDITPO_DATA !== d || !panel || !panel.isConnected) return;
+    const s = d.setPO;
+    s.set = Array.isArray(h.set) ? h.set : set;
+    s.hilang = [];   // susunan baru dibangun dari item PO ini saja -- anggota lama yang hilang ikut terganti
+    s.item.forEach(function (it) { it.setNama = ""; });
+    set.forEach(function (g) {
+      g.anggota.forEach(function (a) {
+        s.item.forEach(function (it) { if (it.brand === a.brand && it.artikel === a.artikel && it.style === a.style) it.setNama = g.nama; });
+      });
+    });
+    const w = document.getElementById("db-editpo-setpo");
+    if (w) w.outerHTML = dbSetPOHtml_(d);
+    const el = document.getElementById("kr-setpo-hasil");
+    if (el) el.textContent = teks;
+  }});
+}
+
+/** Editor set terbuka DAN isinya beda dari yang tersimpan? (nama dibandingkan seperti server: spasi dirapatkan, huruf besar diabaikan) */
+function dbSetPOBelumDisimpan_(){
+  const ed = document.querySelector("#db-editpo-overlay #kr-setpo-editor");
+  if (!ed || ed.classList.contains("hidden")) return false;
+  const item = window.RJD_SETPO_ITEM || [];
+  return Array.prototype.some.call(ed.querySelectorAll(".kr-setpo-input"), function (inp) {
+    const it = item[Number(inp.getAttribute("data-i"))];
+    return !!it && rjdSetPONama_(inp.value).toLowerCase() !== rjdSetPONama_(it.setNama).toLowerCase();
+  });
 }
 
 /* ============================================================

@@ -257,35 +257,8 @@ body { padding-top: 0; }   /* lihat catatan gap 68px di simpro-orderlist.css */
   .kr-tabel { min-width: 840px; }
 }
 
-/* ============================================================
-   SET PO (30 Okt 2026, butuh gs >= @427): panel set di atas tabel form surat jalan.
-   Kotak isian >= 16px (P18-C WJ-9: di bawahnya Safari iOS memperbesar halaman saat disentuh).
-   ============================================================ */
-.kr-setpo { margin: 0 0 14px; padding: 12px 14px; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--paper); }
-.kr-setpo-kepala { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13.5px; }
-.kr-setpo-atur, .kr-setpo-simpan, .kr-setpo-batal { font: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px;
-  border-radius: 9px; cursor: pointer; border: 1px solid var(--navy); background: var(--white); color: var(--navy); }
-.kr-setpo-simpan { background: var(--navy); color: var(--white); }
-.kr-setpo-simpan:disabled { opacity: .6; cursor: wait; }
-.kr-setpo-daftar { margin: 8px 0 0; padding-left: 18px; font-size: 13px; word-break: normal; overflow-wrap: break-word; }
-.kr-setpo-info { font-size: 12.5px; color: var(--ink-soft); margin: 8px 0 0; }
-.kr-setpo-galat, .kr-setpo-pesan.galat { font-size: 12.5px; color: var(--thread); }
-.kr-setpo-hasil { font-size: 12.5px; color: #2C6B3F; margin-top: 6px; }
-.kr-setpo-hasil:empty, .kr-setpo-cek:empty, .kr-setpo-pesan:empty { display: none; }
-.kr-setpo-tabel { width: 100%; border-collapse: collapse; margin: 8px 0; }
-.kr-setpo-tabel td { padding: 6px 4px; border-top: 1px solid var(--line-soft); font-size: 13px; vertical-align: middle;
-  word-break: normal; overflow-wrap: break-word; }
-.kr-setpo-style { width: 50%; }
-.kr-setpo-input { width: 100%; box-sizing: border-box; font-size: 16px; padding: 7px 10px; border: 1px solid var(--line-soft);
-  border-radius: 8px; background: var(--white); }
-.kr-setpo-tombol { display: flex; gap: 8px; flex-wrap: wrap; }
-.kr-setpo-pesan { font-size: 12.5px; margin-top: 8px; color: var(--ink-soft); }
-.kr-setpo-cek { margin-top: 8px; }
-.kr-setpo-ok { font-size: 12.5px; color: #2C6B3F; font-weight: 600; word-break: normal; }
-.kr-setpo-awas { margin: 6px 0 0; padding: 8px 12px 8px 26px; border-radius: 8px; background: #FCF3E3; color: #8A5D1F;
-  font-size: 12.5px; word-break: normal; overflow-wrap: break-word; }
-.kr-setpo-lencana { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--paper-2);
-  font-size: 11px; font-weight: 600; color: var(--navy); white-space: nowrap; }
+/* SET PO (30 Okt 2026): aturan .kr-setpo-* PINDAH ke simpro-global.css (v420, selektor identik) -- dipakai juga panel Set
+   di modal Edit PO yang hidup di halaman order-list & produksi, yang tidak memuat berkas ini. */
 
 /* v407: kelebihan di atas qty PO (izin kirim-lebih), dihitung per ketikan -- alasan wajib kalau ada. */
 .kr-buat-lebih-info { margin: 10px 0 0; padding: 8px 12px; border-radius: 8px; background: #FFF4E5; color: #8A4B08; font-size: 13px; font-weight: 600; }

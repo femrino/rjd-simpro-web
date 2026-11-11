@@ -766,7 +766,8 @@ function krSimpanPengiriman() {
  * SET PO DI FORM SURAT JALAN (30 Okt 2026, butuh gs >= @427 -- set-po.js)
  * ============================================================
  * Order yang dijual per SET (261029/MCONX A33: Dress + Outer, harga per set) dicatat per potong. Panel ini:
- *   1. menampilkan & mengatur susunan set PO (rute simpanSetPO, bagian gudang -- yang membuat surat jalan);
+ *   1. menampilkan & mengatur susunan set PO (rute simpanSetPO, bagian gudang -- yang membuat surat jalan); sejak v420 lewat
+ *      komponen bersama rjdSetPO* di simpro-global.js -- pintu keduanya panel Set di modal Edit PO;
  *   2. memperingatkan kalau qty anggota satu set tidak sama -- kertasnya akan mencetak sisanya per potong.
  * Pasangan warna memakai rjdSetPasanganWarna_ (simpro-global.js), aturan yang SAMA dengan cetakan, jadi
  * peringatan di sini dan isi kertas tidak berbeda pendapat. Payload gs lama (tanpa `set`) = panel tidak ada.
@@ -797,119 +798,29 @@ function krSetPOItem_(d){
   return hasil;
 }
 
+// v420: panel, editor, susunan & simpan pindah ke simpro-global.js (rjdSetPO*) -- dipakai juga panel Set di modal Edit PO.
+// Pembungkus di bawah mempertahankan nama lama (onclick markup & harness jalan135) dan menyambungkan API, token, serta
+// sesudah-simpan milik form ini: muat ulang form sambil memulihkan qty yang sudah diketik.
 function krSetPOPanelHtml_(d){
   if (!d || !Array.isArray(d.set)) return "";   // gs < @427: fiturnya belum ada di server
-  const daftar = d.set.length
-    ? '<ul class="kr-setpo-daftar">' + d.set.map(function (s) {
-        return '<li><b>' + rjdEscapeHtml_(s.nama) + '</b> = ' +
-          rjdEscapeHtml_(s.anggota.map(function (a) { return a.style || a.deskripsi || "-"; }).join(" + ")) + '</li>';
-      }).join("") + '</ul>'
-    : '<p class="kr-setpo-info">Belum ada set. Kalau beberapa style di PO ini dijual sebagai satu set (mis. Dress + Outer), ' +
-      'atur di sini supaya surat jalan dan invoice tercetak per set.</p>';
-  return '<div class="kr-setpo" id="kr-setpo">' +
-    '<div class="kr-setpo-kepala"><b>Set</b>' +
-      '<button type="button" class="kr-setpo-atur" id="kr-setpo-atur" onclick="krSetPOBuka()">Atur set</button></div>' +
-    daftar +
-    (d.setGalat ? '<p class="kr-setpo-galat">' + rjdEscapeHtml_(d.setGalat) + '</p>' : '') +
-    '<div class="kr-setpo-hasil" id="kr-setpo-hasil"></div>' +
-    '<div class="hidden" id="kr-setpo-editor"></div>' +
-    '<div class="kr-setpo-cek" id="kr-setpo-cek"></div>' +
-  '</div>';
+  return rjdSetPOPanelHtml_({ set: d.set, galat: d.setGalat, atur: "krSetPOBuka()", cek: true });
 }
 
 function krSetPOBuka(){
   const d = window.KR_BUAT;
-  const ed = document.getElementById("kr-setpo-editor");
-  if (!d || !ed) return;
-  const item = krSetPOItem_(d);
-  window.KR_SETPO_ITEM = item;
-  ed.innerHTML =
-    '<p class="kr-setpo-info">Ketik <b>nama set yang sama</b> di style-style yang dijual sebagai satu set. ' +
-      'Kosongkan style yang dijual sendiri. Data tetap per potong; yang berubah hanya cetakan surat jalan dan invoice.</p>' +
-    '<datalist id="kr-setpo-nama">' + (d.set || []).map(function (s) {
-      return '<option value="' + rjdEscapeHtml_(s.nama) + '"></option>'; }).join("") + '</datalist>' +
-    '<table class="kr-setpo-tabel"><tbody>' + item.map(function (it, i) {
-      return '<tr><td class="kr-setpo-style">' + rjdEscapeHtml_([it.artikel, it.style].filter(Boolean).join(" / ") || "-") + '</td>' +
-        '<td class="kr-setpo-isian"><input type="text" class="kr-setpo-input" data-i="' + i + '" list="kr-setpo-nama" maxlength="60" ' +
-          'placeholder="dijual sendiri" aria-label="Nama set" value="' + rjdEscapeHtml_(it.setNama) + '"/></td></tr>';
-    }).join("") + '</tbody></table>' +
-    '<div class="kr-setpo-tombol">' +
-      '<button type="button" class="kr-setpo-simpan" id="kr-setpo-simpan" onclick="krSetPOSimpan()">Simpan set</button>' +
-      '<button type="button" class="kr-setpo-batal" onclick="krSetPOBatal()">Batal</button></div>' +
-    '<div class="kr-setpo-pesan" id="kr-setpo-pesan"></div>';
-  ed.classList.remove("hidden");
-  const atur = document.getElementById("kr-setpo-atur");
-  if (atur) atur.classList.add("hidden");
+  if (!d) return;
+  rjdSetPOBuka_(krSetPOItem_(d), d.set, { simpan: "krSetPOSimpan()", batal: "krSetPOBatal()" });
 }
 
-function krSetPOBatal(){
-  const ed = document.getElementById("kr-setpo-editor");
-  if (ed) { ed.classList.add("hidden"); ed.innerHTML = ""; }
-  const atur = document.getElementById("kr-setpo-atur");
-  if (atur) atur.classList.remove("hidden");
-}
-
-/** Susunan dari isian editor: nama yang sama (abaikan huruf besar & spasi ganda) = satu set. */
-function krSetPOSusun_(){
-  const item = window.KR_SETPO_ITEM || [], grup = {}, urut = [];
-  document.querySelectorAll(".kr-setpo-input").forEach(function (inp) {
-    const it = item[Number(inp.getAttribute("data-i"))];
-    const nama = String(inp.value || "").replace(/\s+/g, " ").trim();
-    if (!it || !nama) return;
-    const k = nama.toLowerCase();
-    if (!grup[k]) { grup[k] = { nama: nama, anggota: [] }; urut.push(k); }
-    grup[k].anggota.push({ brand: it.brand, artikel: it.artikel, style: it.style });
-  });
-  return urut.map(function (k) { return grup[k]; });
-}
+function krSetPOBatal(){ rjdSetPOBatal_(); }
 
 function krSetPOSimpan(){
   const d = window.KR_BUAT;
-  const pesan = document.getElementById("kr-setpo-pesan");
-  if (!d || !pesan || window.KR_SETPO_SIBUK) return;
-  const set = krSetPOSusun_();
-  const kurang = set.filter(function (s) { return s.anggota.length < 2; });
-  if (kurang.length) {
-    pesan.className = "kr-setpo-pesan galat";
-    pesan.textContent = "Set " + kurang.map(function (s) { return '"' + s.nama + '"'; }).join(", ") +
-      " baru berisi 1 style. Satu set butuh minimal 2 style: ketik nama yang sama di style pasangannya, atau kosongkan.";
-    return;
-  }
-  const payload = { idPurchaseOrder: d.idPurchaseOrder, set: set };
-  // Kunci terikat ISIAN (pola surat jalan, P18-A): jawaban hilang + Simpan lagi dengan isian sama = dikenali server.
-  payload.idPermintaan = rjdKunciIsian_("setpo", { idPurchaseOrder: payload.idPurchaseOrder, set: set });
-  window.KR_SETPO_SIBUK = true;
-  const btn = document.getElementById("kr-setpo-simpan");
-  if (btn) btn.disabled = true;
-  pesan.className = "kr-setpo-pesan";
-  pesan.textContent = "Menyimpan...";
-  let jawabanTiba = false;
-  fetch(KR_API_URL, { method: "POST",
-    body: JSON.stringify({ idToken: KR_ID_TOKEN, action: "simpanSetPO", payload: payload }) })
-  .then(function (r) { jawabanTiba = true; return r.json(); })
-  .then(function (h) {
-    window.KR_SETPO_SIBUK = false;
-    rjdKunciLepas_("setpo");   // server MENJAWAB (berhasil atau menolak): kunci tidak lagi dibutuhkan
-    if (!h || !h.success) {
-      if (btn) btn.disabled = false;
-      pesan.className = "kr-setpo-pesan galat";
-      pesan.textContent = (h && h.error) || "Set gagal disimpan.";
-      return;
-    }
-    window.KR_SETPO_PESAN = h.tidakBerubah ? "Tidak ada perubahan: susunan set sama dengan yang tersimpan." :
-      (h.sudahTercatat ? "Set ini SUDAH tersimpan sebelumnya; kiriman ulang tidak menyimpan dua kali." :
-        (set.length ? "Set tersimpan. Surat jalan dan invoice PO ini kini tercetak per set." :
-          "Semua set PO ini dihapus. Cetakan kembali per potong."));
+  if (!d) return;
+  rjdSetPOSimpan_({ idPO: d.idPurchaseOrder, apiUrl: KR_API_URL, idToken: KR_ID_TOKEN, sesudah: function (h, teks) {
+    window.KR_SETPO_PESAN = teks;
     krSetPOMuatUlang_();
-  })
-  .catch(function (e) {
-    window.KR_SETPO_SIBUK = false;
-    if (btn) btn.disabled = false;
-    pesan.className = "kr-setpo-pesan galat";
-    // Sebelum jawaban tiba keadaannya TIDAK DIKETAHUI -- kuncinya sengaja disimpan, Simpan lagi itu aman.
-    pesan.textContent = (jawabanTiba ? "Jawaban server tidak terbaca" : "Jawaban server tidak sampai") +
-      " -- set BELUM PASTI tersimpan. Tekan Simpan set lagi tanpa mengubah isian: kiriman ulang dikenali, tidak tersimpan dua kali.";
-  });
+  }});
 }
 
 /** Muat ulang form dari server (setId per baris ditempel server), qty yang sudah diketik diingat. */
