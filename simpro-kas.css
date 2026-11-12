@@ -118,6 +118,10 @@
 .ks-ubah-aksi { display: flex; gap: 6px; align-items: center; }
 .ks-ubah-foto { flex: 1 1 220px; } .ks-ubah-foto input[type=file] { font-size: 16px; }
 .ks-ubah-foto a { color: #2F4A7A; }
+/* @K17 BK-3 (v425): kotak Alasan selebar kotak Keterangan; Pihak/Ref terkunci untuk non-finance tampak terkunci. */
+.ks-ubah-alasan { flex: 1 1 260px; } .ks-ubah-alasan input { width: 100%; }
+.ks-ubah-panel input:disabled { background: #F3F1EC; color: var(--ink-soft, #5F6B7A); cursor: not-allowed; }
+.ks-ubah-catatan { flex: 1 1 100%; }
 .ks-koreksi-bar { background: #EEF3FB; border: 1px solid #CFD6E4; border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; font-size: 12.5px; color: #2F4A7A; line-height: 1.6; }
 .ks-btn-kecil-netral { padding: 3px 8px; font-size: 11px; margin-left: 6px; }
 .ks-tabel-arus td:first-child { min-width: 180px; }

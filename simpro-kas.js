@@ -534,7 +534,13 @@ function ksSimpan() {
  * barisnya. Disuntik dari JS (pola KP-8): markup tabel memang dibangun JS. Hanya kolom
  * yang BERUBAH yang dikirim, dan kalau tidak ada yang berubah tidak ada permintaan sama
  * sekali -- servernya idempoten, tapi permintaan kosong tetap permintaan.
+ *
+ * @K17 BK-3 (v425, butuh gs >= @457): Pihak & Ref hanya finance/owner + ALASAN. Pihak menentukan saldo kasbon per
+ * orang, Ref menentukan biaya per PO -- keduanya memindahkan rupiah antar sub-buku walau saldonya tidak bergerak.
+ * Untuk peran lain kedua kotaknya tampil TERKUNCI (bukan disembunyikan: isinya tetap informasi), Keterangan & foto
+ * tetap bisa diubah. Server menjaganya lagi, termasuk Ref yang mengikat tagihan supplier / slip gaji.
  */
+const KS_ALASAN_UBAH_MIN = 5;
 function ksUbahCatatan(btn) {
   const id = btn.getAttribute("data-id");
   const t = (KS_DATA.transaksi || []).filter(function (x) { return x.id === id; })[0];
@@ -544,14 +550,18 @@ function ksUbahCatatan(btn) {
   KS_UBAH_FOTO = null;   // foto milik panel sebelumnya tidak boleh ikut terkirim
   const tr = btn.closest("tr"); if (!tr) return;
   const kolom = tr.children.length;
+  const fin = !!(KS_DATA && KS_DATA.bisaFinance);
+  const kunci = fin ? '' : ' disabled title="Pihak &amp; Ref hanya bisa diubah finance/owner"';
   tr.insertAdjacentHTML("afterend",
     '<tr class="ks-r-ubah" data-id="' + ksEsc_(id) + '"><td colspan="' + kolom + '"><div class="ks-ubah-panel">' +
-    '<label>Pihak<input id="ks-ub-pihak" type="text" value="' + ksEsc_(t.pihak) + '"></label>' +
-    '<label>Ref<input id="ks-ub-ref" type="text" value="' + ksEsc_(t.ref) + '"></label>' +
+    '<label>Pihak<input id="ks-ub-pihak" type="text" value="' + ksEsc_(t.pihak) + '"' + kunci + '></label>' +
+    '<label>Ref<input id="ks-ub-ref" type="text" value="' + ksEsc_(t.ref) + '"' + kunci + '></label>' +
     '<label class="ks-ubah-ket">Keterangan<input id="ks-ub-ket" type="text" value="' + ksEsc_(t.keterangan) + '"></label>' +
     // @K14b: foto. Kalau baris sudah berfoto, tautannya ditampilkan dan foto baru MENGGANTINYA.
     '<label class="ks-ubah-foto">' + (t.bukti ? 'Ganti foto (<a href="' + ksEsc_(t.bukti) + '" target="_blank" rel="noopener">lihat yang ada</a>)' : 'Tambah foto bukti') +
       '<input id="ks-ub-bukti" type="file" accept="image/*" onchange="ksUbahFotoDipilih(this)"><span id="ks-ub-bukti-info" class="ks-sub"></span></label>' +
+    (fin ? '<label class="ks-ubah-alasan">Alasan (wajib kalau Pihak/Ref berubah)<input id="ks-ub-alasan" type="text" placeholder="mis. salah nama penerima kasbon"></label>'
+         : '<span class="ks-ubah-catatan ks-sub">Pihak &amp; Ref hanya bisa diubah finance/owner.</span>') +
     '<span class="ks-ubah-aksi"><button id="ks-ub-simpan" class="ks-btn ks-btn-utama" type="button" onclick="ksUbahCatatanSimpan(\'' + ksEsc_(id) + '\')">Simpan</button> ' +
     '<button id="ks-ub-batal" class="ks-btn" type="button" onclick="document.querySelector(\'tr.ks-r-ubah\').remove()">Batal</button></span>' +
     '<div id="ks-ub-pesan" class="ks-sub"></div></div></td></tr>');
@@ -564,12 +574,23 @@ function ksUbahCatatanSimpan(id) {
   if (!t) return;
   const perubahan = {};
   [["pihak", "ks-ub-pihak"], ["ref", "ks-ub-ref"], ["keterangan", "ks-ub-ket"]].forEach(function (p) {
-    const v = String(document.getElementById(p[1]).value || "").trim();
+    const el = document.getElementById(p[1]);
+    if (!el || el.disabled) return;   // @K17 BK-3: kotak terkunci (bukan finance) tidak pernah dikirim
+    const v = String(el.value || "").trim();
     if (v !== String(t[p[0]] || "").trim()) perubahan[p[0]] = v;
   });
   // @K14b: foto dihitung sebagai perubahan walau tidak ada teks yang berganti.
   if (KS_UBAH_FOTO) { perubahan.buktiBase64 = KS_UBAH_FOTO.base64; perubahan.buktiMime = KS_UBAH_FOTO.mime; }
   if (!Object.keys(perubahan).length) { if (pesan) pesan.textContent = "Tidak ada yang berubah."; return; }
+  // @K17 BK-3: alasan dituntut di sini juga supaya penolakan server tidak jadi satu putaran jaringan. Alasan yang diisi
+  // untuk perubahan Keterangan/foto saja ikut terkirim -- tercatat di Log Ubah Kas, tidak dituntut.
+  const elAlasan = document.getElementById("ks-ub-alasan"), alasan = elAlasan ? String(elAlasan.value || "").trim() : "";
+  if ((perubahan.pihak !== undefined || perubahan.ref !== undefined) && alasan.length < KS_ALASAN_UBAH_MIN) {
+    if (pesan) pesan.textContent = "Alasan wajib (minimal " + KS_ALASAN_UBAH_MIN + " huruf) untuk mengubah Pihak/Ref.";
+    if (elAlasan) elAlasan.focus();
+    return;
+  }
+  if (alasan) perubahan.alasan = alasan;
   const btn = document.getElementById("ks-ub-simpan"); if (btn) btn.disabled = true;
   if (pesan) pesan.textContent = "Menyimpan...";
   ksKirim_("ubahCatatanKas", { id: id, perubahan: perubahan })
