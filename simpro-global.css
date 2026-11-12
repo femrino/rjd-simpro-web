@@ -1001,6 +1001,29 @@ footer{padding:28px 0;background:var(--ink)}
 .kr-setpo-lencana { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--paper-2);
   font-size: 11px; font-weight: 600; color: var(--navy); white-space: nowrap; }
 .rjd-modal .dbep-setpo { margin-top: 14px; }
+/* v426 (butuh gs >= @459): bilah Status PO di puncak modal Edit PO (dbStatusPOHtml_). Isian 16 px: lantai zoom iOS (PF-12). */
+.rjd-modal .dbep-stpo { margin: 0 0 14px; padding: 10px 14px; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--paper); }
+.rjd-modal .dbep-stpo-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; font-size: 13.5px; word-break: normal; overflow-wrap: break-word; }
+.rjd-modal .dbep-stpo-lbl { font-size: 12.5px; color: var(--ink-soft); }
+.rjd-modal .dbep-stpo-nilai { color: var(--navy); }
+.rjd-modal .dbep-stpo-btn, .rjd-modal .dbep-stpo-ok-btn, .rjd-modal .dbep-stpo-batal { font: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px;
+  border-radius: 9px; cursor: pointer; border: 1px solid var(--navy); background: var(--white); color: var(--navy); }
+.rjd-modal .dbep-stpo-ok-btn { background: var(--navy); color: var(--white); }
+.rjd-modal .dbep-stpo-btn:disabled, .rjd-modal .dbep-stpo-ok-btn:disabled { opacity: .6; cursor: wait; }
+.rjd-modal .dbep-stpo-ket, .rjd-modal .dbep-stpo-info { font-size: 12.5px; color: var(--ink-soft); }
+.rjd-modal .dbep-stpo-info { margin: 8px 0 0; }
+.rjd-modal .dbep-stpo-panel { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line-soft); font-size: 13px; word-break: normal; overflow-wrap: break-word; }
+.rjd-modal .dbep-stpo-kirim { margin: 0 0 8px; }
+.rjd-modal .dbep-stpo-ok, .rjd-modal .dbep-stpo-tersimpan { color: #2C6B3F; font-weight: 600; font-size: 12.5px; }
+.rjd-modal .dbep-stpo-kurang { color: #8A5D1F; font-weight: 600; font-size: 12.5px; }
+.rjd-modal .dbep-stpo-galat { color: var(--thread); font-size: 12.5px; }
+.rjd-modal p.dbep-stpo-galat { margin: 0 0 8px; }
+.rjd-modal .dbep-stpo-awas { margin: 0 0 8px; padding: 8px 12px; border-radius: 8px; background: #FCF3E3; color: #8A5D1F; font-size: 12.5px; }
+.rjd-modal .dbep-stpo-lbl-alasan { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+.rjd-modal .dbep-stpo-alasan { display: block; width: 100%; box-sizing: border-box; margin-top: 5px; font-size: 16px; padding: 7px 10px;
+  border: 1px solid var(--line-soft); border-radius: 8px; background: var(--white); color: var(--navy); }
+.rjd-modal .dbep-stpo-aksi { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.rjd-modal .dbep-stpo-hasil:empty { display: none; }
 .rjd-modal .dbep-panel { margin-top: 14px; }
 .rjd-modal .dbep-panel h4 { font-size: 11.5px; font-family: 'IBM Plex Mono', monospace;
   letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft);

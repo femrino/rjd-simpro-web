@@ -5792,6 +5792,7 @@ function dbRenderEditPO(d){
   // (opsional -- ...)", "Kain Dari Klien (opsional -- ...)") supaya tidak
   // terbaca sebagai form yang berbeda.
   document.getElementById("db-editpo-body").innerHTML =
+    dbStatusPOHtml_(d) +   // v426 (butuh gs >= @459): bilah Status PO -- kosong untuk gs lama
     itemHtml +
     dbSetPOHtml_(d) +   // v420 (butuh gs >= @448): panel Set -- kosong untuk gs lama
     '<div class="of-form-section" style="margin-top:4px">' +
@@ -6585,6 +6586,172 @@ function dbSetPOBelumDisimpan_(){
   return Array.prototype.some.call(ed.querySelectorAll(".kr-setpo-input"), function (inp) {
     const it = item[Number(inp.getAttribute("data-i"))];
     return !!it && rjdSetPONama_(inp.value).toLowerCase() !== rjdSetPONama_(it.setNama).toLowerCase();
+  });
+}
+
+/* ============================================================
+ * STATUS PO di Edit PO -- v426 (butuh gs >= @459; keputusan Femri 12 Nov 2026, opsi A)
+ * ============================================================
+ * Satu bilah di PUNCAK modal: status PO sekarang + satu tombol -- "Tandai Selesai" (PO jalan) atau "Buka kembali ke Produksi"
+ * (PO Selesai). Tombol meminta PRATINJAU ke server (ubahStatusPO pratinjau:true = pemeriksaan yang sama dengan tulisannya, tanpa
+ * menulis): ukuran kiriman SJ aktif, packing yang menahan, dan apakah alasan wajib. Baru Konfirmasi yang menulis.
+ * Status disimpan SENDIRI, terpisah dari Simpan Perubahan, seperti panel Set: isian Edit PO yang belum disimpan tidak tersentuh,
+ * dan yang digambar ulang sesudahnya hanya bilah ini.
+ * Server mengenali kiriman ulang yang sama (status sheet sudah = yang diminta -> jawaban 'sudah', nol tulis), jadi jawaban yang
+ * hilang aman dicoba lagi -- karena itu tombolnya hidup lagi sesudah jaringan putus, tidak dikunci. Status yang dilihat layar
+ * (d.status) ikut terkirim: server menolak kalau sheet sudah diubah orang lain/AppSheet di sela pratinjau & konfirmasi.
+ * gs lama (tanpa bolehUbahStatus): bilah tidak ada sama sekali, modal lain utuh. Selain pemilik/admin: status terlihat, tanpa tombol.
+ * ============================================================ */
+function dbStatusPOBatal_(st){ return /^(cancel|canceled|cancelled|batal|dibatalkan)$/i.test(String(st || "").trim()); }
+
+function dbStatusPOHtml_(d){
+  if (!d || typeof d.bolehUbahStatus !== "boolean") return "";   // gs < @459
+  const esc = rjdEscapeHtml_, st = String(d.status || "").trim();
+  const selesai = st.toLowerCase() === "selesai", batal = dbStatusPOBatal_(st);
+  // Spasi di antara bagian bilah: tidak tampil (ruang putih di antara anak flex dibuang), tapi membuat teksnya terbaca utuh saat disalin
+  // atau dibacakan -- tanpa itu textContent-nya 'Status POProduksiTandai Selesai'.
+  const aksi = (d.bolehUbahStatus && !batal)
+    ? ' <button class="dbep-stpo-btn" id="db-editpo-stpo-btn" type="button" onclick="dbStatusPOBuka(\'' + (selesai ? "Produksi" : "Selesai") + '\')">' +
+        (selesai ? "Buka kembali ke Produksi" : "Tandai Selesai") + '</button>'
+    : '';
+  const ket = !d.bolehUbahStatus ? ' <span class="dbep-stpo-ket">Hanya pemilik/admin yang bisa menutup atau membuka PO.</span>'
+    : (batal ? ' <span class="dbep-stpo-ket">PO dibatalkan &#8212; statusnya tidak diubah dari sini.</span>' : '');
+  return '<div class="dbep-stpo" id="db-editpo-stpo">' +
+    '<div class="dbep-stpo-bar"><span class="dbep-stpo-lbl">Status PO</span> <b class="dbep-stpo-nilai">' + esc(st || "(kosong)") + '</b>' + aksi + ket + '</div>' +
+    '<div class="dbep-stpo-panel hidden" id="db-editpo-stpo-panel"></div>' +
+  '</div>';
+}
+
+/** Isi panel sesudah pratinjau. h = jawaban ubahStatusPO pratinjau:true. */
+function dbStatusPOPanelHtml_(h){
+  const esc = rjdEscapeHtml_, ke = h.statusBaru === "Produksi" ? "Buka kembali ke Produksi" : "Tandai Selesai";
+  const angka = function (n) { return Number(n || 0).toLocaleString("id-ID"); };
+  if (h.sudah) {
+    return '<p class="dbep-stpo-info">Status PO ini sudah \'' + esc(h.statusKini) + '\' di server (mungkin baru diubah di AppSheet). Tutup dan buka lagi Edit Order untuk melihat keadaan terbaru.</p>' +
+      '<div class="dbep-stpo-aksi"><button class="dbep-stpo-batal" type="button" onclick="dbStatusPOTutup()">Tutup</button></div>';
+  }
+  const k = h.kirim;
+  const kirim = k ? '<p class="dbep-stpo-kirim">Terkirim (surat jalan aktif): <b>' + angka(k.qtyKirim) + ' / ' + angka(k.qtyOrder) + ' pcs</b>' +
+      (k.persen === null || k.persen === undefined ? '' : ' (' + String(k.persen).replace(".", ",") + '%)') +
+      (k.tuntas ? ' <span class="dbep-stpo-ok">tuntas</span>' : ' <span class="dbep-stpo-kurang">belum tuntas (di bawah ' + esc(h.ambangPersen || 90) + '%)</span>') + '</p>'
+    : '';
+  if (h.tolak) {
+    return kirim + '<p class="dbep-stpo-galat">' + esc(h.tolak) + '</p>' +
+      '<div class="dbep-stpo-aksi"><button class="dbep-stpo-batal" type="button" onclick="dbStatusPOTutup()">Tutup</button></div>';
+  }
+  const wajib = !!h.perluAlasan;
+  return kirim +
+    (wajib ? '<p class="dbep-stpo-awas">' + esc(h.sebabAlasan) + '</p>' : '') +
+    '<label class="dbep-stpo-lbl-alasan">Alasan ' + (wajib ? '(wajib, minimal ' + esc(h.alasanMin || 5) + ' huruf)' : '(opsional)') +
+      '<input class="dbep-stpo-alasan" id="db-editpo-stpo-alasan" type="text" maxlength="500" placeholder="' +
+        (h.statusBaru === "Produksi" ? 'mis. klien menambah kiriman susulan' : (wajib ? 'mis. sisa dibatalkan klien' : 'catatan untuk Log Edit PO')) + '"/></label>' +
+    '<div class="dbep-stpo-aksi">' +
+      '<button class="dbep-stpo-ok-btn" id="db-editpo-stpo-ok" type="button" onclick="dbStatusPOKirim()">' + ke + '</button>' +
+      '<button class="dbep-stpo-batal" type="button" onclick="dbStatusPOTutup()">Batal</button>' +
+      '<span class="dbep-stpo-hasil" id="db-editpo-stpo-hasil"></span>' +
+    '</div>' +
+    '<p class="dbep-stpo-info">Tercatat di Log Edit PO. Status disimpan sendiri &#8212; tidak ikut tombol Simpan Perubahan.</p>';
+}
+
+function dbStatusPOTutup(){
+  const panel = document.getElementById("db-editpo-stpo-panel");
+  if (panel) { panel.classList.add("hidden"); panel.innerHTML = ""; }
+  const btn = document.getElementById("db-editpo-stpo-btn");
+  if (btn) btn.disabled = false;
+  window.DBEP_STPO = null;
+}
+
+function dbStatusPOBuka(baru){
+  const d = window.OL_EDITPO_DATA, idPO = window.OL_EDITPO_ID;
+  const panel = document.getElementById("db-editpo-stpo-panel");
+  if (!d || !idPO || !panel || d.bolehUbahStatus !== true) return;
+  if (baru !== "Selesai" && baru !== "Produksi") return;
+  let cfg;
+  try { cfg = rjdEditPOCfg_(); } catch (e) { return; }
+  const btn = document.getElementById("db-editpo-stpo-btn");
+  if (btn) btn.disabled = true;
+  const s = { baru: baru, d: d, cek: null, kirim: false };
+  window.DBEP_STPO = s;
+  panel.classList.remove("hidden");
+  panel.innerHTML = '<p class="dbep-stpo-info">Memeriksa kiriman &amp; packing...</p>';
+  // Jawaban milik form yang sudah ditutup, PO lain yang dibuka sesudahnya, atau pratinjau yang sudah diganti: abaikan.
+  const basi = function () { return window.OL_EDITPO_DATA !== d || window.DBEP_STPO !== s || !panel.isConnected; };
+  fetch(cfg.apiUrl, { method: "POST", body: JSON.stringify({ idToken: cfg.idToken(), action: "ubahStatusPO",
+    payload: { idPurchaseOrder: idPO, statusBaru: baru, statusLama: d.status || "", pratinjau: true } }) })
+  .then(function (r) { return r.json(); })
+  .then(function (h) {
+    if (basi()) return;
+    if (!h || !h.success) {
+      panel.innerHTML = '<p class="dbep-stpo-galat">' + rjdEscapeHtml_((h && h.error) || "Server menolak pemeriksaan status.") + '</p>' +
+        '<div class="dbep-stpo-aksi"><button class="dbep-stpo-batal" type="button" onclick="dbStatusPOTutup()">Tutup</button></div>';
+      return;
+    }
+    s.cek = h;
+    panel.innerHTML = dbStatusPOPanelHtml_(h);
+  })
+  .catch(function (e) {
+    if (basi()) return;
+    // Tiga sebab, tiga kalimat (CLAUDE.md: .catch yang memayungi render jangan melabeli semuanya "jaringan"). Pratinjau tidak
+    // menulis apa pun, jadi ketiganya berarti "belum ada yang diubah".
+    const jaringan = e && e.name === "TypeError" && /fetch|network|load failed/i.test(String(e.message || ""));
+    panel.innerHTML = '<p class="dbep-stpo-galat">' + (jaringan
+        ? "Pemeriksaan tidak sampai ke server &#8212; sambungan terputus."
+        : (e && e.name === "SyntaxError" ? "Jawaban server tidak bisa dibaca (bukan JSON)." : "Galat di layar: " + rjdEscapeHtml_(String(e && e.message || e)))) +
+        ' Belum ada yang diubah.</p>' +
+      '<div class="dbep-stpo-aksi"><button class="dbep-stpo-ok-btn" type="button" onclick="dbStatusPOBuka(\'' + baru + '\')">Coba lagi</button>' +
+      '<button class="dbep-stpo-batal" type="button" onclick="dbStatusPOTutup()">Tutup</button></div>';
+  });
+}
+
+function dbStatusPOKirim(){
+  const s = window.DBEP_STPO, d = window.OL_EDITPO_DATA, idPO = window.OL_EDITPO_ID;
+  if (!s || !s.cek || s.d !== d || !idPO || s.kirim) return;   // s.kirim: ketuk ganda selagi menunggu = satu kiriman
+  let cfg;
+  try { cfg = rjdEditPOCfg_(); } catch (e) { return; }
+  const panel = document.getElementById("db-editpo-stpo-panel");
+  const inp = document.getElementById("db-editpo-stpo-alasan"), ok = document.getElementById("db-editpo-stpo-ok"), hasil = document.getElementById("db-editpo-stpo-hasil");
+  const alasan = inp ? inp.value.replace(/\s+/g, " ").trim() : "";
+  const min = s.cek.alasanMin || 5;
+  if (s.cek.perluAlasan && alasan.length < min) {
+    if (hasil) { hasil.className = "dbep-stpo-hasil dbep-stpo-galat"; hasil.textContent = "Isi alasan minimal " + min + " huruf."; }
+    if (inp) inp.focus();
+    return;
+  }
+  s.kirim = true;
+  if (ok) ok.disabled = true;
+  if (hasil) { hasil.className = "dbep-stpo-hasil"; hasil.textContent = "Menyimpan..."; }
+  const basi = function () { return window.OL_EDITPO_DATA !== d || window.DBEP_STPO !== s || !panel || !panel.isConnected; };
+  fetch(cfg.apiUrl, { method: "POST", body: JSON.stringify({ idToken: cfg.idToken(), action: "ubahStatusPO",
+    payload: { idPurchaseOrder: idPO, statusBaru: s.baru, statusLama: d.status || "", alasan: alasan } }) })
+  .then(function (r) { return r.json(); })
+  .then(function (h) {
+    s.kirim = false;
+    if (basi()) return;
+    if (!h || !h.success) {
+      if (ok) ok.disabled = false;
+      if (hasil) { hasil.className = "dbep-stpo-hasil dbep-stpo-galat"; hasil.textContent = (h && h.error) || "Server menolak perubahan status."; }
+      return;
+    }
+    d.status = h.status;
+    window.DBEP_STPO = null;
+    const w = document.getElementById("db-editpo-stpo");
+    if (w) w.outerHTML = dbStatusPOHtml_(d);
+    const bar = document.querySelector("#db-editpo-stpo .dbep-stpo-bar");
+    if (bar) {
+      const t = document.createElement("span");
+      bar.appendChild(document.createTextNode(" "));
+      t.className = "dbep-stpo-tersimpan";
+      t.textContent = (h.sudah ? "Status PO memang sudah '" + h.status + "'." : "Tersimpan: status PO kini '" + h.status + "'.") +
+        (h.logGagal ? " Catatan Log Edit PO GAGAL ditulis -- laporkan ke admin." : "");
+      bar.appendChild(t);
+    }
+    rjdEditPOSesudahSimpan_();   // daftar PO di halaman dimuat ulang -- PO Selesai keluar dari Orderan Berjalan
+  })
+  .catch(function () {
+    s.kirim = false;
+    if (basi()) return;
+    if (ok) ok.disabled = false;
+    if (hasil) { hasil.className = "dbep-stpo-hasil dbep-stpo-galat"; hasil.textContent = "Jawaban server tidak sampai -- status BELUM PASTI tersimpan. Tekan lagi aman: kalau ternyata sudah tersimpan, server menjawab 'sudah' tanpa menulis ulang."; }
   });
 }
 
