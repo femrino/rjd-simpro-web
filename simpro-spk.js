@@ -12891,7 +12891,7 @@ function spRenderSelisih_() {
  * (rjdKunciIsian_): jawaban hilang -> kirim lagi tanpa mengubah isian = server menjawab dengan catatan yang sama.
  * Status barang (Normal / Noda / Tanpa Label) hanya keterangan; batas qty memakai lolos QC (SPEC D5, D7).
  */
-const SP_KMS = { data: null, detail: null, pilih: "", pesan: null, mengirim: false, urut: 0 };
+const SP_KMS = { data: null, detail: null, pilih: "", pesan: null, mengirim: false, urut: 0, tampilBatal: false };
 function spPanelKemas_() {
   let p = document.getElementById("sp-panel-kemas");
   if (p) return p;
@@ -12939,7 +12939,11 @@ function spMuatKemas_(pertahankanPesan) {
     const ada = (d.packing || []).map(function (x) { return x.idPacking; });
     if (!SP_KMS.pilih || ada.indexOf(SP_KMS.pilih) === -1) {
       const draft = (d.packing || []).filter(function (x) { return x.status === "Draft"; })[0];
-      SP_KMS.pilih = draft ? draft.idPacking : (ada.length ? ada[ada.length - 1] : "");
+      // Cara 3 (13 Nov 2026): pilihan otomatis = packing TERAKHIR yang tidak Batal. Dulu yang terakhir apa adanya, jadi PO dengan
+      // T1 Terbit + T2-T4 Batal membuka T4 Batal -- dan kartu terpilih selalu tampil, sehingga kartu Batal yang disembunyikan
+      // muncul lagi lewat pintu ini. Kalau semuanya Batal, tetap yang terakhir.
+      const hidup = (d.packing || []).filter(function (x) { return x.status !== "Batal"; }).map(function (x) { return x.idPacking; });
+      SP_KMS.pilih = draft ? draft.idPacking : (hidup.length ? hidup[hidup.length - 1] : (ada.length ? ada[ada.length - 1] : ""));
     }
     if (!SP_KMS.pilih) { SP_KMS.detail = null; spRenderKemas_(); return null; }
     return spKmsPost_("getDetailPacking", { idPacking: SP_KMS.pilih }).then(function (dt) {
@@ -12991,18 +12995,35 @@ function spRenderKemas_() {
     '<p class="sp-info"><b>Siap packing = lolos QC Finishing &#8722; terkirim &#8722; sudah dipacking.</b> ' + (d.adaQC ? "" : "Belum ada QC Finishing untuk PO ini &#8212; barang baru bisa dipacking sesudah lolos QC. ") +
     'Total siap ' + (t.siap || 0) + ' pcs. <button class="sp-btn-kecil sp-kms-baca" type="button" data-kms-aksi="segarkan">Segarkan</button></p>' +
     ((d.ganda || []).length ? '<p class="sp-pesan sp-galat">Detail PO ganda untuk satu item/warna/size: ' + esc(d.ganda.join("; ")) + '</p>' : '') + tabel + '</div>';
+  w.innerHTML = kartuSiap + spKmsKartuDaftarHtml_() + spKmsDetailHtml_();
+  spKmsPratinjau_();
+  spKmsSetPratinjau_();   // 1E
+}
+/**
+ * Kartu "Packing PO ini". Cara 3 (keputusan Femri 13 Nov 2026): kartu Batal DISEMBUNYIKAN bawaan -- data coba-coba / salah input
+ * (MCONX A33: T2-T4 Batal kosong) memenuhi deret kartu, padahal yang dicari orang packing yang hidup. Tombol "Tampilkan yang batal
+ * (N)" membukanya; packing yang sedang DIPILIH selalu tampil walau Batal (baru dibatalkan = tetap di depan mata). Pasangannya di
+ * server: packing Batal tanpa SJ tidak memakan nomor T (kmsKirimanKe_, packing.js gs).
+ * PO TANPA packing Batal: HTML IDENTIK dengan sebelum cara 3 (jalan148 P membandingkannya byte demi byte dengan v422).
+ * Dipanggil ulang SENDIRI saat tombol ditekan (spKmsKlik_ mengganti kartu ini saja), supaya isian form packing di bawahnya tidak hilang.
+ */
+function spKmsKartuDaftarHtml_() {
+  const d = SP_KMS.data || {}, esc = rjdEscapeHtml_, bolehIsi = spKmsBolehIsi_();
   const draft = (d.packing || []).filter(function (x) { return x.status === "Draft"; })[0];
   const adaSiap = (d.item || []).some(function (o) { return o.siap > 0; });
   const tombolBuat = draft ? '' : '<button class="sp-simpan-btn" type="button" data-kms-aksi="buat"' + (bolehIsi && adaSiap ? '' : ' disabled title="' + (bolehIsi ? 'Belum ada barang siap packing' : 'Bukan bagian gudang/packing') + '"') + '>+ Packing baru</button>';
-  const kartuDaftar = '<div class="sp-card"><h3 class="sp-judul">Packing PO ini</h3>' +
-    ((d.packing || []).length ? '<div class="sp-kms-daftar">' + d.packing.map(function (x) {
+  const semuaPk = d.packing || [];
+  const nBatal = semuaPk.filter(function (x) { return x.status === "Batal"; }).length;
+  const tampil = semuaPk.filter(function (x) { return x.status !== "Batal" || SP_KMS.tampilBatal || x.idPacking === SP_KMS.pilih; });
+  const togel = !nBatal ? '' : '<p class="sp-info sp-kms-togel"><button type="button" class="sp-btn-kecil sp-kms-baca" data-kms-aksi="togelBatal" aria-pressed="' + (SP_KMS.tampilBatal ? 'true' : 'false') + '">' +
+    (SP_KMS.tampilBatal ? 'Sembunyikan yang batal' : 'Tampilkan yang batal (' + nBatal + ')') + '</button> Packing batal yang belum pernah punya surat jalan tidak memakan nomor T.</p>';
+  return '<div class="sp-card"><h3 class="sp-judul">Packing PO ini</h3>' +
+    (semuaPk.length ? (tampil.length ? '<div class="sp-kms-daftar">' + tampil.map(function (x) {
       return '<button type="button" class="sp-kms-pk sp-kms-baca' + (x.idPacking === SP_KMS.pilih ? ' aktif' : '') + '" data-kms-aksi="pilih" data-id="' + esc(x.idPacking) + '"><b>T' + x.kirimanKe + '</b> ' + esc(x.idPacking) +
         ' <span class="sp-kms-st sp-kms-st-' + esc(String(x.status).toLowerCase()) + '">' + esc(x.status) + '</span><span class="sp-kms-sub">' + x.plastik + ' plastik &#183; ' + x.karung + ' karung &#183; ' + x.pcs + ' pcs' +
         (x.idPengiriman ? ' &#183; ' + esc(x.idPengiriman) : '') + '</span></button>';   // 3C: SJ yang terbit dari packing ini
-    }).join("") + '</div>' : '<p class="sp-info">Belum ada packing untuk PO ini. Nomor kiriman (T1, T2, ...) ditentukan server -- surat jalan lama ikut dihitung.</p>') + tombolBuat + '</div>';
-  w.innerHTML = kartuSiap + kartuDaftar + spKmsDetailHtml_();
-  spKmsPratinjau_();
-  spKmsSetPratinjau_();   // 1E
+    }).join("") + '</div>' : '<p class="sp-info">Semua packing PO ini dibatalkan.</p>') + togel
+      : '<p class="sp-info">Belum ada packing untuk PO ini. Nomor kiriman (T1, T2, ...) ditentukan server -- surat jalan lama ikut dihitung.</p>') + tombolBuat + '</div>';
 }
 function spKmsDetailHtml_() {
   const dt = SP_KMS.detail, d = SP_KMS.data; if (!dt || !dt.packing) return "";
@@ -13286,6 +13307,11 @@ function spKmsKlik_(e) {
   const aksi = t.getAttribute("data-kms-aksi"), id = t.getAttribute("data-id") || "", dt = SP_KMS.detail, pk = dt && dt.packing ? dt.packing.idPacking : "";
   if (aksi === "segarkan") { spMuatKemas_(); return; }
   if (aksi === "pilih") { SP_KMS.pilih = id; spMuatKemas_(); return; }
+  if (aksi === "togelBatal") {   // cara 3: hanya kartu daftar yang digambar ulang -- tanpa fetch, isian form di bawahnya utuh
+    SP_KMS.tampilBatal = !SP_KMS.tampilBatal;
+    const kartu = t.closest(".sp-card"); if (kartu) kartu.outerHTML = spKmsKartuDaftarHtml_();
+    return;
+  }
   if (SP_KMS.mengirim) return;
   if (aksi === "buat") { spKmsJalan_(t, "buatPacking", { idPurchaseOrder: window.SP_PO_AKTIF }, "kms-buat:" + window.SP_PO_AKTIF, function (d) { SP_KMS.pilih = d.idPacking; return d.sudahTercatat ? "Packing " + d.idPacking + " sudah dibuat sebelumnya (kiriman yang sama)." : "Packing " + d.idPacking + " (kiriman ke-" + d.kirimanKe + ") dibuat."; }); return; }
   if (aksi === "plastik") {
