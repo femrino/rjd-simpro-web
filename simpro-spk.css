@@ -1468,6 +1468,19 @@ body.sp-siap #sp-subtabs { visibility: visible; }
 }
 .sp-ord-dekat { background: #FCF3E3; color: #8A5D1F; }
 .sp-ord-lewat { background: #FBEAE5; color: #8F2C22; }
+/* v427: lencana Saran Status di sel Tahap -- BENTUK sama dengan penanda deadline (satu bahasa visual untuk "perhatikan baris
+   ini"), WARNA berbeda dari keduanya: "Siap ditutup" hijau (tinggal satu klik), "Perlu keputusan" kelabu-ungu -- bukan
+   merah, karena yang dibutuhkan keputusan, bukan teguran, dan merah sudah dipakai "hari lewat" di sel sebelahnya.
+   NISAN: white-space:nowrap SENGAJA TIDAK ADA. Disisir 44 lebar (320-1400 px, nama klien & artikel panjang,
+   uji/ukur-nowrap-saran.py, 13 Nov 2026): dengan flex-wrap di sel Tahap mode kartu (lihat @media 760px), nowrap tidak
+   menahan apa pun -- lencana pindah baris UTUH, tidak menyempit. Kalau suatu hari label terbelah dua baris, ukur dulu
+   lebar & susunan selnya sebelum menambahkannya kembali. */
+.sp-ord-saran {
+  display: inline-block; margin-top: 3px; padding: 1px 7px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700;
+}
+.sp-ord-saran-siap { background: #E6F2EA; color: #1F5E37; }
+.sp-ord-saran-putuskan { background: #ECEBF5; color: #45407A; }
 
 /* ---- Tab Orderan di layar sempit (v159) ---- */
 
@@ -1506,6 +1519,10 @@ body.sp-siap #sp-subtabs { visibility: visible; }
   #sp-panel-orderan .sp-tabel-kartu td[data-label="Qty"] { text-align: left; }
   /* Deadline & penandanya sebaris, tidak terpotong jadi dua. */
   #sp-panel-orderan .sp-tabel-kartu td[data-label="Deadline"] { flex-wrap: wrap; }
+  /* v427: pola yang sama untuk lencana Saran Status di sel Tahap. Sel kartu adalah flex SATU baris; tanpa wrap, lencana
+     "Perlu keputusan" di 320-360 px terukur menyempit jadi dua baris (36 px vs 19 px) atau -- kalau diberi nowrap --
+     meluber 8 px dari tepi kanan sel. Dengan wrap ia turun ke baris berikutnya utuh. */
+  #sp-panel-orderan .sp-tabel-kartu td[data-label="Tahap"] { flex-wrap: wrap; }
 }
 
 /* ============================================================

@@ -3467,6 +3467,22 @@ function spBolehEditOrder_() {
   return (p === "full" || p === "admin") && typeof dbBukaEditPO === "function";
 }
 
+/**
+ * v427 (butuh gs >= @461; keputusan Femri 13 Nov 2026 "kerjakan A dan B"): lencana Saran Status di sel Tahap. Teks dan
+ * jenisnya DITURUNKAN server -- sinkron tahap (tiap 4 jam) menulis kolom Saran Status, daftar-po.js membawa saranStatus +
+ * saranJenis -- jadi layar tidak menebak dari angka atau dari awal kalimat. Lencana hanya memberi tahu; menutup PO tetap satu
+ * klik orang di bilah Status PO (tombol Edit). Kalimat lengkapnya (kiriman, tanggal) di title; di layar sentuh ia terbaca di
+ * pratinjau bilah Status PO. Order Selesai/Dibatalkan tidak pernah berlencana walau snapshot lokal masih membawa saran lama.
+ * Medan tidak ada (gs lama) atau saran kosong -> string kosong, sel identik dengan sebelum v427.
+ */
+function spOrderanSaranHtml_(p) {
+  if (!p || p.spSelesai || p.spBatal) return "";
+  const j = p.saranJenis;
+  if (j !== "siap" && j !== "putuskan") return "";
+  return ' <span class="sp-ord-saran sp-ord-saran-' + j + '" title="' + rjdEscapeHtml_(p.saranStatus || "") + '">' +
+    (j === "siap" ? "Siap ditutup" : "Perlu keputusan") + '</span>';
+}
+
 function spOrderanHasilHtml_(baris) {
   const bolehEdit = spBolehEditOrder_();   // v383
   return (baris.length
@@ -3527,7 +3543,7 @@ function spOrderanHasilHtml_(baris) {
                 (tandaDl ? ' ' + tandaDl : '') + '</td>' +
               '<td data-label="Tahap">' + (p.tahap
                 ? rjdEscapeHtml_(p.tahap)
-                : '<span class="sp-kosong">belum mulai</span>') + '</td>' +
+                : '<span class="sp-kosong">belum mulai</span>') + spOrderanSaranHtml_(p) + '</td>' +
               // v161: tombol "Detail" DIBUANG. Setelah klik baris sendiri
               // membuka detail, tombol itu cuma target kedua untuk aksi yang
               // sama -- dan tombol yang mengulang perilaku barisnya membuat
