@@ -12891,7 +12891,7 @@ function spRenderSelisih_() {
  * (rjdKunciIsian_): jawaban hilang -> kirim lagi tanpa mengubah isian = server menjawab dengan catatan yang sama.
  * Status barang (Normal / Noda / Tanpa Label) hanya keterangan; batas qty memakai lolos QC (SPEC D5, D7).
  */
-const SP_KMS = { data: null, detail: null, pilih: "", pesan: null, mengirim: false, urut: 0, tampilBatal: false };
+const SP_KMS = { data: null, detail: null, pilih: "", pesan: null, mengirim: false, urut: 0, tampilBatal: false, mk: null };
 function spPanelKemas_() {
   let p = document.getElementById("sp-panel-kemas");
   if (p) return p;
@@ -13025,6 +13025,117 @@ function spKmsKartuDaftarHtml_() {
     }).join("") + '</div>' : '<p class="sp-info">Semua packing PO ini dibatalkan.</p>') + togel
       : '<p class="sp-info">Belum ada packing untuk PO ini. Nomor kiriman (T1, T2, ...) ditentukan server -- surat jalan lama ikut dihitung.</p>') + tombolBuat + '</div>';
 }
+/* ---- ISI & TUTUP BANYAK KARUNG (13 Nov 2026, keputusan Femri "form banyak karung"; rute isiKarungMassal, butuh gs >= @463) ----
+ * Terukur sebelum ini (lihatWaktuPacking, MCONX A33): satu tombol karung ±11-14 dtk (rute tulis + muat ulang getPackingSiap 5,1 dtk +
+ * getDetailPacking 3,2 dtk), tiga tombol per karung, ±4-5 menit untuk tujuh karung dengan layar terkunci. Panel ini menyusun SATU
+ * rencana di layar lalu mengirimnya dalam SATU panggilan; muat ulang terjadi sekali di akhir.
+ * Susunan rencana: (1) karung Terbuka yang SUDAH berisi -> baris "tutup"; (2) plastik Aktif tanpa karung, urut nomor, dipotong per
+ * "isi per karung" -- potongan pertama mengisi karung Terbuka yang masih KOSONG (tidak meninggalkan karung kosong), sisanya karung
+ * baru bernomor lanjut (labelnya = nomor yang akan diberikan server: No tertinggi packing ini + 1, termasuk karung Batal).
+ * Keadaan di SP_KMS.mk (milik satu packing): isi, berat, dan ubahan per baris (kunci = ID karung atau "baru:<plastik pertama>") --
+ * panel digambar ulang tiap layar dimuat ulang, jadi rencana disusun ulang dari keadaan, bukan disimpan sebagai HTML.
+ * Set terbelah: server menjawab perluKonfirmasi TANPA menulis; layar menyebut peringatannya dan bertanya -- tetap simpan
+ * (abaikanPeringatan) atau tidak (rencana tetap di layar untuk disusun ulang).
+ */
+function spKmsMkBawaan_(dt) {
+  const kr = (dt.karung || []).filter(function (k) { return k.status !== "Batal" && k.plastik > 0; }), hitung = {};
+  let isi = 0, n = 0;
+  kr.forEach(function (k) { hitung[k.plastik] = (hitung[k.plastik] || 0) + 1; if (hitung[k.plastik] > n || (hitung[k.plastik] === n && k.plastik > isi)) { n = hitung[k.plastik]; isi = k.plastik; } });
+  const tutup = (dt.karung || []).filter(function (k) { return k.status === "Tertutup" && k.beratKg > 0; }).sort(function (a, b) { return b.no - a.no; })[0];
+  return { isi: isi || dt.saranPlastikKarung || 8, berat: tutup ? spKmsKg_(tutup.beratKg) : "" };
+}
+function spKmsMkSusun_(dt) {
+  const m = SP_KMS.mk, isi = Math.max(1, parseInt(m.isi, 10) || 1), ubah = m.ubah || {};
+  const semua = dt.karung || [], kode = function (no) { return "K" + String(no).padStart(2, "0"); };
+  let noMaks = 0; semua.forEach(function (k) { noMaks = Math.max(noMaks, k.no || 0); });
+  const aktif = (dt.plastik || []).filter(function (x) { return x.status === "Aktif"; });
+  const urut = function (a, b) { return a.no - b.no; };
+  const terbuka = semua.filter(function (k) { return k.status === "Terbuka"; }).sort(urut);
+  const kosong = terbuka.filter(function (k) { return !k.plastik; });
+  const bebas = aktif.filter(function (x) { return !x.idKarung; }).sort(urut);
+  const baris = [];
+  const tambah = function (o) {
+    const u = ubah[o.kunci] || {};
+    o.berat = u.berat !== undefined ? u.berat : m.berat; o.tutup = u.tutup !== undefined ? u.tutup : true;
+    const g = {}, gu = []; o.isiPl.forEach(function (x) { const k = [x.style || x.artikel, x.warna, x.size].filter(Boolean).join(" "); if (!g[k]) { g[k] = 0; gu.push(k); } g[k]++; });
+    o.ringkas = gu.map(function (k) { return k + ": " + g[k]; }).join(" · ");
+    o.plastik = o.isiPl.length; o.pcs = o.isiPl.reduce(function (a, x) { return a + (x.qty || 0); }, 0);
+    baris.push(o);
+  };
+  terbuka.filter(function (k) { return k.plastik > 0; }).forEach(function (k) {
+    tambah({ kunci: k.idKarung, idKarung: k.idKarung, label: kode(k.no), jenis: "terbuka", idPlastik: [], nomor: "sudah berisi",
+      isiPl: aktif.filter(function (x) { return x.idKarung === k.idKarung; }) });
+  });
+  for (let i = 0; i < bebas.length; i += isi) {
+    const potong = bebas.slice(i, i + isi), k = kosong.shift();
+    tambah({ kunci: k ? k.idKarung : "baru:" + potong[0].idPlastik, idKarung: k ? k.idKarung : "", label: kode(k ? k.no : ++noMaks), jenis: k ? "kosong" : "baru",
+      idPlastik: potong.map(function (x) { return x.idPlastik; }), nomor: spKmsNo_(potong[0].no) + (potong.length > 1 ? "–" + spKmsNo_(potong[potong.length - 1].no) : ""), isiPl: potong });
+  }
+  return { baris: baris, bebas: bebas.length };
+}
+function spKmsMkHtml_(dt, bolehIsi) {
+  const esc = rjdEscapeHtml_, m = SP_KMS.mk;
+  if (!m || m.idPacking !== dt.packing.idPacking) {
+    return '<div class="sp-kms-mk"><button class="sp-btn-kecil" type="button" data-kms-aksi="mk-buka"' + (bolehIsi ? '' : ' disabled title="Bukan bagian gudang/packing"') + '>Isi &amp; tutup banyak karung</button></div>';
+  }
+  const r = spKmsMkSusun_(dt), jenis = { terbuka: "terbuka", kosong: "terbuka, kosong", baru: "baru" };
+  const dikirim = r.baris.filter(function (b) { return b.idPlastik.length || b.tutup; });
+  const nTutup = dikirim.filter(function (b) { return b.tutup; }).length, nBaru = r.baris.filter(function (b) { return b.jenis === "baru"; }).length;
+  const tabel = r.baris.length ? '<div class="sp-tabelwrap sp-tabelwrap-kartu"><table class="sp-tabel sp-tabel-kartu sp-kms-mk-tabel"><thead><tr><th>Karung</th><th>Plastik</th><th>Isi</th><th class="num">Pcs</th><th>Berat kg</th><th>Tutup</th></tr></thead><tbody>' +
+    r.baris.map(function (b) {
+      const k = esc(b.kunci);
+      return '<tr><td data-label="Karung"><b>' + esc(b.label) + '</b> <span class="sp-kms-sub">' + jenis[b.jenis] + '</span></td><td data-label="Plastik">' + esc(b.nomor) + ' <span class="sp-kms-sub">(' + b.plastik + ' plastik)</span></td>' +
+        '<td data-label="Isi">' + esc(b.ringkas) + '</td><td class="num" data-label="Pcs">' + b.pcs + '</td>' +
+        '<td data-label="Berat kg"><input type="text" inputmode="decimal" class="sp-kms-mk-berat" data-kms-mk-berat="' + k + '" value="' + esc(b.berat || "") + '"/></td>' +
+        '<td data-label="Tutup"><label class="sp-kms-mk-cek"><input type="checkbox" data-kms-mk-tutup="' + k + '"' + (b.tutup ? ' checked' : '') + '/> tutup</label></td></tr>';
+    }).join("") + '</tbody></table></div>' : '<p class="sp-info">Tidak ada karung terbuka berisi dan tidak ada plastik yang belum berkarung.</p>';
+  return '<div class="sp-kms-mk sp-kms-mk-buka"><h4>Isi &amp; tutup banyak karung</h4>' +
+    '<div class="sp-kms-form"><label class="sp-kms-f sp-kms-f-angka">Isi per karung (plastik)<input id="sp-kms-mk-isi" type="text" inputmode="numeric" value="' + esc(String(m.isi)) + '"/></label>' +
+    '<label class="sp-kms-f sp-kms-f-angka">Berat per karung kg<input id="sp-kms-mk-beratsemua" type="text" inputmode="decimal" value="' + esc(m.berat || "") + '"/></label>' +
+    '<button class="sp-btn-kecil" type="button" data-kms-aksi="mk-susun">Susun ulang</button><button class="sp-btn-kecil" type="button" data-kms-aksi="mk-tutuppanel">Tutup panel</button></div>' +
+    '<p class="sp-info">' + r.bebas + ' plastik belum berkarung. Berat bisa diubah per baris; hilangkan centang untuk karung yang belum ditutup. Susun ulang memakai isi &amp; berat di atas untuk semua baris.</p>' + tabel +
+    (dikirim.length ? '<p class="sp-info sp-kms-mk-ringkas">Rencana: ' + (nBaru ? nBaru + ' karung baru, ' : '') + r.baris.reduce(function (a, b) { return a + b.idPlastik.length; }, 0) + ' plastik dimasukkan, ' + nTutup + ' karung ditutup &#8212; satu kali simpan.</p>' +
+      '<button class="sp-simpan-btn" type="button" data-kms-aksi="mk-simpan"' + (bolehIsi ? '' : ' disabled title="Bukan bagian gudang/packing"') + '>Simpan rencana</button>' : '') + '</div>';
+}
+/** Kirim rencana: SATU panggilan isiKarungMassal. perluKonfirmasi (set terbelah) = server tidak menulis; tanya, lalu kirim ulang dengan abaikanPeringatan. */
+function spKmsMkKirim_(tombol, abaikan) {
+  const dt = SP_KMS.detail; if (!dt || !SP_KMS.mk || SP_KMS.mengirim) return;
+  const r = spKmsMkSusun_(dt), kurang = [], baris = [];
+  r.baris.forEach(function (b) {
+    if (!b.idPlastik.length && !b.tutup) return;
+    const berat = String(b.berat || "").trim();
+    if (b.tutup && !berat) kurang.push(b.label);
+    baris.push({ idKarung: b.idKarung, idPlastik: b.idPlastik, tutup: !!b.tutup, beratKg: b.tutup ? berat : "" });
+  });
+  if (!baris.length) { spKmsPesan_("Tidak ada yang dikerjakan -- semua centang Tutup kosong dan tidak ada plastik yang dimasukkan.", false); return; }
+  if (kurang.length) { spKmsPesan_("Isi berat untuk " + kurang.join(", ") + " -- atau hilangkan centang Tutup-nya.", false); return; }
+  const payload = { idPacking: dt.packing.idPacking, baris: baris }; if (abaikan) payload.abaikanPeringatan = true;
+  const kunci = "kms-mk:" + payload.idPacking;
+  payload.idPermintaan = typeof rjdKunciIsian_ === "function" ? rjdKunciIsian_(kunci, payload) : String(Date.now());
+  SP_KMS.mengirim = true; const lama = tombol ? tombol.textContent : ""; if (tombol) { tombol.disabled = true; tombol.textContent = "Menyimpan..."; }
+  spKmsPesan_("Menyimpan " + baris.length + " karung sekaligus...", true);
+  return spKmsPost_("isiKarungMassal", payload).then(function (d) {
+    if (typeof rjdKunciLepas_ === "function") rjdKunciLepas_(kunci);
+    SP_KMS.mengirim = false;
+    if (d.perluKonfirmasi) {
+      if (tombol) { tombol.disabled = false; tombol.textContent = lama; }
+      const daftar = (d.peringatan || []).join("; ");
+      if (window.confirm("Rencana ini membelah set:\n- " + (d.peringatan || []).join("\n- ") + "\n\nTetap simpan?")) return spKmsMkKirim_(tombol, true);
+      spKmsPesan_("Belum disimpan -- set terbelah: " + daftar + ". Ubah isi per karung lalu Susun ulang.", false);
+      return;
+    }
+    SP_KMS.mk = null;
+    const kb = d.karungBaru || [], kode = function (id) { return String(id).slice(-3); };
+    spKmsPesan_(d.sudahTercatat ? "Rencana ini sudah tersimpan sebelumnya (kiriman yang sama)." :
+      (kb.length ? kb.length + " karung baru (" + kode(kb[0]) + (kb.length > 1 ? "–" + kode(kb[kb.length - 1]) : "") + "), " : "") + (d.diisi || 0) + " plastik masuk karung, " +
+      (d.ditutup || []).length + " karung ditutup." + ((d.peringatan || []).length ? " PERINGATAN: " + d.peringatan.join("; ") + "." : ""), true);
+    spMuatKemas_(true);
+  }).catch(function (e) {
+    if (!e.jaringan && typeof rjdKunciLepas_ === "function") rjdKunciLepas_(kunci);
+    SP_KMS.mengirim = false; if (tombol) { tombol.disabled = false; tombol.textContent = lama; }
+    spKmsPesan_(e.jaringan ? "Jawaban server tidak sampai -- MUNGKIN sudah tersimpan. Tekan lagi TANPA mengubah rencana: server mengenali kiriman yang sama." : "Tidak tersimpan: " + e.message, false);
+  });
+}
 function spKmsDetailHtml_() {
   const dt = SP_KMS.detail, d = SP_KMS.data; if (!dt || !dt.packing) return "";
   const esc = rjdEscapeHtml_, pk = dt.packing, draft = pk.status === "Draft", bolehIsi = spKmsBolehIsi_() && draft, putus = spKmsBolehPutus_();
@@ -13063,6 +13174,7 @@ function spKmsDetailHtml_() {
       return '<div class="sp-kms-kr"><span><b>' + no + '</b> <span class="sp-kms-st sp-kms-st-' + esc(k.status.toLowerCase()) + '">' + esc(k.status) + '</span> ' + k.plastik + ' plastik &#183; ' + k.pcs + ' pcs' + (k.beratKg ? ' &#183; ' + spKmsKg_(k.beratKg) + ' kg' : '') + spKmsKondisiHtml_(k) + '</span>' + kanan +
         ((k.set || []).length ? '<div class="sp-kms-krsetwrap">' + k.set.map(spKmsSetBarisHtml_).join("") + '</div>' : '') + '</div>';   // 1E
     }).join("") : '<p class="sp-info">Belum ada karung.</p>') +
+    (draft ? spKmsMkHtml_(dt, bolehIsi) : '') +   // 13 Nov 2026: isi & tutup banyak karung sekaligus
     (draft ? '<button class="sp-simpan-btn" type="button" data-kms-aksi="karung-baru"' + mati(bolehIsi, "Bukan bagian gudang/packing") + '>+ Karung baru</button>' : '') + '</div>';
   const kodeK = {}; dt.karung.forEach(function (k) { kodeK[k.idKarung] = { no: "K" + String(k.no).padStart(2, "0"), status: k.status }; });
   const rentang = spKmsRentang_(dt.plastik || []);
@@ -13283,6 +13395,16 @@ function spKmsKetik_(e) {
     if (k) k.item.forEach(function (o, i) { const el = document.querySelector('#sp-panel-kemas [data-kms-anggota="' + i + '"]'); if (el) el.value = o.idDetailOrder; });
   }
   if (id === "sp-kms-set" || id === "sp-kms-setsel" || id === "sp-kms-jmlset" || id === "sp-kms-setisi" || (t.hasAttribute && t.hasAttribute("data-kms-anggota"))) spKmsSetPratinjau_();
+  // Isi & tutup banyak karung: ubahan per baris disimpan di keadaan (panel digambar ulang dari keadaan); centang Tutup menggambar
+  // ulang panelnya supaya ringkasan "N karung ditutup" ikut benar -- ketikan berat TIDAK (fokus kotak tidak dicuri).
+  if (SP_KMS.mk && t.getAttribute) {
+    const kb = t.getAttribute("data-kms-mk-berat"), kt = t.getAttribute("data-kms-mk-tutup"), u = SP_KMS.mk.ubah;
+    if (kb !== null) (u[kb] = u[kb] || {}).berat = t.value;
+    if (kt !== null && e.type === "change") {
+      (u[kt] = u[kt] || {}).tutup = !!t.checked;
+      const w = t.closest(".sp-kms-mk"), dt = SP_KMS.detail; if (w && dt) w.outerHTML = spKmsMkHtml_(dt, spKmsBolehIsi_() && dt.packing.status === "Draft");
+    }
+  }
 }
 function spKmsNilai_(id) { const el = document.getElementById(id); return el ? String(el.value || "").trim() : ""; }
 /** Jalankan satu aksi tulis: tombol terkunci, kunci kiriman untuk rute pembuat, muat ulang sesudah berhasil. */
@@ -13312,7 +13434,21 @@ function spKmsKlik_(e) {
     const kartu = t.closest(".sp-card"); if (kartu) kartu.outerHTML = spKmsKartuDaftarHtml_();
     return;
   }
+  // Isi & tutup banyak karung: buka / susun ulang / tutup panel = tanpa fetch, hanya panelnya yang digambar ulang (isian form lain utuh)
+  if (aksi === "mk-buka" || aksi === "mk-susun" || aksi === "mk-tutuppanel") {
+    if (!dt || !dt.packing) return;
+    if (aksi === "mk-buka") { const bw = spKmsMkBawaan_(dt); SP_KMS.mk = { idPacking: dt.packing.idPacking, isi: bw.isi, berat: bw.berat, ubah: {} }; }
+    if (aksi === "mk-tutuppanel") SP_KMS.mk = null;
+    if (aksi === "mk-susun" && SP_KMS.mk) {
+      const isi = spKmsNilai_("sp-kms-mk-isi");
+      if (!/^\d+$/.test(isi) || parseInt(isi, 10) < 1) { spKmsPesan_("Isi per karung harus bilangan bulat 1 atau lebih.", false); return; }
+      SP_KMS.mk.isi = parseInt(isi, 10); SP_KMS.mk.berat = spKmsNilai_("sp-kms-mk-beratsemua"); SP_KMS.mk.ubah = {};
+    }
+    const w = t.closest(".sp-kms-mk"); if (w) w.outerHTML = spKmsMkHtml_(dt, spKmsBolehIsi_() && dt.packing.status === "Draft");
+    return;
+  }
   if (SP_KMS.mengirim) return;
+  if (aksi === "mk-simpan") { spKmsMkKirim_(t, false); return; }
   if (aksi === "buat") { spKmsJalan_(t, "buatPacking", { idPurchaseOrder: window.SP_PO_AKTIF }, "kms-buat:" + window.SP_PO_AKTIF, function (d) { SP_KMS.pilih = d.idPacking; return d.sudahTercatat ? "Packing " + d.idPacking + " sudah dibuat sebelumnya (kiriman yang sama)." : "Packing " + d.idPacking + " (kiriman ke-" + d.kirimanKe + ") dibuat."; }); return; }
   if (aksi === "plastik") {
     const total = spKmsNilai_("sp-kms-total"), isi = spKmsNilai_("sp-kms-isiplastik"), packer = spKmsNilai_("sp-kms-packer"), ido = spKmsNilai_("sp-kms-item");

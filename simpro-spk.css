@@ -2396,6 +2396,16 @@ h4 .sp-kms-sub { display: inline; margin-left: 6px; }
   padding: 10px 0; border-bottom: 1px solid var(--line-soft); font-size: 13px; }
 .sp-kms-kr-aksi { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
 .sp-kms-kr-aksi .sp-kms-f-angka { width: 92px; }
+/* Isi & tutup banyak karung (13 Nov 2026): panel di blok Karung. Tabelnya mode kartu di HP (sp-tabel-kartu, data-label per td) --
+   kotak berat 16 px lewat aturan luas panel; centang Tutup berlabel teks dengan kotak sentuh >= 32 px. */
+.sp-kms-mk { margin: 12px 0; }
+.sp-kms-mk-buka { border: 1px solid var(--line-soft); border-radius: 12px; padding: 12px 14px; }
+.sp-kms-mk h4 { font-size: 13.5px; font-weight: 700; margin: 0 0 10px; color: var(--ink); }
+.sp-kms-mk .sp-kms-form { margin-bottom: 8px; }
+.sp-kms-mk-tabel td { vertical-align: middle; }
+.sp-kms-mk-berat { width: 92px; }
+.sp-kms-mk-cek { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; font-weight: 600; cursor: pointer; }
+.sp-kms-mk-ringkas { font-weight: 600; color: var(--ink); }
 /* NISAN (5 Nov 2026): '.sp-kms-blok .sp-btn-kecil { min-height: 32px }' dibuang -- terukur NO-OP, .sp-btn-kecil halaman ini sudah
    padding 8px (aturan 'tombol' di atas), jadi >= 32px tanpa bantuan; sabotase yang mencabutnya tetap hijau. Penjaganya asersi L jalan144. */
 .sp-kms-blok .sp-simpan-btn, .sp-card > .sp-simpan-btn { margin-top: 12px; }
