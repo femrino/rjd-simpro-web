@@ -13503,7 +13503,8 @@ function spKmsKlik_(e) {
   if (aksi === "batal-rentang" || aksi === "keluar-rentang") {
     const ids = String(t.getAttribute("data-ids") || "").split(",").filter(Boolean);
     if (aksi === "batal-rentang") {
-      if (!window.confirm("Batalkan " + ids.length + " plastik? Nomornya tidak dipakai ulang.")) return;
+      // D4 diubah 14 Nov 2026 (gs >= @464): nomor batal DI UJUNG dipakai lagi oleh plastik berikutnya -- label lamanya harus dibuang.
+      if (!window.confirm("Batalkan " + ids.length + " plastik? Kalau nomornya paling akhir, plastik berikutnya akan memakai nomor itu lagi -- buang label lamanya.")) return;
       spKmsJalan_(t, "batalkanPlastik", { idPacking: pk, idPlastik: ids }, null, function (d) { return d.dibatalkan + " plastik dibatalkan."; });
     } else spKmsJalan_(t, "keluarkanPlastikDariKarung", { idPacking: pk, idPlastik: ids }, null, function (d) { return d.dikeluarkan + " plastik dikeluarkan dari karung."; });
     return;
