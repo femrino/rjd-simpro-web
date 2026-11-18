@@ -1064,6 +1064,21 @@ function ckRenderLaporanCuttingKlien_(d, PR){
  * (a) jumlah baris per rasio (supaya kertas menjumlah lurus) dan (b) panjang gelaran & qty per layer per pemakaian = aktual / layer dan
  * pcs / layer (identik dengan panjang marker + allowance x layer di server, dan tetap ada untuk End cut yang tidak membawa data marker).
  * Pemakaian bahan per pc = panjang gelaran / qty per layer (konsumsi marker), BUKAN konsumsi rata-rata kelompok. */
+/* Sel KET merentang paling banyak sekian baris (18 Nov 2026, cetak Femri: halaman 1 hanya kotak kepala, tabel lompat ke halaman 2).
+ * Dulu KET merentang SELURUH badan; rentang rowspan yang barisnya break-inside: avoid tidak dipotong Chrome, jadi seluruh badan jadi
+ * satu blok yang didorong ke halaman berikutnya (terukur uji/ukur-lcf-halaman.py, 6 rasio x 8 roll). Isi KET +-196 px = 9 baris cetak
+ * 24 px; 10 = tidak ada baris yang melar (6 baris terukur melar jadi 35 px). Sisa kolomnya sel kosong ck-lcf-ket-lanjut. */
+const CK_LCF_KET_BARIS = 10;
+/** Halaman cetak A4 MENDATAR hanya selama Format klien tampil (18 Nov 2026). Dulu lewat halaman BERNAMA (.ck-lcf { page: ck-lcf }):
+ *  pergantian nama halaman MEMAKSA ganti halaman, dan halaman live punya div kosong Blogger SESUDAH dokumen (#unused-required-section,
+ *  halaman 'auto') -> satu halaman KOSONG di ujung tiap cetak, dan dialog cetak tetap menawarkan Tegak. @page polos tanpa nama tidak
+ *  memaksa ganti halaman dan membuat dialog langsung mendatar. Dipasang/dilepas di sini supaya dokumen lain di cetak.html tetap tegak. */
+function ckLcfHalaman_(pasang){
+  let st = document.getElementById("ck-lcf-halaman");
+  if (!pasang) { if (st) st.remove(); return; }
+  if (!st) { st = document.createElement("style"); st.id = "ck-lcf-halaman"; document.head.appendChild(st); }
+  st.textContent = "@page { size: A4 landscape; margin: 8mm; }";
+}
 function ckLcfNum_(v){ const n = Number(v); return v === null || v === undefined || v === "" || isNaN(n) ? null : n; }
 function ckLcfSel_(v, desimal){ return v === null || v === undefined ? '' : ckAngka_(v, desimal); }
 /** Order per size untuk warna kelompok ini: jumlah baris hasilPotong (order) yang warnanya sama, lintas style. */
@@ -1144,7 +1159,9 @@ function ckLcfLembar_(d, g, nomorLembar, tampilKain){
     const label = G.kode ? String(++nomor) : '';
     G.baris.forEach(function(b, i){
       const pj = b.lapis ? b.aktual / b.lapis : null, ql = b.lapis ? b.pcs / b.lapis : null, perPc = pj && ql ? pj / ql : null;
-      const sisa = b.jenis === 'endcut' ? '&#8212;' : (b.sisa === null || b.sisa === undefined ? '' : ckAngka_(b.sisa) + ckUkurAsli_(b, u));
+      // Sisa bahan: angka satuan kelompok SAJA (Femri 18 Nov 2026: 'tampilkan angka dalam yard saja') -- ukur asli '(1,52 m)' hanya di
+      // versi Internal & Untuk klien.
+      const sisa = b.jenis === 'endcut' ? '&#8212;' : (b.sisa === null || b.sisa === undefined ? '' : ckAngka_(b.sisa));
       const sel = b.jenis === 'endcut' ? '&#8212;' : (b.selisih === null || b.selisih === undefined ? (b.kirim !== null && b.status && b.status !== 'Selesai' ? '<span class="ck-lc-kecil">' + rjdEscapeHtml_(String(b.status).toLowerCase()) + '</span>' : '') : ckTanda_(b.selisih));
       barisHtml.push('<tr class="' + (b.jenis === 'endcut' ? 'ck-lcf-ec' : '') + (b.kirimLanjutan ? ' ck-lcf-lanjut' : '') + '">' +
         '<td class="ck-lcf-tgl">' + (b.tanggal ? ckTglIndo_(b.tanggal) : '') + '</td>' +
@@ -1156,13 +1173,8 @@ function ckLcfLembar_(d, g, nomorLembar, tampilKain){
         selSz(b.perSize, b.pcs) +
         '<td class="num">' + ckLcfSel_(b.aktual) + '</td><td class="num' + (b.selisih < 0 ? ' ck-lc-merah' : '') + '">' + sel + '</td></tr>');
     });
-    // Subtotal rasio: kode marker di sini (sel Rasio cukup nomornya -- kode panjang membungkus jadi 3 baris). Rasio yang hanya End cut:
-    // kirim/sisa/selisih kosong, bukan 0 (tidak ada roll yang bisa bernilai 0).
-    const t = G.subtotal, adaRoll = G.baris.some(function(b){ return b.jenis === 'roll'; });
-    const rollSel = function(v, tanda){ return adaRoll ? (tanda ? ckTanda_(v) : ckAngka_(v)) : ''; };
-    barisHtml.push('<tr class="ck-lcf-sub"><td colspan="3" class="ck-lcf-sub-lbl">Subtotal ' + (G.kode ? rjdEscapeHtml_(G.kode) : 'belum dipakai') + '</td><td class="num">' + rollSel(t.kirim) + '</td><td></td><td></td><td></td>' +
-      '<td class="num">' + ckAngka_(t.lapis, 0) + '</td><td class="num">' + ckAngka_(t.pcs, 0) + '</td><td class="num">' + rollSel(t.sisa) + '</td>' +
-      selSz(t.perSize, t.pcs) + '<td class="num">' + ckAngka_(t.aktual) + '</td><td class="num' + (adaRoll && t.selisih < 0 ? ' ck-lc-merah' : '') + '">' + rollSel(t.selisih, true) + '</td></tr>');
+    // Nisan 18 Nov 2026: baris 'Subtotal <kode marker>' per rasio DIHAPUS atas permintaan Femri (revisi sesudah cetak pertama). Akibatnya
+    // kode marker tidak lagi tercetak -- kolom Rasio hanya nomornya. G.subtotal tetap dihitung ckLcfRasio_ (jumlah layer baris TOTAL).
   });
   // KET = neraca kain kelompok (BAHAN = ACT + SHORT + SISA + MASIH DI ROLL), satu sel di sisi kanan sepanjang badan tabel.
   const m = ckLcMasihAda_(s) ? s.masihDiRoll : null, NB = CK_NBSP;
@@ -1171,7 +1183,11 @@ function ckLcfLembar_(d, g, nomorLembar, tampilKain){
     ketBaris('Sisa', s.sisaAkhir) + (m ? ketBaris('Masih di roll', m.total) : '') +
     '<div class="ck-lcf-ket-garis"></div>' + ketBaris('', Math.round(((Number(s.konsumsi) || 0) + (Number(s.short) || 0) + (Number(s.sisaAkhir) || 0) + (m ? Number(m.total) || 0 : 0)) * 100) / 100, 'ck-lcf-ket-jumlah') +
     '<div class="ck-lc-kecil">Sisa = potongan pendek sesudah End cut, bukan kain utuh' + (g.ukurSisa ? '; diukur ' + ckTglIndo_(g.ukurSisa.tanggal) : '') + '.</div>';
-  const tubuh = barisHtml.map(function(h, i){ return i === 0 ? h.replace(/<\/tr>$/, '<td class="ck-lcf-ket" rowspan="' + barisHtml.length + '">' + ket + '</td></tr>') : h; }).join('');
+  const nKet = Math.min(barisHtml.length, CK_LCF_KET_BARIS), sambung = nKet < barisHtml.length;
+  const tubuh = barisHtml.map(function(h, i){
+    if (i === 0) return h.replace(/<\/tr>$/, '<td class="ck-lcf-ket' + (sambung ? ' ck-lcf-ket-sambung' : '') + '" rowspan="' + nKet + '">' + ket + '</td></tr>');
+    return i >= nKet ? h.replace(/<\/tr>$/, '<td class="ck-lcf-ket-lanjut"></td></tr>') : h;
+  }).join('');
   const kaki = '<tr class="ck-lcf-kaki"><td colspan="3">TOTAL Q&#8217;TY HC</td><td class="num">' + ckAngka_(s.material) + '</td><td></td><td></td><td></td>' +
     '<td class="num">' + ckAngka_(grup.reduce(function(a, G){ return a + G.subtotal.lapis; }, 0), 0) + '</td><td class="num">' + ckAngka_(cutTotal, 0) + '</td><td class="num">' + ckAngka_(s.sisaRoll) + '</td>' +
     selSz(s.perSize, cutTotal) + '<td class="num">' + ckAngka_(s.konsumsi) + '</td><td class="num' + ((s.short || 0) > 0 ? ' ck-lc-merah' : '') + '">' + ckTanda_(-(Number(s.short) || 0)) + '</td><td></td></tr>';
@@ -1196,6 +1212,7 @@ function ckRenderLaporanCuttingFormatKlien_(d, PR){
     PR.kelompok.map(function(g, i){ return ckLcfLembar_(d, g, i, perWarna[ckNorm_(g.warna)] > 1); }).join('') + '</div>';
   document.getElementById("ck-isi").innerHTML = html;
   document.body.classList.add("ck-lcf-aktif");   // wadah layar dilebarkan (lc-format-klien.css); versi lain melepasnya di ckRenderLaporanCutting
+  ckLcfHalaman_(true);   // kertas A4 mendatar; dilepas ckRenderLaporanCutting saat versi lain digambar
   document.title = "Laporan Cutting " + (d.idPurchaseOrder || "") + " -- RJD Apparel";
 }
 
@@ -1358,6 +1375,7 @@ function ckRenderLaporanProduksi(d){
 function ckRenderLaporanCutting(d){
   CK_LC_DATA = d;   // 5 Nov 2026: sakelar versi menggambar ulang tanpa memuat ulang
   document.body.classList.remove("ck-lcf-aktif");   // 18 Nov 2026: wadah lebar hanya untuk Format klien
+  ckLcfHalaman_(false);   // 18 Nov 2026: @page mendatar hanya untuk Format klien
   if (CK_LC_VERSI === "format" && d.perRoll && (d.perRoll.kelompok || []).length) { ckRenderLaporanCuttingFormatKlien_(d, d.perRoll); return; }
   if (CK_LC_VERSI === "klien" && d.perRoll && (d.perRoll.kelompok || []).length) { ckRenderLaporanCuttingKlien_(d, d.perRoll); return; }
   const r = d.ringkasan || {};

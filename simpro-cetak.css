@@ -900,9 +900,9 @@ body:has(nav) { padding-top: 0; }
 @media print { .ck-sj-batal { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 
 /* ---------- Laporan cutting: FORMAT KLIEN (18 Nov 2026) -- lembar per style + warna, tabel bergaris penuh seperti lembar cutting klien.
-   Dicetak MENDATAR (halaman bernama ck-lcf): 10 kolom tetap + size + Total + 3 kolom kanan tidak muat tegak tanpa huruf terlalu kecil. */
-.ck-lcf { page: ck-lcf; }
-@page ck-lcf { size: A4 landscape; margin: 8mm; }
+   Dicetak MENDATAR: 10 kolom tetap + size + Total + 3 kolom kanan tidak muat tegak tanpa huruf terlalu kecil. @page mendatar dipasang
+   JS (ckLcfHalaman_) selama versi ini tampil. Nisan 18 Nov 2026: halaman BERNAMA (.ck-lcf { page: ck-lcf } + @page ck-lcf) dicabut --
+   pergantian nama halaman memaksa ganti halaman sebelum div kosong Blogger sesudah dokumen, jadi tiap cetak berakhir halaman KOSONG. */
 .ck-lcf-lembar + .ck-lcf-lembar { margin-top: 32px; }
 .ck-lcf-atas { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
 /* word-break: normal -- bundel CSS Blogger (body{word-break:break-word}) memecah kata kepala kolom di huruf mana pun ('Panjan/g', 'Ras/io'),
@@ -925,10 +925,12 @@ body.ck-lcf-aktif .ck-scr-main { max-width: 1240px; }
 .ck-lcf-tabel td.ck-lcf-roll { white-space: nowrap; font-weight: 600; }
 .ck-lcf-tabel td.ck-lcf-sztot { background: var(--paper-2); }
 .ck-lcf-tabel tr.ck-lcf-ec td { background: #fbf6ec; }
-.ck-lcf-tabel tr.ck-lcf-sub td { font-weight: 700; border-top: 1.5px solid var(--ink-soft); border-bottom: 1.5px solid var(--ink-soft); }
-.ck-lcf-tabel tr.ck-lcf-sub td.ck-lcf-sub-lbl { font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; text-transform: uppercase; color: var(--ink-soft); }
+/* Nisan 18 Nov 2026: aturan baris subtotal (tr.ck-lcf-sub) dibuang bersama barisnya. */
 .ck-lcf-tabel tfoot tr.ck-lcf-kaki td { font-weight: 800; background: var(--cream); border-top: 2px solid var(--ink); }
 .ck-lcf-tabel td.ck-lcf-ket { min-width: 96px; background: var(--white); vertical-align: top; }
+/* KET merentang paling banyak CK_LCF_KET_BARIS baris; sel lanjutan di bawahnya tanpa garis mendatar supaya kolom tetap tampak satu sel. */
+.ck-lcf-tabel td.ck-lcf-ket.ck-lcf-ket-sambung { border-bottom: 0; }
+.ck-lcf-tabel td.ck-lcf-ket-lanjut { background: var(--white); border-top: 0; border-bottom: 0; }
 /* KET: label di atas angka (bukan sebaris) -- sebaris butuh +-150 px dan menekan kolom size. */
 .ck-lcf-ket-baris { display: flex; flex-direction: column; padding: 2px 0 3px; }
 .ck-lcf-ket-baris span { text-transform: uppercase; font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: var(--ink-soft); }
@@ -942,5 +944,8 @@ body.ck-lcf-aktif .ck-scr-main { max-width: 1240px; }
   .ck-lcf-lembar.ck-lcf-lembar-baru { break-before: page; }
   .ck-lcf .ck-lc-wrap { overflow: visible; }
   .ck-lcf-tabel thead { display: table-header-group; }
+  /* TOTAL Q'TY HC sekali di akhir lembar: tfoot bawaan DIULANG Chrome di kaki tiap halaman (terukur 18 Nov 2026), jadi halaman 1 dari 3
+     ikut menampilkan TOTAL seluruh lembar. */
+  .ck-lcf-tabel tfoot { display: table-row-group; }
   .ck-lcf-tabel tr { break-inside: avoid; }
 }
