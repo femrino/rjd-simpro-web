@@ -898,3 +898,49 @@ body:has(nav) { padding-top: 0; }
 .ck-sj-batal b { font-size: 16px; letter-spacing: .08em; }
 .ck-sj-status { font-size: 12.5px; margin: -6px 0 14px; line-height: 1.5; }
 @media print { .ck-sj-batal { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+
+/* ---------- Laporan cutting: FORMAT KLIEN (18 Nov 2026) -- lembar per style + warna, tabel bergaris penuh seperti lembar cutting klien.
+   Dicetak MENDATAR (halaman bernama ck-lcf): 10 kolom tetap + size + Total + 3 kolom kanan tidak muat tegak tanpa huruf terlalu kecil. */
+.ck-lcf { page: ck-lcf; }
+@page ck-lcf { size: A4 landscape; margin: 8mm; }
+.ck-lcf-lembar + .ck-lcf-lembar { margin-top: 32px; }
+.ck-lcf-atas { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+/* word-break: normal -- bundel CSS Blogger (body{word-break:break-word}) memecah kata kepala kolom di huruf mana pun ('Panjan/g', 'Ras/io'),
+   terukur jalan154 F12 bahkan di kertas 1062 px; keluarga PF-19/PF-23. Kata utuh membungkus antar-kata; tabel layar tetap di penggulir. */
+.ck-lcf-kotak, .ck-lcf-rasiosize, .ck-lcf-tabel { border-collapse: collapse; font-size: 11px; word-break: normal; overflow-wrap: normal; }
+/* Halaman cetak membungkus dokumen di .ck-scr-main 900 px; lembar ini butuh +-1.000 px (layar) -- dilebarkan HANYA selama versi ini tampil
+   (kelas body dipasang/dilepas perender). Kertas tidak terpengaruh: A4 mendatar memberi +-1.060 px. */
+body.ck-lcf-aktif .ck-scr-main { max-width: 1240px; }
+.ck-lcf-kotak th, .ck-lcf-kotak td, .ck-lcf-rasiosize th, .ck-lcf-rasiosize td, .ck-lcf-tabel th, .ck-lcf-tabel td { border: 1px solid var(--line); padding: 4px 5px; vertical-align: top; }
+.ck-lcf-kotak th, .ck-lcf-rasiosize th, .ck-lcf-tabel thead th { background: var(--paper-2); font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; letter-spacing: .03em; text-transform: uppercase; color: var(--ink-soft); font-weight: 700; text-align: left; }
+.ck-lcf-kotak th { min-width: 112px; }
+.ck-lcf-kotak td { min-width: 150px; font-weight: 700; }
+.ck-lcf-rasiosize td, .ck-lcf-rasiosize thead th.num { min-width: 44px; }
+.ck-lcf-tabel { width: 100%; }
+.ck-lcf-tabel thead th { text-align: center; vertical-align: middle; }
+.ck-lcf-tabel thead th.ck-lcf-grup { background: var(--cream); color: var(--ink); }
+.ck-lcf-kotak .num, .ck-lcf-rasiosize .num, .ck-lcf-tabel td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ck-lcf-tabel td.ck-lcf-tgl { white-space: nowrap; }
+.ck-lcf-tabel td.ck-lcf-rasio { text-align: center; }
+.ck-lcf-tabel td.ck-lcf-roll { white-space: nowrap; font-weight: 600; }
+.ck-lcf-tabel td.ck-lcf-sztot { background: var(--paper-2); }
+.ck-lcf-tabel tr.ck-lcf-ec td { background: #fbf6ec; }
+.ck-lcf-tabel tr.ck-lcf-sub td { font-weight: 700; border-top: 1.5px solid var(--ink-soft); border-bottom: 1.5px solid var(--ink-soft); }
+.ck-lcf-tabel tr.ck-lcf-sub td.ck-lcf-sub-lbl { font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; text-transform: uppercase; color: var(--ink-soft); }
+.ck-lcf-tabel tfoot tr.ck-lcf-kaki td { font-weight: 800; background: var(--cream); border-top: 2px solid var(--ink); }
+.ck-lcf-tabel td.ck-lcf-ket { min-width: 96px; background: var(--white); vertical-align: top; }
+/* KET: label di atas angka (bukan sebaris) -- sebaris butuh +-150 px dan menekan kolom size. */
+.ck-lcf-ket-baris { display: flex; flex-direction: column; padding: 2px 0 3px; }
+.ck-lcf-ket-baris span { text-transform: uppercase; font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: var(--ink-soft); }
+.ck-lcf-ket-baris b { white-space: nowrap; text-align: right; }
+.ck-lcf-ket-garis { border-top: 1px solid var(--ink); margin: 4px 0; }
+.ck-lcf-ket-jumlah b { font-size: 12px; }
+@media print {
+  /* Kasus terlebar (7 size S-4XL, angka 4 digit, jalan154 F12b) meluap 44 px di A4 mendatar dengan padding 5 px: 21 kolom x 2 sisi.
+     Sel dirapatkan HANYA di kertas -- layar punya penggulir. */
+  .ck-lcf-tabel th, .ck-lcf-tabel td { padding: 3px 3px; font-size: 10.5px; }
+  .ck-lcf-lembar.ck-lcf-lembar-baru { break-before: page; }
+  .ck-lcf .ck-lc-wrap { overflow: visible; }
+  .ck-lcf-tabel thead { display: table-header-group; }
+  .ck-lcf-tabel tr { break-inside: avoid; }
+}
