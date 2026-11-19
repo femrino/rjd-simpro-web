@@ -187,6 +187,7 @@ function upMuat() {
     upRender_();
     if (typeof rjdSnapshotBarHapus_ === "function") rjdSnapshotBarHapus_("up-hasil");
     upSlipPasang_(d);   // v385 (Tahap 5C): kartu slip gaji di bawah hasil, hanya lingkup penuh
+    upGjPasang_(d);     // v431 (tiga buku): kartu Gajian HCM di bawah kartu slip, hanya lingkup penuh
   })
   .catch(function () {
     document.getElementById("up-hasil").innerHTML =
@@ -468,7 +469,10 @@ function upSlipRender_() {
     '<button class="up-btn up-btn-kecil up-btn-putih" type="button" onclick="upSlipMuat()">Muat ulang</button></div>';
   const ringkas = '<div class="up-slip-ringkas" id="up-slip-ringkas"><span>Draf<b>' + draf.length + '</b></span><span>Dibayar<b>' + dibayar.length + '</b></span><span>Dibatalkan<b>' + batal.length + '</b></span><span>Netto dibayar<b>' + upSlipRp_(nettoDibayar) + '</b></span></div>';
   const baris = slip.map(function (s) {
-    const id = String(s["ID Slip"] || ""), st = String(s.Status || ""), isDraf = st === "Draf", edit = UP_SLIP_EDIT === id;
+    const id = String(s["ID Slip"] || ""), st = String(s.Status || ""), edit = UP_SLIP_EDIT === id;
+    // v431: slip HCM (Buku Gaji dari HCM) dibayar & dibatalkan per GAJIAN di kartu Gajian HCM -- server menolak bayar/ubah per slip
+    // dan batal slip Dibayar, jadi tombolnya tidak ditawarkan (tombol yang pasti ditolak lebih buruk daripada tidak ada tombol).
+    const hcm = String(s.Jenis || "") === "HCM", isDraf = st === "Draf" && !hcm;
     const kelas = st === "Dibatalkan" ? "up-slip-batal" : (st === "Dibayar" ? "up-slip-dibayar" : "");
     const idJs = typeof rjdAttrJs_ === "function" ? rjdAttrJs_(id) : upEsc_(id);
     const inp = function (medan, nilai, kelasTambah) { return '<input data-medan="' + medan + '" class="' + (kelasTambah || "") + '" value="' + upEsc_(nilai) + '">'; };
@@ -484,15 +488,193 @@ function upSlipRender_() {
       '<td class="num">' + (edit ? inp("potonganKasbon", Number(s["Potongan Kasbon"]) || 0) : upSlipRp_(s["Potongan Kasbon"])) + (sk !== undefined ? '<div class="up-sub">saldo ' + upSlipRp_(sk) + '</div>' : '') + '</td>' +
       '<td class="num">' + (edit ? inp("potonganLain", Number(s["Potongan Lain"]) || 0) + '<div>' + inp("keteranganPotongan", s["Keterangan Potongan"] || "", "up-slip-ket") + '</div>' : upSlipRp_(s["Potongan Lain"]) + (s["Keterangan Potongan"] ? '<div class="up-sub">' + upEsc_(s["Keterangan Potongan"]) + '</div>' : '')) + '</td>' +
       '<td class="num"><b>' + upSlipRp_(s.Netto) + '</b></td>' +
-      '<td class="up-slip-st">' + upEsc_(st) + (st === "Dibayar" ? '<div class="up-sub">' + upEsc_(s["Tanggal Bayar"]) + ' &#183; ' + upEsc_(s["Akun Kas"]) + '</div>' : '') + (st === "Dibatalkan" && s["Alasan Batal"] ? '<div class="up-sub">' + upEsc_(s["Alasan Batal"]) + '</div>' : '') + '</td>' +
+      '<td class="up-slip-st">' + upEsc_(st) + (st === "Dibayar" ? '<div class="up-sub">' + upEsc_(s["Tanggal Bayar"]) + ' &#183; ' + upEsc_(s["Akun Kas"]) + (hcm && s["ID Gajian"] ? ' &#183; ' + upEsc_(s["ID Gajian"]) : '') + '</div>' : '') +
+        (hcm && st === "Draf" ? '<div class="up-sub up-slip-hcm">bayar lewat kartu Gajian HCM</div>' : '') + (st === "Dibatalkan" && s["Alasan Batal"] ? '<div class="up-sub">' + upEsc_(s["Alasan Batal"]) + '</div>' : '') + '</td>' +
       '<td class="up-slip-aksi">' + (edit
         ? '<button class="up-btn up-btn-kecil" type="button" onclick="upSlipSimpanEdit(\'' + idJs + '\')"' + (UP_SLIP_SIBUK ? ' disabled' : '') + '>Simpan</button> <button class="up-btn up-btn-kecil up-btn-putih" type="button" onclick="upSlipEditBatal()">Batal ubah</button>'
         : (isDraf ? '<button class="up-btn up-btn-kecil up-btn-putih" type="button" onclick="upSlipEdit(\'' + idJs + '\')">Ubah</button> ' : '') +
-          (st !== "Dibatalkan" ? '<button class="up-btn up-btn-kecil up-btn-putih" type="button" onclick="upSlipBatal(\'' + idJs + '\')"' + (UP_SLIP_SIBUK ? ' disabled' : '') + '>Batal</button>' : '')) + '</td></tr>';
+          (st !== "Dibatalkan" && !(hcm && st === "Dibayar") ? '<button class="up-btn up-btn-kecil up-btn-putih" type="button" onclick="upSlipBatal(\'' + idJs + '\')"' + (UP_SLIP_SIBUK ? ' disabled' : '') + '>Batal</button>' : '')) + '</td></tr>';
   }).join("");
   const tabel = slip.length
     ? '<div class="up-tabelwrap"><table class="up-tabel up-slip-tabel" id="up-slip-tabel"><thead><tr><th></th><th>Slip</th><th>Karyawan</th><th class="num">Pcs</th><th class="num">Upah / pokok</th><th class="num">Tunjangan</th><th class="num">THR</th><th class="num">Pot. kasbon</th><th class="num">Pot. lain</th><th class="num">Netto</th><th>Status</th><th></th></tr></thead><tbody>' + baris + '</tbody></table></div>'
     : '<p class="up-info" id="up-slip-kosong">Belum ada slip untuk periode ini. Tekan <b>Buat draf periode ini</b> sesudah memeriksa upah di atas.</p>';
   el.innerHTML = '<div class="up-kartu">' + judul + '<div class="up-sub">Periode ' + upEsc_((d.periode || {}).dari || per.dari) + ' &#8212; ' + upEsc_((d.periode || {}).sampai || per.sampai) + (d.drafLain ? ' &#183; ' + d.drafLain + ' draf periode lain masih menggantung' : '') + '</div>' +
     ringkas + peringatan + bilah + pesan + tabel + '</div>';
+}
+
+
+/* ============================================================================
+ * v431 (butuh gs >= @467) -- KARTU GAJIAN HCM di bawah kartu slip (RANCANGAN-GAJI-KASBON bagian 5 langkah 3, "tiga buku").
+ * Gaji DIHITUNG di sheet HCM; kartu ini MEMBUKUKANNYA, tiga langkah:
+ *   Impor  -- getImporGajiHCM (pratinjau) -> imporGajiHCM: satu slip Draf Jenis HCM per baris HCM (Buku Gaji).
+ *   Bayar  -- getBayarGajian -> bayarGajian per TANGGAL BAYAR HCM dari satu akun: Buku Kas per kategori + satu Masuk pengembalian
+ *             kasbon, Ref = ID Gajian. Baris kas gaji tanpa slip di tanggal yang sama (baris global) DITOLAK server; layar
+ *             menampilkannya dan mengirim konfirmasi HANYA kalau kotaknya dicentang orang.
+ *   Batal  -- batalkanGajian (alasan wajib): pembalik kas + slip Dibatalkan; membayar lagi = impor ulang lalu bayar.
+ * Hanya lingkup PENUH (sama dengan kartu slip; server menolak lewat area "penggajian"). Periode HCM (mis. 2026 10 = 26 Sep - 25 Okt)
+ * BERDIRI SENDIRI, tidak mengikuti rentang tanggal upah di atas. Tulis: rjdKunciIsian_ (kiriman ulang = server menjawab
+ * sudahTercatat) + tombol dikunci selama sibuk. Jawaban yang disusul dibuang (UP_GJ_URUT). Teks lewat upEsc_, ID di handler lewat rjdAttrJs_.
+ * ========================================================================== */
+let UP_GJ = null, UP_GJ_URUT = 0, UP_GJ_STATUS = "", UP_GJ_PESAN = null, UP_GJ_SIBUK = false;
+
+function upGjWadah_() {
+  let el = document.getElementById("up-gajian");
+  if (el) return el;
+  const j = document.getElementById("up-slip") || document.getElementById("up-hasil"); if (!j || !j.parentNode) return null;
+  el = document.createElement("div"); el.id = "up-gajian";
+  j.parentNode.insertBefore(el, j.nextSibling);
+  return el;
+}
+/** Dipanggil sesudah getUpahBorongan sukses: kartu hanya untuk lingkup penuh. Isinya tidak bergantung pada rentang upah. */
+function upGjPasang_(d) {
+  const el = upGjWadah_(); if (!el) return;
+  if (d && d.lingkup && d.lingkup.penuh === false) { el.innerHTML = ""; UP_GJ = null; UP_GJ_STATUS = ""; return; }
+  upGjRender_();
+}
+function upGjPesanGagal_(e) {
+  const m = String(e && e.message || e);
+  return /Failed to fetch|NetworkError|jaringan/i.test(m) ? "Gajian HCM tidak sampai ke server -- sambungan terputus di tengah jalan. Coba lagi." : m;
+}
+/** Pratinjau impor + pratinjau bayar untuk satu periode HCM (kosong = periode terbaru menurut server). */
+function upGjMuat(periode) {
+  const urut = ++UP_GJ_URUT;
+  UP_GJ_STATUS = "memuat"; upGjRender_();
+  let impor = null;
+  upSlipKirim_("getImporGajiHCM", periode ? { periode: periode } : {})
+    .then(function (d) { impor = d; return upSlipKirim_("getBayarGajian", { periode: d.periode }); })
+    .then(function (b) { if (urut !== UP_GJ_URUT) return; UP_GJ = { periode: impor.periode, impor: impor, bayar: b }; UP_GJ_STATUS = ""; upGjRender_(); })
+    .catch(function (e) { if (urut !== UP_GJ_URUT) return; UP_GJ_STATUS = upGjPesanGagal_(e); upGjRender_(); });
+}
+function upGjPesan_(teks, galat) {
+  UP_GJ_PESAN = teks ? { teks: teks, galat: !!galat } : null;
+  const el = document.getElementById("up-gj-pesan");
+  if (el) { el.textContent = teks || ""; el.className = "up-slip-pesan" + (galat ? " up-galat" : (teks ? " up-slip-ok" : "")); }
+}
+/** Satu jalur untuk semua aksi tulis kartu ini: dikunci selama sibuk; sukses -> pesan + muat ulang (kartu slip ikut kalau terbuka). */
+function upGjAksi_(action, payload, sesudah) {
+  if (UP_GJ_SIBUK) return;
+  UP_GJ_SIBUK = true; upGjPesan_("Mengirim...", false); upGjRender_();
+  upSlipKirim_(action, payload)
+    .then(function (d) {
+      UP_GJ_SIBUK = false; UP_GJ_PESAN = { teks: sesudah(d), galat: false };
+      upGjMuat(UP_GJ && UP_GJ.periode);
+      if (UP_SLIP) upSlipMuat();
+    })
+    .catch(function (e) { UP_GJ_SIBUK = false; upGjPesan_(upGjPesanGagal_(e), true); upGjRender_(); });
+}
+function upGjKunci_(nama, isian) { return typeof rjdKunciIsian_ === "function" ? rjdKunciIsian_(nama, isian) : ""; }
+function upGjImpor() {
+  if (!UP_GJ) return;
+  const isian = { periode: UP_GJ.periode };
+  isian.idPermintaan = upGjKunci_("up-gj-impor", isian);
+  upGjAksi_("imporGajiHCM", isian, function (d) {
+    return "Diimpor " + d.jumlah + " slip Draf periode " + d.periode + ((d.ditolak || []).length ? "; " + d.ditolak.length + " baris ditolak/berubah tidak diimpor" : "") +
+      ((d.dikecualikan || []).length ? "; dikecualikan: " + d.dikecualikan.join(", ") : "") + ".";
+  });
+}
+function upGjAkun_() { return (document.getElementById("up-gj-akun") || {}).value || ""; }
+function upGjBayar(tanggal) {
+  if (!UP_GJ) return;
+  const akun = upGjAkun_();
+  if (!akun) { upGjPesan_("Pilih akun kas dulu.", true); return; }
+  const kotak = Array.prototype.filter.call(document.querySelectorAll("#up-gajian input.up-gj-konfirmasi"), function (c) { return c.dataset.tanggal === tanggal; })[0];
+  const isian = { periode: UP_GJ.periode, tanggal: tanggal, akun: akun };
+  if (kotak && kotak.checked) isian.konfirmasiBarisGajiLain = true;
+  isian.idPermintaan = upGjKunci_("up-gj-bayar", isian);
+  upGjAksi_("bayarGajian", isian, function (d) {
+    if (d.sudahTercatat) return "Gajian " + d.idGajian + " sudah tercatat sebelumnya (" + d.jumlahSlip + " slip) -- tidak dibayar dua kali.";
+    if (d.dipulihkan) return d.jumlahSlip + " slip ditambal (kas gajiannya sudah tertulis sebelumnya, tidak ditulis lagi).";
+    return "Gajian " + d.idGajian + " dibayar " + d.tanggal + " dari " + d.akun + ": " + d.jumlahSlip + " slip, keluar dari bank " + upRp_(d.release) +
+      " (potongan kasbon " + upRp_(d.potongan) + "), " + (d.kas || []).length + " baris kas" + ((d.tertinggal || []).length ? "; " + d.tertinggal.length + " slip belum ikut" : "") + ".";
+  });
+}
+/** Slip Draf yang SUDAH punya kas gajian (pembayaran sebelumnya terputus sebelum slipnya ditandai): server menambal, kas tidak ditulis lagi. */
+function upGjPulihkan() {
+  if (!UP_GJ) return;
+  const akun = upGjAkun_(); if (!akun) { upGjPesan_("Pilih akun kas dulu.", true); return; }
+  const h = new Date(), iso = h.getFullYear() + "-" + String(h.getMonth() + 1).padStart(2, "0") + "-" + String(h.getDate()).padStart(2, "0");
+  const isian = { periode: UP_GJ.periode, tanggal: iso, akun: akun, pulihkan: true };
+  isian.idPermintaan = upGjKunci_("up-gj-pulihkan", isian);
+  upGjAksi_("bayarGajian", isian, function (d) { return d.dipulihkan ? d.jumlahSlip + " slip ditambal (kas gajiannya sudah tertulis sebelumnya)." : "Tidak ada yang perlu ditambal."; });
+}
+function upGjBatal(idGajian) {
+  const alasan = String(window.prompt("Alasan membatalkan gajian " + idGajian + " (min. 5 huruf). Semua baris kasnya dibalik dan slipnya dibatalkan; membayar lagi = impor ulang lalu bayar:") || "").trim();
+  if (!alasan) return;
+  if (alasan.length < 5) { upGjPesan_("Alasan pembatalan minimal 5 huruf.", true); return; }
+  upGjAksi_("batalkanGajian", { idGajian: idGajian, alasan: alasan }, function (d) {
+    return d.sudahTercatat ? "Gajian " + d.idGajian + " sudah dibatalkan sebelumnya." : "Gajian " + d.idGajian + " dibatalkan: " + d.jumlahSlip + " slip, " + (d.pembalik || []).length + " baris kas dibalik. Impor ulang periode ini untuk membayar lagi.";
+  });
+}
+function upGjJs_(s) { return typeof rjdAttrJs_ === "function" ? rjdAttrJs_(s) : upEsc_(s); }
+function upGjRender_() {
+  const el = upGjWadah_(); if (!el) return;
+  const judul = '<div class="up-slip-judul">Gajian HCM</div>';
+  if (UP_GJ_STATUS) {
+    const memuat = UP_GJ_STATUS === "memuat";
+    el.innerHTML = '<div class="up-kartu">' + judul + '<p class="' + (memuat ? 'up-info' : 'up-galat') + '" id="up-gj-status">' + upEsc_(memuat ? "Memuat gajian HCM..." : UP_GJ_STATUS) + '</p>' +
+      (memuat ? '' : '<button class="up-btn up-btn-kecil" type="button" onclick="upGjMuat(' + (UP_GJ ? "'" + upGjJs_(UP_GJ.periode) + "'" : '') + ')">Coba lagi</button>') + '</div>';
+    return;
+  }
+  if (!UP_GJ) {
+    el.innerHTML = '<div class="up-kartu">' + judul + '<p class="up-info">Gaji dihitung di sheet HCM. Di sini: <b>Impor</b> jadi slip (Buku Gaji), <b>Bayar</b> per tanggal bayar HCM (Buku Kas per kategori + pengembalian kasbon), dan <b>Batal</b> per gajian.</p>' +
+      '<button id="up-gj-buka" class="up-btn" type="button" onclick="upGjMuat()">Buka gajian HCM</button></div>';
+    return;
+  }
+  const im = UP_GJ.impor || {}, by = UP_GJ.bayar || {}, R = im.ringkas || {}, B = by.ringkas || {}, kunci = UP_GJ_SIBUK ? ' disabled' : '';
+  const rp = function (v) { return upRp_(Number(v) || 0); };
+  const pesan = '<div id="up-gj-pesan" class="up-slip-pesan' + (UP_GJ_PESAN ? (UP_GJ_PESAN.galat ? ' up-galat' : ' up-slip-ok') : '') + '">' + (UP_GJ_PESAN ? upEsc_(UP_GJ_PESAN.teks) : '') + '</div>';
+  const pilihPeriode = '<label>Periode HCM<select id="up-gj-periode" onchange="upGjMuat(this.value)"' + kunci + '>' + (im.periodeAda || [UP_GJ.periode]).map(function (p) {
+    return '<option value="' + upEsc_(p) + '"' + (p === UP_GJ.periode ? ' selected' : '') + '>' + upEsc_(p) + '</option>'; }).join("") + '</select></label>';
+  // ---- 1. Impor
+  let awasImpor = "";
+  if (!im.padananAda) awasImpor += '<div class="up-waspada" id="up-gj-padanan-awas"><b>Sheet SD Padanan Nama Gaji belum ada</b> -- impor ditolak server. Jalankan <b>siapkanPadananNamaGaji()</b> (berkas gaji-hcm.js) dari editor Apps Script; di sana subkon seperti Ratnawati dikecualikan.</div>';
+  if ((im.padananGalat || []).length) awasImpor += '<div class="up-waspada" id="up-gj-padanan-galat"><b>SD Padanan Nama Gaji bermasalah</b> -- impor ditolak: ' + upEsc_(im.padananGalat.join("; ")) + '</div>';
+  if ((im.namaGanda || []).length) awasImpor += '<div class="up-waspada up-waspada-lembut" id="up-gj-ganda"><b>' + im.namaGanda.length + ' nama muncul dua kali</b> di periode ini (tidak ditolak -- periksa apakah memang dua orang): ' +
+    im.namaGanda.map(function (g) { return upEsc_(g.kunci) + ' (' + upEsc_((g.baris || []).join(" | ")) + ')'; }).join("; ") + '</div>';
+  const ringImpor = '<div class="up-slip-ringkas" id="up-gj-ringkas-impor"><span>Baris HCM<b>' + (R.baris || 0) + '</b></span><span>Baru<b>' + (R.baru || 0) + '</b></span><span>Sudah diimpor<b>' + (R.sudah || 0) + '</b></span>' +
+    '<span>Berubah<b>' + (R.berubah || 0) + '</b></span><span>Ditolak<b>' + (R.ditolak || 0) + '</b></span><span>Dikecualikan<b>' + (R.dikecualikan || 0) + '</b></span><span>Nol<b>' + (R.nol || 0) + '</b></span>' +
+    '<span>Bruto<b>' + rp(R.bruto) + '</b></span><span>Potongan kasbon<b>' + rp(R.potongan) + '</b></span><span>Netto<b>' + rp(R.netto) + '</b></span></div>';
+  const tombolImpor = '<button id="up-gj-impor" class="up-btn up-btn-kecil" type="button" onclick="upGjImpor()"' + (UP_GJ_SIBUK || !R.baru || !im.padananAda || (im.padananGalat || []).length ? ' disabled' : '') + '>' +
+    (UP_GJ_SIBUK ? 'Mengirim...' : 'Impor ' + (R.baru || 0) + ' slip baru') + '</button>';
+  const masalahImpor = (im.baris || []).filter(function (o) { return o.status === "ditolak" || o.status === "berubah" || o.status === "dikecualikan"; });
+  const tabelImpor = masalahImpor.length ? '<div class="up-tabelwrap"><table class="up-tabel up-gj-tabel" id="up-gj-tabel-impor"><thead><tr><th>ID Gaji</th><th>Nama</th><th>Divisi</th><th class="num">Total</th><th>Status</th><th>Sebab</th></tr></thead><tbody>' +
+    masalahImpor.map(function (o) { return '<tr data-gaji="' + upEsc_(o.idGaji) + '"><td><span class="up-rek">' + upEsc_(o.idGaji || "-") + '</span></td><td>' + upEsc_(o.nama) + '</td><td>' + upEsc_(o.divisi) + '</td><td class="num">' + rp(o.total) + '</td><td>' + upEsc_(o.status) + '</td><td>' + upEsc_((o.sebab || []).join("; ")) + '</td></tr>'; }).join("") +
+    '</tbody></table></div>' : '';
+  const blokImpor = '<div class="up-gj-blok" id="up-gj-blok-impor"><div class="up-gj-subjudul">1. Impor dari HCM ke Buku Gaji</div>' + awasImpor + ringImpor + '<div class="up-slip-bilah">' + tombolImpor + '</div>' + tabelImpor + '</div>';
+  // ---- 2. Bayar
+  const akunPilih = upGjAkun_();
+  const pilihAkun = '<label>Akun kas<select id="up-gj-akun">' + (by.akun || []).map(function (a) { return '<option value="' + upEsc_(a.kode) + '"' + (a.kode === akunPilih ? ' selected' : '') + '>' + upEsc_(a.kode + " - " + a.nama) + '</option>'; }).join("") + '</select></label>';
+  const ringBayar = '<div class="up-slip-ringkas" id="up-gj-ringkas-bayar"><span>Slip Draf<b>' + (B.draf || 0) + '</b></span><span>Siap dibayar<b>' + (B.siap || 0) + '</b></span><span>Belum bertanggal bayar<b>' + (B.belum || 0) + '</b></span>' +
+    '<span>Ditolak<b>' + (B.ditolak || 0) + '</b></span><span>Menunggu tambal<b>' + (B.ditahan || 0) + '</b></span></div>';
+  const awasTahan = B.ditahan ? '<div class="up-waspada" id="up-gj-tahan-awas"><b>' + B.ditahan + ' slip menunggu tambal</b> -- kas gajiannya sudah tertulis tapi slipnya belum ditandai (pembayaran sebelumnya terputus). ' +
+    '<button id="up-gj-pulihkan" class="up-btn up-btn-kecil" type="button" onclick="upGjPulihkan()"' + kunci + '>Tambal sekarang</button></div>' : '';
+  const lain = by.kasGajiLain || {};
+  const barisGrup = (by.grup || []).map(function (g) {
+    const tgl = String(g.tanggal || ""), dobel = lain[tgl] || [], tJs = upGjJs_(tgl);
+    const kat = Object.keys(g.perKategori || {}).sort().map(function (k) { return upEsc_(k) + ' ' + rp(g.perKategori[k]); }).join("<br>");
+    const peringatan = dobel.length ? '<div class="up-gj-dobel"><b>Tanggal ini sudah punya ' + dobel.length + ' baris kas gaji TANPA slip</b>: ' + dobel.map(function (t) { return upEsc_(t.id) + ' ' + upEsc_(t.kategori) + ' ' + rp(t.jumlah) + (t.keterangan ? ' (' + upEsc_(t.keterangan) + ')' : ''); }).join("; ") +
+      '. Kalau itu gajian yang sama (dicatat global), batalkan barisnya di Buku Kas dulu.<label class="up-gj-konfirmasi-label"><input type="checkbox" class="up-gj-konfirmasi" data-tanggal="' + upEsc_(tgl) + '"> Sudah kuperiksa: itu BUKAN gajian ini, tetap bayar</label></div>' : '';
+    return '<tr data-tanggal="' + upEsc_(tgl) + '"><td><b>' + upEsc_(tgl) + '</b>' + peringatan + '</td><td class="num">' + g.jumlah + '</td><td class="num">' + kat + '</td><td class="num">' + rp(g.potongan) + '</td><td class="num"><b>' + rp(g.release) + '</b></td><td class="num">' + rp(g.selisih) + '</td>' +
+      '<td class="up-slip-aksi"><button class="up-btn up-btn-kecil up-gj-bayar" type="button" onclick="upGjBayar(\'' + tJs + '\')"' + kunci + '>' + (UP_GJ_SIBUK ? 'Mengirim...' : 'Bayar') + '</button></td></tr>';
+  }).join("");
+  const tabelGrup = (by.grup || []).length
+    ? '<div class="up-tabelwrap"><table class="up-tabel up-gj-tabel" id="up-gj-tabel-bayar"><thead><tr><th>Tanggal bayar HCM</th><th class="num">Slip</th><th class="num">Keluar per kategori</th><th class="num">Potongan kasbon</th><th class="num">Keluar dari bank (Release)</th><th class="num">Pembulatan</th><th></th></tr></thead><tbody>' + barisGrup + '</tbody></table></div>'
+    : '<p class="up-info" id="up-gj-bayar-kosong">Tidak ada slip yang siap dibayar untuk periode ini' + (B.draf ? ' -- lihat sebabnya di bawah.' : (R.baru ? ' -- impor dulu.' : '.')) + '</p>';
+  const tertinggal = (by.slip || []).filter(function (o) { return o.status !== "siap"; });
+  const tabelTinggal = tertinggal.length ? '<div class="up-tabelwrap"><table class="up-tabel up-gj-tabel" id="up-gj-tabel-tinggal"><thead><tr><th>ID Gaji</th><th>Nama</th><th>Bagian</th><th class="num">Netto</th><th>Status</th><th>Sebab</th></tr></thead><tbody>' +
+    tertinggal.map(function (o) { return '<tr data-gaji="' + upEsc_(o.idGaji) + '"><td><span class="up-rek">' + upEsc_(o.idGaji) + '</span></td><td>' + upEsc_(o.nama) + '</td><td>' + upEsc_(o.bagian) + '</td><td class="num">' + rp(o.netto) + '</td><td>' + upEsc_(o.status) + '</td><td>' + upEsc_((o.sebab || []).join("; ")) + '</td></tr>'; }).join("") +
+    '</tbody></table></div>' : '';
+  const blokBayar = '<div class="up-gj-blok" id="up-gj-blok-bayar"><div class="up-gj-subjudul">2. Bayar per tanggal bayar HCM</div>' + ringBayar + awasTahan + '<div class="up-slip-bilah">' + pilihAkun + '</div>' + tabelGrup + tabelTinggal + '</div>';
+  // ---- 3. Gajian periode ini
+  const gajian = by.gajian || [];
+  const blokGajian = '<div class="up-gj-blok" id="up-gj-blok-gajian"><div class="up-gj-subjudul">3. Gajian periode ini</div>' + (gajian.length
+    ? '<div class="up-tabelwrap"><table class="up-tabel up-gj-tabel" id="up-gj-tabel-gajian"><thead><tr><th>ID Gajian</th><th>Tanggal</th><th>Akun</th><th class="num">Slip</th><th class="num">Keluar dari bank</th><th class="num">Potongan kasbon</th><th>Status</th><th></th></tr></thead><tbody>' +
+      gajian.map(function (x) {
+        const batal = x.status !== "Dibayar";
+        return '<tr data-gajian="' + upEsc_(x.idGajian) + '" class="' + (batal ? 'up-slip-batal' : 'up-slip-dibayar') + '"><td><span class="up-rek">' + upEsc_(x.idGajian) + '</span></td><td>' + upEsc_(x.tanggal) + '</td><td>' + upEsc_(x.akun) + '</td><td class="num">' + x.jumlah + '</td><td class="num">' + rp(x.release) + '</td><td class="num">' + rp(x.potongan) + '</td>' +
+          '<td class="up-slip-st">' + upEsc_(x.status) + '</td><td class="up-slip-aksi">' + (batal ? '' : '<button class="up-btn up-btn-kecil up-btn-putih" type="button" onclick="upGjBatal(\'' + upGjJs_(x.idGajian) + '\')"' + kunci + '>Batal gajian</button>') + '</td></tr>';
+      }).join("") + '</tbody></table></div>'
+    : '<p class="up-info" id="up-gj-gajian-kosong">Belum ada gajian yang dibayar untuk periode ini.</p>') + '</div>';
+  el.innerHTML = '<div class="up-kartu">' + judul + '<div class="up-slip-bilah">' + pilihPeriode + '<button class="up-btn up-btn-kecil up-btn-putih" type="button" onclick="upGjMuat(\'' + upGjJs_(UP_GJ.periode) + '\')"' + kunci + '>Muat ulang</button></div>' +
+    pesan + blokImpor + blokBayar + blokGajian + '</div>';
 }

@@ -213,3 +213,17 @@
 .up-slip-batal td { color: var(--ink-soft, #5F6B7A); text-decoration: line-through; }
 .up-slip-batal td.up-slip-aksi, .up-slip-batal td.up-slip-st { text-decoration: none; }
 .up-slip-dibayar td.up-slip-st { color: #1D6B3A; font-weight: 700; }
+.up-slip-hcm { color: #8A5A00; }
+
+/* v431 (tiga buku): kartu Gajian HCM di bawah kartu slip -- tiga blok (impor, bayar, gajian). Tabelnya ber-ID panjang & rupiah:
+   kata utuh (PF-19, bundel Blogger memberi body word-break) dan lantai lebar di dalam .up-tabelwrap yang menggulir (PF-21). */
+#up-gajian { margin-top: 16px; }
+.up-gj-blok { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line, #E5E0D6); }
+.up-gj-subjudul { font-weight: 700; font-size: 13.5px; margin-bottom: 6px; }
+.up-gj-tabel { min-width: 760px; }
+.up-gj-tabel td, .up-gj-tabel th { word-break: normal; overflow-wrap: normal; vertical-align: top; }
+.up-gj-tabel td.num, .up-gj-tabel th.num { white-space: nowrap; }
+.up-gj-tabel td.up-slip-aksi, .up-gj-tabel td.up-slip-aksi button { white-space: nowrap; }
+.up-gj-dobel { margin-top: 6px; padding: 8px 10px; background: #FFF4E5; border-left: 3px solid #D98A00; font-size: 12px; max-width: 420px; white-space: normal; }
+.up-gj-konfirmasi-label { display: flex; gap: 6px; align-items: flex-start; margin-top: 6px; font-weight: 700; }
+.up-gj-konfirmasi-label input { margin-top: 2px; }
