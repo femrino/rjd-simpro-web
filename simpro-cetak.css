@@ -949,3 +949,5 @@ body.ck-lcf-aktif .ck-scr-main { max-width: 1240px; }
   .ck-lcf-tabel tfoot { display: table-row-group; }
   .ck-lcf-tabel tr { break-inside: avoid; }
 }
+/* Format klien: tabel Sisa akhir terukur di bawah tabel utama (19 Nov 2026). Tidak dipotong antarhalaman -- tabelnya pendek (wujud + Total). */
+.ck-lcf-us { margin-top: 14px; break-inside: avoid; }

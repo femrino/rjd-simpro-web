@@ -901,7 +901,17 @@ function ckLcUkurSisaSub_(g, u){
 }
 /** Tabel "Sisa akhir terukur" -- TIGA kolom, bukan lima (Potong/Panjang/Berat terpisah): tiap wujud cuma punya satu-dua angka, dan lima kolom
  *  terpotong di HP 390 px (terukur di pratinjau). */
-function ckLcUkurSisa_(g, u){
+/** Bagian sisa yang TERBUANG saat End cut (19 Nov 2026, Femri): selisih sisa potongan hitungan - panjang terukur BUKAN "tidak diukur" -- itu
+ *  kain yang habis karena potongan sisa roll dipotong per panel saat End cut (tidak bisa digelar utuh seperti marker). Hanya kalau panjang
+ *  sisa DIUKUR dan tidak melebihi hitungan; selain itu null (tanpa ukur panjang = memang tidak diukur; terukur > hitungan = periksa). */
+function ckLcTerbuangEc_(g){
+  const su = g && g.ukurSisa; if (!su) return null;
+  const j = ckLcUkurSisaJumlah_(su.baris); if (!j.adaPj) return null;
+  const t = Math.round(((Number((g.ringkasan || {}).sisaAkhir) || 0) - j.panjang) * 100) / 100;
+  return t < -0.005 ? null : { terukur: j.panjang, terbuang: t };
+}
+/** opsi.tanpaBanding (Format klien): tanpa kalimat pembanding -- angkanya sudah di KET lembar itu (Terbuang End cut / Sisa terukur). */
+function ckLcUkurSisa_(g, u, opsi){
   const su = g.ukurSisa; if (!su) return '';
   const s = g.ringkasan || {}, j = ckLcUkurSisaJumlah_(su.baris), NB = CK_NBSP;
   const isi = (su.baris || []).map(function(x){
@@ -912,12 +922,16 @@ function ckLcUkurSisa_(g, u){
   const sisa = Math.round(((Number(s.sisaAkhir) || 0) - j.panjang) * 100) / 100;
   const banding = sisa < -0.005
     ? 'Panjang terukur ' + ckAngka_(j.panjang) + NB + u + ' <b>lebih</b> dari sisa potongan hitungan ' + ckAngka_(s.sisaAkhir) + NB + u + ' &#8212; periksa sisa per roll atau gelaran End cut.'
-    : 'Sisa potongan hitungan ' + ckAngka_(s.sisaAkhir) + NB + u + ' &#8722; panjang terukur ' + ckAngka_(j.panjang) + NB + u + ' = <b>' + ckAngka_(sisa) + NB + u + '</b> tidak diukur panjangnya' +
-      (j.adaKg ? '; wujudnya potongan kecil &amp; perca yang ditimbang ' + ckAngka_(j.berat) + NB + 'kg.' : '.');
+    : (j.adaPj
+      ? 'Sisa potongan hitungan ' + ckAngka_(s.sisaAkhir) + NB + u + ' &#8722; panjang terukur ' + ckAngka_(j.panjang) + NB + u + ' = <b>' + ckAngka_(sisa) + NB + u + '</b> terbuang saat End cut ' +
+        '(potongan sisa dipotong per panel' + (j.adaKg ? ', termasuk potongan kecil &amp; perca yang ditimbang ' + ckAngka_(j.berat) + NB + 'kg' : '') + ').'
+      : 'Sisa potongan hitungan ' + ckAngka_(s.sisaAkhir) + NB + u + ' &#8722; panjang terukur ' + ckAngka_(j.panjang) + NB + u + ' = <b>' + ckAngka_(sisa) + NB + u + '</b> tidak diukur panjangnya' +
+        (j.adaKg ? '; wujudnya potongan kecil &amp; perca yang ditimbang ' + ckAngka_(j.berat) + NB + 'kg.' : '.'));
   return '<div class="ck-lc-us"><div class="ck-lc-us-judul"><b>Sisa akhir terukur</b> &#183; diukur ' + ckTglIndo_(su.tanggal) + ' oleh ' + rjdEscapeHtml_(su.oleh || '-') + '</div>' +
     '<div class="ck-lc-wrap"><table class="ck-dok-tabel ck-lc-tabel ck-lc-us-tabel"><thead><tr><th>Wujud</th><th class="num">Hasil ukur</th><th>Tujuan</th></tr></thead>' +
     '<tbody>' + isi + tot + '</tbody></table></div>' +
-    '<p class="ck-lc-catatan">' + banding + (su.catatan ? ' Catatan: ' + rjdEscapeHtml_(su.catatan) + '.' : '') + '</p></div>';
+    (opsi && opsi.tanpaBanding ? (su.catatan ? '<p class="ck-lc-catatan">Catatan: ' + rjdEscapeHtml_(su.catatan) + '.</p>' : '')
+      : '<p class="ck-lc-catatan">' + banding + (su.catatan ? ' Catatan: ' + rjdEscapeHtml_(su.catatan) + '.' : '') + '</p>') + '</div>';
 }
 
 /* ---- masih di roll (MCONX A34: 3 roll belum selesai = 424 yd tidak muncul di kartu mana pun). s.masihDiRoll dari gs >= @445:
@@ -992,11 +1006,13 @@ function ckLckNeraca_(g){
   const s = g.ringkasan || {}, u = ckSatuanTeks_(g.satuan), mat = Number(s.material) || 0, sh = Number(s.short) || 0;
   const baris = function(label, ket, v, kelas){ return '<tr' + (kelas ? ' class="' + kelas + '"' : '') + '><td>' + label + (ket ? '<div class="ck-lc-kecil">' + ket + '</div>' : '') + '</td>' +
     '<td class="num">' + ckAngka_(v) + '</td><td class="num">' + ckLckPersen_(v, mat) + '</td></tr>'; };
-  const m = ckLcMasihAda_(s) ? s.masihDiRoll : null;
+  const m = ckLcMasihAda_(s) ? s.masihDiRoll : null, T = ckLcTerbuangEc_(g);   // 19 Nov 2026: sisa terukur -> terbuang saat End cut + sisa kain terukur
   return '<div class="ck-lc-kel"><div class="ck-lc-kel-judul"><b>' + rjdEscapeHtml_(g.jenisKain) + ' &#183; ' + rjdEscapeHtml_(g.warna) + '</b></div>' +
     '<div class="ck-lc-wrap"><table class="ck-dok-tabel ck-lc-tabel ck-lck-neraca"><thead><tr><th>Uraian</th><th class="num">' + (u === 'yd' ? 'Yard' : 'Meter') + '</th><th class="num">%</th></tr></thead><tbody>' +
     baris('Terpakai untuk cutting', ckAngka_(s.pcs, 0) + ' pcs' + (s.perPcs === null || s.perPcs === undefined ? '' : ' &#183; rata-rata ' + ckAngka_(s.perPcs, 3) + CK_NBSP + u + '/pcs'), s.konsumsi) +
-    baris('Sisa kain', 'potongan pendek, bukan kain utuh' + (g.ukurSisa ? ' &#8212; diukur, lihat bagian 3' : ''), s.sisaAkhir) +
+    (T ? baris('Terbuang saat End cut', 'kain sisa yang habis karena potongan sisa dipotong per panel', T.terbuang) +
+         baris('Sisa kain terukur', 'potongan, diukur ' + ckTglIndo_(g.ukurSisa.tanggal) + ' &#8212; lihat bagian 3', T.terukur)
+      : baris('Sisa kain', 'potongan pendek, bukan kain utuh' + (g.ukurSisa ? ' &#8212; diukur, lihat bagian 3' : ''), s.sisaAkhir)) +
     (sh >= 0 ? baris('Selisih panjang roll', 'kain yang tergelar ditambah sisanya lebih pendek dari panjang di label roll', sh)
       : baris('Kelebihan panjang roll', 'kain yang tergelar ditambah sisanya lebih panjang dari label roll', sh)) +
     (m ? baris('Masih di roll', ckLcMasihSub_(m) + ' &#8212; belum selesai dipotong', m.total) : '') +
@@ -1013,7 +1029,12 @@ function ckLckSisa_(g, klien){
   const tabel = '<div class="ck-lc-wrap"><table class="ck-dok-tabel ck-lc-tabel ck-lck-sisa"><thead><tr><th>Wujud</th><th class="num">Hasil ukur</th><th>Tujuan</th></tr></thead><tbody>' +
     (su.baris || []).map(function(x){ return '<tr><td>' + rjdEscapeHtml_(x.wujud) + '</td><td class="num">' + ckLcUkurTeks_(x, u) + '</td><td>' + rjdEscapeHtml_(x.tujuan || '') + '</td></tr>'; }).join('') +
     '</tbody></table></div>';
-  const ket = '<p class="ck-lc-catatan">Diukur ' + ckTglIndo_(su.tanggal) + ' sesudah cutting. Sisa kain ' + ckAngka_(s.sisaAkhir) + NB + u + ' di bagian 2 adalah hitungan; ' +
+  // 19 Nov 2026 (Femri): selisih hitungan - terukur habis saat End cut (potongan sisa dipotong per panel) -- bukan 'sisanya'.
+  const T = ckLcTerbuangEc_(g);
+  const ket = T ? '<p class="ck-lc-catatan">Diukur ' + ckTglIndo_(su.tanggal) + ' sesudah cutting: ' + ckAngka_(T.terukur) + NB + u + ' potongan' + (j.potong ? ' (' + ckAngka_(j.potong, 0) + ' potong)' : '') +
+      '. Dari sisa hitungan ' + ckAngka_(s.sisaAkhir) + NB + u + ', ' + ckAngka_(T.terbuang) + NB + u + ' terbuang saat End cut karena potongan sisa dipotong per panel' +
+      (j.adaKg ? ' (termasuk potongan kecil &amp; perca yang ditimbang ' + ckAngka_(j.berat) + NB + 'kg)' : '') + '.' + (su.catatan ? ' Catatan: ' + rjdEscapeHtml_(su.catatan) + '.' : '') + '</p>'
+    : '<p class="ck-lc-catatan">Diukur ' + ckTglIndo_(su.tanggal) + ' sesudah cutting. Sisa kain ' + ckAngka_(s.sisaAkhir) + NB + u + ' di bagian 2 adalah hitungan; ' +
     (j.adaPj ? ckAngka_(j.panjang) + NB + u + ' di antaranya terukur sebagai potongan' + (j.potong ? ' (' + ckAngka_(j.potong, 0) + ' potong)' : '') : 'panjangnya tidak diukur') +
     (j.adaKg ? ', sisanya potongan kecil &amp; perca seberat ' + ckAngka_(j.berat) + NB + 'kg' : '') + '.' + (su.catatan ? ' Catatan: ' + rjdEscapeHtml_(su.catatan) + '.' : '') + '</p>';
   const terima = pulang.length ? '<div class="ck-lck-terima"><div class="ck-lck-terima-judul"><b>Tanda terima sisa kain</b></div>' +
@@ -1038,7 +1059,11 @@ function ckRenderLaporanCuttingKlien_(d, PR){
   const ringkas = '<div class="ck-lc-ringkasan">' + ckLcKartuOrder_(d, kartu, "Hasil cutting") +
     kartu("Kain diterima", u ? ckAngka_(Math.round(jumlah('material') * 100) / 100) + uh : 'lihat bagian 2', u ? (jumlah('rollSelesai') + jumlah('rollBelumSelesai')) + ' roll' : '') +
     kartu("Terpakai", u ? ckAngka_(Math.round(jumlah('konsumsi') * 100) / 100) + uh : 'lihat bagian 2') +
-    kartu("Sisa kain", u ? ckAngka_(Math.round(jumlah('sisaAkhir') * 100) / 100) + uh : 'lihat bagian 3', 'potongan pendek') + '</div>';
+    // 19 Nov 2026: SEMUA kelompok sudah diukur & terpecah -> kartu = sisa kain TERUKUR, terbuang saat End cut di keterangannya; selain itu bentuk lama.
+    (function(){ const TT = PR.kelompok.map(ckLcTerbuangEc_); if (!u || !TT.length || TT.some(function(t){ return !t; }))
+        return kartu("Sisa kain", u ? ckAngka_(Math.round(jumlah('sisaAkhir') * 100) / 100) + uh : 'lihat bagian 3', 'potongan pendek');
+      const tk = TT.reduce(function(a, t){ return a + t.terukur; }, 0), tb = TT.reduce(function(a, t){ return a + t.terbuang; }, 0);
+      return kartu("Sisa kain", ckAngka_(Math.round(tk * 100) / 100) + uh, 'terukur &#183; ' + ckAngka_(Math.round(tb * 100) / 100) + CK_NBSP + u + ' terbuang saat End cut'); })() + '</div>';
   const html = ckLcPilihVersiHtml_() + '<div class="ck-dok ck-lc ck-lck">' +
     ckHeaderHtml("LAPORAN CUTTING", rjdEscapeHtml_(d.idPurchaseOrder || ''), 'Dicetak ' + ckTglIndo_(d.tanggalCetak)) +
     meta + ringkas + ckLcOrderSize_(d) +
@@ -1184,12 +1209,24 @@ function ckLcfLembar_(d, g, nomorLembar, tampilKain){
   });
   // KET = neraca kain kelompok (BAHAN = ACT + SHORT + SISA + MASIH DI ROLL), satu sel di sisi kanan sepanjang badan tabel.
   const m = ckLcMasihAda_(s) ? s.masihDiRoll : null, NB = CK_NBSP;
+  // 20 Nov 2026 (Femri): selisih roll di KET bertanda SAMA dengan kolom Selisih bahan per-roll baris TOTAL (ckTanda_(-short)): kurang =
+  // 'Short -x' (merah), lebih = 'Lebih +x'. Dulu 'Short' + s.short (positif = kurang) -> roll yang LEBIH panjang tercetak 'SHORT -25,35 yd'
+  // di samping TOTAL +25,35. Garis jumlah tetap = Bahan (Act - selisih + sisa + masih di roll).
+  const selRoll = Math.round(-(Number(s.short) || 0) * 100) / 100;
+  const ketSelisih = '<div class="ck-lcf-ket-baris"><span>' + (selRoll > 0 ? 'Lebih' : 'Short') + '</span><b' + (selRoll < 0 ? ' class="ck-lc-merah"' : '') + '>' +
+    ckTanda_(selRoll) + NB + u + '</b></div>';
   const ketBaris = function(lbl, v, kelas){ return '<div class="ck-lcf-ket-baris' + (kelas ? ' ' + kelas : '') + '"><span>' + lbl + '</span><b>' + ckAngka_(v) + NB + u + '</b></div>'; };
-  const ket = ketBaris('Bahan', s.material) + ketBaris('Act', s.konsumsi) + ketBaris('Short', s.short) +
-    ketBaris('Sisa', s.sisaAkhir) + (m ? ketBaris('Masih di roll', m.total) : '') +
+  // 19 Nov 2026 (Femri): sesudah sisa diukur, 'Sisa' dipecah jadi Terbuang End cut + Sisa terukur (jumlahnya = sisa hitungan, jadi garis
+  // jumlah tetap = Bahan). Belum diukur / tanpa ukur panjang / terukur > hitungan: satu angka Sisa seperti dulu.
+  const T = ckLcTerbuangEc_(g);
+  const ket = ketBaris('Bahan', s.material) + ketBaris('Act', s.konsumsi) + ketSelisih +
+    (T ? ketBaris('Terbuang End cut', T.terbuang) + ketBaris('Sisa terukur', T.terukur) : ketBaris('Sisa', s.sisaAkhir)) + (m ? ketBaris('Masih di roll', m.total) : '') +
     '<div class="ck-lcf-ket-garis"></div>' + ketBaris('', Math.round(((Number(s.konsumsi) || 0) + (Number(s.short) || 0) + (Number(s.sisaAkhir) || 0) + (m ? Number(m.total) || 0 : 0)) * 100) / 100, 'ck-lcf-ket-jumlah') +
-    '<div class="ck-lc-kecil">Sisa = potongan pendek sesudah End cut, bukan kain utuh' + (g.ukurSisa ? '; diukur ' + ckTglIndo_(g.ukurSisa.tanggal) : '') + '.</div>';
-  const nKet = Math.min(barisHtml.length, CK_LCF_KET_BARIS), sambung = nKet < barisHtml.length;
+    (T ? '<div class="ck-lc-kecil">Terbuang End cut = kain sisa yang habis saat End cut dipotong per panel; sisa terukur ' + ckTglIndo_(g.ukurSisa.tanggal) + ' dirinci di bawah tabel.</div>'
+      : '<div class="ck-lc-kecil">Sisa = potongan pendek sesudah End cut, bukan kain utuh' + (g.ukurSisa ? '; hasil ukur ' + ckTglIndo_(g.ukurSisa.tanggal) + ' di bawah tabel' : '') + '.</div>');
+  // 19 Nov 2026: KET terpecah (Terbuang End cut + Sisa terukur) satu baris & catatan lebih panjang -> +2 baris rentang; terukur di data panjang
+  // (jalan154 F19e): dengan 10 baris, baris tabel melar 24 -> 26 px. KET tanpa pecahan tetap 10 (v432).
+  const nKet = Math.min(barisHtml.length, CK_LCF_KET_BARIS + (T ? 2 : 0)), sambung = nKet < barisHtml.length;
   const tubuh = barisHtml.map(function(h, i){
     if (i === 0) return h.replace(/<\/tr>$/, '<td class="ck-lcf-ket' + (sambung ? ' ck-lcf-ket-sambung' : '') + '" rowspan="' + nKet + '">' + ket + '</td></tr>');
     return i >= nKet ? h.replace(/<\/tr>$/, '<td class="ck-lcf-ket-lanjut"></td></tr>') : h;
@@ -1208,7 +1245,10 @@ function ckLcfLembar_(d, g, nomorLembar, tampilKain){
   // div, BUKAN section: simpro-global.css memberi section padding 88 px (aturan "hindari tag generik", terukur di pratinjau).
   return '<div class="ck-lcf-lembar' + (nomorLembar ? ' ck-lcf-lembar-baru' : '') + '">' +
     '<div class="ck-lcf-atas">' + kiri + kanan + '</div>' +
-    '<div class="ck-lc-wrap"><table class="ck-lcf-tabel" data-kolom="' + nUtama + '">' + kepala + '<tbody>' + tubuh + '</tbody><tfoot>' + kaki + '</tfoot></table></div></div>';
+    '<div class="ck-lc-wrap"><table class="ck-lcf-tabel" data-kolom="' + nUtama + '">' + kepala + '<tbody>' + tubuh + '</tbody><tfoot>' + kaki + '</tfoot></table></div>' +
+    // 19 Nov 2026 (Femri: 'data sisa akhir terukur belum ada di format yang baru'): tabel Sisa akhir terukur di bawah tabel utama -- perender
+    // YANG SAMA dengan versi Internal (ckLcUkurSisa_), tanpa kalimat pembanding (angkanya di KET).
+    (g.ukurSisa ? '<div class="ck-lcf-us">' + ckLcUkurSisa_(g, u, { tanpaBanding: true }) + '</div>' : '') + '</div>';
 }
 /* Keputusan Femri 18 Nov 2026 ("ringkas dan persis seperti contoh asli"): TANPA kepala RJD, baris klien/periode, tanda tangan dan catatan
  * kaki -- lembar langsung dimulai dari kotak Style dan tabel rasio size, seperti lembar klien. Identitas PO tetap di judul tab/berkas. */
