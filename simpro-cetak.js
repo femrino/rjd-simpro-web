@@ -1055,11 +1055,11 @@ function ckRenderLaporanCuttingKlien_(d, PR){
 }
 
 /* ---------- LAPORAN CUTTING: FORMAT KLIEN (18 Nov 2026, permintaan klien lewat Femri; versi ketiga di samping Internal & Untuk klien) ----------
- * Lembar per STYLE + WARNA berbentuk lembar cutting klien: kotak kepala (Style, Color, Q'ty order, Actual cutting, Balance), tabel rasio size
+ * Lembar per STYLE + WARNA berbentuk lembar cutting klien: kotak kepala (Style, Color, Qty order, Actual cutting, Balance), tabel rasio size
  * (Order / Cutting / Balance per size), lalu satu baris per roll dikelompokkan per RASIO dengan kolom Marker (panjang gelaran, pemakaian per pc,
  * qty per layer), Cutting per roll (layer, total qty, sisa bahan), Hasil cutting per size, Bahan actual, Selisih bahan per roll, dan KET berisi
- * neraca kain. Baris End cut ditaruh DI RASIO marker yang dipakainya (seperti lembar klien), subtotal per rasio termasuk End cut-nya, dan
- * baris TOTAL Q'TY HC menjumlah semuanya.
+ * neraca kain. Baris End cut ditaruh DI RASIO marker yang dipakainya (seperti lembar klien), dan baris TOTAL QTY HASIL CUTTING menjumlah
+ * semuanya KECUALI Jumlah layer, Total quantity dan Sisa bahan (Femri 19 Nov 2026). Baris subtotal per rasio dihapus 18 Nov 2026.
  * SEMUA angka dari server (laporan-cutting.js susunLaporanCuttingPerRoll_) -- di sini hanya disusun ulang; tidak ada hitungan baru selain
  * (a) jumlah baris per rasio (supaya kertas menjumlah lurus) dan (b) panjang gelaran & qty per layer per pemakaian = aktual / layer dan
  * pcs / layer (identik dengan panjang marker + allowance x layer di server, dan tetap ada untuk End cut yang tidak membawa data marker).
@@ -1081,19 +1081,30 @@ function ckLcfHalaman_(pasang){
 }
 function ckLcfNum_(v){ const n = Number(v); return v === null || v === undefined || v === "" || isNaN(n) ? null : n; }
 function ckLcfSel_(v, desimal){ return v === null || v === undefined ? '' : ckAngka_(v, desimal); }
-/** Order per size untuk warna kelompok ini: jumlah baris hasilPotong (order) yang warnanya sama, lintas style. */
+/** Order per size untuk lembar ini.
+ *  19 Nov 2026 (Femri, MCONX A33: "setiap tabel sesuai style yang dipotong"): server menyebut style yang DIPOTONG di kain+warna ini (g.style,
+ *  dari kolom Style gelaran; gs >= @469) -> order = baris hasilPotong warna itu yang style-nya ada di daftar. Dulu SEMUA style berwarna sama
+ *  dijumlah (Dress 1.540 + Outer 1.540 = 3.080) padahal lembar Polo Linen hanya memotong Dress (1.578): balance -1.502 palsu, kini +38.
+ *  Tanpa daftar (data lama, gelaran tanpa Style) atau daftar yang tidak cocok dengan satu baris order pun: semua style berwarna sama, seperti
+ *  dulu -- lebih baik lembar lama daripada order 0 karena ejaan style gelaran beda dari order. Kain yang memotong dua style: keduanya dijumlah,
+ *  sama seperti hasil cutting kain itu. */
 function ckLcfOrder_(d, g){
   const w = ckNorm_(g.warna), perSize = {}, style = [];
+  const pilih = (g.style || []).map(function(s){ return { ar: ckNorm_(s.artikel), st: ckNorm_(s.style) }; });
+  const cocok = function(h){ return pilih.some(function(s){ return s.st === ckNorm_(h.style) && (!s.ar || !h.artikel || s.ar === ckNorm_(h.artikel)); }); };
+  const warnaIni = (d.hasilPotong || []).filter(function(h){ return ckNorm_(h.warna) === w && !h.tidakDiOrder; });
+  const perStyle = pilih.length ? warnaIni.filter(cocok) : [];
   let total = 0;
-  (d.hasilPotong || []).forEach(function(h){
-    if (ckNorm_(h.warna) !== w || h.tidakDiOrder) return;
+  (perStyle.length ? perStyle : warnaIni).forEach(function(h){
     const st = [h.artikel, h.style].filter(Boolean).join(" / ");
     if (st && style.indexOf(st) === -1) style.push(st);
     (h.perSize || []).forEach(function(x){ if (x.order) perSize[x.size] = (perSize[x.size] || 0) + x.order; });
     total += Number(h.totalOrder) || 0;
   });
-  return { perSize: perSize, total: total, style: style };
+  return { perSize: perSize, total: total, style: style, perStyle: perStyle.length > 0 };
 }
+/** Kunci style lembar (dari server) untuk mengurutkan & menghitung kain per style; '' = tanpa daftar style (data lama). */
+function ckLcfKunciStyle_(g){ return (g.style || []).map(function(s){ return ckNorm_([s.artikel, s.style].filter(Boolean).join(" / ")); }).join("; "); }
 /** Baris pemakaian: satu per (roll, pemakaian) + End cut, dikelompokkan per rasio (kode marker). */
 function ckLcfRasio_(g){
   const urut = function(a, b){ return String(a.kode || '').localeCompare(String(b.kode || ''), 'id', { numeric: true }); };
@@ -1119,13 +1130,8 @@ function ckLcfRasio_(g){
   grup.sort(function(a, b){ if (!a.kode !== !b.kode) return a.kode ? -1 : 1; return urut(a, b); });
   grup.forEach(function(G){
     G.baris.sort(function(a, b){ return (a.jenis === 'endcut' ? 1 : 0) - (b.jenis === 'endcut' ? 1 : 0); });
-    const s = { kirim: 0, lapis: 0, pcs: 0, sisa: 0, aktual: 0, selisih: 0, perSize: {} };
-    G.baris.forEach(function(b){
-      s.kirim += b.kirim || 0; s.lapis += b.lapis || 0; s.pcs += b.pcs || 0; s.sisa += b.sisa || 0; s.aktual += b.aktual || 0; s.selisih += b.selisih || 0;
-      Object.keys(b.perSize || {}).forEach(function(z){ s.perSize[z] = (s.perSize[z] || 0) + (b.perSize[z] || 0); });
-    });
-    ["kirim", "sisa", "aktual", "selisih"].forEach(function(f){ s[f] = Math.round(s[f] * 100) / 100; });
-    G.subtotal = s;
+    // Nisan 19 Nov 2026: G.subtotal (jumlah per rasio) dibuang -- pemakai terakhirnya, jumlah layer di baris TOTAL, dicabut atas permintaan
+    // Femri (Jumlah layer / Total quantity / Sisa bahan tidak dijumlah); baris subtotal sudah dihapus 18 Nov 2026.
   });
   return grup;
 }
@@ -1140,7 +1146,7 @@ function ckLcfLembar_(d, g, nomorLembar, tampilKain){
     kotak('Style', rjdEscapeHtml_(ord.style.join('; ') || d.artikel || '-')) +
     kotak('Color', rjdEscapeHtml_(g.warna || '-')) +
     (tampilKain ? kotak('Kain', rjdEscapeHtml_(g.jenisKain || '-')) : '') +
-    kotak('Q&#8217;ty order', ckAngka_(ord.total, 0), 'num') +
+    kotak('Qty order', ckAngka_(ord.total, 0), 'num') +   // 19 Nov 2026 (Femri): 'Qty order', bukan Q'ty
     kotak('Actual cutting', ckAngka_(cutTotal, 0), 'num') +
     kotak('Balance', ckTanda_(balance), 'num' + (balance < 0 ? ' ck-lc-merah' : '')) + '</tbody></table>';
   const selBal = function(z){ const b = (Number((s.perSize || {})[z]) || 0) - (ord.perSize[z] || 0); return '<td class="num' + (b < 0 ? ' ck-lc-merah' : '') + '">' + ckTanda_(b) + '</td>'; };
@@ -1174,7 +1180,7 @@ function ckLcfLembar_(d, g, nomorLembar, tampilKain){
         '<td class="num">' + ckLcfSel_(b.aktual) + '</td><td class="num' + (b.selisih < 0 ? ' ck-lc-merah' : '') + '">' + sel + '</td></tr>');
     });
     // Nisan 18 Nov 2026: baris 'Subtotal <kode marker>' per rasio DIHAPUS atas permintaan Femri (revisi sesudah cetak pertama). Akibatnya
-    // kode marker tidak lagi tercetak -- kolom Rasio hanya nomornya. G.subtotal tetap dihitung ckLcfRasio_ (jumlah layer baris TOTAL).
+    // kode marker tidak lagi tercetak -- kolom Rasio hanya nomornya.
   });
   // KET = neraca kain kelompok (BAHAN = ACT + SHORT + SISA + MASIH DI ROLL), satu sel di sisi kanan sepanjang badan tabel.
   const m = ckLcMasihAda_(s) ? s.masihDiRoll : null, NB = CK_NBSP;
@@ -1188,8 +1194,10 @@ function ckLcfLembar_(d, g, nomorLembar, tampilKain){
     if (i === 0) return h.replace(/<\/tr>$/, '<td class="ck-lcf-ket' + (sambung ? ' ck-lcf-ket-sambung' : '') + '" rowspan="' + nKet + '">' + ket + '</td></tr>');
     return i >= nKet ? h.replace(/<\/tr>$/, '<td class="ck-lcf-ket-lanjut"></td></tr>') : h;
   }).join('');
-  const kaki = '<tr class="ck-lcf-kaki"><td colspan="3">TOTAL Q&#8217;TY HC</td><td class="num">' + ckAngka_(s.material) + '</td><td></td><td></td><td></td>' +
-    '<td class="num">' + ckAngka_(grup.reduce(function(a, G){ return a + G.subtotal.lapis; }, 0), 0) + '</td><td class="num">' + ckAngka_(cutTotal, 0) + '</td><td class="num">' + ckAngka_(s.sisaRoll) + '</td>' +
+  // 19 Nov 2026 (Femri): label 'TOTAL QTY HASIL CUTTING'; Jumlah layer, Total quantity dan Sisa bahan TIDAK dijumlah (sel kosong) --
+  // total pcs tetap di kolom Total hasil cutting per size.
+  const kaki = '<tr class="ck-lcf-kaki"><td colspan="3">TOTAL QTY HASIL CUTTING</td><td class="num">' + ckAngka_(s.material) + '</td><td></td><td></td><td></td>' +
+    '<td></td><td></td><td></td>' +
     selSz(s.perSize, cutTotal) + '<td class="num">' + ckAngka_(s.konsumsi) + '</td><td class="num' + ((s.short || 0) > 0 ? ' ck-lc-merah' : '') + '">' + ckTanda_(-(Number(s.short) || 0)) + '</td><td></td></tr>';
   const kepala = '<thead><tr><th rowspan="2">Date</th><th rowspan="2">Rasio</th><th colspan="2" class="ck-lcf-grup">Bahan kirim per-roll</th><th colspan="3" class="ck-lcf-grup">Marker</th>' +
     '<th colspan="3" class="ck-lcf-grup">Cutting (per-roll)</th><th colspan="' + (szK.length + 1) + '" class="ck-lcf-grup ck-lcf-hc">Hasil cutting (per-size)</th>' +
@@ -1205,11 +1213,15 @@ function ckLcfLembar_(d, g, nomorLembar, tampilKain){
 /* Keputusan Femri 18 Nov 2026 ("ringkas dan persis seperti contoh asli"): TANPA kepala RJD, baris klien/periode, tanda tangan dan catatan
  * kaki -- lembar langsung dimulai dari kotak Style dan tabel rasio size, seperti lembar klien. Identitas PO tetap di judul tab/berkas. */
 function ckRenderLaporanCuttingFormatKlien_(d, PR){
-  // Baris Kain hanya kalau satu warna dipotong dari LEBIH dari satu kain (lembar klien tidak punya baris itu; tanpa pembeda,
-  // dua lembar warna yang sama tidak bisa dibedakan).
-  const perWarna = {}; PR.kelompok.forEach(function(g){ const k = ckNorm_(g.warna); perWarna[k] = (perWarna[k] || 0) + 1; });
+  // Baris Kain hanya kalau satu STYLE+warna dipotong dari LEBIH dari satu kain (lembar klien tidak punya baris itu; tanpa pembeda, dua lembar
+  // style+warna yang sama tidak bisa dibedakan). 19 Nov 2026: dulu per warna -- MCONX A33 Dress (Polo Linen) & Outer (Salur) sama-sama BW,
+  // jadi keduanya berbaris Kain padahal Style-nya sudah membedakan. Tanpa daftar style (data lama) kuncinya '' = per warna seperti dulu.
+  // Lembar diurut STYLE (stabil: kain dalam style yang sama tetap urutan server), supaya lembar satu style berdampingan.
+  const kunci = function(g){ return ckLcfKunciStyle_(g) + "||" + ckNorm_(g.warna); };
+  const perKunci = {}; PR.kelompok.forEach(function(g){ perKunci[kunci(g)] = (perKunci[kunci(g)] || 0) + 1; });
+  const urut = PR.kelompok.slice().sort(function(a, b){ const x = ckLcfKunciStyle_(a), y = ckLcfKunciStyle_(b); return x < y ? -1 : (x > y ? 1 : 0); });
   const html = ckLcPilihVersiHtml_() + '<div class="ck-dok ck-lc ck-lcf">' +
-    PR.kelompok.map(function(g, i){ return ckLcfLembar_(d, g, i, perWarna[ckNorm_(g.warna)] > 1); }).join('') + '</div>';
+    urut.map(function(g, i){ return ckLcfLembar_(d, g, i, perKunci[kunci(g)] > 1); }).join('') + '</div>';
   document.getElementById("ck-isi").innerHTML = html;
   document.body.classList.add("ck-lcf-aktif");   // wadah layar dilebarkan (lc-format-klien.css); versi lain melepasnya di ckRenderLaporanCutting
   ckLcfHalaman_(true);   // kertas A4 mendatar; dilepas ckRenderLaporanCutting saat versi lain digambar
