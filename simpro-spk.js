@@ -12956,13 +12956,16 @@ function spMuatKemas_(pertahankanPesan) {
       '</p><button class="sp-btn-kecil sp-kms-baca" type="button" data-kms-aksi="segarkan">Coba lagi</button></div>';
   });
 }
-/** Plastik aktif berurutan dikelompokkan jadi rentang: item, size, status barang, qty, dan karung sama. */
+/** Plastik aktif berurutan dikelompokkan jadi rentang: item, size, status barang, qty, dan karung sama.
+ *  1G: per PLASTIK (rjdKmsUnitPlastik_) -- plastik gabung satu nomor walau isinya beberapa baris; qty-nya = SET, pcs dijumlah. */
 function spKmsRentang_(plastik) {
   const hasil = [];
-  plastik.filter(function (x) { return x.status === "Aktif"; }).forEach(function (x) {
-    const r = hasil[hasil.length - 1];
-    if (r && r.akhir === x.no - 1 && r.idDetailOrder === x.idDetailOrder && r.statusBarang === x.statusBarang && r.qty === x.qty && r.idKarung === x.idKarung && r.idSetPO === (x.idSetPO || "")) { r.akhir = x.no; r.ids.push(x.idPlastik); return; }
-    hasil.push({ awal: x.no, akhir: x.no, ids: [x.idPlastik], idDetailOrder: x.idDetailOrder, label: spKmsLabel_(x), statusBarang: x.statusBarang, qty: x.qty, idKarung: x.idKarung, idSetPO: x.idSetPO || "" });
+  rjdKmsUnitPlastik_(plastik).filter(function (x) { return x.status === "Aktif"; }).forEach(function (x) {
+    const r = hasil[hasil.length - 1], pcs = x.gabung ? x.pcs : x.qty;
+    if (r && r.akhir === x.no - 1 && r.idDetailOrder === x.idDetailOrder && r.statusBarang === x.statusBarang && r.qty === x.qty && r.idKarung === x.idKarung && r.idSetPO === (x.idSetPO || "") &&
+        r.gabung === !!x.gabung && r.kunciIsi === (x.kunciIsi || "")) { r.akhir = x.no; r.ids.push(x.idPlastik); r.pcs += pcs; return; }
+    hasil.push({ awal: x.no, akhir: x.no, ids: [x.idPlastik], idDetailOrder: x.idDetailOrder, label: x.gabung ? rjdKmsWarnaSizeGabung_(x) : spKmsLabel_(x), statusBarang: x.statusBarang, qty: x.qty, idKarung: x.idKarung, idSetPO: x.idSetPO || "",
+      gabung: !!x.gabung, kunciIsi: x.kunciIsi || "", pcs: pcs, gaya: x.gabung ? x.anggota.map(function (a) { return a.style || a.artikel; }) : null });
   });
   return hasil;
 }
@@ -13048,7 +13051,7 @@ function spKmsMkSusun_(dt) {
   const m = SP_KMS.mk, isi = Math.max(1, parseInt(m.isi, 10) || 1), ubah = m.ubah || {};
   const semua = dt.karung || [], kode = function (no) { return "K" + String(no).padStart(2, "0"); };
   let noMaks = 0; semua.forEach(function (k) { noMaks = Math.max(noMaks, k.no || 0); });
-  const aktif = (dt.plastik || []).filter(function (x) { return x.status === "Aktif"; });
+  const aktif = rjdKmsUnitPlastik_(dt.plastik || []).filter(function (x) { return x.status === "Aktif"; });   // 1G: per plastik, bukan per baris isi
   const urut = function (a, b) { return a.no - b.no; };
   const terbuka = semua.filter(function (k) { return k.status === "Terbuka"; }).sort(urut);
   const kosong = terbuka.filter(function (k) { return !k.plastik; });
@@ -13057,9 +13060,9 @@ function spKmsMkSusun_(dt) {
   const tambah = function (o) {
     const u = ubah[o.kunci] || {};
     o.berat = u.berat !== undefined ? u.berat : m.berat; o.tutup = u.tutup !== undefined ? u.tutup : true;
-    const g = {}, gu = []; o.isiPl.forEach(function (x) { const k = [x.style || x.artikel, x.warna, x.size].filter(Boolean).join(" "); if (!g[k]) { g[k] = 0; gu.push(k); } g[k]++; });
+    const g = {}, gu = []; o.isiPl.forEach(function (x) { const k = x.gabung ? spKmsNamaSet_(x.idSetPO) + " " + [x.warna, x.size].filter(Boolean).join(" ") + " (gabung)" : [x.style || x.artikel, x.warna, x.size].filter(Boolean).join(" "); if (!g[k]) { g[k] = 0; gu.push(k); } g[k]++; });
     o.ringkas = gu.map(function (k) { return k + ": " + g[k]; }).join(" · ");
-    o.plastik = o.isiPl.length; o.pcs = o.isiPl.reduce(function (a, x) { return a + (x.qty || 0); }, 0);
+    o.plastik = o.isiPl.length; o.pcs = o.isiPl.reduce(function (a, x) { return a + (x.gabung ? x.pcs : (x.qty || 0)); }, 0);
     baris.push(o);
   };
   terbuka.filter(function (k) { return k.plastik > 0; }).forEach(function (k) {
@@ -13185,10 +13188,14 @@ function spKmsDetailHtml_() {
       const tombolR = (kr && kr.status === "Tertutup" ? '' : '<button class="sp-btn-kecil" type="button" data-kms-aksi="batal-rentang" data-ids="' + esc(r.ids.join(",")) + '"' + mati(bolehIsi, "Bukan bagian gudang/packing") + '>Batalkan</button>') +
         (kr && kr.status === "Terbuka" ? ' <button class="sp-btn-kecil" type="button" data-kms-aksi="keluar-rentang" data-ids="' + esc(r.ids.join(",")) + '"' + mati(bolehIsi, "Bukan bagian gudang/packing") + '>Keluarkan</button>' : '');
       const aksi = draft ? (tombolR ? '<td class="sp-td-aksi" data-label="">' + tombolR + '</td>' : '<td class="sp-kms-kosong" data-label=""></td>') : '';
-      return '<tr><td data-label="Nomor"><b>' + nom + '</b></td><td data-label="Item">' + (r.idSetPO ? '<span class="sp-kms-itemset">' + esc(r.label) + '<span class="sp-kms-sub">set ' + esc(spKmsNamaSet_(r.idSetPO)) + '</span></span>' : esc(r.label)) + '</td><td data-label="Status">' + esc(r.statusBarang) + '</td>' +
-        '<td class="num" data-label="Pcs">' + (n > 1 ? n + ' × ' + r.qty + ' = ' + (n * r.qty) : r.qty) + '</td><td data-label="Karung">' + (kr ? kr.no : '<span class="sp-kms-minus">belum</span>') + '</td>' + aksi + '</tr>';
+      // 1G: plastik gabung -- nama set + warna·size, anggota di bawahnya; isi dihitung SET, pcs = jumlah semua baris isinya
+      const selItem = r.gabung ? '<span class="sp-kms-itemset">' + esc(spKmsNamaSet_(r.idSetPO) + ' · ' + r.label) + '<span class="sp-kms-sub">satu plastik: ' + esc(r.gaya.join(" + ")) + '</span></span>'
+        : (r.idSetPO ? '<span class="sp-kms-itemset">' + esc(r.label) + '<span class="sp-kms-sub">set ' + esc(spKmsNamaSet_(r.idSetPO)) + '</span></span>' : esc(r.label));
+      const selPcs = r.gabung ? (n > 1 ? n + ' × ' + r.qty + ' set = ' + (n * r.qty) + ' set' : r.qty + ' set') + ' (' + r.pcs + ' pcs)' : (n > 1 ? n + ' × ' + r.qty + ' = ' + (n * r.qty) : r.qty);
+      return '<tr><td data-label="Nomor"><b>' + nom + '</b></td><td data-label="Item">' + selItem + '</td><td data-label="Status">' + esc(r.statusBarang) + '</td>' +
+        '<td class="num" data-label="Pcs">' + selPcs + '</td><td data-label="Karung">' + (kr ? kr.no : '<span class="sp-kms-minus">belum</span>') + '</td>' + aksi + '</tr>';
     }).join("") + '</tbody></table></div>' : '<p class="sp-info">Belum ada plastik.</p>') +
-    ((dt.plastik || []).some(function (x) { return x.status !== "Aktif"; }) ? '<p class="sp-kms-sub">' + dt.plastik.filter(function (x) { return x.status !== "Aktif"; }).length + ' plastik dibatalkan (nomornya tidak dipakai ulang).</p>' : '') + spKmsRingkasHtml_(dt.plastik || []) + spKmsRingkasSetHtml_(dt) + '</div>';
+    ((dt.plastik || []).some(function (x) { return x.status !== "Aktif"; }) ? '<p class="sp-kms-sub">' + rjdKmsUnitPlastik_(dt.plastik).filter(function (x) { return x.status !== "Aktif"; }).length + ' plastik dibatalkan (nomornya tidak dipakai ulang).</p>' : '') + spKmsRingkasHtml_(dt.plastik || []) + spKmsRingkasSetHtml_(dt) + '</div>';
   const alasanPutus = "Hanya pemilik atau admin";
   // 3C (butuh gs >= @452): surat jalan TERBIT dari packing Ditutup -- isinya = plastik aktif, tidak bisa diedit di sini (SPEC §7); batal SJ
   // mengembalikan packing ke Ditutup. Tanggal bawaan = hari ini (zona perangkat; server memeriksa periode bulannya).
@@ -13333,18 +13340,33 @@ function spKmsSetFormHtml_(d, pk, bolehIsi) {
   const galat = d.setGalat ? '<p class="sp-pesan sp-galat">' + esc(d.setGalat) + ' &#8212; form per item di atas tetap bisa dipakai.</p>' : '';
   if (!set.length) return '<div class="sp-kms-blok sp-kms-setform"><h4>Tambah plastik per set</h4>' + galat + '</div>';
   const mati = bolehIsi ? '' : ' disabled title="Bukan bagian gudang/packing"';
-  return '<div class="sp-kms-blok sp-kms-setform"><h4>Tambah plastik per set <span class="sp-kms-sub">satu plastik satu style; anggota satu set masuk karung yang sama</span></h4>' + galat +
+  // 1G (K23): pilihan Bungkus HANYA bila server mengenalnya (gs >= 1F mengirim set.bungkusTerakhir) -- server lama akan diam-diam membuat
+  // plastik terpisah untuk pilihan "gabung". Awalnya mengikuti plastik aktif terakhir set itu di PO ini; belum ada = terpisah.
+  const bisaGabung = set.some(function (s) { return s.bungkusTerakhir !== undefined; }), gabung0 = set[0].bungkusTerakhir === "gabung";
+  return '<div class="sp-kms-blok sp-kms-setform"><h4>Tambah plastik per set <span class="sp-kms-sub">' + (bisaGabung ? 'terpisah = satu plastik satu style; gabung = semua anggota satu plastik; anggota satu set masuk karung yang sama'
+    : 'satu plastik satu style; anggota satu set masuk karung yang sama') + '</span></h4>' + galat +
     '<div class="sp-kms-form"><label class="sp-kms-f">Set<select id="sp-kms-set">' + set.map(function (s) {
       return '<option value="' + esc(s.id) + '">' + esc(s.nama) + ' (' + s.anggota.map(function (a) { return esc(a.style); }).join(" + ") + ')</option>'; }).join("") + '</select></label></div>' +
     '<div class="sp-kms-form" id="sp-kms-setanggota">' + spKmsSetAnggotaHtml_(set[0]) + '</div>' +
     '<div class="sp-kms-form">' +
       '<label class="sp-kms-f">Status barang<select id="sp-kms-setstatus">' + ((d.konstanta || {}).statusBarang || ["Normal", "Noda", "Tanpa Label"]).map(function (s) { return '<option>' + esc(s) + '</option>'; }).join("") + '</select></label>' +
+      (bisaGabung ? '<label class="sp-kms-f sp-kms-f-item">Bungkus<select id="sp-kms-setbungkus"><option value="terpisah"' + (gabung0 ? '' : ' selected="selected"') + '>Terpisah per style</option>' +
+        '<option value="gabung"' + (gabung0 ? ' selected="selected"' : '') + '>Gabung satu plastik</option></select></label>' : '') +
       '<label class="sp-kms-f sp-kms-f-angka">Jumlah set<input id="sp-kms-jmlset" type="text" inputmode="numeric"/></label>' +
-      '<label class="sp-kms-f sp-kms-f-angka">Isi per plastik<input id="sp-kms-setisi" type="text" inputmode="numeric" value="' + pk.isiStandar + '"/></label>' +
+      '<label class="sp-kms-f sp-kms-f-angka">' + (bisaGabung ? '<span id="sp-kms-setisi-lbl">' + (gabung0 ? 'Set per plastik' : 'Isi per plastik') + '</span>' : 'Isi per plastik') +
+        '<input id="sp-kms-setisi" type="text" inputmode="numeric" value="' + pk.isiStandar + '"/></label>' +
       '<label class="sp-kms-f">Packer<input id="sp-kms-setpacker" type="text" maxlength="60"/></label>' +
       '<label class="sp-kms-f">Pemeriksa<input id="sp-kms-setpemeriksa" type="text" maxlength="60"/></label></div>' +
     '<p class="sp-info" id="sp-kms-setpratinjau"></p>' +
     '<button class="sp-simpan-btn" type="button" data-kms-aksi="plastik-set"' + mati + '>Simpan plastik set</button></div>';
+}
+/** 1G: cara bungkus terpilih -- "gabung" hanya bila kotak Bungkus ada dan memilihnya (server lama tidak punya kotaknya). */
+function spKmsSetBungkus_() { const el = document.getElementById("sp-kms-setbungkus"); return el && el.value === "gabung" ? "gabung" : "terpisah"; }
+function spKmsSetLabelIsi_() { const l = document.getElementById("sp-kms-setisi-lbl"); if (l) l.textContent = spKmsSetBungkus_() === "gabung" ? "Set per plastik" : "Isi per plastik"; }
+/** Ganti set -> Bungkus kembali ke cara bungkus plastik terakhir set ITU (K23). */
+function spKmsSetBungkusBawaan_() {
+  const el = document.getElementById("sp-kms-setbungkus"), s = spKmsSetDipilih_(); if (!el || !s) return;
+  el.value = s.bungkusTerakhir === "gabung" ? "gabung" : "terpisah"; spKmsSetLabelIsi_();
 }
 /** Item terpilih per anggota (urut susunan set), dari kotak pilihan anggota. */
 function spKmsSetItemTerpilih_(s) {
@@ -13360,6 +13382,16 @@ function spKmsSetPratinjau_() {
   if (!(n > 0) || !(isi > 0)) { el.textContent = "Isi jumlah set dan isi per plastik."; el.className = "sp-info"; return; }
   let no = 0; ((SP_KMS.detail || {}).plastik || []).forEach(function (x) { no = Math.max(no, x.no || 0); });
   const item = spKmsSetItemTerpilih_(s), penuh = Math.floor(n / isi), sisa = n % isi, nPl = penuh + (sisa ? 1 : 0);
+  if (spKmsSetBungkus_() === "gabung") {   // 1G: semua anggota SATU plastik -- satu rentang nomor untuk seluruh set, isi dihitung SET
+    const kurangG = s.anggota.map(function (a, i) { const o = item[i]; return o && n > o.siap ? a.style + " siap " + o.siap : ""; }).filter(Boolean);
+    const bedaG = item.some(function (o) { return o && item[0] && (o.size !== item[0].size || (!spKmsSetSatuWarna_(s) && o.warna !== item[0].warna)); });
+    el.textContent = n + " set → " + nPl + " plastik gabung " + spKmsNo_(no + 1) + (nPl > 1 ? "–" + spKmsNo_(no + nPl) : "") + " (" +
+      [penuh ? penuh + " × " + isi + " set" : "", sisa ? "1 isi " + sisa + " set" : ""].filter(Boolean).join(" + ") + "), tiap plastik " +
+      s.anggota.map(function (a) { return a.style; }).join(" + ") + ". Nomor perkiraan." +
+      (kurangG.length ? " MELEBIHI siap packing: " + kurangG.join(", ") + "." : "") + (bedaG ? " Anggota beda warna/size -- pastikan memang pasangannya." : "");
+    el.className = "sp-info" + (kurangG.length ? " sp-galat" : "");
+    return;
+  }
   const kurang = [];
   const bagian = s.anggota.map(function (a, i) {
     const o = item[i], awal = no + 1; no += nPl;
@@ -13389,12 +13421,13 @@ function spKmsKetik_(e) {
   const t = e.target || {}, id = t.id;
   if (id === "sp-kms-total" || id === "sp-kms-isiplastik" || id === "sp-kms-item") spKmsPratinjau_();
   // 1E: ganti set -> kotak anggota digambar ulang untuk set itu; ganti warna/size -> tiap anggota ikut (K9: default sewarna & sesize).
-  if (id === "sp-kms-set" && e.type === "change") { const w = document.getElementById("sp-kms-setanggota"), s = spKmsSetDipilih_(); if (w && s) w.innerHTML = spKmsSetAnggotaHtml_(s); }
+  if (id === "sp-kms-set" && e.type === "change") { const w = document.getElementById("sp-kms-setanggota"), s = spKmsSetDipilih_(); if (w && s) w.innerHTML = spKmsSetAnggotaHtml_(s); spKmsSetBungkusBawaan_(); }
+  if (id === "sp-kms-setbungkus") spKmsSetLabelIsi_();   // 1G
   if (id === "sp-kms-setsel") {
     const s = spKmsSetDipilih_(), k = s ? spKmsSetKombinasi_(s).filter(function (x) { return x.kunci === t.value; })[0] : null;
     if (k) k.item.forEach(function (o, i) { const el = document.querySelector('#sp-panel-kemas [data-kms-anggota="' + i + '"]'); if (el) el.value = o.idDetailOrder; });
   }
-  if (id === "sp-kms-set" || id === "sp-kms-setsel" || id === "sp-kms-jmlset" || id === "sp-kms-setisi" || (t.hasAttribute && t.hasAttribute("data-kms-anggota"))) spKmsSetPratinjau_();
+  if (id === "sp-kms-set" || id === "sp-kms-setsel" || id === "sp-kms-jmlset" || id === "sp-kms-setisi" || id === "sp-kms-setbungkus" || (t.hasAttribute && t.hasAttribute("data-kms-anggota"))) spKmsSetPratinjau_();
   // Isi & tutup banyak karung: ubahan per baris disimpan di keadaan (panel digambar ulang dari keadaan); centang Tutup menggambar
   // ulang panelnya supaya ringkasan "N karung ditutup" ikut benar -- ketikan berat TIDAK (fokus kotak tidak dicuri).
   if (SP_KMS.mk && t.getAttribute) {
@@ -13469,17 +13502,22 @@ function spKmsKlik_(e) {
     const s = spKmsSetDipilih_(); if (!s) return;
     const jml = spKmsNilai_("sp-kms-jmlset"), isi = spKmsNilai_("sp-kms-setisi"), packer = spKmsNilai_("sp-kms-setpacker");
     const n = parseInt(jml, 10), nIsi = parseInt(isi, 10), item = spKmsSetItemTerpilih_(s);
+    const gabung = spKmsSetBungkus_() === "gabung", kataIsi = gabung ? "Set per plastik" : "Isi per plastik";   // 1G (K24: isi gabung = SET)
     if (!(String(n) === jml && n > 0)) { spKmsPesan_("Jumlah set harus bilangan bulat lebih dari 0.", false); return; }
-    if (!(String(nIsi) === isi && nIsi > 0)) { spKmsPesan_("Isi per plastik harus bilangan bulat lebih dari 0.", false); return; }
-    if (dt.packing.isiStandar && nIsi > dt.packing.isiStandar) { spKmsPesan_("Isi per plastik paling banyak " + dt.packing.isiStandar + " (isi standar packing ini).", false); return; }
+    if (!(String(nIsi) === isi && nIsi > 0)) { spKmsPesan_(kataIsi + " harus bilangan bulat lebih dari 0.", false); return; }
+    if (dt.packing.isiStandar && nIsi > dt.packing.isiStandar) { spKmsPesan_(kataIsi + " paling banyak " + dt.packing.isiStandar + " (isi standar packing ini).", false); return; }
     if (!packer) { spKmsPesan_("Nama packer wajib diisi.", false); return; }
     if (item.some(function (o) { return !o; })) { spKmsPesan_("Pilih warna/size untuk tiap anggota set.", false); return; }
     const kurang = s.anggota.map(function (a, i) { return n > item[i].siap ? a.style + " " + [item[i].warna, item[i].size].filter(Boolean).join(" ") + " siap " + item[i].siap : ""; }).filter(Boolean);
     if (kurang.length) { spKmsPesan_("Melebihi siap packing untuk " + n + " set: " + kurang.join("; ") + ". Tidak ada plastik yang dibuat.", false); return; }
-    spKmsJalan_(t, "buatPlastikSet", { idPacking: pk, idSetPO: s.id, jumlahSet: jml, isi: isi, statusBarang: spKmsNilai_("sp-kms-setstatus"), packer: packer,
-      pemeriksa: spKmsNilai_("sp-kms-setpemeriksa"), anggota: item.map(function (o) { return { idDetailOrder: o.idDetailOrder }; }) }, "kms-plastikset:" + pk, function (d) {
+    // 1G: bungkus dikirim HANYA untuk gabung -- payload terpisah identik dengan sebelum 1G (server menganggap kosong = terpisah)
+    spKmsJalan_(t, "buatPlastikSet", Object.assign({ idPacking: pk, idSetPO: s.id, jumlahSet: jml, isi: isi, statusBarang: spKmsNilai_("sp-kms-setstatus"), packer: packer,
+      pemeriksa: spKmsNilai_("sp-kms-setpemeriksa"), anggota: item.map(function (o) { return { idDetailOrder: o.idDetailOrder }; }) }, gabung ? { bungkus: "gabung" } : {}), "kms-plastikset:" + pk, function (d) {
       if (d.sudahTercatat) return d.jumlahPlastik + " plastik set ini sudah tercatat sebelumnya (kiriman yang sama).";
       const nomor = function (ids) { const a = String(ids[0] || "").split("-").pop(), b = String(ids[ids.length - 1] || "").split("-").pop(); return ids.length > 1 ? a + "–" + b : a; };
+      if (gabung && d.bungkus !== "gabung") return "PERHATIAN: server belum mengenal bungkus gabung -- " + d.jumlahPlastik + " plastik dibuat TERPISAH per style. Batalkan plastik itu dan hubungi admin.";
+      if (gabung) { const a0 = (d.perAnggota || [])[0] || {};
+        return d.jumlahSet + " set " + d.namaSet + " tersimpan: " + d.jumlahPlastik + " plastik gabung " + nomor(d.idPlastik || []) + (a0.sisa ? " (terakhir isi " + a0.sisa + " set)" : "") + "." + (d.info ? " " + d.info : ""); }
       return d.jumlahSet + " set " + d.namaSet + " tersimpan: " + (d.perAnggota || []).map(function (a) {
         return a.style + " " + a.jumlahPlastik + " plastik " + nomor(a.idPlastik || []) + (a.sisa ? " (terakhir isi " + a.sisa + ")" : ""); }).join("; ") + "." + (d.info ? " " + d.info : "");
     });
@@ -13489,7 +13527,7 @@ function spKmsKlik_(e) {
   if (aksi === "isi-karung") {
     const dari = parseInt((document.querySelector('[data-kms-dari="' + id + '"]') || {}).value, 10), sampai = parseInt((document.querySelector('[data-kms-sampai="' + id + '"]') || {}).value, 10);
     if (!(dari > 0) || !(sampai >= dari)) { spKmsPesan_("Isi nomor plastik dari dan sampai (mis. 1 sampai 8).", false); return; }
-    const ids = (dt.plastik || []).filter(function (x) { return x.status === "Aktif" && !x.idKarung && x.no >= dari && x.no <= sampai; }).map(function (x) { return x.idPlastik; });
+    const ids = rjdKmsUnitPlastik_(dt.plastik || []).filter(function (x) { return x.status === "Aktif" && !x.idKarung && x.no >= dari && x.no <= sampai; }).map(function (x) { return x.idPlastik; });   // 1G: satu ID per plastik
     if (!ids.length) { spKmsPesan_("Tidak ada plastik aktif tanpa karung di nomor " + spKmsNo_(dari) + "–" + spKmsNo_(sampai) + ".", false); return; }
     spKmsJalan_(t, "masukkanPlastikKeKarung", { idKarung: id, idPlastik: ids }, null, function (d) { return d.dimasukkan + " plastik masuk karung " + id.slice(-3) + "."; }); return;
   }

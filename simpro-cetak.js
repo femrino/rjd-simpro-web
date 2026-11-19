@@ -2833,20 +2833,30 @@ function ckPkNamaSet_(d, id){
 }
 function ckPkKg_(v){ return String(Math.round((Number(v) || 0) * 100) / 100).replace(".", ","); }
 function ckPkSelesai_(d){ return ["Ditutup", "Terbit", "Diterima"].indexOf(d.packing.status) !== -1; }
-/** Plastik AKTIF berurutan dengan karung, item, status, qty, dan set yang sama = satu rentang. */
+/** Plastik AKTIF berurutan dengan karung, item, status, qty, dan set yang sama = satu rentang.
+ *  1G: per PLASTIK (rjdKmsUnitPlastik_) -- plastik gabung satu nomor, qty = SET, pcs = jumlah baris isinya (r.pcs = n x qty untuk yang lain). */
 function ckPkRentang_(plastik){
   const hasil = [];
-  (plastik || []).filter(function(x){ return x.status === "Aktif"; }).forEach(function(x){
-    const r = hasil[hasil.length - 1];
-    if (r && r.akhir === x.no - 1 && r.idDetailOrder === x.idDetailOrder && r.statusBarang === x.statusBarang && r.qty === x.qty && r.idKarung === x.idKarung && r.idSetPO === (x.idSetPO || "")) {
-      r.akhir = x.no; r.n++; return; }
-    hasil.push({ awal: x.no, akhir: x.no, n: 1, idDetailOrder: x.idDetailOrder, item: ckPkItem_(x), style: x.style || x.artikel, statusBarang: x.statusBarang,
-      qty: x.qty, idKarung: x.idKarung, idSetPO: x.idSetPO || "" });
+  rjdKmsUnitPlastik_(plastik).filter(function(x){ return x.status === "Aktif"; }).forEach(function(x){
+    const r = hasil[hasil.length - 1], pcs = x.gabung ? x.pcs : x.qty;
+    if (r && r.akhir === x.no - 1 && r.idDetailOrder === x.idDetailOrder && r.statusBarang === x.statusBarang && r.qty === x.qty && r.idKarung === x.idKarung && r.idSetPO === (x.idSetPO || "") &&
+        r.gabung === !!x.gabung && r.kunciIsi === (x.kunciIsi || "")) {
+      r.akhir = x.no; r.n++; r.pcs += pcs; return; }
+    hasil.push({ awal: x.no, akhir: x.no, n: 1, idDetailOrder: x.idDetailOrder, item: x.gabung ? rjdKmsWarnaSizeGabung_(x) : ckPkItem_(x), style: x.style || x.artikel, statusBarang: x.statusBarang,
+      qty: x.qty, idKarung: x.idKarung, idSetPO: x.idSetPO || "", gabung: !!x.gabung, kunciIsi: x.kunciIsi || "", pcs: pcs,
+      gaya: x.gabung ? x.anggota.map(function(a){ return a.style || a.artikel; }) : null });
   });
   return hasil;
 }
 function ckPkNomor_(r){ return ckPkNoP_(r.awal) + (r.akhir > r.awal ? "–" + ckPkNoP_(r.akhir) : ""); }
-function ckPkIsiTeks_(r){ return r.n > 1 ? r.n + " × " + r.qty : "1 × " + r.qty; }
+function ckPkIsiTeks_(r){ return (r.n > 1 ? r.n + " × " + r.qty : "1 × " + r.qty) + (r.gabung ? " set" : ""); }
+/** Sel item satu rentang: plastik gabung = nama set · warna·size + anggotanya (1G); selain itu item apa adanya. */
+function ckPkItemRentang_(d, r, sub){
+  const esc = rjdEscapeHtml_;
+  if (!r.gabung) return esc(r.item);
+  return '<b>' + esc(ckPkNamaSet_(d, r.idSetPO)) + '</b> &#183; ' + esc(r.item) + (sub ? '<div class="ck-pk-kecil">satu plastik: ' + esc(r.gaya.join(" + ")) + '</div>'
+    : ' <span class="ck-pk-kecil">(' + esc(r.gaya.join(" + ")) + ')</span>');
+}
 /** Satu kelompok set dari server: "Set X · M: 72 set (144 pcs)", tidak seimbang menyebut qty tiap anggota (§5.6 aturan 3-4). */
 function ckPkSetBaris_(d, r){
   const esc = rjdEscapeHtml_;
@@ -2872,8 +2882,8 @@ function ckPkIsiKarungHtml_(d, k){
   const rt = ckPkRentang_((d.plastik || []).filter(function(x){ return x.idKarung === k.idKarung; }));
   if (!rt.length) return '<div class="ck-pk-kecil">(karung kosong)</div>';
   return '<table class="ck-pk-isi"><tbody>' + rt.map(function(r){
-    return '<tr><td class="ck-pk-mono">' + ckPkNomor_(r) + '</td><td>' + esc(r.item) + (r.statusBarang !== "Normal" ? ' <b class="ck-pk-status">' + esc(r.statusBarang) + '</b>' : '') +
-      '</td><td class="num">' + ckPkIsiTeks_(r) + ' = <b>' + (r.n * r.qty) + '</b></td></tr>'; }).join("") + '</tbody></table>';
+    return '<tr><td class="ck-pk-mono">' + ckPkNomor_(r) + '</td><td>' + ckPkItemRentang_(d, r, false) + (r.statusBarang !== "Normal" ? ' <b class="ck-pk-status">' + esc(r.statusBarang) + '</b>' : '') +
+      '</td><td class="num">' + ckPkIsiTeks_(r) + ' = <b>' + r.pcs + '</b></td></tr>'; }).join("") + '</tbody></table>';
 }
 function ckPkSetKarungHtml_(d, k){ return (k.set || []).length ? '<div class="ck-pk-setwrap">' + k.set.map(function(r){ return ckPkSetBaris_(d, r); }).join("") + '</div>' : ''; }
 
@@ -2884,8 +2894,8 @@ function ckPkListHtml_(d){
   const rt = ckPkRentang_(d.plastik);
   const baris = rt.map(function(r){
     return '<tr><td class="ck-pk-mono">' + (r.idKarung ? esc(kodeK[r.idKarung] || r.idKarung) : '<span class="ck-pk-merah">belum berkarung</span>') + '</td>' +
-      '<td class="ck-pk-mono">' + ckPkNomor_(r) + '</td><td>' + esc(r.item) + (r.idSetPO ? '<div class="ck-pk-kecil">set ' + esc(ckPkNamaSet_(d, r.idSetPO)) + '</div>' : '') + '</td>' +
-      '<td>' + esc(r.statusBarang) + '</td><td class="num">' + ckPkIsiTeks_(r) + '</td><td class="num"><b>' + (r.n * r.qty) + '</b></td></tr>'; }).join("");
+      '<td class="ck-pk-mono">' + ckPkNomor_(r) + '</td><td>' + ckPkItemRentang_(d, r, true) + (r.idSetPO && !r.gabung ? '<div class="ck-pk-kecil">set ' + esc(ckPkNamaSet_(d, r.idSetPO)) + '</div>' : '') + '</td>' +
+      '<td>' + esc(r.statusBarang) + '</td><td class="num">' + ckPkIsiTeks_(r) + '</td><td class="num"><b>' + r.pcs + '</b></td></tr>'; }).join("");
   // rekap per item·size x status barang (plastik aktif)
   const baku = ["Normal", "Noda", "Tanpa Label"], ada = [], rek = {}, urut = [], kol = {};
   (d.plastik || []).filter(function(x){ return x.status === "Aktif"; }).forEach(function(x){
@@ -2930,8 +2940,9 @@ function ckPkLembar_(sel, perLembar, kelas){
 }
 function ckPkLabelPlastikHtml_(d){
   const esc = rjdEscapeHtml_, t = ckPkT_(d), R = CK_PK_RENTANG_NO;
-  const pl = (d.plastik || []).filter(function(x){ return x.status === "Aktif" && (!R.dari || x.no >= R.dari) && (!R.sampai || x.no <= R.sampai); });
+  const pl = rjdKmsUnitPlastik_(d.plastik).filter(function(x){ return x.status === "Aktif" && (!R.dari || x.no >= R.dari) && (!R.sampai || x.no <= R.sampai); });   // 1G: satu label per PLASTIK
   const sel = pl.map(function(x){
+    if (x.gabung) return ckPkLabelGabungHtml_(d, x, t);
     return '<div class="ck-pk-lbl">' +
       '<div class="ck-pk-lbl-atas"><span class="ck-pk-kode">' + t + '-' + ckPkNoP_(x.no) + '</span><span class="ck-pk-order">' + ckPkTandaDraft_(d) + esc(d.kodeOrder) + '</span></div>' +
       (x.idSetPO ? '<div class="ck-pk-lbl-set">' + esc(ckPkNamaSet_(d, x.idSetPO)) + ' &#183; ' + esc(x.style || x.artikel) + '</div>' : '<div class="ck-pk-lbl-item">' + esc(x.style || x.artikel) + '</div>') +
@@ -2943,6 +2954,18 @@ function ckPkLabelPlastikHtml_(d){
       '<input id="ck-pk-sampai" type="text" inputmode="numeric" value="' + (R.sampai || '') + '" placeholder="sampai"/> <button type="button" onclick="ckPkSaringNomor()">Terapkan</button>' +
       ' <span class="ck-pk-kecil">' + pl.length + ' label, ' + Math.ceil(pl.length / 8) + ' lembar A4</span></div>' +
     ckPkDraftLayar_(d) + ckPkLembar_(sel, 8, "l8");
+}
+/** 1G (K26): label plastik GABUNG -- nama set, warna·size (sekali bila semua anggota sama), jumlah set + total pcs, qty tiap anggota. */
+function ckPkLabelGabungHtml_(d, x, t){
+  const esc = rjdEscapeHtml_, sama = x.anggota.every(function(a){ return a.warna === x.warna && a.size === x.size; });
+  return '<div class="ck-pk-lbl ck-pk-lbl-gabung">' +
+    '<div class="ck-pk-lbl-atas"><span class="ck-pk-kode">' + t + '-' + ckPkNoP_(x.no) + '</span><span class="ck-pk-order">' + ckPkTandaDraft_(d) + esc(d.kodeOrder) + '</span></div>' +
+    '<div class="ck-pk-lbl-set">' + esc(ckPkNamaSet_(d, x.idSetPO)) + ' &#183; satu plastik</div>' +
+    (sama ? '<div class="ck-pk-lbl-wz">' + esc(x.warna || '') + (x.warna ? ' &#183; ' : '') + '<b>' + esc(x.size || '') + '</b></div>' : '') +
+    '<div class="ck-pk-lbl-qty"><b>' + x.qty + '</b> set &#183; ' + x.pcs + ' pcs' + (x.statusBarang !== "Normal" ? ' <span class="ck-pk-status">' + esc(x.statusBarang) + '</span>' : '') + '</div>' +
+    '<div class="ck-pk-lbl-anggota">' + x.anggota.map(function(a){ return '<div>' + esc(a.style || a.artikel) + (sama ? '' : ' &#183; ' + esc([a.warna, a.size].filter(Boolean).join(" "))) + ' <b>' + a.qty + '</b></div>'; }).join("") + '</div>' +
+    '<div class="ck-pk-lbl-bawah">Packer: ' + esc(x.packer || '-') + ' &#183; Periksa: ' + esc(x.pemeriksa || '-') + '<br/>' + esc(x.idPlastik) + '</div>' +
+  '</div>';
 }
 function ckPkLabelKarungHtml_(d){
   const esc = rjdEscapeHtml_, k0 = ckPkKlien_(d).klien, sj = d.packing.idPengiriman;

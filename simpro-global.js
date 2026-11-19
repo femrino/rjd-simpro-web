@@ -6987,3 +6987,28 @@ function rjdLaporanProduksiHtml_(d, opsi) {
     '<p class="rlp-kaki-dok">Dihitung ' + E(d.dihitungPada || "") + ' oleh ' + E(d.dicetakOleh || "") +
     (d.ms ? ' dalam ' + (Math.round(d.ms / 100) / 10).toString().replace(".", ",") + ' detik' : '') + '.</p></div>';
 }
+
+/**
+ * 1G (SPEC-PACKING v0.5 §5.7, butuh gs >= rilis 1F): plastik GABUNG set = SATU ID Plastik dengan beberapa baris isi (satu per anggota set,
+ * bungkus "gabung"). Layar packing (simpro-spk.js) dan dokumen cetak (simpro-cetak.js) bekerja per PLASTIK: baris gabung ber-ID sama
+ * dilipat jadi satu unit { ..baris pertama, gabung: true, anggota: [baris..], pcs, kunciIsi } dengan qty = jumlah SET di plastik itu.
+ * Baris BUKAN gabung dikembalikan apa adanya (objek yang sama), jadi PO tanpa plastik gabung = keluaran identik dengan sebelum 1G.
+ * Ringkasan per item/size/status SENGAJA tetap membaca baris (pcs per style), bukan unit.
+ */
+function rjdKmsUnitPlastik_(plastik) {
+  const hasil = [], per = {};
+  (plastik || []).forEach(function (x) {
+    if (!x || x.bungkus !== "gabung") { hasil.push(x); return; }
+    const u = per[x.idPlastik];
+    if (u) { u.anggota.push(x); u.pcs += Number(x.qty) || 0; return; }
+    const b = Object.assign({}, x, { gabung: true, anggota: [x], pcs: Number(x.qty) || 0 });
+    per[x.idPlastik] = b; hasil.push(b);
+  });
+  hasil.forEach(function (u) { if (u && u.gabung) u.kunciIsi = u.anggota.map(function (a) { return a.idDetailOrder; }).join("+"); });
+  return hasil;
+}
+/** Warna · size satu plastik gabung: satu nilai bila semua anggota sama, selain itu per anggota (dipisah " / "). */
+function rjdKmsWarnaSizeGabung_(u) {
+  const w = (u.anggota || []).map(function (a) { return [a.warna, a.size].filter(Boolean).join(" · "); });
+  return w.every(function (x) { return x === w[0]; }) ? (w[0] || "") : w.join(" / ");
+}
