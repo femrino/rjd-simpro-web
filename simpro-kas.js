@@ -352,6 +352,7 @@ function ksFormArahBerubah() {
   if (wTujuan) wTujuan.classList.toggle("hidden", arah !== "Transfer");
   if (sel && KS_DATA) {
     ksPasangPanduanKategori_();
+    ksPasangCariKategori_();   // v441: kotak ketik di atas <select> (yang tetap sumber nilai)
     const lama = sel.value;
     // @K13 KN-6: SEARAH, aktif saja, lalu URUT kolom Urutan (bukan urutan baris sheet).
     //
@@ -419,6 +420,136 @@ function ksPanduanKategori_() {
   const teks = k ? String(k.keterangan || "").trim() : "";
   d.textContent = teks;
   d.classList.toggle("hidden", !teks);
+  ksKatSinkron_();   // v441: semua jalur yang mengubah <select> kategori lewat sini (pengisian arah, Koreksi, Bayar tagihan)
+}
+
+/* v441 (26 Nov 2026, Femri): kategori dicari dengan MENGETIK, bukan menggulir dropdown. Pemicunya mesin jahit 24,7 jt:
+ * "Pembelian aktiva tetap" ada di dasar daftar (sesudah "Lain-lain") dan NAMANYA tidak memuat kata "mesin" -- yang memuatnya
+ * PENJELASANNYA ("Mesin, motor, komputer, meja"). Jadi pencarian mencocokkan nama + Keterangan + kode akun, dan tiap pilihan
+ * menampilkan penjelasannya. Urutan hasil: nama berawalan kata yang diketik, lalu nama yang memuat semua kata, lalu yang cocok
+ * lewat penjelasan/kode; di dalam tiap tingkat tetap urutan kolom Urutan.
+ *
+ * <select id="ks-in-kategori"> TETAP sumber nilai: pengisian per arah (ksFormArahBerubah), Koreksi, Bayar tagihan supplier,
+ * Simpan dan harness membaca/menulis .value-nya, dan DAFTAR yang dicari diambil dari OPSI-nya (bukan dari KS_DATA lagi), jadi
+ * penyaring aktif/virtual/searah hanya ada di satu tempat. Ia disembunyikan secara VISUAL (1 px, tembus pandang -- BUKAN
+ * display:none: select_option Playwright tetap bisa memakainya). Kotak ketik disinkronkan dari sana lewat ksPanduanKategori_,
+ * satu-satunya titik yang dilewati semua jalur yang mengubahnya.
+ *
+ * Daftar ikut ALIRAN halaman, bukan melayang: .ks-form-wrap ber-overflow:hidden memotong daftar absolut di dasar form.
+ * Teks bebas TIDAK pernah jadi kategori: keluar dari kotak dengan teks yang bukan nama kategori = kembali ke pilihan terakhir;
+ * kotak dikosongkan = kategori dikosongkan. jalan160.
+ */
+let KS_KAT_AKTIF = 0;
+function ksPasangCariKategori_() {
+  if (document.getElementById("ks-kat-cari")) return;   // idempoten
+  const sel = document.getElementById("ks-in-kategori"); if (!sel || !sel.parentNode) return;
+  const w = document.createElement("div"); w.id = "ks-kat-cari-wrap"; w.className = "ks-kat-cari-wrap";
+  w.innerHTML = '<input id="ks-kat-cari" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list"' +
+    ' aria-expanded="false" aria-controls="ks-kat-daftar" placeholder="Ketik untuk mencari kategori"/>' +
+    '<div id="ks-kat-daftar" class="ks-kat-daftar hidden" role="listbox"></div>';
+  sel.parentNode.insertBefore(w, sel);
+  sel.classList.add("ks-kat-asli"); sel.tabIndex = -1; sel.setAttribute("aria-hidden", "true");
+  const inp = document.getElementById("ks-kat-cari");
+  inp.addEventListener("focus", function () { try { inp.select(); } catch (e) { /* browser tua */ } ksKatRender_(""); });
+  inp.addEventListener("input", function () { ksKatRender_(inp.value); });
+  inp.addEventListener("keydown", ksKatTombol_);
+  inp.addEventListener("blur", function () { setTimeout(ksKatLepas_, 0); });
+  // mousedown, bukan click: blur kotak ketik (yang menutup daftar) terjadi SEBELUM click; preventDefault menahan fokusnya.
+  document.getElementById("ks-kat-daftar").addEventListener("mousedown", function (e) {
+    e.preventDefault();
+    const o = e.target && e.target.closest ? e.target.closest(".ks-kat-opsi") : null;
+    if (o) ksKatPilih_(o.getAttribute("data-nilai"));
+  });
+  ksKatSinkron_(true);
+}
+
+/** Kategori yang bisa dipilih = OPSI <select> saat ini (sudah searah, aktif, tanpa virtual), dilengkapi Keterangan & kode akun. */
+function ksKatDaftar_() {
+  const sel = document.getElementById("ks-in-kategori"); if (!sel) return [];
+  const arah = (document.querySelector('input[name="ks-arah"]:checked') || {}).value || "Keluar";
+  const meta = {};
+  ((KS_DATA && KS_DATA.kategori) || []).forEach(function (k) { if (k.arah === arah) meta[k.kategori] = k; });
+  return Array.prototype.filter.call(sel.options, function (o) { return !!o.value; }).map(function (o, i) {
+    const k = meta[o.value] || {};
+    return { nilai: o.value, ket: String(k.keterangan || "").trim(), akun: String(k.akunBuku || "").trim(), urut: i };
+  });
+}
+function ksKatNorm_(s) { return String(s === null || s === undefined ? "" : s).toLowerCase().replace(/\s+/g, " ").trim(); }
+function ksKatCocok_(q) {
+  const daftar = ksKatDaftar_(), kata = ksKatNorm_(q).split(" ").filter(String), utuh = kata.join(" ");
+  if (!kata.length) return daftar;
+  const tingkat = function (x) {
+    const nm = ksKatNorm_(x.nilai), semua = nm + " " + ksKatNorm_(x.ket) + " " + ksKatNorm_(x.akun);
+    if (!kata.every(function (k) { return semua.indexOf(k) !== -1; })) return -1;
+    if (nm.indexOf(utuh) === 0) return 0;
+    if (kata.every(function (k) { return nm.indexOf(k) !== -1; })) return 1;
+    return 2;
+  };
+  return daftar.map(function (x) { return { x: x, t: tingkat(x) }; }).filter(function (o) { return o.t >= 0; })
+    .sort(function (a, b) { return a.t - b.t || a.x.urut - b.x.urut; }).map(function (o) { return o.x; });
+}
+function ksKatRender_(q) {
+  const box = document.getElementById("ks-kat-daftar"), inp = document.getElementById("ks-kat-cari"); if (!box || !inp) return;
+  const hasil = ksKatCocok_(q);
+  KS_KAT_AKTIF = 0;
+  box.innerHTML = hasil.length ? hasil.map(function (x, i) {
+    return '<div class="ks-kat-opsi' + (i === 0 ? ' aktif' : '') + '" role="option" id="ks-kat-opsi-' + i + '" data-nilai="' + ksEsc_(x.nilai) + '">' +
+      '<span class="ks-kat-nama">' + ksEsc_(x.nilai) + '</span>' + (x.akun ? '<span class="ks-kat-akun">' + ksEsc_(x.akun) + '</span>' : '') +
+      (x.ket ? '<span class="ks-kat-ket">' + ksEsc_(x.ket) + '</span>' : '') + '</div>';
+  }).join("") : '<div class="ks-kat-kosong">Tidak ada kategori yang cocok dengan "' + ksEsc_(String(q).trim()) + '".</div>';
+  box.classList.remove("hidden"); inp.setAttribute("aria-expanded", "true");
+  if (hasil.length) inp.setAttribute("aria-activedescendant", "ks-kat-opsi-0"); else inp.removeAttribute("aria-activedescendant");
+}
+function ksKatTombol_(e) {
+  const box = document.getElementById("ks-kat-daftar"), inp = document.getElementById("ks-kat-cari"); if (!box || !inp) return;
+  const opsi = box.querySelectorAll(".ks-kat-opsi"), buka = !box.classList.contains("hidden");
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    if (!buka) { ksKatRender_(inp.value); return; }
+    if (!opsi.length) return;
+    KS_KAT_AKTIF = (KS_KAT_AKTIF + (e.key === "ArrowDown" ? 1 : opsi.length - 1)) % opsi.length;
+    for (let i = 0; i < opsi.length; i++) opsi[i].classList.toggle("aktif", i === KS_KAT_AKTIF);
+    inp.setAttribute("aria-activedescendant", opsi[KS_KAT_AKTIF].id);
+    if (opsi[KS_KAT_AKTIF].scrollIntoView) opsi[KS_KAT_AKTIF].scrollIntoView({ block: "nearest" });
+  } else if (e.key === "Enter") {
+    if (buka && opsi.length) { e.preventDefault(); ksKatPilih_(opsi[KS_KAT_AKTIF].getAttribute("data-nilai")); }
+  } else if (e.key === "Escape") {
+    if (buka) { e.preventDefault(); ksKatTutup_(); ksKatSinkron_(true); }
+  }
+}
+function ksKatTutup_() {
+  const box = document.getElementById("ks-kat-daftar"), inp = document.getElementById("ks-kat-cari");
+  if (box) { box.classList.add("hidden"); box.innerHTML = ""; }
+  if (inp) { inp.setAttribute("aria-expanded", "false"); inp.removeAttribute("aria-activedescendant"); }
+}
+function ksKatPilih_(nilai) {
+  const sel = document.getElementById("ks-in-kategori"); if (!sel) return;
+  sel.value = nilai;
+  ksKatTutup_();
+  sel.dispatchEvent(new Event("change", { bubbles: true }));   // -> ksPanduanKategori_ (pendengar KN-9) -> panduan + sinkron
+  ksKatSinkron_(true);
+}
+/** Keluar dari kotak: teks = nama kategori (besar/kecil huruf bebas) -> dipilih; kosong -> kategori dikosongkan; selain itu
+ *  kembali ke pilihan terakhir. */
+function ksKatLepas_() {
+  const inp = document.getElementById("ks-kat-cari"), sel = document.getElementById("ks-in-kategori");
+  if (!inp || !sel || document.activeElement === inp) return;
+  ksKatTutup_();
+  const teks = ksKatNorm_(inp.value);
+  if (!teks) {
+    if (sel.value) { sel.value = ""; sel.dispatchEvent(new Event("change", { bubbles: true })); }
+    ksKatSinkron_(true); return;
+  }
+  const sama = ksKatDaftar_().filter(function (x) { return ksKatNorm_(x.nilai) === teks; })[0];
+  if (sama && sama.nilai !== sel.value) { ksKatPilih_(sama.nilai); return; }
+  ksKatSinkron_(true);
+}
+/** Kotak ketik mengikuti <select>. Tanpa `paksa`, teks yang SEDANG diketik tidak ditimpa. */
+function ksKatSinkron_(paksa) {
+  const inp = document.getElementById("ks-kat-cari"), sel = document.getElementById("ks-in-kategori");
+  if (!inp || !sel) return;
+  if (!paksa && document.activeElement === inp) return;
+  inp.value = sel.value;
 }
 
 /**
