@@ -5363,9 +5363,15 @@ function dbPanelArtikelHtml_(it, n){
       'Perubahan di panel ini ikut ke semuanya, termasuk order yang sudah selesai.</div>'
     : '';
 
+  // 20 Nov 2026 (butuh gs >= @473; Femri, MNVDL 54): server MENDAFTARKAN artikel yang belum terdaftar kalau panel ini berisi
+  // (penanda bisaDaftar). Petunjuk lama menyuruh "setujui lewat Form Order" -- jalan buntu untuk order yang SUDAH disetujui. Tanpa
+  // penanda (gs lama) petunjuk lama tetap dipakai apa adanya: di sana isiannya memang dilewati.
   var belumTerdaftar = !a.adaMaster
-    ? '<div class="of-komposisi-hint">Artikel ini belum terdaftar di Master Artikel, ' +
-      'jadi isian di sini belum bisa disimpan. Setujui order lewat Form Order untuk mendaftarkannya.</div>'
+    ? (a.bisaDaftar
+      ? '<div class="of-komposisi-hint dbep-belum-terdaftar">Artikel ini belum terdaftar di Master Artikel. Isi Komposisi Kain ' +
+        '(atau data artikel lain) di panel ini lalu Simpan &#8212; artikelnya didaftarkan, dan kainnya jadi pilihan di halaman cutting.</div>'
+      : '<div class="of-komposisi-hint">Artikel ini belum terdaftar di Master Artikel, ' +
+        'jadi isian di sini belum bisa disimpan. Setujui order lewat Form Order untuk mendaftarkannya.</div>')
     : '';
 
   // Kolom size mengikuti size yang DIPAKAI item ini -- sama dengan tabel Warna
@@ -6062,6 +6068,32 @@ function dbHitungTotalBarisPO(inp){
   if(sel) sel.textContent = t;
 }
 
+/**
+ * 20 Nov 2026 (butuh gs >= @473; Femri, MNVDL 54): kabar data ARTIKEL dari jawaban simpanEditPO_. Label "Artikel / Style"
+ * dari server -- dipakai sebagai TEKS (textContent & alert), tidak pernah innerHTML.
+ *   artikelDisalin     nama item diganti, data artikel (kain, aksesoris, size chart) ikut ke nama baru
+ *   artikelDidaftarkan artikel yang belum terdaftar didaftarkan dari isian panel
+ *   artikelDilewati    isian panel TIDAK tersimpan (beserta sebab)            -> awas
+ *   artikelTanpaMaster nama diganti, tapi tidak ada data artikel di nama lama -> awas (cutting tanpa kain)
+ * gs lama tidak mengirim medannya: teks "" dan awas "", jadi status & jeda tutup identik dengan sebelumnya.
+ */
+function dbEditPOCatatanArtikel_(d){
+  const daftar = function(x){
+    return Array.isArray(x) ? x.map(function(v){ return String(v === null || v === undefined ? "" : v).trim(); }).filter(function(v){ return v; }) : [];
+  };
+  const disalin = daftar(d && d.artikelDisalin), didaftarkan = daftar(d && d.artikelDidaftarkan);
+  const dilewati = daftar(d && d.artikelDilewati), tanpa = daftar(d && d.artikelTanpaMaster);
+  let teks = "";
+  if (disalin.length) teks += " Data artikel (kain, aksesoris, size chart) ikut ke nama baru: " + disalin.join(", ") + ".";
+  if (didaftarkan.length) teks += " Artikel didaftarkan ke Master Artikel: " + didaftarkan.join(", ") + ".";
+  const awas = [];
+  if (dilewati.length) awas.push("Data artikel TIDAK tersimpan:\n- " + dilewati.join("\n- "));
+  if (tanpa.length) awas.push("Item berikut belum punya data artikel (komposisi kain), jadi kainnya belum muncul di halaman cutting:\n- " +
+    tanpa.join("\n- ") + "\nBuka Edit PO lagi dan isi Komposisi Kain di panel 'Berlaku untuk ARTIKEL'.");
+  if (awas.length) teks += " PERHATIAN: ada data artikel yang belum tersimpan.";
+  return { teks: teks, awas: awas.join("\n\n") };
+}
+
 async function dbSimpanEditPO(){
   const btn = document.getElementById("db-editpo-simpan");
   const statusEl = document.getElementById("db-editpo-status");
@@ -6324,12 +6356,16 @@ async function dbSimpanEditPO(){
       window.OL_EDITPO_KUNCI = "";
       // @P16-C OR-4: kiriman ulang yang ternyata sudah tersimpan -- katakan begitu, bukan "Tersimpan." polos.
       const lebih = (d.pesananDiBawahTerkirim || []);
-      statusEl.textContent = d.sudahTercatat
+      const artikelKabar = dbEditPOCatatanArtikel_(d);   // 20 Nov 2026 (gs >= @473); gs lama -> teks & awas kosong
+      statusEl.textContent = (d.sudahTercatat
         ? "Sudah tersimpan sebelumnya (jawaban pertama tidak sampai ke layar). Tidak ada yang disimpan dua kali."
-        : "Tersimpan." + (lebih.length ? " Tercatat dikirim/ditagih melebihi pesanan: " + lebih.join(", ") + "." : "");
+        : "Tersimpan." + (lebih.length ? " Tercatat dikirim/ditagih melebihi pesanan: " + lebih.join(", ") + "." : "")) + artikelKabar.teks;
       // Daftar halaman dimuat ulang (lewat sambungan halaman) supaya angka & deadline di tabel ikut segar.
       rjdEditPOSesudahSimpan_();
-      setTimeout(dbTutupEditPO, lebih.length ? 2600 : 700);   // v409: kalimat kelebihan perlu waktu dibaca
+      // 20 Nov 2026: data artikel yang TIDAK tersimpan / item tanpa data artikel = peringatan yang harus terbaca, bukan kalimat yang
+      // ikut hilang bersama modal 2,6 detik kemudian -> alert. Kabar biasa (disalin, didaftarkan) cukup di status, dengan jeda baca.
+      if (artikelKabar.awas) alert(artikelKabar.awas);
+      setTimeout(dbTutupEditPO, (lebih.length || artikelKabar.teks) ? 2600 : 700);   // v409: kalimat kelebihan perlu waktu dibaca
     } else {
       statusEl.textContent = (d && d.error) || "Gagal menyimpan.";
       // v409: penolakan lantai terkirim/tertagih -> tawarkan izin tercatat (gs @436). Teks pesan itu dari periksaQtyEditPO_.
