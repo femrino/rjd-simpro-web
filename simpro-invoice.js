@@ -349,6 +349,27 @@ function ivFormatRupiah_(n){
   return "Rp " + Math.round(Number(n) || 0).toLocaleString("id-ID");
 }
 
+/* v440 (26 Nov 2026, Femri): "Sembunyikan yang dibatalkan" di Daftar Invoice. Invoice batal TETAP ada di sheet -- ia dokumen
+ * bernomor: menghapus barisnya mengunci pengirimannya (detail invoice tanpa kepala batal = "sudah ditagih"), bisa memakai ulang
+ * nomornya (generateIdInvoiceBaru_ = terbesar + 1), dan menggeser jurnal bulan terbitnya. Yang disembunyikan hanya BARISNYA di
+ * tampilan. "Belum lunas", "Lunas" dan filter umur sudah tidak memuat yang batal (lunas = batal || ...; v281), jadi centang ini
+ * hanya TAMPAK di "Semua invoice" -- di tampilan lain ia tidak mengubah apa pun. "Dibatalkan" tetap menampilkan semuanya.
+ * Bawaan: tersembunyi. Pilihan diingat per penampil (localStorage); penyimpanan yang ditolak (mode privat) = bawaan, pilihan
+ * tetap berlaku selama halaman terbuka lewat IV_SEMBUNYI_BATAL. jalan159. */
+var IV_KUNCI_SEMBUNYI_BATAL = "iv_sembunyi_batal";
+function ivSembunyiBatal_(){
+  if(typeof window.IV_SEMBUNYI_BATAL === "boolean") return window.IV_SEMBUNYI_BATAL;
+  let v = null;
+  try { v = localStorage.getItem(IV_KUNCI_SEMBUNYI_BATAL); } catch(e) { v = null; }
+  window.IV_SEMBUNYI_BATAL = v === null ? true : v === "1";
+  return window.IV_SEMBUNYI_BATAL;
+}
+function ivSembunyiBatalUbah_(nilai){
+  window.IV_SEMBUNYI_BATAL = !!nilai;
+  try { localStorage.setItem(IV_KUNCI_SEMBUNYI_BATAL, nilai ? "1" : "0"); } catch(e) {}
+  ivRender();
+}
+
 /**
  * Saring + render. Default filter "Belum lunas" -- halaman ini dibuka untuk
  * menagih, bukan untuk melihat riwayat semua invoice.
@@ -365,15 +386,34 @@ function ivRender(){
     const o = document.createElement("option"); o.value = "batal"; o.textContent = "Dibatalkan"; selStatus.appendChild(o);
   }
   const fStatus = selStatus.value;
+  // v440: centang disuntik SEKALI di sebelah <select> status (template tidak berubah), tampak hanya di "Semua invoice".
+  let kotakBatal = document.getElementById("iv-sembunyi-batal-wrap");
+  if(selStatus && !kotakBatal && selStatus.parentNode){
+    kotakBatal = document.createElement("label");
+    kotakBatal.id = "iv-sembunyi-batal-wrap"; kotakBatal.className = "iv-sembunyi-batal";
+    kotakBatal.innerHTML = '<input type="checkbox" id="iv-sembunyi-batal" onchange="ivSembunyiBatalUbah_(this.checked)"/>' +
+      '<span>Sembunyikan yang dibatalkan</span>';
+    selStatus.parentNode.insertBefore(kotakBatal, selStatus.nextSibling);
+  }
+  if(kotakBatal){
+    kotakBatal.style.display = fStatus === "" ? "" : "none";
+    const cb = document.getElementById("iv-sembunyi-batal"); if(cb) cb.checked = ivSembunyiBatal_();
+  }
+  const sembunyiBatal = fStatus === "" && ivSembunyiBatal_();
+  const cocokCari = function(p){ return !cari || [p.idInvoice, p.idPurchaseOrder, p.namaKlien].join(" ").toLowerCase().indexOf(cari) !== -1; };
+  // Yang disembunyikan DIHITUNG (yang juga cocok dengan pencarian) dan disebut di bawah -- baris yang hilang tanpa kabar
+  // terbaca "tidak ada", bukan "disembunyikan".
+  const tersembunyi = sembunyiBatal ? semua.filter(function(p){ return p.batal && cocokCari(p); }).length : 0;
 
   const hasil = semua.filter(function(p){
+    if(sembunyiBatal && p.batal) return false;
     if(fStatus === "belum" && p.lunas) return false;
     if(fStatus === "lunas" && (!p.lunas || p.batal)) return false;   // v281: batal bukan lunas
     if(fStatus === "batal" && !p.batal) return false;
     if(fStatus && fStatus.indexOf("bucket:") === 0 && p.bucket !== fStatus.slice(7)) return false;
-    if(!cari) return true;
-    return [p.idInvoice, p.idPurchaseOrder, p.namaKlien].join(" ").toLowerCase().indexOf(cari) !== -1;
+    return cocokCari(p);
   });
+  const kabarSembunyi = tersembunyi ? tersembunyi + ' dibatalkan disembunyikan' : '';
 
   // Ringkasan aging -- angka yang paling sering ditanyakan sebelum tabelnya dibaca.
   const bucket = r.bucket || {};
@@ -398,12 +438,14 @@ function ivRender(){
     }).join("");
 
   if(!hasil.length){
-    wadah.innerHTML = '<p style="font-size:12.5px;color:var(--ink-soft)">Tidak ada invoice yang cocok dengan filter.</p>';
+    wadah.innerHTML = '<p style="font-size:12.5px;color:var(--ink-soft)">Tidak ada invoice yang cocok dengan filter.' +
+      (kabarSembunyi ? ' (' + kabarSembunyi + ')' : '') + '</p>';
     return;
   }
 
   wadah.innerHTML =
-    '<div class="iv-jumlah">' + hasil.length + ' dari ' + semua.length + ' invoice</div>' +
+    '<div class="iv-jumlah">' + hasil.length + ' dari ' + semua.length + ' invoice' +
+      (kabarSembunyi ? ' &#183; ' + kabarSembunyi : '') + '</div>' +
     '<div class="iv-tabelwrap"><table class="iv-tabel"><thead><tr>' +
       '<th>Invoice</th><th>Klien</th><th>PO</th><th class="num">Total</th>' +
       '<th class="num">Dibayar</th><th class="num">Sisa</th><th>Tanggal</th><th>Umur</th><th>Status</th>' +

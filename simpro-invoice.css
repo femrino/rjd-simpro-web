@@ -36,6 +36,13 @@ body { padding-top: 0; }
   border: 1px solid var(--line-soft); border-radius: 9px; }
 .iv-alat select { flex: 0 1 220px; margin: 0; padding: 8px 10px; background: var(--white);
   border: 1px solid var(--line-soft); border-radius: 9px; font-size: 12.5px; }
+/* v440: centang "Sembunyikan yang dibatalkan". Kotak centang 16 px (bawaan Chromium 13 px) -- sasaran sentuh di HP; jalan159 G
+   menuntut 15-20 px. .iv-alat input (flex 1 1 260px, padding, border) memang COCOK dengan kotak centang ini, tapi TERUKUR tidak
+   berefek di Chromium (checkbox appearance:auto mengabaikan flex-basis & padding: lebar tetap 13 px); flex/padding/border di
+   bawah dinolkan sebagai pengaman untuk mesin lain, bukan karena ada cacat yang terlihat. (0,2,1) mengalahkan (0,1,1). */
+.iv-alat .iv-sembunyi-batal { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; font-size: 12.5px;
+  color: var(--ink-soft); white-space: nowrap; cursor: pointer; }
+.iv-alat .iv-sembunyi-batal input { flex: 0 0 auto; width: 16px; height: 16px; margin: 0; padding: 0; border: 0; cursor: pointer; }
 
 .iv-jumlah { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--ink-soft); margin-bottom: 8px; }
 .iv-tabelwrap { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--white); }
