@@ -1373,6 +1373,17 @@ function ksRenderJurnal_() {
   if (p.gaji) baris.push(['Gaji bulan ini: kas ber-Ref slip vs netto slip Dibayar' + rinci(p.gaji) + (p.gaji.kasTanpaSlipBaris ? '<div class="ks-sub" id="ks-jt-gaji-tanpa-slip">' + p.gaji.kasTanpaSlipBaris + ' baris kas kategori gaji TANPA slip: ' + ksRp(p.gaji.kasTanpaSlip) + '</div>' : ''), ksRp(p.gaji.gl), ksRp(p.gaji.buku), lencana(p.gaji.beda === 0 && !(p.gaji.rinci || []).length, p.gaji.beda)]);
   // Tahap 6A (gs @421): akumulasi penyusutan per akun akumulasi vs SD Penyusutan. null / tanpa medan (belum ada aset, server lama) -> baris tidak ada.
   if (p.penyusutan) baris.push(['Akumulasi penyusutan (15x) vs SD Penyusutan' + rinci(p.penyusutan), ksRp(p.penyusutan.gl), ksRp(p.penyusutan.buku), lencana(p.penyusutan.beda === 0 && !(p.penyusutan.rinci || []).length, p.penyusutan.beda)]);
+  // v442 (gs @475, 27 Nov 2026 -- mesin jahit): akun aset 15x vs daftar SD Aset Tetap AKTIF. Saat BEDA, kedua sisi disebut jumlahnya dan
+  // ke mana membetulkannya; aset bertanggal SEBELUM buku kas (tidak dibandingkan) disebut terpisah -- di sana salah ketik tahun
+  // mendarat. null / tanpa medan (belum ada aset, server lama) -> baris tidak ada.
+  if (p.asetTetap) {
+    const a = p.asetTetap, beres = a.beda === 0 && !(a.rinci || []).length, luar = a.diLuarJendela || [];
+    const sisi = beres ? '' : '<div class="ks-sub" id="ks-jt-aset-sisi">kas ber-akun aset ' + (a.kas || []).length + ' baris · daftar aset ' + (a.aset || []).length +
+      ' aset -- daftarkan yang belum di kartu Laporan keuangan &gt; Aset tetap</div>';
+    const diLuar = luar.length ? '<div class="ks-sub" id="ks-jt-aset-luar">' + luar.map(function (x) {
+      return ksEsc_(x.id) + ' ' + ksEsc_(x.nama) + ' bertanggal ' + ksEsc_(x.tanggal) + ' (sebelum buku kas, tidak dibandingkan) -- salah ketik tahun?'; }).join('<br>') + '</div>' : '';
+    baris.push(['Aset tetap (152/154/156) vs daftar aset' + rinci(a) + sisi + diLuar, ksRp(a.gl), ksRp(a.buku), lencana(beres, a.beda)]);
+  }
   const htmlPredikat = '<div class="ks-gulir"><table class="ks-tabel" id="ks-jt-predikat"><thead><tr><th>Pemeriksaan</th><th class="ks-td-rp">Buku besar</th><th class="ks-td-rp">Buku pembantu</th><th></th></tr></thead><tbody>' +
     baris.map(function (b) { return '<tr><td>' + b[0] + '</td><td class="ks-td-rp">' + b[1] + '</td><td class="ks-td-rp">' + b[2] + '</td><td>' + b[3] + '</td></tr>'; }).join("") + '</tbody></table></div>';
 
@@ -1949,7 +1960,14 @@ function ksAsetCatat() {
   const isian = { nama: v("ks-aset-nama").trim(), kelompok: v("ks-aset-kelompok"), tanggalPerolehan: v("ks-aset-tanggal"), nilaiPerolehan: ksParseRp_(v("ks-aset-nilai")), nilaiResidu: ksParseRp_(v("ks-aset-residu")), umurBulan: Number(String(v("ks-aset-umur")).replace(/[^0-9]/g, "")) || 0, catatan: v("ks-aset-catatan").trim() };
   if (!isian.nama || !isian.tanggalPerolehan || !(isian.nilaiPerolehan > 0) || !(isian.umurBulan > 0)) { ksLapPesan_("Nama, tanggal perolehan, nilai perolehan (> 0) dan umur (bulan, > 0) wajib diisi.", true); return; }
   isian.idPermintaan = typeof rjdKunciIsian_ === "function" ? rjdKunciIsian_("ks-aset", isian) : "";
-  ksLapAksi_("catatAsetTetap", isian, function (d) { return d.sudahTercatat ? "Aset " + d.idAset + " sudah tercatat sebelumnya (tidak dicatat dua kali)." : "Aset " + d.idAset + " dicatat -- penyusutan " + ksRp(d.perBulan) + " per bulan."; });
+  ksLapAksi_("catatAsetTetap", isian, function (d) {
+    // v442 (laporan Femri 27 Nov 2026): kunci DILEPAS begitu server menjawab berhasil. Unit kembar -- BROTHER ke-3 yang isiannya
+    // persis sama dengan ke-2 -- adalah aset BARU, bukan kiriman ulang; dulu kuncinya tidak pernah dilepas, jadi server menjawab
+    // "AST... sudah tercatat sebelumnya" untuk unit kedua dst. Kunci tetap DITAHAN kalau jawaban tidak sampai (jaringan) atau
+    // ditolak: kiriman ulang isian yang sama sesudah jaringan putus tetap aman. Pola sama dengan gelaran/surat jalan (P18-A). jalan131 D.
+    if (typeof rjdKunciLepas_ === "function") rjdKunciLepas_("ks-aset");
+    return d.sudahTercatat ? "Aset " + d.idAset + " sudah tercatat sebelumnya (tidak dicatat dua kali)." : "Aset " + d.idAset + " dicatat -- penyusutan " + ksRp(d.perBulan) + " per bulan.";
+  });
 }
 function ksAsetNonaktif(id) {
   const catatan = String(window.prompt("Nonaktifkan aset " + id + " (dijual / dihapus-bukukan)? Tulis keterangannya:") || "").trim();
