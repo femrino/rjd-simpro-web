@@ -146,8 +146,14 @@ function ivPasangKotakRef_(){
  * jenis di luar daftar). Kalau halaman ini hidup LEBIH DULU dari gs-nya, server
  * akan menelan potongannya tanpa galat -- itu sebabnya urutan rilisnya gs dulu.
  */
-var IV_JENIS_POTONGAN = ["Biaya transfer bank", "Pembulatan"];
+var IV_JENIS_POTONGAN = ["Biaya transfer bank", "Pembulatan", "Ongkir dipotong klien"];
 var IV_POTONGAN_MAKS = 25000;
+/* 26 Nov 2026 (Femri, PT MAS / MANSL 288; butuh gs >= rilis ongkir): klien MEMOTONG ongkos kirim dari transfer -- beban
+ * RJD (733 Biaya Ekspedisi), bukan biaya bank. Plafon 25.000 TIDAK berlaku untuk jenis ini; penggantinya (sama dengan server,
+ * input-pembayaran.js): hanya ke INVOICE, <= IV_ONGKIR_PERSEN_MAKS % nilai transfer invoicenya, <= sisa (server). Satu
+ * pemeriksa untuk mode tunggal & split: ivPotonganSalah_. Server tetap penjaga terakhir. */
+var IV_JENIS_ONGKIR = "Ongkir dipotong klien";
+var IV_ONGKIR_PERSEN_MAKS = 10;
 
 /* v438 (26 Nov 2026, laporan Femri, INV-2610.120): ringkasan potongan menyebut JUMLAH, jadi
  * mengubah jumlah harus menyegarkannya juga. Sebelumnya hanya kotak potongan, jenis, dan
@@ -178,9 +184,9 @@ function ivPasangKotakPotongan_(){
   const div = document.createElement("div");
   div.className = "iv-biaya-field";
   div.innerHTML =
-    '<label for="iv-bayar-potongan">Potongan (biaya transfer/admin)</label>' +
+    '<label for="iv-bayar-potongan">Potongan (biaya transfer / ongkir dipotong klien)</label>' +
     '<input id="iv-bayar-potongan" type="number" min="0" step="1" value="0"' +
-      ' max="' + IV_POTONGAN_MAKS + '" oninput="ivPotonganUbah_()"/>' +
+      ' oninput="ivPotonganUbah_()"/>' +
     '<div id="iv-bayar-jenispotongan-wrap" style="display:none;margin-top:8px">' +
       '<label for="iv-bayar-jenispotongan">Jenis potongan</label>' +
       '<select id="iv-bayar-jenispotongan" onchange="ivPotonganUbah_()">' +
@@ -207,14 +213,10 @@ function ivPotonganUbah_(){
   if(wrap) wrap.style.display = pot > 0 ? "" : "none";
   if(!ringkas) return;
 
-  if(pot < 0){
-    ringkas.innerHTML = '<span class="iv-bayar-galat">Potongan tidak boleh negatif.</span>';
-    return;
-  }
-  if(pot > IV_POTONGAN_MAKS){
-    ringkas.innerHTML = '<span class="iv-bayar-galat">Potongan di atas ' +
-      formatRupiah(IV_POTONGAN_MAKS) + ' bukan biaya transfer. Pakai koreksi invoice / ' +
-      'nota kredit, bukan potongan pembayaran.</span>';
+  const jenis = ((document.getElementById("iv-bayar-jenispotongan") || {}).value || "").trim();
+  const salah = ivPotonganSalah_(pot, jenis, window.IV_MODE_BAYAR || "invoice", ivNilaiTujuanTerpilih_());
+  if(salah){
+    ringkas.innerHTML = '<span class="iv-bayar-galat">' + rjdEscapeHtml_(salah) + '</span>';
     return;
   }
   const dibayar = Math.round(Number((document.getElementById("iv-bayar-jumlah") || {}).value) || 0);
@@ -226,7 +228,35 @@ function ivPotonganUbah_(){
   const sisaKini = ivSisaTujuanTerpilih_();
   ringkas.innerHTML = 'Dibayar <b>' + formatRupiah(dibayar) + '</b> + potongan <b>' +
     formatRupiah(pot) + '</b> = menutup <b>' + formatRupiah(menutup) + '</b>' +
-    (sisaKini === null ? "" : ' &#8594; sisa <b>' + formatRupiah(Math.max(0, sisaKini - menutup)) + '</b>');
+    (sisaKini === null ? "" : ' &#8594; sisa <b>' + formatRupiah(Math.max(0, sisaKini - menutup)) + '</b>') +
+    (jenis === IV_JENIS_ONGKIR ? '<br>Ongkir dibukukan sebagai beban ongkir (733), bukan biaya bank. Buku kas tetap mencatat jumlah dibayar saja.' : '');
+}
+
+/** 26 Nov 2026: SATU pemeriksa potongan untuk mode tunggal, split, dan tombol Simpan -- pesan "" = boleh.
+ *  nilai = nilai transfer invoice tujuan (null = tidak diketahui; pagar 10% lalu diserahkan ke server). */
+function ivPotonganSalah_(pot, jenis, mode, nilai){
+  if(pot < 0) return "Potongan tidak boleh negatif.";
+  if(jenis === IV_JENIS_ONGKIR){
+    if(mode !== "invoice") return "Potongan '" + IV_JENIS_ONGKIR + "' hanya untuk pelunasan invoice, bukan uang muka order.";
+    if(nilai !== null && nilai !== undefined){
+      const batas = Math.floor(Number(nilai) * IV_ONGKIR_PERSEN_MAKS) / 100;
+      if(pot > batas) return "Potongan ongkir " + formatRupiah(pot) + " melebihi " + IV_ONGKIR_PERSEN_MAKS +
+        "% nilai invoice (maks " + formatRupiah(batas) + "). Kalau memang sebesar itu, itu bukan ongkir lagi: pakai koreksi invoice.";
+    }
+    return "";
+  }
+  if(pot > IV_POTONGAN_MAKS) return "Potongan di atas " + formatRupiah(IV_POTONGAN_MAKS) +
+    " bukan biaya transfer. Pakai koreksi invoice / nota kredit, bukan potongan pembayaran. Kalau klien memotong ongkos kirim, pilih jenis '" +
+    IV_JENIS_ONGKIR + "'.";
+  return "";
+}
+
+/** Nilai transfer invoice tujuan yang sedang dipilih (mode invoice), atau null -- "tidak tahu", bukan nol. */
+function ivNilaiTujuanTerpilih_(){
+  const pilih = window.IV_PILIH_BAYAR;
+  if(!pilih || !window.IV_TUJUAN || (window.IV_MODE_BAYAR || "invoice") !== "invoice") return null;
+  const v = (window.IV_TUJUAN.invoice || []).filter(function(x){ return x.id === pilih; })[0];
+  return v && v.nilaiTransfer !== undefined ? (Number(v.nilaiTransfer) || 0) : null;
 }
 
 /** @KP-9: sisa tagihan tujuan yang sedang dipilih, atau null kalau tidak bisa
@@ -1439,6 +1469,11 @@ function ivSimpanPembayaran(){
   const tanggal = document.getElementById("iv-bayar-tanggal").value;
   if(jumlah <= 0){ status.textContent = "Jumlah dibayar harus lebih besar dari nol."; return; }
   if(!tanggal){ status.textContent = "Tanggal bayar wajib diisi."; return; }
+  // 26 Nov 2026: potongan yang ditolak ringkasan juga ditolak tombolnya -- dulu mode tunggal mengirim apa saja dan
+  // menunggu server (ongkir > 10% / ke uang muka / biaya transfer > 25.000).
+  const salahPot = ivPotonganSalah_(Math.round(Number((document.getElementById("iv-bayar-potongan") || {}).value) || 0),
+    ((document.getElementById("iv-bayar-jenispotongan") || {}).value || "").trim(), mode, ivNilaiTujuanTerpilih_());
+  if(salahPot){ status.innerHTML = '<span class="iv-bayar-galat">' + rjdEscapeHtml_(salahPot) + '</span>'; return; }
 
   const payload = {
     tujuan: mode,
@@ -1812,8 +1847,8 @@ function ivRenderSplit(){
         // kotak potongan pada baris yang belum dialokasikan cuma derau, dan derau
         // di form uang membuat orang berhenti membaca.
         (nilai ? '<input class="iv-split-pot" type="number" min="0" step="1" placeholder="pot."' +
-          ' title="Potongan biaya transfer untuk baris ini (maks ' + IV_POTONGAN_MAKS + ')"' +
-          ' max="' + IV_POTONGAN_MAKS + '" value="' + ((window.IV_POTONGAN || {})[kunci] || "") + '"' +
+          ' title="Potongan untuk baris ini: biaya transfer maks ' + IV_POTONGAN_MAKS + ', ongkir dipotong klien maks ' + IV_ONGKIR_PERSEN_MAKS + '% nilai invoice"' +
+          ' value="' + ((window.IV_POTONGAN || {})[kunci] || "") + '"' +
           ' oninput="ivSetPotongan(\'' + ivAttr_(kunci) + '\', this.value)"/>' : '') +
         '<button class="iv-split-penuh" type="button" title="Isi sebesar sisa tagihan"' +
           ' onclick="ivIsiPenuh(\'' + ivAttr_(kunci) + '\', ' + (Number(v.sisa) || 0) + ')">Sisa</button>' +
@@ -1947,11 +1982,18 @@ function ivSimpanSplit(){
       'belum dipilih.</span>';
     return;
   }
-  const potLebih = daftar.filter(function(a){ return (a.potongan || 0) > IV_POTONGAN_MAKS; });
-  if(potLebih.length){
-    status.innerHTML = '<span class="iv-bayar-galat">Potongan ' +
-      formatRupiah(potLebih[0].potongan) + ' di atas ' + formatRupiah(IV_POTONGAN_MAKS) +
-      ' bukan biaya transfer. Pakai koreksi invoice / nota kredit, bukan potongan pembayaran.</span>';
+  // 26 Nov 2026: pemeriksa yang SAMA dengan mode tunggal (ivPotonganSalah_), per baris berpotongan -- ongkir hanya ke invoice
+  // dan <= 10% nilai invoice BARIS itu; jenis lain plafon 25.000. Pesan pertama yang menyimpang, dengan ID tujuannya.
+  const nilaiInv = {};
+  ((window.IV_TUJUAN && window.IV_TUJUAN.invoice) || []).forEach(function(v){ nilaiInv[v.id] = Number(v.nilaiTransfer) || 0; });
+  const potSalah = daftar.map(function(a){
+    if(!((a.potongan || 0) > 0)) return "";
+    const m = ivPotonganSalah_(a.potongan, a.jenisPotongan, a.tujuan,
+      a.tujuan === "invoice" && Object.prototype.hasOwnProperty.call(nilaiInv, a.idInvoice) ? nilaiInv[a.idInvoice] : null);
+    return m ? (a.idInvoice || a.idPurchaseOrder) + ": " + m : "";
+  }).filter(String);
+  if(potSalah.length){
+    status.innerHTML = '<span class="iv-bayar-galat">' + rjdEscapeHtml_(potSalah[0]) + '</span>';
     return;
   }
 
