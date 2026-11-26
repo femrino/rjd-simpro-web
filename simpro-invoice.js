@@ -149,7 +149,25 @@ function ivPasangKotakRef_(){
 var IV_JENIS_POTONGAN = ["Biaya transfer bank", "Pembulatan"];
 var IV_POTONGAN_MAKS = 25000;
 
+/* v438 (26 Nov 2026, laporan Femri, INV-2610.120): ringkasan potongan menyebut JUMLAH, jadi
+ * mengubah jumlah harus menyegarkannya juga. Sebelumnya hanya kotak potongan, jenis, dan
+ * pergantian tujuan yang memicunya: potongan diketik DULU lalu jumlah diubah = ringkasan
+ * memakai jumlah LAMA ("Dibayar Rp 30.000 + potongan Rp 1 = menutup Rp 30.001" untuk
+ * jumlah 50.334.000), sementara yang dikirim jumlah baru -- layar dan payload tidak sepakat.
+ * Kotak Jumlah ada di template Blogger tanpa oninput, jadi pendengarnya dipasang dari sini
+ * (tanpa tempel template). addEventListener, bukan .oninput, supaya tidak menimpa handler
+ * lain; penanda dataset supaya tidak menumpuk walau fungsi ini dipanggil tiap tab Bayar
+ * dibuka. Dipanggil SEBELUM penjaga id di bawah: urutan pemasangan tidak bergantung pada
+ * apakah kotak potongan sudah ada. jalan104 blok I. */
+function ivSambungJumlahPotongan_(){
+  const jumlah = document.getElementById("iv-bayar-jumlah");
+  if(!jumlah || jumlah.dataset.dengarPotongan) return;
+  jumlah.dataset.dengarPotongan = "1";
+  jumlah.addEventListener("input", function(){ ivPotonganUbah_(); });
+}
+
 function ivPasangKotakPotongan_(){
+  ivSambungJumlahPotongan_();
   if(document.getElementById("iv-bayar-potongan")) return;
   const ref = document.getElementById("iv-bayar-ref");
   const jumlah = document.getElementById("iv-bayar-jumlah");
