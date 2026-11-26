@@ -146,7 +146,9 @@ function ksKirim_(action, muatan) {
     .then(function (r) { return r.text(); })
     .then(function (teks) {
       let d; try { d = JSON.parse(teks); } catch (e) { throw new Error("jawaban server tidak terbaca: " + String(teks).replace(/<[^>]*>/g, " ").trim().slice(0, 80)); }
-      if (!d || !d.success) throw new Error((d && d.error) || "Permintaan ditolak server.");
+      // v443: penolakan server DITANDAI (.server) -- dibedakan dari jaringan putus & jawaban tak terbaca, yang keadaannya tidak
+      // diketahui. Pemakainya ksBeliKirim_: hanya yang bertanda ini yang boleh melepas kunci kiriman (pola crKirim_).
+      if (!d || !d.success) { const g = new Error((d && d.error) || "Permintaan ditolak server."); g.server = true; throw g; }
       return d;
     });
 }
@@ -1503,15 +1505,27 @@ function ksBeliPesan_(teks, galat) {
   KS_BELI_PESAN = teks ? { teks: teks, kelas: kelas } : null;
   const el = document.getElementById("ks-beli-pesan"); if (!el) return; el.textContent = teks || ""; el.className = kelas;
 }
-/** Kirim aksi tulis pembelian: tombol dimatikan selama kirim; success:false -> pesan, jaringan putus -> pesan + muat ulang. */
-function ksBeliKirim_(btn, action, payload, sukses) {
+/** Kirim aksi tulis pembelian: tombol dimatikan selama kirim; success:false -> pesan, jaringan putus -> pesan + muat ulang.
+ *  v443 -- `kunci` (opsional) = nama kunci rjdKunciIsian_ milik form itu. Polanya gelaran/surat jalan/cutting (P18-A):
+ *  DILEPAS begitu server MENJAWAB (berhasil maupun ditolak -- keadaannya diketahui), DITAHAN kalau jawabannya tidak sampai
+ *  atau tidak terbaca (satu-satunya keadaan yang tidak diketahui). Dulu kunci form PO supplier & tagihan tidak pernah
+ *  dilepas: isian yang sama sesudah BERHASIL dijawab "SUDAH terbit/tercatat sebagai ..." -- cacat yang sama dengan
+ *  BROTHER ke-3 di form Catat aset (v442).
+ *  Jaringan putus + kunci: kartu TIDAK dimuat ulang. Muat ulang menggambar form KOSONG (pesan lama "Isian masih di layar"
+ *  tidak benar), dan isian yang diketik ulang dengan satu beda saja = kunci BARU = PO kedua kalau kiriman pertama ternyata
+ *  sampai. Isiannya dibiarkan, jadi menekan tombolnya lagi mengirim kunci yang sama. Tanpa kunci (batal, setujui):
+ *  perilaku lama -- daftar dimuat ulang supaya keadaannya terlihat. */
+function ksBeliKirim_(btn, action, payload, sukses, kunci) {
   const teksAsli = btn ? btn.textContent : ""; if (btn) { btn.disabled = true; btn.textContent = "Mengirim..."; }
   const pulih = function () { if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = teksAsli; } };
-  return ksKirim_(action, { payload: payload }).then(function (d) { pulih(); ksBeliPesan_(sukses ? sukses(d) : "Tersimpan."); ksBeliMuat(); return d; })
+  const lepas = function () { if (kunci && typeof rjdKunciLepas_ === "function") rjdKunciLepas_(kunci); };
+  return ksKirim_(action, { payload: payload }).then(function (d) { lepas(); pulih(); ksBeliPesan_(sukses ? sukses(d) : "Tersimpan."); ksBeliMuat(); return d; })
     .catch(function (e) {
       pulih();
-      const jaringan = /Failed to fetch|NetworkError|jaringan/i.test(String(e && e.message || e));
-      ksBeliPesan_(jaringan ? "Tidak sampai ke server -- sambungan terputus di tengah jalan. Isian masih di layar; daftar dimuat ulang, lihat apakah sudah tercatat sebelum mengirim lagi." : String((e && e.message) || e), true);
+      if (e && e.server) lepas();   // ditolak server: isian ini tidak tercatat, kunci tidak dibutuhkan lagi
+      const jaringan = !(e && e.server) && /Failed to fetch|NetworkError|jaringan/i.test(String(e && e.message || e));
+      if (jaringan && kunci) { ksBeliPesan_("Jawaban server tidak sampai -- BELUM PASTI tercatat. Isian masih di layar: tekan tombolnya lagi TANPA mengubah isian -- server mengenali kiriman yang sama dan tidak mencatatnya dua kali.", true); return; }
+      ksBeliPesan_(jaringan ? "Tidak sampai ke server -- sambungan terputus di tengah jalan. Daftar dimuat ulang; lihat apakah sudah tercatat sebelum mengirim lagi." : String((e && e.message) || e), true);
       if (jaringan) ksBeliMuat();
     });
 }
@@ -1600,8 +1614,12 @@ function ksBeliTerbitPOS_(btn) {
   const payload = { idSupplier: idSupplier, tanggal: document.getElementById("ks-pos-tanggal").value, idPB: document.getElementById("ks-pos-pb").value, catatan: (document.getElementById("ks-pos-catatan").value || "").trim(),
     item: k.item.map(function (x) { const y = Object.assign({}, x); delete y._total; return y; }) };
   if (String(termin).trim() !== "") payload.terminHari = ksParseRp_(termin);
+  // v443 KEPUTUSAN: isian yang sama sesudah BERHASIL = PO BARU (pesanan kedua barang yang sama ke supplier yang sama), bukan
+  // kiriman ulang -- kunci dilepas begitu server menjawab. Form digambar kosong sesudah berhasil dan PO-nya langsung tampil di
+  // daftar, jadi isian kembar hanya lahir dari mengetik ulang semuanya dengan sengaja. Yang salah ditolak SERVER, bukan kunci:
+  // PO dari PB yang sama -> "PB ... berstatus Jadi PO" (terbitkanPOSupplier_ memeriksa status PB sesudah kunci).
   payload.idPermintaan = rjdKunciIsian_("ks-pos", payload);
-  ksBeliKirim_(btn, "terbitkanPOSupplier", payload, function (d) { return d.sudahTercatat ? "PO ini SUDAH terbit sebagai " + d.idPOS + " -- tidak diterbitkan dua kali." : "Terbit " + d.idPOS + " total " + ksRp(d.total) + "."; });
+  ksBeliKirim_(btn, "terbitkanPOSupplier", payload, function (d) { return d.sudahTercatat ? "PO ini SUDAH terbit sebagai " + d.idPOS + " -- tidak diterbitkan dua kali." : "Terbit " + d.idPOS + " total " + ksRp(d.total) + "."; }, "ks-pos");
 }
 function ksBeliBatalPOS_(btn) {
   const id = btn.dataset.id, alasan = prompt("Alasan membatalkan " + id + ":"); if (alasan === null) return;
@@ -1642,11 +1660,16 @@ function ksBeliCatatTS_(btn) {
   if (isNaN(dpp) || dpp <= 0) { ksBeliPesan_("DPP harus angka lebih dari 0 (koma = desimal, tanpa titik ribuan).", true); return; }
   if (isNaN(ppn) || ppn < 0) { ksBeliPesan_("PPN bukan angka.", true); return; }
   const payload = { idSupplier: idSupplier, noFaktur: faktur, tanggal: document.getElementById("ks-ts-tanggal").value, jatuhTempo: document.getElementById("ks-ts-tempo").value, idPOS: document.getElementById("ks-ts-pos").value, dpp: dpp, ppn: ppn, catatan: (document.getElementById("ks-ts-catatan").value || "").trim() };
+  // v443 KEPUTUSAN: isian yang sama sesudah BERHASIL = TANDA SALAH (No Faktur yang sama dari supplier yang sama = utang dicatat
+  // dua kali). Penjaganya SERVER, bukan kunci: catatTagihanSupplier_ menolak faktur kembar di antara tagihan HIDUP ("Faktur ...
+  // sudah dicatat sebagai TS-..."), permanen dan lintas perangkat -- kunci di layar hilang saat halaman dimuat ulang. Jadi kunci
+  // tetap DILEPAS begitu server menjawab: menahannya justru salah sesudah tagihannya DIBATALKAN -- isian yang sama dijawab
+  // "SUDAH tercatat sebagai TS-x" padahal TS-x sudah dibalik, dan faktur yang benar tidak bisa dicatat ulang.
   payload.idPermintaan = rjdKunciIsian_("ks-ts", payload);
   ksBeliKirim_(btn, "catatTagihanSupplier", payload, function (d) {
     if (d.sudahTercatat) return "Tagihan ini SUDAH tercatat sebagai " + d.idTS + " -- tidak dicatat dua kali.";
     const s = d.selisih || {}; return "Tercatat " + d.idTS + " " + ksRp(d.total) + ", jatuh tempo " + d.jatuhTempo + (s.catatan ? ". SELISIH: " + s.catatan : ".");
-  });
+  }, "ks-ts");
 }
 function ksBeliBatalTS_(btn) {
   const id = btn.dataset.id, alasan = prompt("Alasan membatalkan tagihan " + id + " (baris pembalik dicatat):"); if (alasan === null) return;

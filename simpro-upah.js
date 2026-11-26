@@ -366,10 +366,15 @@ function upSlipKirim_(action, payload) {
     .then(function (r) { return r.text(); })
     .then(function (teks) {
       let d; try { d = JSON.parse(teks); } catch (e) { throw new Error("jawaban server tidak terbaca: " + String(teks).replace(/<[^>]*>/g, " ").trim().slice(0, 80)); }
-      if (!d || !d.success) throw new Error((d && d.error) || "Permintaan ditolak server.");
+      // v443: penolakan server DITANDAI (.server) -- hanya ini, bukan jaringan putus / jawaban tak terbaca, yang boleh melepas
+      // kunci kiriman di upSlipAksi_ / upGjAksi_ (pola crKirim_).
+      if (!d || !d.success) { const g = new Error((d && d.error) || "Permintaan ditolak server."); g.server = true; throw g; }
       return d;
     });
 }
+/** v443: kunci kiriman (rjdKunciIsian_) dilepas begitu server MENJAWAB -- berhasil, atau ditolak (e.server) -- dan ditahan kalau
+ *  jawabannya tidak sampai / tidak terbaca. Pola gelaran/surat jalan (P18-A). */
+function upKunciLepas_(kunci, e) { if (kunci && (!e || e.server) && typeof rjdKunciLepas_ === "function") rjdKunciLepas_(kunci); }
 function upSlipPesanGagal_(e) {
   const m = String(e && e.message || e);
   return /Failed to fetch|NetworkError|jaringan/i.test(m) ? "Slip gaji tidak sampai ke server -- sambungan terputus di tengah jalan. Coba lagi." : m;
@@ -387,23 +392,27 @@ function upSlipPesan_(teks, galat) {
   const el = document.getElementById("up-slip-pesan");
   if (el) { el.textContent = teks || ""; el.className = "up-slip-pesan" + (galat ? " up-galat" : (teks ? " up-slip-ok" : "")); }
 }
-/** Satu jalur untuk semua aksi tulis: dikunci selama sibuk, sukses -> pesan + muat ulang, gagal -> pesan server apa adanya. */
-function upSlipAksi_(action, payload, sesudah) {
+/** Satu jalur untuk semua aksi tulis: dikunci selama sibuk, sukses -> pesan + muat ulang, gagal -> pesan server apa adanya.
+ *  `kunci` (opsional, v443): nama kunci rjdKunciIsian_ form itu -- lihat upKunciLepas_. */
+function upSlipAksi_(action, payload, sesudah, kunci) {
   if (UP_SLIP_SIBUK) return;
   UP_SLIP_SIBUK = true; upSlipPesan_("Mengirim...", false); upSlipRender_();
   upSlipKirim_(action, payload)
-    .then(function (d) { UP_SLIP_SIBUK = false; UP_SLIP_EDIT = null; UP_SLIP_PESAN = { teks: sesudah(d), galat: false }; upSlipMuat(); })
-    .catch(function (e) { UP_SLIP_SIBUK = false; upSlipPesan_(upSlipPesanGagal_(e), true); upSlipRender_(); });
+    .then(function (d) { upKunciLepas_(kunci); UP_SLIP_SIBUK = false; UP_SLIP_EDIT = null; UP_SLIP_PESAN = { teks: sesudah(d), galat: false }; upSlipMuat(); })
+    .catch(function (e) { upKunciLepas_(kunci, e); UP_SLIP_SIBUK = false; upSlipPesan_(upSlipPesanGagal_(e), true); upSlipRender_(); });
 }
 function upSlipBuatDraf() {
   const per = upSlipPeriode_(); if (!per.dari || !per.sampai) return;
   const isian = { dari: per.dari, sampai: per.sampai };
+  // v443 KEPUTUSAN: periode yang sama sesudah BERHASIL = MENJALANKAN LAGI (karyawan baru didaftarkan, slip yang dibatalkan dibuat
+  // ulang) -- kunci dilepas begitu server menjawab. Penjaganya struktur di SERVER: buatDrafSlip_ melewati karyawan yang sudah punya
+  // slip beririsan (Draf/Dibayar) dan tidak memeriksa idPermintaan sama sekali.
   isian.idPermintaan = typeof rjdKunciIsian_ === "function" ? rjdKunciIsian_("up-slip-draf", isian) : "";
   upSlipAksi_("buatDrafSlip", isian, function (d) {
     return "Draf dibuat: " + d.jumlah + " slip" + ((d.dilewati || []).length ? "; dilewati " + d.dilewati.length + " (" + d.dilewati.slice(0, 5).join(", ") + (d.dilewati.length > 5 ? ", ..." : "") + ")" : "") +
       ((d.belumTerdaftar || []).length ? "; BELUM TERDAFTAR di master (tidak dibuat): " + d.belumTerdaftar.join(", ") : "") +
       ((d.peringatan && d.peringatan.prosesTanpaTarif || []).length ? "; " + d.peringatan.prosesTanpaTarif.length + " proses tanpa tarif (upahnya belum terhitung)" : "") + ".";
-  });
+  }, "up-slip-draf");
 }
 function upSlipBayar() {
   const ids = Array.prototype.map.call(document.querySelectorAll("#up-slip-tabel input.up-slip-pilih:checked"), function (c) { return c.value; });
@@ -411,11 +420,14 @@ function upSlipBayar() {
   const akun = (document.getElementById("up-slip-akun") || {}).value || "", tgl = (document.getElementById("up-slip-tanggal") || {}).value || "";
   if (!akun || !tgl) { upSlipPesan_("Akun kas dan tanggal bayar wajib diisi.", true); return; }
   const isian = { idSlip: ids, akun: akun, tanggal: tgl };
+  // v443 KEPUTUSAN: slip yang sama sesudah BERHASIL = TANDA SALAH (membayar slip yang sudah dibayar). Penjaganya SERVER: bayarSlip_
+  // membaca status slip DI DALAM lock dan menolak slip Dibayar ("sudah Dibayar <tanggal>") / bukan Draf; kas ber-Ref slip yang sudah
+  // ada ditambal, tidak ditulis lagi. Jadi kunci dilepas begitu server menjawab, seperti form lain.
   isian.idPermintaan = typeof rjdKunciIsian_ === "function" ? rjdKunciIsian_("up-slip-bayar", isian) : "";
   upSlipAksi_("bayarSlip", isian, function (d) {
     const ulang = (d.slip || []).filter(function (x) { return x.sudahTercatat; }).length;
     return "Dibayar " + d.jumlahSlip + " slip, " + d.barisKas + " baris kas, netto " + upRp_(d.totalNetto) + (ulang ? " (" + ulang + " slip sudah tercatat sebelumnya, tidak dibayar dua kali)" : "") + ".";
-  });
+  }, "up-slip-bayar");
 }
 function upSlipEdit(id) { UP_SLIP_EDIT = id; upSlipRender_(); }
 function upSlipEditBatal() { UP_SLIP_EDIT = null; upSlipRender_(); }
@@ -551,26 +563,30 @@ function upGjPesan_(teks, galat) {
   if (el) { el.textContent = teks || ""; el.className = "up-slip-pesan" + (galat ? " up-galat" : (teks ? " up-slip-ok" : "")); }
 }
 /** Satu jalur untuk semua aksi tulis kartu ini: dikunci selama sibuk; sukses -> pesan + muat ulang (kartu slip ikut kalau terbuka). */
-function upGjAksi_(action, payload, sesudah) {
+function upGjAksi_(action, payload, sesudah, kunci) {
   if (UP_GJ_SIBUK) return;
   UP_GJ_SIBUK = true; upGjPesan_("Mengirim...", false); upGjRender_();
   upSlipKirim_(action, payload)
     .then(function (d) {
+      upKunciLepas_(kunci);   // v443
       UP_GJ_SIBUK = false; UP_GJ_PESAN = { teks: sesudah(d), galat: false };
       upGjMuat(UP_GJ && UP_GJ.periode);
       if (UP_SLIP) upSlipMuat();
     })
-    .catch(function (e) { UP_GJ_SIBUK = false; upGjPesan_(upGjPesanGagal_(e), true); upGjRender_(); });
+    .catch(function (e) { upKunciLepas_(kunci, e); UP_GJ_SIBUK = false; upGjPesan_(upGjPesanGagal_(e), true); upGjRender_(); });
 }
 function upGjKunci_(nama, isian) { return typeof rjdKunciIsian_ === "function" ? rjdKunciIsian_(nama, isian) : ""; }
 function upGjImpor() {
   if (!UP_GJ) return;
   const isian = { periode: UP_GJ.periode };
+  // v443 KEPUTUSAN: periode yang sama sesudah BERHASIL = IMPOR LAGI (baris HCM yang baru ditambah / sudah dibetulkan, dan jalur
+  // resmi sesudah Batalkan gajian: "impor ulang lalu bayar") -- kunci dilepas begitu server menjawab. Penjaganya SERVER:
+  // imporGajiHCM_ melewati ID Gaji HCM yang sudah punya slip tidak-batal dan tidak memeriksa idPermintaan sama sekali.
   isian.idPermintaan = upGjKunci_("up-gj-impor", isian);
   upGjAksi_("imporGajiHCM", isian, function (d) {
     return "Diimpor " + d.jumlah + " slip Draf periode " + d.periode + ((d.ditolak || []).length ? "; " + d.ditolak.length + " baris ditolak/berubah tidak diimpor" : "") +
       ((d.dikecualikan || []).length ? "; dikecualikan: " + d.dikecualikan.join(", ") : "") + ".";
-  });
+  }, "up-gj-impor");
 }
 function upGjAkun_() { return (document.getElementById("up-gj-akun") || {}).value || ""; }
 function upGjBayar(tanggal) {
@@ -580,13 +596,17 @@ function upGjBayar(tanggal) {
   const kotak = Array.prototype.filter.call(document.querySelectorAll("#up-gajian input.up-gj-konfirmasi"), function (c) { return c.dataset.tanggal === tanggal; })[0];
   const isian = { periode: UP_GJ.periode, tanggal: tanggal, akun: akun };
   if (kotak && kotak.checked) isian.konfirmasiBarisGajiLain = true;
+  // v443 KEPUTUSAN: periode + tanggal + akun yang sama sesudah BERHASIL bisa berarti gajian BARU: slip yang "belum ikut" (tertinggal)
+  // lalu diimpor/dibetulkan dan siap bertanggal sama. Dengan kunci ditahan, bayarGajian_ menemukan slip Dibayar ber-idPermintaan itu
+  // dan menjawab "sudah tercatat sebelumnya" -- slip yang baru siap TIDAK dibayar. Kunci dilepas begitu server menjawab; penjaga
+  // bayar dua kali ada di SERVER: hanya slip berstatus siap (Draf) yang dibayar, plus pemeriksaan kas gaji tanpa slip per tanggal.
   isian.idPermintaan = upGjKunci_("up-gj-bayar", isian);
   upGjAksi_("bayarGajian", isian, function (d) {
     if (d.sudahTercatat) return "Gajian " + d.idGajian + " sudah tercatat sebelumnya (" + d.jumlahSlip + " slip) -- tidak dibayar dua kali.";
     if (d.dipulihkan) return d.jumlahSlip + " slip ditambal (kas gajiannya sudah tertulis sebelumnya, tidak ditulis lagi).";
     return "Gajian " + d.idGajian + " dibayar " + d.tanggal + " dari " + d.akun + ": " + d.jumlahSlip + " slip, keluar dari bank " + upRp_(d.release) +
       " (potongan kasbon " + upRp_(d.potongan) + "), " + (d.kas || []).length + " baris kas" + ((d.tertinggal || []).length ? "; " + d.tertinggal.length + " slip belum ikut" : "") + ".";
-  });
+  }, "up-gj-bayar");
 }
 /** Slip Draf yang SUDAH punya kas gajian (pembayaran sebelumnya terputus sebelum slipnya ditandai): server menambal, kas tidak ditulis lagi. */
 function upGjPulihkan() {
@@ -594,8 +614,10 @@ function upGjPulihkan() {
   const akun = upGjAkun_(); if (!akun) { upGjPesan_("Pilih akun kas dulu.", true); return; }
   const h = new Date(), iso = h.getFullYear() + "-" + String(h.getMonth() + 1).padStart(2, "0") + "-" + String(h.getDate()).padStart(2, "0");
   const isian = { periode: UP_GJ.periode, tanggal: iso, akun: akun, pulihkan: true };
+  // v443 KEPUTUSAN: isian yang sama sesudah BERHASIL = MENAMBAL LAGI (pembayaran lain yang terputus sesudahnya) -- kunci dilepas
+  // begitu server menjawab. Penjaganya SERVER: bayarGajian_ hanya menambal slip Draf yang sudah punya kas gajian ("ditahan").
   isian.idPermintaan = upGjKunci_("up-gj-pulihkan", isian);
-  upGjAksi_("bayarGajian", isian, function (d) { return d.dipulihkan ? d.jumlahSlip + " slip ditambal (kas gajiannya sudah tertulis sebelumnya)." : "Tidak ada yang perlu ditambal."; });
+  upGjAksi_("bayarGajian", isian, function (d) { return d.dipulihkan ? d.jumlahSlip + " slip ditambal (kas gajiannya sudah tertulis sebelumnya)." : "Tidak ada yang perlu ditambal."; }, "up-gj-pulihkan");
 }
 function upGjBatal(idGajian) {
   const alasan = String(window.prompt("Alasan membatalkan gajian " + idGajian + " (min. 5 huruf). Semua baris kasnya dibalik dan slipnya dibatalkan; membayar lagi = impor ulang lalu bayar:") || "").trim();

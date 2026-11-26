@@ -9778,7 +9778,11 @@ function spSimpanRoll(btn) {
  *      SEBELUM tombol dinyalakan: kalau sudah, beri tahu dan lanjutkan seperti sukses; kalau
  *      belum, baru tawarkan simpan lagi; kalau pemeriksaan gagal, larang simpan lagi.
  * Pengaman sejati tetap di server (anti-kembar @335-@337); ini jaring kedua di layar.
- * opsi = { btn, sukses(res|null), periksa(): Promise<bool>, teksSibuk }
+ * opsi = { btn, sukses(res|null), periksa(): Promise<bool>, teksSibuk, kunci, aksi }
+ * v443 -- opsi.kunci = nama kunci rjdKunciIsian_ milik form itu: DILEPAS begitu jawaban server TERBACA (berhasil maupun
+ * ditolak), DITAHAN kalau jawabannya tidak sampai (jaringan) atau tidak terbaca -- pola gelaran/surat jalan (P18-A). Pemakai
+ * tanpa kunci tidak berubah. Dengan kunci, jaringan putus memakai pesan spPesanGalatTulis_ ("Tekan Simpan lagi tanpa
+ * mengubah isian") -- kiriman ulang isian yang sama justru jalan yang aman. opsi.aksi = nama barangnya di pesan itu.
  */
 function spKirim_(action, payload, opsi) {
   opsi = opsi || {};
@@ -9791,6 +9795,7 @@ function spKirim_(action, payload, opsi) {
       catch (e) {
         throw new Error("Jawaban server bukan data (" + String(teks || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 60) + "). Login ulang atau coba lagi.");
       }
+      if (opsi.kunci) rjdKunciLepas_(opsi.kunci);   // v443: server MENJAWAB -- berhasil atau menolak, keadaannya diketahui
       pulih();
       if (!res || !res.success) { alert((res && res.error) || "Ditolak server."); return null; }
       return opsi.sukses ? opsi.sukses(res) : res;
@@ -9803,7 +9808,7 @@ function spKirim_(action, payload, opsi) {
       // yang bisa keluar dari situ dua-duanya salah untuk cacat render: yang satu
       // menyatakan datanya sudah tersimpan, yang lain menyuruh SIMPAN LAGI.
       if (!(e && e.spJaringan) || typeof opsi.periksa !== "function") {
-        pulih(); alert(spPesanGalat_(e, "Simpan")); return null;
+        pulih(); alert(opsi.kunci ? spPesanGalatTulis_(e, opsi.aksi) : spPesanGalat_(e, "Simpan")); return null;
       }
       if (opsi.btn) opsi.btn.textContent = "Jawaban tidak sampai, memeriksa...";
       return opsi.periksa().then(function (sudah) {
@@ -12473,9 +12478,12 @@ function spBeliKirimPB_(btn) {
   if (k.galat.length) { spBeliPesan_("sp-pb-pesan", k.galat[0], true); return; }
   if (!k.item.length) { spBeliPesan_("sp-pb-pesan", "Isi minimal satu item (nama & qty).", true); return; }
   const payload = { tanggal: document.getElementById("sp-pb-tanggal").value, idPurchaseOrder: (document.getElementById("sp-pb-po").value || "").trim(), item: k.item };
+  // v443 KEPUTUSAN: isian yang sama sesudah BERHASIL = permintaan BARU (barang yang sama habis lagi dan diminta lagi) -- kunci
+  // dilepas begitu server menjawab. Permintaan kembar yang keliru tertahan di GERBANG PERSETUJUAN keuangan (keduanya tampil di
+  // daftar Diajukan), bukan di kunci; kunci yang ditahan dulu menjawab "SUDAH tercatat" untuk permintaan sah kedua.
   payload.idPermintaan = rjdKunciIsian_("sp-pb", payload);
   spBeliPesan_("sp-pb-pesan", "");
-  spKirim_("simpanPermintaanBeli", payload, { btn: btn, teksSibuk: "Mengirim...", sukses: function (res) {
+  spKirim_("simpanPermintaanBeli", payload, { btn: btn, teksSibuk: "Mengirim...", kunci: "sp-pb", aksi: "permintaan beli ini", sukses: function (res) {
     if (res && res.sudahTercatat) spBeliPesan_("sp-pb-pesan", "Permintaan ini SUDAH tercatat sebelumnya sebagai " + res.idPB + " -- tidak dikirim dua kali.");
     else if (res) spBeliPesan_("sp-pb-pesan", "Tercatat " + res.idPB + " (" + res.item + " item).");
     spMuatBeli_("pbeli", true); return res; } });
@@ -12546,9 +12554,12 @@ function spBeliKirimGR_(btn) {
     if (galat.length) { spBeliPesan_("sp-gr-pesan", galat[0], true); return; }
   }
   if (!payload.item.length) { spBeliPesan_("sp-gr-pesan", "Isi qty yang diterima minimal untuk satu item.", true); return; }
+  // v443 KEPUTUSAN: isian yang sama sesudah BERHASIL = barang DATANG LAGI (kiriman sebagian kedua dengan qty yang sama, hari
+  // yang sama) -- kunci dilepas begitu server menjawab. Penerimaan yang keliru dibalik lewat Batalkan (baris pembalik). Catatan:
+  // No Roll yang sama dua kali bisa berarti roll yang sama -- itu bukan tugas kunci (kunci hilang saat halaman dimuat ulang).
   payload.idPermintaan = rjdKunciIsian_("sp-gr", payload);
   spBeliPesan_("sp-gr-pesan", "");
-  spKirim_("terimaBarang", payload, { btn: btn, teksSibuk: "Mencatat...", sukses: function (res) {
+  spKirim_("terimaBarang", payload, { btn: btn, teksSibuk: "Mencatat...", kunci: "sp-gr", aksi: "penerimaan ini", sukses: function (res) {
     if (res && res.sudahTercatat) spBeliPesan_("sp-gr-pesan", "Penerimaan ini SUDAH tercatat sebagai " + res.idGR + " -- tidak dicatat dua kali.");
     else if (res) spBeliPesan_("sp-gr-pesan", "Tercatat " + res.idGR + (res.statusPOS ? " -- PO kini " + res.statusPOS : "") + ".");
     spMuatBeli_("terima", true); return res; } });
@@ -12642,6 +12653,13 @@ function spGudangKirimOpname_(btn) {
   if (galat.length) { spBeliPesan_("sp-op-pesan", galat[0], true); return; }
   if (!item.length) { spBeliPesan_("sp-op-pesan", "Isi minimal satu item yang dihitung (qty 0 pun boleh -- itu informasi).", true); return; }
   const payload = { tanggal: document.getElementById("sp-op-tanggal").value, item: item };
+  // v443 KEPUTUSAN -- SATU-SATUNYA form Beli/Stok yang kuncinya SENGAJA DITAHAN sesudah berhasil (tanpa opsi.kunci ke spKirim_):
+  // opname yang sama (tanggal, item, qty hitung sama) sesudah berhasil = TANDA SALAH, bukan hitungan baru -- hitung ulang yang
+  // hasilnya sama tidak menambah informasi. Server TIDAK menolaknya dengan aturan lain: catatOpname_ tidak memeriksa isi, dan
+  // setujuiOpname_ menerapkan Selisih yang DISIMPAN saat diajukan -- selama yang pertama masih Diajukan, Qty Sistem keduanya
+  // sama, jadi menyetujui keduanya = penyesuaian DUA KALI. Jadi kunci inilah satu-satunya penjaga (dalam satu sesi halaman); jawaban yang ditolak tidak
+  // mencatat kunci di server, jadi menahannya di sana tidak merugikan. Melepasnya baru benar sesudah server punya penjaga
+  // sendiri. jalan127 B2 & K memaku keputusan ini.
   payload.idPermintaan = rjdKunciIsian_("sp-op", payload);
   spBeliPesan_("sp-op-pesan", "");
   spKirim_("catatOpname", payload, { btn: btn, teksSibuk: "Mengajukan...", sukses: function (res) {
@@ -12656,9 +12674,11 @@ function spGudangKirimKeluar_(btn) {
   const sumber = document.getElementById("sp-kl-sumber").value, po = (document.getElementById("sp-kl-po").value || "").trim();
   if (sumber === "keluar-ke-PO" && !po) { spBeliPesan_("sp-kl-pesan", "Keluar ke PO: isi ID Purchase Order.", true); return; }
   const payload = { namaItem: nama, kodeItem: (document.getElementById("sp-kl-kode").value || "").trim(), qty: q, satuan: (document.getElementById("sp-kl-satuan").value || "pcs").trim() || "pcs", sumber: sumber, idPurchaseOrder: po };
+  // v443 KEPUTUSAN: isian yang sama sesudah BERHASIL = barang KELUAR LAGI (aksesoris ke PO yang sama untuk kedua kalinya) --
+  // kunci dilepas begitu server menjawab. Server menjaga yang lain: keluar melebihi saldo ditolak (keluarStok_).
   payload.idPermintaan = rjdKunciIsian_("sp-kl", payload);
   spBeliPesan_("sp-kl-pesan", "");
-  spKirim_("keluarStok", payload, { btn: btn, teksSibuk: "Mencatat...", sukses: function (res) {
+  spKirim_("keluarStok", payload, { btn: btn, teksSibuk: "Mencatat...", kunci: "sp-kl", aksi: "mutasi keluar ini", sukses: function (res) {
     if (res && res.sudahTercatat) spBeliPesan_("sp-kl-pesan", "Mutasi ini SUDAH tercatat (" + res.idMutasi + ").");
     else if (res) spBeliPesan_("sp-kl-pesan", "Tercatat " + res.idMutasi + " (" + res.qty + ").");
     spMuatGudang_(true); return res; } });
