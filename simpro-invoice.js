@@ -2016,7 +2016,37 @@ function ivSetAlokasi(kunci, nilai){
   const n = Math.round(Number(nilai) || 0);
   if(!window.IV_ALOKASI) window.IV_ALOKASI = {};
   if(n > 0) window.IV_ALOKASI[kunci] = n; else delete window.IV_ALOKASI[kunci];
+  ivSplitSelaraskanBaris_(kunci);   // 27 Nov 2026: kotak potongan baris ini muncul/hilang tanpa menggambar ulang daftar
   ivHitungSisaSplit();
+}
+
+/** 27 Nov 2026: baris split mengikuti alokasinya TANPA menggambar ulang daftar. ivRenderSplit hanya menggambar kotak potongan
+ *  (.iv-split-pot) dan wadah jenis tambahan (.iv-split-potlain) untuk baris yang SUDAH beralokasi saat digambar, sementara kotak
+ *  alokasi memanggil ivSetAlokasi -- yang sengaja tidak menggambar ulang (komentar ivHitungSisaSplit). Akibatnya alokasi yang
+ *  DIKETIK tangan tidak memunculkan kotak potongannya sampai sesuatu kebetulan memanggil ivRenderSplit (tombol Sisa, isi otomatis,
+ *  ganti klien, cari). Di sini elemennya disisipkan / dicabut di baris itu saja: kotak alokasi yang sedang diketik tidak disentuh,
+ *  jadi fokusnya tetap. IDEMPOTEN (menyamakan DOM dengan IV_ALOKASI, bukan membandingkan sebelum-sesudah): delapan ketukan
+ *  "39350000" tetap satu kotak. Markup-nya dari fungsi yang SAMA dengan ivRenderSplit (ivSplitPotKotakHtml_, ivPotSplitHtml_).
+ *  Sengaja TIDAK menyentuh IV_POTONGAN / IV_POT_LAIN saat alokasi dikosongkan -- sama dengan ivRenderSplit, yang juga menyembunyikan
+ *  kotaknya tanpa menghapus isinya; ivSimpanSplit hanya mengirim baris beralokasi. Baris yang tersaring (cari / klien) tidak ada
+ *  di DOM: render berikutnya menggambarnya dari IV_ALOKASI. */
+function ivSplitSelaraskanBaris_(kunci){
+  const wadah = document.getElementById("iv-split-daftar");
+  if(!wadah) return;
+  const milik = function(sel){ return [].filter.call(wadah.querySelectorAll(sel), function(el){ return el.dataset.kunci === kunci; })[0]; };
+  const baris = milik(".iv-split-baris");
+  if(!baris) return;
+  const terisi = !!(window.IV_ALOKASI || {})[kunci];
+  baris.classList.toggle("terisi", terisi);
+  if(kunci.indexOf("INV:") !== 0) return;   // uang muka order tidak punya kotak potongan -- sama dengan ivRenderSplit
+  const pot = baris.querySelector(".iv-split-pot"), lain = milik(".iv-split-potlain"), alok = baris.querySelector(".iv-split-input");
+  if(terisi){
+    if(!pot && alok) alok.insertAdjacentHTML("afterend", ivSplitPotKotakHtml_(kunci));
+    if(!lain) baris.insertAdjacentHTML("afterend", ivPotSplitHtml_(kunci, kunci.slice(4)));
+  } else {
+    if(pot) pot.remove();
+    if(lain) lain.remove();
+  }
 }
 
 /** Hitung ulang sisa TANPA menggambar ulang daftar. Dipisah dari ivRenderSplit
@@ -2085,7 +2115,8 @@ function ivRenderSplit(){
     .map(function(v){
       const kunci = "INV:" + v.id;
       const nilai = alokasi[kunci] || "";
-      return '<div class="iv-split-baris' + (nilai ? " terisi" : "") + '">' +
+      // data-kunci: ivSplitSelaraskanBaris_ menemukan barisnya saat alokasi diketik (27 Nov 2026)
+      return '<div class="iv-split-baris' + (nilai ? " terisi" : "") + '" data-kunci="' + rjdEscapeHtml_(kunci) + '">' +
         '<div class="iv-split-isi">' +
           '<span class="iv-kirim-id">' + rjdEscapeHtml_(v.id) + '</span>' +
           '<span class="iv-kirim-sub">' + rjdEscapeHtml_(v.namaKlien) + ' &#183; ' +
@@ -2098,10 +2129,7 @@ function ivRenderSplit(){
         // @KP-9: kotak potongan per baris, muncul HANYA setelah barisnya terisi --
         // kotak potongan pada baris yang belum dialokasikan cuma derau, dan derau
         // di form uang membuat orang berhenti membaca.
-        (nilai ? '<input class="iv-split-pot" type="number" min="0" step="1" placeholder="pot."' +
-          ' title="Potongan untuk baris ini: biaya transfer maks ' + IV_POTONGAN_MAKS + ', ongkir dipotong klien maks ' + IV_ONGKIR_PERSEN_MAKS + '% nilai invoice"' +
-          ' value="' + ((window.IV_POTONGAN || {})[kunci] || "") + '"' +
-          ' oninput="ivSetPotongan(\'' + ivAttr_(kunci) + '\', this.value)"/>' : '') +
+        (nilai ? ivSplitPotKotakHtml_(kunci) : '') +
         '<button class="iv-split-penuh" type="button" title="Isi sebesar sisa tagihan"' +
           ' onclick="ivIsiPenuh(\'' + ivAttr_(kunci) + '\', ' + (Number(v.sisa) || 0) + ')">Sisa</button>' +
       '</div>' +
@@ -2116,7 +2144,7 @@ function ivRenderSplit(){
     .map(function(v){
       const kunci = "PO:" + v.idPurchaseOrder;
       const nilai = alokasi[kunci] || "";
-      return '<div class="iv-split-baris' + (nilai ? " terisi" : "") + '">' +
+      return '<div class="iv-split-baris' + (nilai ? " terisi" : "") + '" data-kunci="' + rjdEscapeHtml_(kunci) + '">' +
         '<div class="iv-split-isi">' +
           '<span class="iv-kirim-id">' + rjdEscapeHtml_(v.idProforma) + '</span>' +
           '<span class="iv-kirim-sub">' + rjdEscapeHtml_(v.namaKlien) + ' &#183; ' +
@@ -2207,6 +2235,16 @@ function ivSetPotongan(kunci, nilai){
   [].forEach.call(document.querySelectorAll(".iv-split-potlain"), function(w){
     if(w.dataset.kunci === kunci) ivPotTombolTambah_(kunci, w.querySelector(".iv-pot-tambah"));
   });
+}
+
+/** @KP-9: kotak potongan satu baris invoice split. SATU sumber markup untuk ivRenderSplit dan ivSplitSelaraskanBaris_ (27 Nov 2026)
+ *  -- dua salinan akan berbeda diam-diam (title plafon, handler). Nilainya dari IV_POTONGAN, jadi kotak yang dicabut saat alokasi
+ *  dikosongkan lalu disisipkan lagi menampilkan isi yang sama dengan yang digambar ivRenderSplit. */
+function ivSplitPotKotakHtml_(kunci){
+  return '<input class="iv-split-pot" type="number" min="0" step="1" placeholder="pot."' +
+    ' title="Potongan untuk baris ini: biaya transfer maks ' + IV_POTONGAN_MAKS + ', ongkir dipotong klien maks ' + IV_ONGKIR_PERSEN_MAKS + '% nilai invoice"' +
+    ' value="' + ((window.IV_POTONGAN || {})[kunci] || "") + '"' +
+    ' oninput="ivSetPotongan(\'' + ivAttr_(kunci) + '\', this.value)"/>';
 }
 
 /** 27 Nov 2026: wadah jenis potongan tambahan satu baris split + tombolnya (tersembunyi sampai baris pertamanya berjumlah & berjenis). */
