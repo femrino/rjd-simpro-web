@@ -9493,6 +9493,17 @@ function spRenderRoll_() {
   const blok = daftar.map(function (g) {
     const baris = g.roll.map(function (r) {
       const diukur = r.sisaTerukur !== null && r.sisaTerukur !== undefined;
+      // v445 SPEC-CUTTING-KG D11: roll kain timbangan tampil APA ADANYA (berat kg, tanpa angka meter palsu); sisanya ditimbang di halaman
+      // Cutting per roll -- form ini tidak menawarkan isian (server juga menolak: simpanSisaRoll_ tolakKg).
+      if (String(r.satuan || "").trim().toLowerCase() === "kg") {
+        const kgT = function (v) { return spEsc_(String(v).replace(".", ",")); };
+        return '<tr class="sp-roll-kg"><td data-label="No Roll"><b>' + spEsc_(r.noRoll || "-") + '</b>' + (r.kodeKain ? '<div class="sp-kode-kain">' + spEsc_(r.kodeKain) + '</div>' : '') + '</td>' +
+          '<td data-label="Panjang awal">' + kgT(r.panjangAwal) + ' kg' + (r.gpm ? ' <small>(' + kgT(r.gpm) + ' g/m)</small>' : '') + '</td>' +
+          '<td data-label="Terpakai">&#8212;</td>' +
+          '<td data-label="Sisa terukur">' + (diukur ? kgT(r.sisaTerukur) + ' kg' : '<small class="sp-roll-kg-ket">ditimbang di halaman Cutting per roll</small>') + '</td>' +
+          '<td data-label="Kondisi"><span class="sp-roll-kondisi-auto">' + spEsc_(r.kondisiSisa || "-") + '</span></td>' +
+          '<td data-label=""><button class="sp-btn-kecil" onclick="spBatalRoll(\'' + rjdAttrJs_(r.idRoll) + '\')" type="button">Batal</button></td></tr>';
+      }
       // v204: sisa boleh diukur dalam satuan lain (roll 100 yds, diukur
       // dengan meteran). Terpakai karena itu dihitung di METER, lalu
       // ditampilkan dalam meter juga -- mencampur "100 yds" dengan "10 m"

@@ -826,7 +826,7 @@ function ckTanda_(v){ if (v === null || v === undefined) return "&#8212;"; const
 function ckNorm_(s){ return String(s === null || s === undefined ? "" : s).trim().toLowerCase().replace(/\s+/g, " "); }
 function ckKunciKw_(kain, warna){ return ckNorm_(String(kain || "").trim() || "(tanpa kain)") + "||" + ckNorm_(warna); }
 const CK_NBSP = String.fromCharCode(160);
-function ckSatuanTeks_(s){ return s === "m" ? "m" : "yd"; }
+function ckSatuanTeks_(s){ return s === "m" ? "m" : (s === "kg" ? "kg" : "yd"); }   // v445: kelompok kg (dulu jatuh ke "yd" diam-diam)
 /** Ukur asli di sel sisa kalau satuannya beda dari satuan kelompok ("12 (10,97 m)"). */
 function ckUkurAsli_(x, satuan){
   if (x.sisaUkur === null || x.sisaUkur === undefined || !x.satuanUkur) return "";
@@ -1318,9 +1318,9 @@ function ckLcPerRoll_(d, PR){
       // 5 Nov 2026: rasio yang HANYA dipotong di roll yang ditutup rasio lain (MCONX A34 Outer Rasio 3: roll 10 Ceruty) -- roll 0, kirim/sisa/short
       // milik rasio penutup, jadi '--' di sini; aktual & hasilnya tetap dihitung ke rasio ini.
       if (!(R.roll || []).length) return '<tr class="ck-lc-rr-numpang"><td><b>' + rjdEscapeHtml_(R.kode) + '</b><div class="ck-lc-kecil">' +
-        (R.panjang ? ckAngka_(R.panjang) + CK_NBSP + u + (R.pcsPerLapis ? ' &#183; ' + R.pcsPerLapis + ' pcs/lapis' : '') + ' &#183; ' : '') + 'hanya di roll rasio lain</div></td>' +
+        (R.panjang ? ckAngka_(R.panjang) + CK_NBSP + (g.satuanPanjangMarker || u) + (R.pcsPerLapis ? ' &#183; ' + R.pcsPerLapis + ' pcs/lapis' : '') + ' &#183; ' : '') + 'hanya di roll rasio lain</div></td>' +
         '<td class="num">0</td><td class="num">&#8212;</td><td class="num">' + ckAngka_(t.aktual) + '</td><td class="num">&#8212;</td><td class="num">&#8212;</td><td></td>' + selSz(t.perSize, t.pcs) + '</tr>';
-      return '<tr><td><b>' + rjdEscapeHtml_(R.kode) + '</b>' + (R.panjang ? '<div class="ck-lc-kecil">' + ckAngka_(R.panjang) + CK_NBSP + u + (R.pcsPerLapis ? ' &#183; ' + R.pcsPerLapis + ' pcs/lapis' : '') + '</div>' : '') + '</td>' +
+      return '<tr><td><b>' + rjdEscapeHtml_(R.kode) + '</b>' + (R.panjang ? '<div class="ck-lc-kecil">' + ckAngka_(R.panjang) + CK_NBSP + (g.satuanPanjangMarker || u) + (R.pcsPerLapis ? ' &#183; ' + R.pcsPerLapis + ' pcs/lapis' : '') + '</div>' : '') + '</td>' +
         '<td class="num">' + ckAngka_(t.roll || (R.roll || []).length, 0) + '</td><td class="num">' + ckAngka_(t.kirim) + '</td><td class="num">' + ckAngka_(t.aktual) + '</td>' +
         '<td class="num">' + ckAngka_(t.sisa) + '</td><td class="num' + (t.selisih < 0 ? ' ck-lc-merah' : '') + '">' + ckTanda_(t.selisih) + '</td>' +
         '<td class="num ck-lc-rr-persen">' + persenShort(t.selisih, t.kirim) + '</td>' + selSz(t.perSize, t.pcs) + '</tr>';
@@ -1342,7 +1342,7 @@ function ckLcPerRoll_(d, PR){
     const baris = rasioUrut.map(function(R){
       if (!(R.roll || []).length) return '';   // 5 Nov 2026: rasio tanpa roll sendiri (dipotong di roll rasio lain) -- barisnya ada di roll itu
       const kepala = '<tr class="ck-lc-rasio"><td colspan="' + nk + '"><b>' + (R.kode ? rjdEscapeHtml_(R.kode) : 'Roll belum dipakai') + '</b>' +
-        (R.panjang ? ' &#183; panjang gelaran ' + ckAngka_(R.panjang) + CK_NBSP + u : '') + (R.pcsPerLapis ? ' &#183; ' + R.pcsPerLapis + ' pcs/lapis' : '') +
+        (R.panjang ? ' &#183; panjang gelaran ' + ckAngka_(R.panjang) + CK_NBSP + (g.satuanPanjangMarker || u) : '') + (R.pcsPerLapis ? ' &#183; ' + R.pcsPerLapis + ' pcs/lapis' : '') +
         ' &#183; ' + (R.roll || []).length + ' roll</td></tr>';
       const rows = (R.roll || []).map(function(x){
         const kelas = x.tanda === "periksa" ? ' class="ck-lc-periksa"' : (x.tanda === "perhatikan" ? ' class="ck-lc-perhatikan"' : '');
@@ -1386,6 +1386,10 @@ function ckLcPerRoll_(d, PR){
     const so = g.sorotan || {};
     const sorot = so.roll ? '<p class="ck-lc-sorot"><b>' + so.roll + ' roll di luar batas wajar</b> (' + so.periksa + ' periksa, ' + so.perhatikan + ' perhatikan) menyumbang ' +
       ckAngka_(Math.abs(so.selisih)) + ' ' + u + (so.persenDariShort === null || so.persenDariShort === undefined ? '' : ' = ' + ckAngka_(so.persenDariShort, 1) + '% dari short') + '.</p>' : '';
+    // v445 SPEC-CUTTING-KG §7.3: kelompok kg -- aktual dihitung dari gramasi lot; catatan kakinya menyebut tiap lot.
+    const gramasiKet = g.satuan === "kg" && (g.gramasi || []).length ? '<p class="ck-lc-catatan ck-lc-gramasi">Aktual = marker &#215; lapis &#215; gramasi lot: ' +
+      g.gramasi.map(function(x){ return rjdEscapeHtml_(x.lot || 'lot') + ' ' + ckAngka_(x.gpm) + CK_NBSP + 'g/m' + (x.tanggal ? ' (' + ckTglIndo_(x.tanggal) + ')' : ''); }).join(', ') +
+      (g.gramasiKolam && g.gramasiKolam.gpm ? '; End cut memakai gramasi kumpulan sisa ' + ckAngka_(g.gramasiKolam.gpm) + CK_NBSP + 'g/m' : '') + '.</p>' : '';
     const tanpa = (g.tanpaRoll || []).length ? '<p class="ck-lc-catatan">Tanpa roll (form gelaran lama, tidak masuk neraca roll): ' +
       g.tanpaRoll.map(function(t){ return t.gelaran + ' gelaran ' + rjdEscapeHtml_(t.jenis) + ' ' + ckAngka_(t.panjang) + ' ' + u + ', ' + t.pcs + ' pcs'; }).join('; ') + '.</p>' : '';
     return '<div class="ck-lc-kel"><div class="ck-lc-kel-judul"><b>' + rjdEscapeHtml_(g.jenisKain) + ' &#183; ' + rjdEscapeHtml_(g.warna) + '</b></div>' + sorot + tabelRingkas +
@@ -1393,7 +1397,7 @@ function ckLcPerRoll_(d, PR){
       '<th class="num" rowspan="2">Aktual</th><th class="num" rowspan="2">Sisa</th><th class="num" rowspan="2">Selisih</th><th class="num" rowspan="2">%</th>' +
       '<th colspan="' + (szK.length + 1) + '" class="ck-lc-sz-kepala">Hasil cutting (pcs)</th></tr><tr>' +
       szK.map(function(z){ return '<th class="num ck-lc-sz">' + rjdEscapeHtml_(z) + '</th>'; }).join('') + '<th class="num ck-lc-sz-total">Total</th></tr></thead>' +
-      '<tbody>' + baris + endCut + total + '</tbody></table></div>' + tanpa + '</div>';
+      '<tbody>' + baris + endCut + total + '</tbody></table></div>' + gramasiKet + tanpa + '</div>';
   }).join("");
   const a = PR.ambang || {};
   return '<div class="ck-lc-blok"><h2>3. Rincian per roll</h2>' + isi +

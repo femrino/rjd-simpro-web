@@ -172,6 +172,21 @@
 /* ---------- ukur sisa akhir sesudah End cut (opsi 2 Femri, 5 Nov 2026) ---------- di bawah kotak ringkasan, bukan di bawah tabel roll
    (MANSL 288: 48 roll = blok tidak terlihat tanpa menggulir jauh). Kotak isian 16 px dari .cr-f (zoom iOS). */
 .cr-ring .cr-us-ring { display: block; font-size: 11px; font-weight: 600; color: #1F6B48; margin-top: 1px; white-space: nowrap; }
+/* v445 SPEC-CUTTING-KG: pilihan satuan kelompok, kartu uji gramasi, lot di neraca. Kotak isian ikut aturan .cr-f (>= 16 px, zoom iOS). */
+.cr-satuan-pilih { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 12px; font-size: 14px; }
+.cr-satuan-pilih small { color: var(--ink-soft, #6B7280); }
+.cr-satuan-btn.cr-satuan-aktif { background: var(--navy, #1B2238); color: #fff; border-color: var(--navy, #1B2238); }
+.cr-uji { border: 1px solid var(--line, #E5E0D6); border-radius: 12px; padding: 12px 14px; margin: 0 0 14px; background: #FBFAF7; font-size: 14px; }
+.cr-uji-kepala { margin-bottom: 8px; } .cr-uji-kepala span { color: var(--ink-soft, #6B7280); font-size: 13px; }
+.cr-uji-baris { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 0; border-top: 1px solid var(--line, #E5E0D6); }
+.cr-uji-isi { flex: 1 1 260px; } .cr-uji-isi small { display: block; color: var(--ink-soft, #6B7280); font-size: 12.5px; }
+.cr-uji-aksi { display: flex; gap: 6px; } .cr-uji-kunci { flex: 1 1 100%; color: var(--ink-soft, #6B7280); font-size: 12.5px; }
+.cr-uji-form { border-top: 1px solid var(--line, #E5E0D6); padding-top: 10px; margin-top: 6px; }
+.cr-uji-isian { display: flex; flex-wrap: wrap; gap: 8px 12px; } .cr-uji-isian .cr-f { flex: 1 1 150px; }
+.cr-uji-hasil { font-weight: 700; margin: 8px 0; }
+.cr-uji-riwayat { margin-top: 8px; font-size: 13px; color: var(--ink-soft, #6B7280); }
+.cr-gramasi { margin: -4px 0 10px; font-size: 13px; color: var(--ink-soft, #6B7280); }
+.cr-no .cr-lot { display: block; font-size: 11px; font-weight: 400; color: var(--ink-soft, #6B7280); white-space: nowrap; }
 /* "Masih di roll" (5 Nov 2026, MCONX A34): roll belum selesai -- utuh + sedang dipotong. Keterangannya baris kecil abu di bawah angka. */
 .cr-ring .cr-ring-sub { display: block; font-size: 11px; color: var(--ink-soft, #6B7280); margin-top: 1px; white-space: nowrap; }
 .cr-us { border: 1px solid var(--line, #E5E0D6); border-radius: 12px; padding: 12px 14px; margin: 0 0 14px; font-size: 13.5px; }
