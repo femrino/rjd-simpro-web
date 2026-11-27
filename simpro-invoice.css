@@ -145,6 +145,26 @@ body { padding-top: 0; }
   text-align: right; border: 1px solid var(--line-soft); border-radius: 8px;
   background: #FFFDF6; color: var(--ink); font-family: inherit; }
 .iv-split-pot:focus { outline: none; border-color: var(--thread); }
+/* 27 Nov 2026: beberapa jenis potongan per pembayaran + bantu hitung kurang terima (qty x harga per pcs). Semua kotak 16px
+   (lantai zoom iOS, PF-12). Selektor berawalan .iv-biaya-field supaya mengalahkan `.iv-biaya-field input { width: 100%; 13px }`
+   (0,1,1) -- satu kelas saja (0,1,0) kalah seri spesifisitas. */
+.iv-pot-kt { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 8px; margin-top: 8px; }
+.iv-biaya-field .iv-pot-kt label, .iv-split-potlain .iv-pot-kt label { display: flex; flex-direction: column; gap: 3px;
+  margin: 0; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); }
+.iv-biaya-field .iv-pot-angka, .iv-split-potlain .iv-pot-angka { width: 120px; padding: 8px 9px; font-size: 16px; text-align: right;
+  border: 1px solid var(--line-soft); border-radius: 8px; background: var(--white); color: var(--ink); font-family: 'Inter', sans-serif; }
+.iv-pot-x { padding-bottom: 10px; color: var(--ink-soft); }
+.iv-pot-baris { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 8px; padding: 8px;
+  border: 1px dashed var(--line-soft); border-radius: 9px; }
+.iv-pot-baris .iv-pot-jenis { flex: 1 1 170px; min-width: 0; padding: 8px 9px; font-size: 16px; border: 1px solid var(--line-soft);
+  border-radius: 8px; background: var(--white); color: var(--ink); font-family: inherit; }
+.iv-pot-baris .iv-pot-kt { flex: 1 1 100%; margin-top: 0; }
+.iv-pot-hapus { flex: none; min-height: 34px; padding: 6px 10px; font-size: 12px; font-weight: 700; color: var(--ink-soft);
+  background: var(--white); border: 1px solid var(--line-soft); border-radius: 8px; cursor: pointer; }
+.iv-pot-tambah { display: inline-block; margin-top: 8px; min-height: 34px; padding: 7px 11px; font-size: 12px; font-weight: 700;
+  color: var(--ink); background: var(--white); border: 1px dashed var(--ink-soft); border-radius: 8px; cursor: pointer; }
+.iv-split-potlain { margin: -2px 0 8px 12px; }
+.iv-split-potlain:empty { display: none; }
 /* Ringkasan hidup di bawah kotak potongan pembayaran tunggal. */
 .iv-bayar-info-kecil { margin-top: 6px; font-size: 11.5px; line-height: 1.5;
   color: var(--ink-soft); }

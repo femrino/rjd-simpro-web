@@ -146,7 +146,7 @@ function ivPasangKotakRef_(){
  * jenis di luar daftar). Kalau halaman ini hidup LEBIH DULU dari gs-nya, server
  * akan menelan potongannya tanpa galat -- itu sebabnya urutan rilisnya gs dulu.
  */
-var IV_JENIS_POTONGAN = ["Biaya transfer bank", "Pembulatan", "Ongkir dipotong klien"];
+var IV_JENIS_POTONGAN = ["Biaya transfer bank", "Pembulatan", "Ongkir dipotong klien", "Kurang terima barang"];
 var IV_POTONGAN_MAKS = 25000;
 /* 26 Nov 2026 (Femri, PT MAS / MANSL 288; butuh gs >= rilis ongkir): klien MEMOTONG ongkos kirim dari transfer -- beban
  * RJD (733 Biaya Ekspedisi), bukan biaya bank. Plafon 25.000 TIDAK berlaku untuk jenis ini; penggantinya (sama dengan server,
@@ -154,6 +154,15 @@ var IV_POTONGAN_MAKS = 25000;
  * pemeriksa untuk mode tunggal & split: ivPotonganSalah_. Server tetap penjaga terakhir. */
 var IV_JENIS_ONGKIR = "Ongkir dipotong klien";
 var IV_ONGKIR_PERSEN_MAKS = 10;
+/* 27 Nov 2026 (Femri, INV-2611.129; butuh gs >= @479): klien menerima LEBIH SEDIKIT dari yang ditagih (1.578 dikirim, 1.576 diterima)
+ * dan memotong nilainya dari transfer. Server: 404 Potongan Penjualan (mengurangi omset), bukan beban; pagarnya sama dengan ongkir --
+ * invoice saja, <= IV_KURANG_TERIMA_PERSEN_MAKS % nilai invoice, <= sisa. IV_JENIS_BESAR = jenis tanpa plafon 25.000, masing-masing
+ * dengan persennya (sama dengan JENIS_POTONGAN_BESAR di pelunasan.js). */
+var IV_JENIS_KURANG_TERIMA = "Kurang terima barang";
+var IV_KURANG_TERIMA_PERSEN_MAKS = 10;
+var IV_JENIS_BESAR = {};
+IV_JENIS_BESAR[IV_JENIS_ONGKIR] = IV_ONGKIR_PERSEN_MAKS;
+IV_JENIS_BESAR[IV_JENIS_KURANG_TERIMA] = IV_KURANG_TERIMA_PERSEN_MAKS;
 
 /* v438 (26 Nov 2026, laporan Femri, INV-2610.120): ringkasan potongan menyebut JUMLAH, jadi
  * mengubah jumlah harus menyegarkannya juga. Sebelumnya hanya kotak potongan, jenis, dan
@@ -184,7 +193,7 @@ function ivPasangKotakPotongan_(){
   const div = document.createElement("div");
   div.className = "iv-biaya-field";
   div.innerHTML =
-    '<label for="iv-bayar-potongan">Potongan (biaya transfer / ongkir dipotong klien)</label>' +
+    '<label for="iv-bayar-potongan">Potongan (biaya transfer / ongkir / kurang terima barang)</label>' +
     '<input id="iv-bayar-potongan" type="number" min="0" step="1" value="0"' +
       ' oninput="ivPotonganUbah_()"/>' +
     '<div id="iv-bayar-jenispotongan-wrap" style="display:none;margin-top:8px">' +
@@ -195,7 +204,11 @@ function ivPasangKotakPotongan_(){
           return '<option value="' + rjdEscapeHtml_(j) + '">' + rjdEscapeHtml_(j) + '</option>';
         }).join("") +
       '</select>' +
+      ivPotKtHtml_("iv-bayar-kt", "", "") +
     '</div>' +
+    '<div id="iv-bayar-potongan-lain"></div>' +
+    '<button id="iv-bayar-potongan-tambah" type="button" class="iv-pot-tambah" style="display:none"' +
+      ' onclick="ivPotLainTambah_(\'tunggal\')">+ Jenis potongan lain</button>' +
     '<div id="iv-bayar-potongan-ringkas" class="iv-bayar-info-kecil"></div>';
   acuan.parentNode.insertBefore(div, acuan.nextSibling);
   ivPotonganUbah_();
@@ -209,12 +222,21 @@ function ivPotonganUbah_(){
   const wrap = document.getElementById("iv-bayar-jenispotongan-wrap");
   const ringkas = document.getElementById("iv-bayar-potongan-ringkas");
   if(!elPot) return;
-  const pot = Math.round(Number(elPot.value) || 0);
-  if(wrap) wrap.style.display = pot > 0 ? "" : "none";
+  const pot1 = Math.round(Number(elPot.value) || 0);
+  if(wrap) wrap.style.display = pot1 > 0 ? "" : "none";
+  const jenis = ((document.getElementById("iv-bayar-jenispotongan") || {}).value || "").trim();
+  // 27 Nov 2026: bantu hitung kurang terima di baris pertama, tombol jenis tambahan, dan daftar jenis tambahan (dropdown-nya
+  // menonaktifkan jenis yang sudah dipakai baris pertama -- digambar ulang HANYA kalau jenis itu berubah, supaya kotak jumlah
+  // jenis tambahan yang sedang diketik tidak kehilangan fokus).
+  const kt = document.getElementById("iv-bayar-kt");
+  if(kt) kt.style.display = (pot1 > 0 && jenis === IV_JENIS_KURANG_TERIMA) ? "" : "none";
+  if(window.IV_POT_JENIS1 !== jenis){ window.IV_POT_JENIS1 = jenis; ivRenderPotLainTunggal_(); }
+  ivPotTombolTambah_("tunggal", document.getElementById("iv-bayar-potongan-tambah"));
   if(!ringkas) return;
 
-  const jenis = ((document.getElementById("iv-bayar-jenispotongan") || {}).value || "").trim();
-  const salah = ivPotonganSalah_(pot, jenis, window.IV_MODE_BAYAR || "invoice", ivNilaiTujuanTerpilih_());
+  const bagian = ivPotBagian_("tunggal").filter(function(b){ return b.jumlah !== 0; });
+  const pot = bagian.reduce(function(s, b){ return s + b.jumlah; }, 0);
+  const salah = ivRinciSalah_(bagian, window.IV_MODE_BAYAR || "invoice", ivNilaiTujuanTerpilih_(), {});
   if(salah){
     ringkas.innerHTML = '<span class="iv-bayar-galat">' + rjdEscapeHtml_(salah) + '</span>';
     return;
@@ -226,29 +248,203 @@ function ivPotonganUbah_(){
   // -- kalau tujuannya belum dipilih, kalimatnya berhenti di "menutup", bukan
   // menebak sisa yang tidak diketahuinya.
   const sisaKini = ivSisaTujuanTerpilih_();
+  const ada = function(j){ return bagian.some(function(b){ return b.jenis === j && b.jumlah > 0; }); };
   ringkas.innerHTML = 'Dibayar <b>' + formatRupiah(dibayar) + '</b> + potongan <b>' +
     formatRupiah(pot) + '</b> = menutup <b>' + formatRupiah(menutup) + '</b>' +
     (sisaKini === null ? "" : ' &#8594; sisa <b>' + formatRupiah(Math.max(0, sisaKini - menutup)) + '</b>') +
-    (jenis === IV_JENIS_ONGKIR ? '<br>Ongkir dibukukan sebagai beban ongkir (733), bukan biaya bank. Buku kas tetap mencatat jumlah dibayar saja.' : '');
+    (bagian.length > 1 ? '<br>Rincian potongan: ' + ivPotRincianTeks_(bagian) : '') +
+    (ada(IV_JENIS_ONGKIR) ? '<br>Ongkir dibukukan sebagai beban ongkir (733), bukan biaya bank. Buku kas tetap mencatat jumlah dibayar saja.' : '') +
+    (ada(IV_JENIS_KURANG_TERIMA) ? '<br>Kurang terima barang dibukukan sebagai potongan penjualan (404): mengurangi omset, bukan beban. Invoice yang dipegang klien tidak berubah.' : '');
 }
 
 /** 26 Nov 2026: SATU pemeriksa potongan untuk mode tunggal, split, dan tombol Simpan -- pesan "" = boleh.
  *  nilai = nilai transfer invoice tujuan (null = tidak diketahui; pagar 10% lalu diserahkan ke server). */
 function ivPotonganSalah_(pot, jenis, mode, nilai){
   if(pot < 0) return "Potongan tidak boleh negatif.";
-  if(jenis === IV_JENIS_ONGKIR){
-    if(mode !== "invoice") return "Potongan '" + IV_JENIS_ONGKIR + "' hanya untuk pelunasan invoice, bukan uang muka order.";
+  const persen = IV_JENIS_BESAR[jenis];
+  if(persen !== undefined){
+    if(mode !== "invoice") return "Potongan '" + jenis + "' hanya untuk pelunasan invoice, bukan uang muka order.";
     if(nilai !== null && nilai !== undefined){
-      const batas = Math.floor(Number(nilai) * IV_ONGKIR_PERSEN_MAKS) / 100;
-      if(pot > batas) return "Potongan ongkir " + formatRupiah(pot) + " melebihi " + IV_ONGKIR_PERSEN_MAKS +
-        "% nilai invoice (maks " + formatRupiah(batas) + "). Kalau memang sebesar itu, itu bukan ongkir lagi: pakai koreksi invoice.";
+      const batas = Math.floor(Number(nilai) * persen) / 100;
+      const ongkir = jenis === IV_JENIS_ONGKIR;
+      if(pot > batas) return "Potongan " + (ongkir ? "ongkir " : "'" + jenis + "' ") + formatRupiah(pot) + " melebihi " + persen +
+        "% nilai invoice (maks " + formatRupiah(batas) + "). Kalau memang sebesar itu, " + (ongkir ? "itu bukan ongkir lagi" : "itu bukan selisih kecil lagi") +
+        ": pakai koreksi invoice.";
     }
     return "";
   }
   if(pot > IV_POTONGAN_MAKS) return "Potongan di atas " + formatRupiah(IV_POTONGAN_MAKS) +
     " bukan biaya transfer. Pakai koreksi invoice / nota kredit, bukan potongan pembayaran. Kalau klien memotong ongkos kirim, pilih jenis '" +
-    IV_JENIS_ONGKIR + "'.";
+    IV_JENIS_ONGKIR + "'; kalau barang yang diterima klien kurang, pilih '" + IV_JENIS_KURANG_TERIMA + "'.";
   return "";
+}
+
+/** 27 Nov 2026: pemeriksa SEMUA bagian potongan satu tujuan (sama dengan potonganAlokasi_ di server, kecuali pagar sisa yang
+ *  diserahkan ke server): jenis besar diperiksa satu per satu dengan persennya, jenis kecil DIJUMLAHKAN lalu kena plafon 25.000,
+ *  jenis tidak boleh dua kali, qty kurang terima bilangan bulat. opsi.wajibJenis: tombol Simpan menuntut jenis tiap bagian;
+ *  ringkasan tidak (baris pertama tanpa jenis tetap menampilkan "menutup", sama seperti sebelum fitur ini). "" = boleh. */
+function ivRinciSalah_(bagian, mode, nilai, opsi){
+  opsi = opsi || {};
+  const dipakai = {};
+  let kecil = 0;
+  for(let i = 0; i < bagian.length; i++){
+    const b = bagian[i], j = Number(b.jumlah) || 0;
+    if(j < 0) return "Potongan tidak boleh negatif.";
+    if(!j) continue;
+    if(!b.jenis){ if(opsi.wajibJenis) return "Pilih jenis untuk potongan " + formatRupiah(j) + "."; kecil += j; continue; }
+    if(dipakai[b.jenis]) return "Jenis potongan '" + b.jenis + "' dipilih dua kali. Gabungkan jadi satu jumlah.";
+    dipakai[b.jenis] = true;
+    if(IV_JENIS_BESAR[b.jenis] !== undefined){ const m = ivPotonganSalah_(j, b.jenis, mode, nilai); if(m) return m; }
+    else kecil += j;
+    if(b.jenis === IV_JENIS_KURANG_TERIMA && String(b.qty || "").trim() !== ""){
+      const q = Number(b.qty);
+      if(!(q > 0) || Math.floor(q) !== q) return "Qty kurang terima harus bilangan bulat pcs (mis. 2).";
+    }
+  }
+  if(kecil > IV_POTONGAN_MAKS) return ivPotonganSalah_(kecil, "", mode, nilai);
+  return "";
+}
+
+/* 27 Nov 2026: BEBERAPA jenis potongan per tujuan. Baris pertama tetap kotak lama (tunggal: #iv-bayar-potongan +
+ * #iv-bayar-jenispotongan; split: kotak .iv-split-pot + dropdown jenis split), jadi pembayaran SATU jenis mengirim payload yang
+ * sama persis dengan sebelumnya. Jenis tambahan per tujuan ada di IV_POT_LAIN[kunci] -- kunci "tunggal" atau kunci split
+ * "INV:<id>" -- dan kalau ada isinya, payload membawa potonganRinci (server potonganAlokasi_). Kurang terima punya bantu hitung
+ * qty x harga per pcs: jumlahnya hanya ditimpa kalau kotaknya kosong atau masih berisi hasil hitungan sebelumnya (data-otomatis),
+ * jadi angka yang diketik dari bukti transfer tidak pernah ditimpa diam-diam. */
+window.IV_POT_LAIN = window.IV_POT_LAIN || {};
+function ivPotLain_(kunci){
+  if(!window.IV_POT_LAIN) window.IV_POT_LAIN = {};
+  if(!window.IV_POT_LAIN[kunci]) window.IV_POT_LAIN[kunci] = [];
+  return window.IV_POT_LAIN[kunci];
+}
+function ivPotJenisUtama_(kunci){
+  const el = document.getElementById(kunci === "tunggal" ? "iv-bayar-jenispotongan" : "iv-split-jenispotongan");
+  return ((el || {}).value || "").trim();
+}
+function ivPotJumlahUtama_(kunci){
+  if(kunci === "tunggal") return Math.round(Number((document.getElementById("iv-bayar-potongan") || {}).value) || 0);
+  return Math.round(Number((window.IV_POTONGAN || {})[kunci]) || 0);
+}
+/** Semua bagian potongan satu tujuan: baris pertama (kalau > 0) lalu jenis tambahan. {jenis, jumlah, qty}. */
+function ivPotBagian_(kunci){
+  const out = [], u = ivPotJumlahUtama_(kunci), j1 = ivPotJenisUtama_(kunci);
+  if(u) out.push({ jenis: j1, jumlah: u,
+    qty: (kunci === "tunggal" && j1 === IV_JENIS_KURANG_TERIMA) ? ((document.getElementById("iv-bayar-ktqty") || {}).value || "") : "" });
+  ivPotLain_(kunci).forEach(function(x){
+    out.push({ jenis: x.jenis || "", jumlah: Math.round(Number(x.jumlah) || 0), qty: x.jenis === IV_JENIS_KURANG_TERIMA ? (x.qty || "") : "" });
+  });
+  return out;
+}
+function ivPotRincianTeks_(bagian){
+  return bagian.filter(function(b){ return b.jumlah; }).map(function(b){
+    return rjdEscapeHtml_(b.jenis || "(tanpa jenis)") + ' ' + formatRupiah(b.jumlah) +
+      (b.jenis === IV_JENIS_KURANG_TERIMA && b.qty ? ' (' + rjdEscapeHtml_(String(b.qty)) + ' pcs)' : '');
+  }).join(" + ");
+}
+/** Isian payload satu alokasi dari bagian-bagiannya. Tanpa jenis tambahan = bentuk LAMA persis. */
+function ivPotPayload_(kunci, a){
+  const lain = ivPotLain_(kunci).filter(function(x){ return Math.round(Number(x.jumlah) || 0) > 0; });
+  const bagian = ivPotBagian_(kunci).filter(function(b){ return b.jumlah > 0; });
+  const kt = bagian.filter(function(b){ return b.jenis === IV_JENIS_KURANG_TERIMA && String(b.qty || "").trim() !== ""; })[0];
+  if(kt) a.kurangTerimaQty = Number(kt.qty);
+  if(!lain.length) return a;
+  a.potonganRinci = bagian.map(function(b){ return { jenis: b.jenis, jumlah: b.jumlah }; });
+  a.potongan = bagian.reduce(function(s, b){ return s + b.jumlah; }, 0);
+  a.jenisPotongan = "";
+  return a;
+}
+function ivPotKtHtml_(id, qty, harga, kunci, i){
+  const lain = kunci !== undefined;
+  const h = function(medan){ return lain ? ' oninput="ivPotLainUbah_(\'' + ivAttr_(kunci) + '\', ' + i + ', \'' + medan + '\', this)"' : ' oninput="ivPotKtTunggal_()"'; };
+  return '<div' + (id ? ' id="' + id + '"' : '') + ' class="iv-pot-kt"' + (lain ? '' : ' style="display:none"') + '>' +
+    '<label>Qty kurang diterima (pcs)<input' + (lain ? '' : ' id="iv-bayar-ktqty"') + ' class="iv-pot-angka iv-pot-ktqty" type="number" min="1" step="1"' +
+      ' placeholder="pcs" value="' + rjdEscapeHtml_(String(qty || "")) + '"' + h("qty") + '/></label>' +
+    '<span class="iv-pot-x" aria-hidden="true">&#215;</span>' +
+    '<label>Harga per pcs<input' + (lain ? '' : ' id="iv-bayar-ktharga"') + ' class="iv-pot-angka iv-pot-ktharga" type="number" min="0" step="1"' +
+      ' placeholder="opsional" value="' + rjdEscapeHtml_(String(harga || "")) + '"' + h("harga") + '/></label>' +
+  '</div>';
+}
+/** qty x harga, atau 0 kalau salah satunya kosong. */
+function ivKtHitung_(qty, harga){
+  const q = Number(qty) || 0, h = Number(harga) || 0;
+  return q > 0 && h > 0 ? Math.round(q * h) : 0;
+}
+/** Bantu hitung: timpa kotak jumlah hanya kalau kosong/0 atau masih berisi hasil hitungan sebelumnya. */
+function ivKtIsi_(kotak, hasil){
+  if(!kotak || !(hasil > 0)) return false;
+  const v = String(kotak.value || "").trim();
+  if(v && Number(v) !== 0 && kotak.dataset.otomatis !== v) return false;
+  kotak.value = String(hasil); kotak.dataset.otomatis = String(hasil);
+  return true;
+}
+function ivPotKtTunggal_(){
+  ivKtIsi_(document.getElementById("iv-bayar-potongan"),
+    ivKtHitung_((document.getElementById("iv-bayar-ktqty") || {}).value, (document.getElementById("iv-bayar-ktharga") || {}).value));
+  ivPotonganUbah_();
+}
+function ivPotHtmlLain_(kunci){
+  const lain = ivPotLain_(kunci), utama = ivPotJumlahUtama_(kunci) ? ivPotJenisUtama_(kunci) : "";
+  return lain.map(function(x, i){
+    const dipakai = [utama].concat(lain.filter(function(y, k){ return k !== i; }).map(function(y){ return y.jenis; }));
+    const arg = "'" + ivAttr_(kunci) + "', " + i;
+    return '<div class="iv-pot-baris">' +
+      '<select class="iv-pot-jenis" aria-label="Jenis potongan tambahan" onchange="ivPotLainUbah_(' + arg + ', \'jenis\', this)">' +
+        '<option value="">-- pilih jenis --</option>' +
+        IV_JENIS_POTONGAN.map(function(j){
+          return '<option value="' + rjdEscapeHtml_(j) + '"' + (j === x.jenis ? ' selected' : '') +
+            (j !== x.jenis && dipakai.indexOf(j) !== -1 ? ' disabled' : '') + '>' + rjdEscapeHtml_(j) + '</option>';
+        }).join("") +
+      '</select>' +
+      '<input class="iv-pot-angka iv-pot-jumlah" type="number" min="0" step="1" placeholder="jumlah" aria-label="Jumlah potongan tambahan"' +
+        ' value="' + rjdEscapeHtml_(String(x.jumlah || "")) + '"' + (x.otomatis ? ' data-otomatis="' + rjdEscapeHtml_(String(x.otomatis)) + '"' : '') +
+        ' oninput="ivPotLainUbah_(' + arg + ', \'jumlah\', this)"/>' +
+      '<button type="button" class="iv-pot-hapus" onclick="ivPotLainHapus_(' + arg + ')">Hapus</button>' +
+      (x.jenis === IV_JENIS_KURANG_TERIMA ? ivPotKtHtml_("", x.qty, x.harga, kunci, i) : '') +
+    '</div>';
+  }).join("");
+}
+/** Tombol "+ Jenis potongan lain": hanya kalau baris pertama sudah berjumlah DAN berjenis, dan masih ada jenis yang belum dipakai. */
+function ivPotTombolTambah_(kunci, tombol){
+  if(!tombol) return;
+  const boleh = ivPotJumlahUtama_(kunci) > 0 && !!ivPotJenisUtama_(kunci) && (1 + ivPotLain_(kunci).length) < IV_JENIS_POTONGAN.length;
+  tombol.style.display = boleh ? "" : "none";
+}
+function ivRenderPotLainTunggal_(){
+  const w = document.getElementById("iv-bayar-potongan-lain");
+  if(w) w.innerHTML = ivPotHtmlLain_("tunggal");
+}
+/** Perubahan bentuk (tambah/hapus/ganti jenis) menggambar ulang; ketikan angka TIDAK (fokus tetap di kotaknya). */
+function ivPotSegarkan_(kunci, bentuk){
+  if(kunci === "tunggal"){ if(bentuk) ivRenderPotLainTunggal_(); ivPotonganUbah_(); return; }
+  if(bentuk) ivRenderSplit();
+}
+function ivPotLainTambah_(kunci){
+  ivPotLain_(kunci).push({ jenis: "", jumlah: "", qty: "", harga: "", otomatis: "" });
+  ivPotSegarkan_(kunci, true);
+  const sel = document.querySelectorAll(kunci === "tunggal" ? "#iv-bayar-potongan-lain .iv-pot-jenis" : ".iv-split-potlain .iv-pot-jenis");
+  const cocok = [].filter.call(sel, function(s){ const w = s.closest(".iv-split-potlain"); return kunci === "tunggal" || (w && w.dataset.kunci === kunci); });
+  if(cocok.length) cocok[cocok.length - 1].focus();
+}
+function ivPotLainHapus_(kunci, i){
+  ivPotLain_(kunci).splice(i, 1);
+  ivPotSegarkan_(kunci, true);
+}
+function ivPotLainUbah_(kunci, i, medan, el){
+  const x = ivPotLain_(kunci)[i];
+  if(!x || !el) return;
+  if(medan === "jenis"){
+    x.jenis = el.value;
+    if(x.jenis !== IV_JENIS_KURANG_TERIMA){ x.qty = ""; x.harga = ""; }
+    ivPotSegarkan_(kunci, true);
+    return;
+  }
+  if(medan === "jumlah"){ x.jumlah = el.value; if(el.dataset.otomatis !== el.value){ el.dataset.otomatis = ""; x.otomatis = ""; } }
+  if(medan === "qty" || medan === "harga"){
+    x[medan] = el.value;
+    const baris = el.closest(".iv-pot-baris"), kotak = baris && baris.querySelector(".iv-pot-jumlah");
+    if(ivKtIsi_(kotak, ivKtHitung_(x.qty, x.harga))){ x.jumlah = kotak.value; x.otomatis = kotak.value; }
+  }
+  ivPotSegarkan_(kunci, false);
 }
 
 /** Nilai transfer invoice tujuan yang sedang dipilih (mode invoice), atau null -- "tidak tahu", bukan nol. */
@@ -1513,8 +1709,10 @@ function ivSimpanPembayaran(){
   if(!tanggal){ status.textContent = "Tanggal bayar wajib diisi."; return; }
   // 26 Nov 2026: potongan yang ditolak ringkasan juga ditolak tombolnya -- dulu mode tunggal mengirim apa saja dan
   // menunggu server (ongkir > 10% / ke uang muka / biaya transfer > 25.000).
-  const salahPot = ivPotonganSalah_(Math.round(Number((document.getElementById("iv-bayar-potongan") || {}).value) || 0),
-    ((document.getElementById("iv-bayar-jenispotongan") || {}).value || "").trim(), mode, ivNilaiTujuanTerpilih_());
+  // 27 Nov 2026: semua bagian potongan (baris pertama + jenis tambahan), pemeriksa yang sama dengan ringkasan (ivRinciSalah_).
+  const bagianTunggal = ivPotBagian_("tunggal");
+  const salahPot = ivRinciSalah_(bagianTunggal, mode, ivNilaiTujuanTerpilih_(),
+    { wajibJenis: ivPotLain_("tunggal").some(function(x){ return Math.round(Number(x.jumlah) || 0) > 0; }) });
   if(salahPot){ status.innerHTML = '<span class="iv-bayar-galat">' + rjdEscapeHtml_(salahPot) + '</span>'; return; }
 
   const payload = {
@@ -1531,6 +1729,7 @@ function ivSimpanPembayaran(){
     kunciKirim: ivKunciKirim_()   // v305 (KP-2), gs >= @338
   };
   if(mode === "invoice") payload.idInvoice = pilih; else payload.idPurchaseOrder = pilih;
+  ivPotPayload_("tunggal", payload);   // 27 Nov 2026: potonganRinci + kurangTerimaQty kalau ada; tanpa itu payload lama persis
 
   btn.disabled = true;
   status.textContent = "Menyimpan...";
@@ -1569,6 +1768,11 @@ function ivSimpanPembayaran(){
     // berikutnya biasanya tidak kena biaya transfer.
     const potEl = document.getElementById("iv-bayar-potongan"); if(potEl) potEl.value = "0";
     const jenEl = document.getElementById("iv-bayar-jenispotongan"); if(jenEl) jenEl.value = "";
+    // 27 Nov 2026: jenis tambahan & bantu hitung kurang terima ikut dikosongkan -- alasannya sama dengan kotak potongannya.
+    window.IV_POT_LAIN = {};
+    ["iv-bayar-ktqty", "iv-bayar-ktharga"].forEach(function(id){ const el = document.getElementById(id); if(el) el.value = ""; });
+    if(potEl) potEl.dataset.otomatis = "";
+    window.IV_POT_JENIS1 = null;
     if(typeof ivPotonganUbah_ === "function") ivPotonganUbah_();
     window.IV_PILIH_BAYAR = null;
     // Daftar tujuan & daftar piutang sama-sama dimuat ulang: angka sisa di
@@ -1631,7 +1835,10 @@ function ivMuatRiwayat(){
           // untuk tagihan Rp 9.950.000 tampil tanpa penjelasan, dan invoice-nya "Lunas".
           '<td class="num' + (v.jumlah < 0 ? ' iv-negatif' : '') + '">' + formatRupiah(v.jumlah) +
             (Number(v.potongan) ? '<div class="iv-sub iv-riw-potongan">' + (Number(v.potongan) < 0 ? '&#8722; ' : '+ ') + 'potongan ' + formatRupiah(Math.abs(Number(v.potongan))) +
-              (v.jenisPotongan ? ' (' + rjdEscapeHtml_(v.jenisPotongan) + ')' : '') + '</div>' : '') + '</td>' +
+              // 27 Nov 2026 (gs >= @479): baris berpotongan beberapa jenis membawa rincianPotongan -- ditampilkan per jenis, bukan teks mentah.
+              (Array.isArray(v.rincianPotongan) && v.rincianPotongan.length > 1
+                ? ' (' + v.rincianPotongan.map(function(b){ return rjdEscapeHtml_(b.jenis) + ' ' + formatRupiah(Math.abs(Number(b.jumlah) || 0)); }).join(' + ') + ')'
+                : (v.jenisPotongan ? ' (' + rjdEscapeHtml_(v.jenisPotongan) + ')' : '')) + '</div>' : '') + '</td>' +
           '<td>' + rjdEscapeHtml_(v.metode || "-") +
           (v.noReferensi ? '<div class="iv-sub">' + rjdEscapeHtml_(v.noReferensi) + '</div>' : '') +
           (v.pembalik ? '<div class="iv-sub">' + rjdEscapeHtml_(v.catatan || "pembalik") + '</div>' : '') + '</td>' +
@@ -1735,6 +1942,7 @@ function ivSplitOtomatis(){
 
   window.IV_ALOKASI = {};
   window.IV_POTONGAN = {};   // @KP-9: dikosongkan BERSAMA alokasinya -- potongan yang tertinggal akan menempel ke transfer berikutnya
+  window.IV_POT_LAIN = {};   // 27 Nov 2026: jenis potongan tambahan ikut, alasannya sama
   let sisa = total;
   ((window.IV_TUJUAN && window.IV_TUJUAN.invoice) || []).forEach(function(v){
     if(sisa <= 0) return;
@@ -1790,6 +1998,7 @@ function ivGantiKlienSplit(){
   }
   window.IV_ALOKASI = {};
   window.IV_POTONGAN = {};   // @KP-9: dikosongkan BERSAMA alokasinya -- potongan yang tertinggal akan menempel ke transfer berikutnya
+  window.IV_POT_LAIN = {};   // 27 Nov 2026: jenis potongan tambahan ikut, alasannya sama
   document.getElementById("iv-split-status").textContent = "";
   ivRenderSplit();
 }
@@ -1797,6 +2006,7 @@ function ivGantiKlienSplit(){
 function ivSplitKosongkan(){
   window.IV_ALOKASI = {};
   window.IV_POTONGAN = {};   // @KP-9: dikosongkan BERSAMA alokasinya -- potongan yang tertinggal akan menempel ke transfer berikutnya
+  window.IV_POT_LAIN = {};   // 27 Nov 2026: jenis potongan tambahan ikut, alasannya sama
   ivRenderSplit();
 }
 
@@ -1894,7 +2104,10 @@ function ivRenderSplit(){
           ' oninput="ivSetPotongan(\'' + ivAttr_(kunci) + '\', this.value)"/>' : '') +
         '<button class="iv-split-penuh" type="button" title="Isi sebesar sisa tagihan"' +
           ' onclick="ivIsiPenuh(\'' + ivAttr_(kunci) + '\', ' + (Number(v.sisa) || 0) + ')">Sisa</button>' +
-      '</div>';
+      '</div>' +
+      // 27 Nov 2026: jenis potongan tambahan baris ini (mis. ongkir DAN kurang terima dari satu transfer) -- di BAWAH barisnya,
+      // bukan di dalam deret flex-nya; hanya untuk baris yang sudah dialokasikan, sama dengan kotak potongannya.
+      (nilai ? ivPotSplitHtml_(kunci, v.id) : '');
     }).join("");
 
   const barisOrder = (window.IV_TUJUAN.order || [])
@@ -1962,7 +2175,7 @@ function ivPasangJenisPotonganSplit_(){
   div.style.display = "none";
   div.innerHTML =
     '<label for="iv-split-jenispotongan">Jenis potongan (untuk baris berpotongan)</label>' +
-    '<select id="iv-split-jenispotongan">' +
+    '<select id="iv-split-jenispotongan" onchange="ivRenderSplit()">' +
       '<option value="">-- pilih --</option>' +
       IV_JENIS_POTONGAN.map(function(j){
         return '<option value="' + rjdEscapeHtml_(j) + '">' + rjdEscapeHtml_(j) + '</option>';
@@ -1987,7 +2200,22 @@ function ivSetPotongan(kunci, nilai){
   const n = Math.round(Number(nilai) || 0);
   if(!window.IV_POTONGAN) window.IV_POTONGAN = {};
   if(n > 0) window.IV_POTONGAN[kunci] = n; else delete window.IV_POTONGAN[kunci];
-  ivRenderSplit();
+  // 27 Nov 2026: TIDAK menggambar ulang daftar lagi. Dulu ivRenderSplit() di sini mengganti seluruh baris tiap ketukan, jadi
+  // kotak potongan kehilangan fokus sesudah digit PERTAMA ("2.076.000" harus diklik ulang tiap angka) -- persis yang dilarang
+  // komentar ivHitungSisaSplit. Yang memang bergantung pada angka ini cuma dropdown jenis split & tombol jenis tambahan baris ini.
+  ivSegarkanJenisPotonganSplit_();
+  [].forEach.call(document.querySelectorAll(".iv-split-potlain"), function(w){
+    if(w.dataset.kunci === kunci) ivPotTombolTambah_(kunci, w.querySelector(".iv-pot-tambah"));
+  });
+}
+
+/** 27 Nov 2026: wadah jenis potongan tambahan satu baris split + tombolnya (tersembunyi sampai baris pertamanya berjumlah & berjenis). */
+function ivPotSplitHtml_(kunci, idInvoice){
+  return '<div class="iv-split-potlain" data-kunci="' + rjdEscapeHtml_(kunci) + '">' + ivPotHtmlLain_(kunci) +
+    '<button type="button" class="iv-pot-tambah" style="display:' +
+      ((ivPotJumlahUtama_(kunci) > 0 && ivPotJenisUtama_(kunci) && (1 + ivPotLain_(kunci).length) < IV_JENIS_POTONGAN.length) ? '' : 'none') + '"' +
+      ' onclick="ivPotLainTambah_(\'' + ivAttr_(kunci) + '\')">+ Jenis potongan lain untuk ' + rjdEscapeHtml_(idInvoice) + '</button>' +
+  '</div>';
 }
 
 function ivSimpanSplit(){
@@ -2013,13 +2241,16 @@ function ivSimpanSplit(){
       jenisPotongan: (Number((window.IV_POTONGAN || {})[k]) || 0) > 0
         ? (document.getElementById("iv-split-jenispotongan") || {}).value || "" : ""
     };
+  }).map(function(a){
+    // 27 Nov 2026: baris invoice dengan jenis potongan tambahan membawa potonganRinci (+ qty kurang terima); tanpa itu bentuk lama.
+    return a.idInvoice ? ivPotPayload_("INV:" + a.idInvoice, a) : a;
   });
   if(!daftar.length){ status.textContent = "Belum ada alokasi."; return; }
   // @KP-9: dijaga di layar SEBELUM dikirim -- backend tetap penjaga terakhirnya,
   // tapi kalau satu-satunya penolakan datang dari sana, staf sudah menekan
   // Simpan dan baru melihat kegagalan tanpa tahu baris mana yang menyimpang.
   const adaPot = daftar.some(function(a){ return (a.potongan || 0) > 0; });
-  if(adaPot && !daftar.every(function(a){ return !(a.potongan > 0) || a.jenisPotongan; })){
+  if(adaPot && !daftar.every(function(a){ return !(a.potongan > 0) || a.jenisPotongan || a.potonganRinci; })){
     status.innerHTML = '<span class="iv-bayar-galat">Ada baris berpotongan tapi jenis potongannya ' +
       'belum dipilih.</span>';
     return;
@@ -2030,8 +2261,10 @@ function ivSimpanSplit(){
   ((window.IV_TUJUAN && window.IV_TUJUAN.invoice) || []).forEach(function(v){ nilaiInv[v.id] = Number(v.nilaiTransfer) || 0; });
   const potSalah = daftar.map(function(a){
     if(!((a.potongan || 0) > 0)) return "";
-    const m = ivPotonganSalah_(a.potongan, a.jenisPotongan, a.tujuan,
-      a.tujuan === "invoice" && Object.prototype.hasOwnProperty.call(nilaiInv, a.idInvoice) ? nilaiInv[a.idInvoice] : null);
+    const nilaiA = a.tujuan === "invoice" && Object.prototype.hasOwnProperty.call(nilaiInv, a.idInvoice) ? nilaiInv[a.idInvoice] : null;
+    const m = a.potonganRinci
+      ? ivRinciSalah_(ivPotBagian_("INV:" + a.idInvoice), a.tujuan, nilaiA, { wajibJenis: true })
+      : ivPotonganSalah_(a.potongan, a.jenisPotongan, a.tujuan, nilaiA);
     return m ? (a.idInvoice || a.idPurchaseOrder) + ": " + m : "";
   }).filter(String);
   if(potSalah.length){
@@ -2111,6 +2344,7 @@ function ivSimpanSplit(){
       rincian + warn;
 
     window.IV_ALOKASI = {};
+    window.IV_POT_LAIN = {};   // 27 Nov 2026: jenis potongan tambahan ikut dikosongkan
     window.IV_POTONGAN = {};   // @KP-9: dikosongkan BERSAMA alokasinya -- potongan yang tertinggal akan menempel ke transfer BERIKUTNYA, dan transfer berikutnya biasanya tidak kena biaya
     document.getElementById("iv-split-total").value = "";
     document.getElementById("iv-split-ref").value = "";
