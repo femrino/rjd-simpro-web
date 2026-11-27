@@ -12653,16 +12653,15 @@ function spGudangKirimOpname_(btn) {
   if (galat.length) { spBeliPesan_("sp-op-pesan", galat[0], true); return; }
   if (!item.length) { spBeliPesan_("sp-op-pesan", "Isi minimal satu item yang dihitung (qty 0 pun boleh -- itu informasi).", true); return; }
   const payload = { tanggal: document.getElementById("sp-op-tanggal").value, item: item };
-  // v443 KEPUTUSAN -- SATU-SATUNYA form Beli/Stok yang kuncinya SENGAJA DITAHAN sesudah berhasil (tanpa opsi.kunci ke spKirim_):
-  // opname yang sama (tanggal, item, qty hitung sama) sesudah berhasil = TANDA SALAH, bukan hitungan baru -- hitung ulang yang
-  // hasilnya sama tidak menambah informasi. Server TIDAK menolaknya dengan aturan lain: catatOpname_ tidak memeriksa isi, dan
-  // setujuiOpname_ menerapkan Selisih yang DISIMPAN saat diajukan -- selama yang pertama masih Diajukan, Qty Sistem keduanya
-  // sama, jadi menyetujui keduanya = penyesuaian DUA KALI. Jadi kunci inilah satu-satunya penjaga (dalam satu sesi halaman); jawaban yang ditolak tidak
-  // mencatat kunci di server, jadi menahannya di sana tidak merugikan. Melepasnya baru benar sesudah server punya penjaga
-  // sendiri. jalan127 B2 & K memaku keputusan ini.
+  // v444 KEPUTUSAN (butuh gs >= @476): opname yang sama sesudah BERHASIL = TANDA SALAH (hitungan yang sama untuk item yang masih
+  // menunggu persetujuan). Di v443 kuncinya SENGAJA DITAHAN karena server tidak menjaganya: setujuiOpname_ menerapkan Selisih
+  // tersimpan, jadi dua opname Diajukan yang sama-sama disetujui = penyesuaian dua kali. Sejak gs @476 penjaganya ada di SERVER --
+  // catatOpname_ menolak item yang masih punya opname Diajukan (menyebut ID-nya), item ganda, dan opname mundur; setujuiOpname_
+  // menolak opname yang Qty Sistem-nya basi -- permanen dan lintas perangkat. Jadi kunci dilepas begitu server menjawab, seperti
+  // form lain (yang dulu ditahan hanya menjaga satu sesi halaman, dan menjawab "SUDAH diajukan" untuk opname yang sudah DITOLAK).
   payload.idPermintaan = rjdKunciIsian_("sp-op", payload);
   spBeliPesan_("sp-op-pesan", "");
-  spKirim_("catatOpname", payload, { btn: btn, teksSibuk: "Mengajukan...", sukses: function (res) {
+  spKirim_("catatOpname", payload, { btn: btn, teksSibuk: "Mengajukan...", kunci: "sp-op", aksi: "opname ini", sukses: function (res) {
     if (res && res.sudahTercatat) spBeliPesan_("sp-op-pesan", "Opname ini SUDAH diajukan sebagai " + res.idOpname + ".");
     else if (res) spBeliPesan_("sp-op-pesan", "Diajukan " + res.idOpname + " (" + res.item + " item, " + res.berselisih + " berselisih) -- menunggu persetujuan keuangan.");
     spMuatGudang_(true); return res; } });
