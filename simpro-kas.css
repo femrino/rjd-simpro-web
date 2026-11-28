@@ -303,3 +303,55 @@
 .ks-badge.ks-badge-muat { background: #F4EFE6; color: #7A5B1E; }
 .ks-memuat { opacity: .45; pointer-events: none; transition: opacity .15s ease; }
 @media print { .ks-bulan-pilih::after { content: none; } .ks-bulan-pilih select { display: none; } }
+
+/* ============================================================
+ * v448 -- TAB HALAMAN KAS (Femri 28 Nov 2026). Bahasa visual = bilah fase halaman produksi (.sp-tabs v98: pil putih bertepi,
+ * yang aktif pil tinta terangkat, satu baris yang bisa digeser di layar sempit) -- sengaja sama supaya tidak ada pola baru.
+ * Bilah melekat di bawah .db-header: tingginya DIKUNCI 68 px di simpro-global.css, dan #db-section-tabs dashboard memakai
+ * angka yang sama (top: 68px). Latar meniru header (krem tembus + blur) supaya tabel yang lewat di bawahnya tidak menembus.
+ * Di <= 640 px TIDAK melekat: bilah + pemilih bulan dua baris (~100 px) memakan seperdelapan layar HP sepanjang tabel buku.
+ * ============================================================ */
+.ks-tab-luar { display: none !important; }
+.ks-tabbilah {
+  position: sticky; top: 68px; z-index: 20;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px;
+  margin: 0 -8px 14px; padding: 8px 8px 10px;
+  background: rgba(249, 247, 242, .92); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line, #E5E0D6);
+}
+.ks-tabs {
+  display: flex; flex-wrap: nowrap; gap: 6px; min-width: 0; flex: 0 1 auto;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: var(--line, #E5E0D6) transparent;
+  padding: 2px;
+}
+.ks-tabs::-webkit-scrollbar { height: 5px; }
+.ks-tabs::-webkit-scrollbar-thumb { background: var(--line, #E5E0D6); border-radius: 3px; }
+.ks-tab {
+  flex: 0 0 auto; min-height: 40px; padding: 9px 18px; border-radius: 9999px;
+  font-family: inherit; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer;
+  color: var(--ink-soft, #6B7280); background: var(--white, #FFFFFF); border: 1px solid var(--line, #E5E0D6);
+}
+.ks-tab:hover { color: var(--navy, #17212F); border-color: var(--navy, #17212F); }
+.ks-tab.active { background: var(--ink, #172134); color: var(--white, #FFFFFF); border-color: var(--ink, #172134); box-shadow: 0 2px 8px rgba(23, 33, 52, .25); }
+.ks-tab:focus-visible { outline: 2px solid var(--terra, #B4532A); outline-offset: 2px; }
+.ks-tabbilah .ks-bulan { margin: 0; }
+/* <= 640 px: KISI 2x2, bukan deret geser. Terukur pratinjau 390 px: deret geser memotong tab keempat jadi "Pembe" di tepi kanan --
+   tab yang baru terlihat sesudah digeser adalah tab yang tidak diketahui ada. Empat tab muat utuh dalam dua baris (~86 px). */
+@media (max-width: 640px) {
+  .ks-tabbilah { position: static; margin: 0 0 12px; padding: 4px 0 8px; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .ks-tabs { flex: 1 1 100%; display: grid; grid-template-columns: 1fr 1fr; overflow: visible; }
+  .ks-tab { padding: 8px 10px; font-size: 12.5px; text-align: center; }
+}
+@media print {
+  .ks-tabs { display: none !important; }
+  .ks-tabbilah { position: static; border: 0; background: none; backdrop-filter: none; margin: 0 0 8px; padding: 0; }
+}
+
+/* v448 -- ANGKA UBIN KPI TIDAK DIPECAH DI TENGAH. "Rp 275.765.631,06" terukur 157 px pada 20 px, isi ubin 149 px di 1024-1400 px
+   (117 px di HP 360), dan overflow-wrap:anywhere memecahnya jadi "275.765.631,0" / "6". Font SEMUA ubin tidak dikecilkan
+   ("43 hari" muat lega); yang mengecil hanya nilai yang kata terpanjangnya (--kpi-huruf, ditulis ksKpiRender_) tidak muat di
+   lebar UBINNYA sendiri: 170cqi / huruf ~ lebar isi / (huruf x 0,56 em) -- 0,56 em = lebar rata-rata angka Archivo 800 terukur
+   (157 / 20 / 14), dengan sisa ~5%. anywhere tetap dipasang sebagai pengaman terakhir, bukan jalur biasa. Diukur ukur-kpi-nilai.py. */
+.ks-kpi-ubin { container-type: inline-size; }
+.ks-kpi-nilai { font-size: min(20px, calc(170cqi / var(--kpi-huruf, 1))); }
+@media (max-width: 640px) { .ks-kpi-nilai { font-size: min(17px, calc(170cqi / var(--kpi-huruf, 1))); } }

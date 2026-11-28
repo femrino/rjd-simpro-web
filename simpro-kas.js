@@ -283,7 +283,12 @@ function ksMuat(bulan, opsi) {
         if (typeof rjdSnapshotBarGagal_ === "function") rjdSnapshotBarGagal_("ks-saldo", new Date(umur));   // ia menuntut Date (rjdJamPendek_)
         return;
       }
-      document.getElementById("ks-buku").innerHTML = '<div class="ks-kartu"><p class="ks-galat">' + ksEsc_(e.message || "Gagal memuat.") + '</p></div>';
+      // v448: galat JARINGAN diterjemahkan (pola kartu stok/biaya/KPI di berkas ini). Dulu "Failed to fetch" mentah tampil ke operator;
+      // jalur_gagal Z3 tidak pernah melihatnya karena sengaja menolak dengan Error berpesan Indonesia, jalan163 Z3 memakai TypeError asli.
+      const pesanMuat = /Failed to fetch|NetworkError|Load failed/i.test(String((e && e.message) || e))
+        ? "Buku kas gagal dimuat: sambungan ke server terputus di tengah jalan. Coba muat ulang halaman."
+        : ((e && e.message) || "Gagal memuat.");
+      document.getElementById("ks-buku").innerHTML = '<div class="ks-kartu"><p class="ks-galat">' + ksEsc_(pesanMuat) + '</p></div>';
       // v229: kalau yang tampil di atas adalah SALDO TERSIMPAN, katakan begitu.
       // ksRender menulis ulang #ks-saldo, jadi bilahnya dipasang SESUDAH ini.
       if (KS_SNAP_WAKTU && typeof rjdSnapshotBarGagal_ === "function") {
@@ -294,7 +299,122 @@ function ksMuat(bulan, opsi) {
 
 // ---------- render ----------
 function ksRender() {
+  if (!KS_TAB) KS_TAB = ksTabAwal_();   // v448: SEBELUM ksRenderKpi_ -- KPI baru dimuat kalau tabnya yang dibuka
   ksRenderSaldo_(); ksRenderForm_(); ksRenderBulan_(); ksPasangSaring_(); ksRenderBuku_(); ksRenderArus_(); ksRenderRekon_(); ksRenderJurnal_(); ksRenderMasterSupplier_(); ksRenderBeli_(); ksRenderStok_(); ksRenderBiaya_(); ksRenderLaporan_(); ksRenderKpi_(); ksRenderPeringatan_();   // v389: KPI owner (Tahap 9B)
+  ksTerapkanTab_();   // v448: SESUDAH semua wadah suntikan lahir -- kelas tab dipasang pada elemen yang sudah ada
+}
+
+/* ============================================================================
+ * v448 -- TAB HALAMAN KAS (Femri 28 Nov 2026: "halaman kas ini cukup panjang, bagaimana kalau dibuat tab seperti halaman
+ * produksi"). Terukur sebelum (ukur-panjang-kas.py, data bulan sibuk 70 transaksi): 9.258 px di 1400 px = 10 layar, 12.457 px di
+ * 390 px = 14 layar; tabel buku 47%, arus kas 6 bulan 18%, dan Laporan keuangan baru tercapai sesudah menggulir ~8.500 px.
+ *
+ * DISUNTIK JS, bukan markup template: bagian halaman TIDAK dibungkus ulang (template tidak ditempel), tiap bagian cukup diberi
+ * kelas .ks-tab-luar kalau tabnya bukan yang aktif. Akibatnya urutan DOM tidak berubah dan semua fungsi yang mencari jangkar
+ * (ksJurnalWadah_, ksKpiWadah_, rjdSnapshotBar*, ksBilahArsip_, ksBilahPraTulis_) tetap benar tanpa disentuh.
+ *
+ * Yang TIDAK terdaftar di peta tetap tampil di SEMUA tab, dan itu disengaja: #ks-peringatan, bilah pra-tulis, bilah arsip dan
+ * bilah snapshot adalah kabar tentang ANGKA di semua tab ("angka di bawah dari sebelum perubahan terakhir"), bukan isi satu tab.
+ * Pemilih bulan (.ks-bulan) dipindah ke bilah tab: ia mengatur buku, rekonsiliasi, jurnal, laporan dan KPI sekaligus, jadi ia
+ * milik halaman, bukan milik tab Buku. Di tab Pembelian & stok ia disembunyikan (tidak ada yang berbulan di sana).
+ *
+ * Tab yang tampil ditentukan PERAN, bukan isi: non-finance hanya punya Buku kas (+ Laporan kalau arus kasnya terisi), dan bilah
+ * tombolnya hilang kalau cuma satu tab yang tersisa. Isi tidak dipakai sebagai penentu karena KPI sengaja KOSONG selama tabnya
+ * belum dibuka (dimuat malas, lihat ksRenderKpi_) -- tab yang muncul-hilang karena itu akan terbaca seperti fitur yang rusak.
+ *
+ * Tab yang dibuka diingat per perangkat (localStorage, dibungkus try/catch: mode privat / penyimpanan diblokir = mulai dari
+ * Buku kas, halaman tetap jalan) dan ditulis ke alamat (#tutup-bulan dst., lewat replaceState supaya tombol Kembali tidak
+ * menelusuri tiap klik tab). Alamat menang atas ingatan: tautan yang dikirim orang harus membuka tab yang disebutnya.
+ * ========================================================================== */
+const KS_TAB_PETA = [
+  ["buku", "Buku kas", ["ks-saldo", "ks-saldo-info", "ks-form-wrap", "ks-saring", "ks-buku"]],
+  ["tutup", "Tutup bulan", ["ks-rekon", "ks-jurnal", "ks-laporan"]],
+  ["laporan", "Laporan & KPI", ["ks-kpi", "ks-arus-judul", "ks-arus", "ks-biaya"]],
+  ["beli", "Pembelian & stok", ["ks-master-supplier", "ks-beli", "ks-stok"]]
+];
+const KS_TAB_ALAMAT = { buku: "buku-kas", tutup: "tutup-bulan", laporan: "laporan-kpi", beli: "pembelian-stok" };
+const KS_TAB_SIMPAN = "ks-tab";
+let KS_TAB = null;   // null = belum ditentukan; ksTabAwal_ mengisinya pada render pertama
+
+function ksTabDariAlamat_() {
+  const h = String((typeof location !== "undefined" && location.hash) || "").replace(/^#/, "");
+  const k = Object.keys(KS_TAB_ALAMAT).filter(function (t) { return KS_TAB_ALAMAT[t] === h; })[0];
+  return k || null;
+}
+function ksTabAwal_() {
+  const dariAlamat = ksTabDariAlamat_(); if (dariAlamat) return dariAlamat;
+  try { const s = localStorage.getItem(KS_TAB_SIMPAN); if (s && KS_TAB_ALAMAT[s]) return s; } catch (e) { /* penyimpanan diblokir */ }
+  return "buku";
+}
+/** Tab yang boleh tampil untuk peran ini (lihat kepala blok: ditentukan peran, bukan isi). */
+function ksTabBoleh_(t) {
+  if (t === "buku") return true;
+  const fin = !!(KS_DATA && KS_DATA.bisaFinance);
+  if (t === "laporan") return fin || !!(KS_DATA && (KS_DATA.arusKas || []).length);
+  return fin;
+}
+function ksTabPasangBilah_() {
+  const isi = document.getElementById("ks-isi"); if (!isi) return null;
+  let bilah = document.getElementById("ks-tabbilah");
+  if (!bilah) {
+    // Penanda posisi ALAMI bilah: bilah melekat (sticky), jadi getBoundingClientRect-nya sendiri melaporkan posisi menempel,
+    // bukan tempat ia berada di aliran -- ksPilihTab memakai penanda ini untuk tahu apakah halaman perlu digulir balik.
+    const jangkar = document.createElement("div"); jangkar.id = "ks-tabjangkar";
+    bilah = document.createElement("div"); bilah.id = "ks-tabbilah"; bilah.className = "ks-tabbilah";
+    bilah.innerHTML = '<div class="ks-tabs" id="ks-tabs" role="tablist" aria-label="Bagian halaman kas"></div>';
+    const per = document.getElementById("ks-peringatan");
+    const sesudah = (per && per.parentNode === isi) ? per.nextSibling : isi.firstChild;
+    isi.insertBefore(jangkar, sesudah); isi.insertBefore(bilah, sesudah);
+    if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("hashchange", function () { const t = ksTabDariAlamat_(); if (t && t !== KS_TAB) ksPilihTab(t); });
+  }
+  // .ks-bulan (template) pindah SEKALI ke bilah; ksPasangPilihBulan_ mencari judulnya lewat id, jadi tempatnya bebas.
+  const bulan = isi.querySelector(":scope > .ks-bulan"); if (bulan) bilah.appendChild(bulan);
+  // judul "Arus kas 6 bulan" (template) tidak ber-id; diberi id supaya bisa masuk peta.
+  const judulArus = isi.querySelector(":scope > .ks-bagian"); if (judulArus && !judulArus.id) judulArus.id = "ks-arus-judul";
+  return bilah;
+}
+function ksTerapkanTab_() {
+  const bilah = ksTabPasangBilah_(); if (!bilah) return;
+  const boleh = KS_TAB_PETA.filter(function (t) { return ksTabBoleh_(t[0]); });
+  if (!boleh.some(function (t) { return t[0] === KS_TAB; })) KS_TAB = "buku";
+  const deret = document.getElementById("ks-tabs");
+  const kunci = boleh.map(function (t) { return t[0]; }).join(",") + "|" + KS_TAB;
+  if (deret.dataset.kunci !== kunci) {
+    deret.innerHTML = boleh.map(function (t) {
+      const aktif = t[0] === KS_TAB;
+      return '<button type="button" role="tab" class="ks-tab' + (aktif ? ' active' : '') + '" data-tab="' + t[0] + '" aria-selected="' + aktif + '" onclick="ksPilihTab(\'' + t[0] + '\')">' + ksEsc_(t[1]) + '</button>';
+    }).join("");
+    deret.dataset.kunci = kunci;
+  }
+  deret.classList.toggle("hidden", boleh.length < 2);
+  // Deret yang tergeser (lebar tanggung, di atas kisi HP): tab aktif digeser masuk layar. Hitungan kotak, BUKAN scrollIntoView --
+  // yang terakhir ikut menggulir HALAMAN ke bilah tab, dan fungsi ini dipanggil tiap ksRender (simpan, ganti bulan) di posisi mana pun.
+  const akt = deret.querySelector(".ks-tab.active");
+  if (akt && deret.scrollWidth > deret.clientWidth) {
+    const rd = deret.getBoundingClientRect(), ra = akt.getBoundingClientRect();
+    if (ra.left < rd.left) deret.scrollLeft -= (rd.left - ra.left) + 8;
+    else if (ra.right > rd.right) deret.scrollLeft += (ra.right - rd.right) + 8;
+  }
+  KS_TAB_PETA.forEach(function (t) {
+    t[2].forEach(function (id) { const el = document.getElementById(id); if (el) el.classList.toggle("ks-tab-luar", t[0] !== KS_TAB); });
+  });
+  const bulan = bilah.querySelector(".ks-bulan"); if (bulan) bulan.classList.toggle("ks-tab-luar", KS_TAB === "beli");
+}
+/** Pindah tab. opsi.tanpaGulir: pemanggil akan menggulir sendiri (mis. Bayar tagihan -> form kas). */
+function ksPilihTab(t, opsi) {
+  if (!KS_TAB_ALAMAT[t] || !ksTabBoleh_(t)) return;
+  const ganti = t !== KS_TAB; KS_TAB = t;
+  try { localStorage.setItem(KS_TAB_SIMPAN, t); } catch (e) { /* penyimpanan diblokir: tab tidak diingat, halaman tetap jalan */ }
+  try { if (history.replaceState) history.replaceState(null, "", "#" + KS_TAB_ALAMAT[t]); } catch (e) { /* file:// atau sandbox */ }
+  ksTerapkanTab_();
+  if (t === "laporan") ksRenderKpi_();   // dimuat malas: pertama kali tab ini dibuka (atau bulan berganti sejak itu)
+  if (!ganti || (opsi && opsi.tanpaGulir)) return;
+  // Halaman sudah digulir jauh ke bawah (mis. di ujung tabel buku): tab baru dimulai dari atas isinya, bukan dari posisi gulir
+  // tab lama -- yang terakhir mendarat di tengah tab yang lebih pendek, atau di ruang kosong.
+  const jangkar = document.getElementById("ks-tabjangkar"), kepala = document.querySelector(".db-header");
+  if (!jangkar || typeof window.scrollTo !== "function") return;
+  const y = jangkar.getBoundingClientRect().top + (window.scrollY || 0) - (kepala ? kepala.offsetHeight : 0);
+  if ((window.scrollY || 0) > y) window.scrollTo(0, Math.max(0, y));
 }
 
 function ksRenderSaldo_() {
@@ -1681,6 +1801,9 @@ function ksBeliBatalTS_(btn) {
 function ksBeliBayar_(btn) {
   const id = btn.dataset.id, t = (KS_BELI.ts || []).filter(function (x) { return x["ID TS"] === id; })[0]; if (!t) return;
   if (typeof ksAksiTutup_ === "function") ksAksiTutup_();
+  // v448: daftar tagihan di tab "Pembelian & stok", form kas di tab "Buku kas" -- pindah DULU: elemen di tab tersembunyi
+  // tidak bisa digulir ke layar maupun difokus, dan form yang terisi diam-diam di tab lain terbaca seperti tombol yang mati.
+  if (typeof ksPilihTab === "function") ksPilihTab("buku", { tanpaGulir: true });
   const radio = document.querySelector('input[name="ks-arah"][value="Keluar"]'); if (radio) { radio.checked = true; if (typeof ksFormArahBerubah === "function") ksFormArahBerubah(); }
   const isi = function (elId, v) { const el = document.getElementById(elId); if (el) el.value = v; };
   isi("ks-in-kategori", KS_BELI.kategoriBayar || "Bayar tagihan supplier"); isi("ks-in-jumlah", ksRpIsian_(t.sisa)); isi("ks-in-ref", id); isi("ks-in-pihak", t["Nama Supplier"] || ""); isi("ks-in-ket", "Bayar faktur " + (t["No Faktur"] || "") + " " + (t["Nama Supplier"] || ""));
@@ -2095,6 +2218,9 @@ function ksRenderKpi_() {
   const el = ksKpiWadah_(); if (!el) return;
   if (!KS_DATA || !KS_DATA.bisaFinance) { el.innerHTML = ""; KS_KPI = null; KS_KPI_STATUS = ""; return; }
   if (KS_KPI && KS_KPI.bulan !== KS_BULAN) { KS_KPI = null; KS_KPI_STATUS = ""; KS_KPI_PESAN = null; KS_KPI_BUKA = ""; }   // bulan berganti: angka lama bukan jawaban
+  // v448: dimuat MALAS -- KPI tinggal di tab "Laporan & KPI"; selama tab lain yang dibuka, getKpiOwner tidak dikirim (staf yang
+  // cuma mencatat kas tidak lagi memicunya tiap membuka halaman). ksPilihTab("laporan") memanggil fungsi ini lagi.
+  if (KS_TAB && KS_TAB !== "laporan" && !KS_KPI && KS_KPI_STATUS !== "memuat") { el.innerHTML = ""; return; }
   // bulan berganti SAAT permintaan masih terbang: minta lagi (urut naik, jawaban lama dibuang) -- tanpa ini jawaban bulan lama
   // mendarat di bawah judul bulan baru (ditemukan jalan134 D2).
   if (KS_KPI_STATUS === "memuat" && KS_KPI_BULAN_MUAT !== KS_BULAN) { ksKpiMuat(); return; }
@@ -2179,8 +2305,11 @@ function ksKpiRender_() {
   const r = d.ringkas || {};
   const ubin = (d.kpi || []).map(function (k) {
     const st = KS_KPI_STATUS_NAMA[k.status] || "INFO", buka = KS_KPI_BUKA === k.kpi;
+    // v448: jumlah huruf KATA TERPANJANG nilai -> --kpi-huruf; CSS mengecilkan HANYA nilai yang tidak muat di lebar ubinnya
+    // (Posisi kas "Rp 275.765.631,06" dulu terpecah "275.765.631,0" / "6" di 1024-1400 px dan di HP).
+    const nilai = String(ksKpiNilai_(k)), huruf = Math.max.apply(null, nilai.split(/\s+/).map(function (s) { return s.length; }).concat([1]));
     return '<button type="button" class="ks-kpi-ubin ks-kpi-' + st.toLowerCase() + (buka ? ' ks-kpi-terbuka' : '') + '" data-kpi="' + E(k.kpi) + '" onclick="ksKpiBuka(\'' + E(k.kpi) + '\')" aria-expanded="' + (buka ? 'true' : 'false') + '">' +
-      '<span class="ks-kpi-nama">' + E(k.nama) + '</span><span class="ks-kpi-nilai">' + E(ksKpiNilai_(k)) + '</span><span class="ks-kpi-target">' + E(ksKpiTarget_(k)) + '</span><span class="ks-kpi-badge">' + E(st) + '</span></button>';
+      '<span class="ks-kpi-nama">' + E(k.nama) + '</span><span class="ks-kpi-nilai" style="--kpi-huruf:' + huruf + '">' + E(nilai) + '</span><span class="ks-kpi-target">' + E(ksKpiTarget_(k)) + '</span><span class="ks-kpi-badge">' + E(st) + '</span></button>';
   }).join("");
   const terbuka = (d.kpi || []).filter(function (k) { return k.kpi === KS_KPI_BUKA; })[0];
   el.innerHTML = '<div class="ks-kartu">' + kepala +
