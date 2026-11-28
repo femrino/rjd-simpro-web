@@ -184,33 +184,38 @@ function ivSambungJumlahPotongan_(){
 function ivPasangKotakPotongan_(){
   ivSambungJumlahPotongan_();
   if(document.getElementById("iv-bayar-potongan")) return;
-  const ref = document.getElementById("iv-bayar-ref");
   const jumlah = document.getElementById("iv-bayar-jumlah");
-  // Ditaruh sesudah kotak ref kalau ada, kalau tidak sesudah kotak Jumlah --
-  // urutan pemasangan kedua kotak suntikan ini tidak dijamin.
-  const acuan = (ref && ref.parentNode) || (jumlah && jumlah.parentNode);
-  if(!acuan || !acuan.parentNode) return;
+  // v449 (Femri 28 Nov 2026: "bagaimana solusi agar lebih rapi bagian form potongan"): BLOK SELEBAR FORM tepat sesudah grid isian,
+  // bukan sel grid. Dulu kotak ini satu sel .iv-biaya-grid (~1/6 lebar form) yang menampung kotak jumlah, dropdown jenis, baris jenis
+  // tambahan, qty x harga dan ringkasan BERTUMPUK -- kolomnya memanjang ~950 px sementara sel lain setinggi satu kotak. Sekarang tiap
+  // jenis potongan satu BARIS berkolom sama (jumlah | jenis | qty x harga kurang terima | hapus), ringkasan satu pita selebar blok
+  // tepat di atas tombol Catat. Id & perilakunya TIDAK berubah (ivPotonganUbah_, payload, IV_POT_LAIN), dan urutan pemasangan dengan
+  // kotak ref (KP-8, tetap sel grid) tidak lagi penting.
+  const grid = jumlah && jumlah.closest ? jumlah.closest(".iv-biaya-grid") : null;
+  if(!grid || !grid.parentNode) return;
   const div = document.createElement("div");
-  div.className = "iv-biaya-field";
+  div.id = "iv-bayar-potongan-blok"; div.className = "iv-pot-blok";
   div.innerHTML =
-    '<label for="iv-bayar-potongan">Potongan (biaya transfer / ongkir / kurang terima barang)</label>' +
-    '<input id="iv-bayar-potongan" type="number" min="0" step="1" value="0"' +
-      ' oninput="ivPotonganUbah_()"/>' +
-    '<div id="iv-bayar-jenispotongan-wrap" style="display:none;margin-top:8px">' +
-      '<label for="iv-bayar-jenispotongan">Jenis potongan</label>' +
-      '<select id="iv-bayar-jenispotongan" onchange="ivPotonganUbah_()">' +
-        '<option value="">-- pilih --</option>' +
-        IV_JENIS_POTONGAN.map(function(j){
-          return '<option value="' + rjdEscapeHtml_(j) + '">' + rjdEscapeHtml_(j) + '</option>';
-        }).join("") +
-      '</select>' +
+    '<div class="iv-pot-kepala"><span class="iv-pot-judul">Potongan dari klien</span>' +
+      '<span class="iv-pot-sub">opsional &middot; biaya transfer / ongkir / kurang terima barang</span></div>' +
+    '<div class="iv-pot-baris iv-pot-baris-utama">' +
+      '<div class="iv-pot-sel"><label for="iv-bayar-potongan">Jumlah (Rp)</label>' +
+        '<input id="iv-bayar-potongan" class="iv-pot-angka" type="number" min="0" step="1" value="0" oninput="ivPotonganUbah_()"/></div>' +
+      '<div id="iv-bayar-jenispotongan-wrap" class="iv-pot-sel" style="display:none">' +
+        '<label for="iv-bayar-jenispotongan">Jenis potongan</label>' +
+        '<select id="iv-bayar-jenispotongan" onchange="ivPotonganUbah_()">' +
+          '<option value="">-- pilih --</option>' +
+          IV_JENIS_POTONGAN.map(function(j){
+            return '<option value="' + rjdEscapeHtml_(j) + '">' + rjdEscapeHtml_(j) + '</option>';
+          }).join("") +
+        '</select></div>' +
       ivPotKtHtml_("iv-bayar-kt", "", "") +
     '</div>' +
     '<div id="iv-bayar-potongan-lain"></div>' +
     '<button id="iv-bayar-potongan-tambah" type="button" class="iv-pot-tambah" style="display:none"' +
       ' onclick="ivPotLainTambah_(\'tunggal\')">+ Jenis potongan lain</button>' +
-    '<div id="iv-bayar-potongan-ringkas" class="iv-bayar-info-kecil"></div>';
-  acuan.parentNode.insertBefore(div, acuan.nextSibling);
+    '<div id="iv-bayar-potongan-ringkas" class="iv-bayar-info-kecil iv-pot-ringkas"></div>';
+  grid.parentNode.insertBefore(div, grid.nextSibling);
   ivPotonganUbah_();
 }
 
@@ -388,6 +393,9 @@ function ivPotHtmlLain_(kunci){
     const dipakai = [utama].concat(lain.filter(function(y, k){ return k !== i; }).map(function(y){ return y.jenis; }));
     const arg = "'" + ivAttr_(kunci) + "', " + i;
     return '<div class="iv-pot-baris">' +
+      '<input class="iv-pot-angka iv-pot-jumlah" type="number" min="0" step="1" placeholder="jumlah" aria-label="Jumlah potongan tambahan"' +
+        ' value="' + rjdEscapeHtml_(String(x.jumlah || "")) + '"' + (x.otomatis ? ' data-otomatis="' + rjdEscapeHtml_(String(x.otomatis)) + '"' : '') +
+        ' oninput="ivPotLainUbah_(' + arg + ', \'jumlah\', this)"/>' +
       '<select class="iv-pot-jenis" aria-label="Jenis potongan tambahan" onchange="ivPotLainUbah_(' + arg + ', \'jenis\', this)">' +
         '<option value="">-- pilih jenis --</option>' +
         IV_JENIS_POTONGAN.map(function(j){
@@ -395,11 +403,8 @@ function ivPotHtmlLain_(kunci){
             (j !== x.jenis && dipakai.indexOf(j) !== -1 ? ' disabled' : '') + '>' + rjdEscapeHtml_(j) + '</option>';
         }).join("") +
       '</select>' +
-      '<input class="iv-pot-angka iv-pot-jumlah" type="number" min="0" step="1" placeholder="jumlah" aria-label="Jumlah potongan tambahan"' +
-        ' value="' + rjdEscapeHtml_(String(x.jumlah || "")) + '"' + (x.otomatis ? ' data-otomatis="' + rjdEscapeHtml_(String(x.otomatis)) + '"' : '') +
-        ' oninput="ivPotLainUbah_(' + arg + ', \'jumlah\', this)"/>' +
-      '<button type="button" class="iv-pot-hapus" onclick="ivPotLainHapus_(' + arg + ')">Hapus</button>' +
       (x.jenis === IV_JENIS_KURANG_TERIMA ? ivPotKtHtml_("", x.qty, x.harga, kunci, i) : '') +
+      '<button type="button" class="iv-pot-hapus" onclick="ivPotLainHapus_(' + arg + ')">Hapus</button>' +
     '</div>';
   }).join("");
 }

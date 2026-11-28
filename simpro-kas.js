@@ -56,6 +56,8 @@ function ksRp(n) {
   const sen = Math.abs(n) % 1 !== 0;
   return (n < 0 ? "\u2212" : "") + Math.abs(n).toLocaleString("id-ID", { minimumFractionDigits: sen ? 2 : 0, maximumFractionDigits: 2 });
 }
+/** v449: rupiah BULAT untuk angka RINGKASAN (kartu saldo, ubin KPI) -- dibulatkan ke rupiah terdekat, tanpa sen. Tabel & isian tetap ksRp. */
+function ksRpBulat_(n) { return ksRp(Math.round(Number(n) || 0)); }
 /**
  * @K17 WK-1/2/6 (v361): tata bahasa KETAT -- bentuk yang tidak dikenal DITOLAK (NaN), bukan
  * ditebak. Parser v360 membuang titik selalu dan membulatkan sen berlebih, jadi tiga ketikan
@@ -421,10 +423,17 @@ function ksRenderSaldo_() {
   const el = document.getElementById("ks-saldo"); if (!el) return;
   const d = KS_DATA; let total = 0;
   const saldo = ksSaldoBulan_();   // @K19: di bulan arsip = saldo akhir bulan itu
+  // v449 (Femri 28 Nov 2026: "rapikan desimalnya, (,06) bagaimana kalau dibulatkan saja"): kartu RINGKASAN dibulatkan ke rupiah
+  // (ksRpBulat_), nilai persisnya di title. Tabel buku, rekonsiliasi, jurnal & laporan TETAP bersen (keputusan K16: rekonsiliasi
+  // dengan rekening koran butuh sen). Total dijumlahkan dari angka PERSIS lalu dibulatkan, jadi bisa beda Rp 1 dari jumlah kartu.
+  const kartu = function (lbl, s, kelas) {
+    return '<div class="ks-saldo-kartu' + (kelas || '') + '"' + (ksRp(s) !== ksRpBulat_(s) ? ' title="Rp ' + ksEsc_(ksRp(s)) + '"' : '') + '><div class="ks-saldo-lbl">' +
+      ksEsc_(lbl) + '</div><div class="ks-saldo-nilai' + (s < 0 && !kelas ? ' ks-minus' : '') + '">Rp ' + ksRpBulat_(s) + '</div></div>';
+  };
   el.innerHTML = (d.akun || []).filter(function (a) { return a.aktif; }).map(function (a) {
     const s = saldo[a.kode] || 0; total += s;
-    return '<div class="ks-saldo-kartu"><div class="ks-saldo-lbl">' + ksEsc_(a.nama) + '</div><div class="ks-saldo-nilai' + (s < 0 ? ' ks-minus' : '') + '">Rp ' + ksRp(s) + '</div></div>';
-  }).join("") + '<div class="ks-saldo-kartu ks-saldo-total"><div class="ks-saldo-lbl">Total uang usaha</div><div class="ks-saldo-nilai">Rp ' + ksRp(total) + '</div></div>';
+    return kartu(a.nama, s, "");
+  }).join("") + kartu("Total uang usaha", total, " ks-saldo-total");
   const info = document.getElementById("ks-saldo-info");
   if (!info) return;
   if (ksArsip_()) {
@@ -557,7 +566,10 @@ function ksPanduanKategori_() {
  * display:none: select_option Playwright tetap bisa memakainya). Kotak ketik disinkronkan dari sana lewat ksPanduanKategori_,
  * satu-satunya titik yang dilewati semua jalur yang mengubahnya.
  *
- * Daftar ikut ALIRAN halaman, bukan melayang: .ks-form-wrap ber-overflow:hidden memotong daftar absolut di dasar form.
+ * v449 (Femri 28 Nov 2026): daftar kini MELAYANG (absolut di bawah kotak, seperti pemilih PO halaman produksi). Dulu ia ikut ALIRAN
+ * karena .ks-form-wrap ber-overflow:hidden memotong daftar absolut di dasar form -- akibatnya membuka daftar mendorong seluruh baris
+ * form ke bawah dan meninggalkan ruang kosong ~400 px di bawah Tanggal & Akun. overflow:hidden itu peninggalan unggahan pertama tanpa
+ * alasan tertulis (anak-anaknya tidak berlatar), jadi DICABUT; jalan160 L kini menuntut daftar utuh terlihat & form tidak bertambah tinggi.
  * Teks bebas TIDAK pernah jadi kategori: keluar dari kotak dengan teks yang bukan nama kategori = kembali ke pilihan terakhir;
  * kotak dikosongkan = kategori dikosongkan. jalan160.
  */
@@ -1074,6 +1086,7 @@ function ksPasangSaring_() {
     '<span id="ks-sr-info" class="ks-sr-info"></span>' +
     '<button type="button" id="ks-sr-hapus" class="ks-sr-hapus hidden" onclick="ksSaringHapus()">Hapus filter</button>';
   buku.parentNode.insertBefore(d, buku);
+  KS_SR_KOMBO.forEach(function (id) { ksKomboPasang_(document.getElementById(id), id === "ks-sr-kat" ? { meta: ksSaringMetaKat_ } : null); });   // v449: arah/akun/kategori dicari dengan mengetik
 }
 
 function ksSaringUbah() {
@@ -1089,6 +1102,7 @@ function ksSaringHapus() {
   ["ks-sr-q", "ks-sr-arah", "ks-sr-akun", "ks-sr-kat", "ks-sr-dari", "ks-sr-sampai"].forEach(function (id) { const e = document.getElementById(id); if (e) e.value = ""; });
   const c = document.getElementById("ks-sr-sembunyi"); if (c) c.checked = false;
   ksRenderBuku_();
+  KS_SR_KOMBO.forEach(function (id) { ksKomboSinkron_(document.getElementById(id), true); });   // v449: arah tidak dibangun ulang ksRenderBuku_
 }
 
 function ksSaringAktif_() {
@@ -1152,12 +1166,134 @@ function ksSaringIsiSelect_(id, semua, daftar, terpilih) {
   sel.innerHTML = '<option value="">' + ksEsc_(semua) + '</option>' +
     daftar.map(function (o) { return '<option value="' + ksEsc_(o.v) + '">' + ksEsc_(o.t) + '</option>'; }).join("");
   sel.value = terpilih || "";
+  ksKomboSinkron_(sel);   // v449: kotak ketik mengikuti opsi & nilai yang baru dibangun (kecuali sedang diketik)
 }
 
 function ksSaringInfo_(n, m, aktif) {
   const info = document.getElementById("ks-sr-info"), hapus = document.getElementById("ks-sr-hapus");
   if (info) info.textContent = aktif ? "tersaring " + n + " dari " + m : "";
   if (hapus) hapus.classList.toggle("hidden", !aktif);
+}
+
+/* ============================================================================
+ * v449 -- FILTER BUKU KAS DICARI DENGAN MENGETIK (Femri 28 Nov 2026: "bagian filter (arah, akun, dan kategori) juga dijadikan ketik
+ * untuk mencari (bukan dropdown biasa)"). KOMBO kecil di atas <select> filter yang SUDAH ADA -- <select> TETAP sumber nilai (pola
+ * kategori form v441): ksSaringUbah, ksSaringHapus, ksSaringIsiSelect_ dan harness membaca/menulis .value-nya, jadi logika penyaringnya
+ * tidak berubah sebaris pun. Select disembunyikan VISUAL di dalam pembungkusnya (bukan display:none -- select_option tetap jalan).
+ *
+ * Fokus = SEMUA pilihan tampil (tanpa mengetik pun ia bekerja seperti dropdown, pilihan yang berlaku tersorot); mengetik menyaring
+ * (teks berawalan kata pertama dulu, lalu yang memuat semua kata). Daftar MELAYANG dan dibalik rata kanan kalau akan keluar layar.
+ * Teks bebas TIDAK pernah jadi nilai: keluar dari kotak = kembali ke pilihan terakhir, kecuali teksnya PERSIS sebuah pilihan; kotak
+ * dikosongkan = "Semua ...". Pilihan memicu 'change' pada select-nya, jadi onchange="ksSaringUbah()" yang menyaring -- satu jalur.
+ * Di layar SENTUH daftar pendek (<= 7 pilihan: arah, akun) tidak memunculkan keyboard (inputmode none): mengetuk satu dari lima
+ * pilihan lebih cepat daripada mengetik, dan keyboard menutupi separuh daftarnya. Kategori (puluhan) tetap memunculkan keyboard.
+ * Filter yang aktif (bukan "Semua") bertepi & berlatar biru -- dulu satu-satunya tandanya "tersaring N dari M" di ujung bilah.
+ * ========================================================================== */
+const KS_SR_KOMBO = ["ks-sr-arah", "ks-sr-akun", "ks-sr-kat"];
+function ksKomboOpsi_(sel) { return Array.prototype.map.call(sel.options, function (o) { return { v: o.value, t: o.textContent }; }); }
+/** Teks kotak = teks pilihan yang berlaku. paksa=false: kotak yang SEDANG diketik tidak ditimpa (ksRenderBuku_ memanggil tiap ketukan). */
+function ksKomboSinkron_(sel, paksa) {
+  if (!sel) return;
+  const inp = document.getElementById(sel.id + "-cari"); if (!inp) return;
+  const o = sel.options[sel.selectedIndex];
+  if (paksa || document.activeElement !== inp) inp.value = o ? o.textContent : "";
+  // Layar sentuh: keyboard disembunyikan hanya untuk daftar PENDEK -- dihitung di SINI (tiap opsi dibangun ulang), bukan saat dipasang:
+  // select kategori lahir berisi "Semua kategori" saja dan opsinya baru diisi ksSaringIsiSelect_ (jalan164 C menemukannya).
+  if (inp.dataset.sentuh === "1") inp.inputMode = sel.options.length <= 7 ? "none" : "";
+  const w = document.getElementById(sel.id + "-kombo"); if (w) w.classList.toggle("ks-kombo-aktif", !!sel.value);
+}
+/** Keterangan & kode akun kategori untuk daftar filter (SD Kategori Kas lewat KS_DATA.kategori). Nama yang ada di DUA arah (mis.
+ *  "Lain-lain" masuk & keluar) memakai arah yang sedang disaring; tanpa saringan arah keduanya disebut berawalan arahnya. */
+function ksSaringMetaKat_(nama) {
+  let ada = ((KS_DATA && KS_DATA.kategori) || []).filter(function (k) { return k.kategori === nama; });
+  if (ada.length > 1 && KS_SARING.arah) { const searah = ada.filter(function (k) { return k.arah === KS_SARING.arah; }); if (searah.length) ada = searah; }
+  if (!ada.length) return null;
+  if (ada.length === 1) return { akun: String(ada[0].akunBuku || "").trim(), ket: String(ada[0].keterangan || "").trim() };
+  return { akun: ada.map(function (k) { return String(k.akunBuku || "").trim(); }).filter(String).join(" / "),
+           ket: ada.map(function (k) { const t = String(k.keterangan || "").trim(); return t ? k.arah + ": " + t : ""; }).filter(String).join(" · ") };
+}
+function ksKomboPasang_(sel, opsiKombo) {
+  if (!sel || !sel.parentNode || sel.dataset.kombo) return;   // idempoten
+  const meta = (opsiKombo && opsiKombo.meta) || function () { return null; };
+  sel.dataset.kombo = "1";
+  const id = sel.id, w = document.createElement("span");
+  w.className = "ks-kombo"; w.id = id + "-kombo";
+  w.innerHTML = '<input id="' + id + '-cari" class="ks-kombo-input" type="text" autocomplete="off" spellcheck="false" role="combobox"' +
+    ' aria-autocomplete="list" aria-expanded="false" aria-controls="' + id + '-daftar" aria-label="' + ksEsc_(sel.getAttribute("aria-label") || "") + '"/>' +
+    '<div id="' + id + '-daftar" class="ks-kombo-daftar hidden" role="listbox"></div>';
+  sel.parentNode.insertBefore(w, sel); w.appendChild(sel);
+  sel.classList.add("ks-kombo-asli"); sel.tabIndex = -1; sel.setAttribute("aria-hidden", "true");
+  const inp = w.querySelector(".ks-kombo-input"), box = w.querySelector(".ks-kombo-daftar");
+  let aktif = 0, hasil = [];
+  try { if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) inp.dataset.sentuh = "1"; } catch (e) { /* browser tua */ }   // inputMode diputuskan ksKomboSinkron_
+  const tutup = function () { box.classList.add("hidden"); box.innerHTML = ""; inp.setAttribute("aria-expanded", "false"); };
+  const render = function (q) {
+    // Tingkat SAMA dengan ksKatCocok_ (kategori form): 0 nama berawalan teks utuh, 1 nama memuat semua kata, 2 cocok lewat
+    // penjelasan/kode akun (hanya pilihan bermeta -- filter kategori). Di dalam tingkat: urutan pilihan aslinya.
+    const kata = ksKatNorm_(q).split(" ").filter(String), utuh = kata.join(" ");
+    const semua = ksKomboOpsi_(sel).map(function (o, i) { const m = o.v ? meta(o.v) : null; return { v: o.v, t: o.t, m: m, i: i }; });
+    if (!kata.length) { hasil = semua; aktif = Math.max(0, semua.map(function (o) { return o.v; }).indexOf(sel.value)); }
+    else {
+      const tingkat = function (o) {
+        const nm = ksKatNorm_(o.t), lain = o.m ? " " + ksKatNorm_(o.m.ket) + " " + ksKatNorm_(o.m.akun) : "";
+        if (!kata.every(function (k) { return (nm + lain).indexOf(k) !== -1; })) return -1;
+        if (nm.indexOf(utuh) === 0) return 0;
+        return kata.every(function (k) { return nm.indexOf(k) !== -1; }) ? 1 : 2;
+      };
+      hasil = semua.map(function (o) { o.tk = tingkat(o); return o; }).filter(function (o) { return o.tk >= 0; })
+        .sort(function (a, b) { return a.tk - b.tk || a.i - b.i; });
+      aktif = 0;
+    }
+    box.innerHTML = hasil.length ? hasil.map(function (o, i) {
+      const isi = o.m ? '<span class="ks-kat-nama">' + ksEsc_(o.t) + '</span>' + (o.m.akun ? '<span class="ks-kat-akun">' + ksEsc_(o.m.akun) + '</span>' : '') +
+        (o.m.ket ? '<span class="ks-kat-ket">' + ksEsc_(o.m.ket) + '</span>' : '') : ksEsc_(o.t);
+      return '<div class="ks-kombo-opsi' + (o.m ? ' ks-kombo-opsi-kaya' : '') + (i === aktif ? ' aktif' : '') + (o.v === sel.value ? ' terpilih' : '') +
+        '" role="option" aria-selected="' + (o.v === sel.value) + '" data-nilai="' + ksEsc_(o.v) + '">' + isi + '</div>';
+    }).join("") : '<div class="ks-kombo-kosong">Tidak ada yang cocok.</div>';
+    box.classList.remove("hidden", "ks-kombo-kanan"); inp.setAttribute("aria-expanded", "true");
+    const lebar = window.innerWidth || document.documentElement.clientWidth;
+    if (box.getBoundingClientRect().right > lebar - 4) box.classList.add("ks-kombo-kanan");   // jangan sampai halaman meluber
+  };
+  const pilih = function (v) {
+    tutup();
+    if (sel.value !== v) { sel.value = v; sel.dispatchEvent(new Event("change", { bubbles: true })); }
+    ksKomboSinkron_(sel, true);
+  };
+  inp.addEventListener("focus", function () { try { inp.select(); } catch (e) { /* browser tua */ } render(""); });
+  inp.addEventListener("input", function () { render(inp.value); });
+  inp.addEventListener("keydown", function (e) {
+    const buka = !box.classList.contains("hidden");
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!buka) { render(""); return; }
+      const opsi = box.querySelectorAll(".ks-kombo-opsi"); if (!opsi.length) return;
+      aktif = (aktif + (e.key === "ArrowDown" ? 1 : -1) + opsi.length) % opsi.length;
+      Array.prototype.forEach.call(opsi, function (o, i) { o.classList.toggle("aktif", i === aktif); });
+      if (opsi[aktif].scrollIntoView) opsi[aktif].scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Enter") {
+      if (buka && hasil[aktif]) { e.preventDefault(); pilih(hasil[aktif].v); }
+    } else if (e.key === "Escape") {
+      if (buka) { e.preventDefault(); tutup(); ksKomboSinkron_(sel, true); }
+    }
+  });
+  inp.addEventListener("blur", function () {
+    setTimeout(function () {
+      if (document.activeElement === inp) return;
+      if (box.classList.contains("hidden")) { ksKomboSinkron_(sel, true); return; }
+      const n = ksKatNorm_(inp.value);
+      const persis = n ? ksKomboOpsi_(sel).filter(function (o) { return ksKatNorm_(o.t) === n; })[0] : null;
+      if (!n) pilih("");                       // dikosongkan = "Semua ..."
+      else if (persis) pilih(persis.v);        // diketik persis nama pilihan
+      else { tutup(); ksKomboSinkron_(sel, true); }   // teks bebas: kembali ke pilihan terakhir
+    }, 0);
+  });
+  // mousedown, bukan click: blur kotak (yang menutup daftar) terjadi SEBELUM click; preventDefault menahan fokusnya (pola v441).
+  box.addEventListener("mousedown", function (e) {
+    e.preventDefault();
+    const o = e.target && e.target.closest ? e.target.closest(".ks-kombo-opsi") : null;
+    if (o) { pilih(o.getAttribute("data-nilai")); inp.blur(); }
+  });
+  ksKomboSinkron_(sel, true);
 }
 
 function ksRenderBuku_() {
@@ -1952,6 +2088,7 @@ function ksBiayaPesan_(teks, galat) {
 function ksBiayaSaring_() {
   const q = document.getElementById("ks-biaya-cari"), k = document.getElementById("ks-biaya-klien"), l = document.getElementById("ks-biaya-lengkap");
   KS_BIAYA_SARING.q = q ? q.value.trim().toLowerCase() : ""; KS_BIAYA_SARING.klien = k ? k.value : ""; KS_BIAYA_SARING.lengkap = !!(l && l.checked);
+  ksKomboSinkron_(k);   // v449: select diubah lewat jalur mana pun -> kotak ketiknya ikut (kecuali sedang diketik)
   const w = document.getElementById("ks-biaya-tabel"); if (w) w.innerHTML = ksBiayaTabelHtml_();
 }
 function ksBiayaTersaring_() {
@@ -2044,6 +2181,9 @@ function ksBiayaRender_() {
     '<div>Diperbarui<b>' + ksEsc_(KS_BIAYA.diperbarui || "-") + '</b></div><div>Tutup biaya<b>kirim terakhir + ' + ksEsc_(String(KS_BIAYA.tutupHari || 30)) + ' hari</b></div></div>' +
     '<div class="rjd-beli-tabs">' + tab("po", "Per PO") + tab("klien", "Per klien") + '</div>' + pesan + isi + ksBiayaRinciHtml_() +
     '<div class="ks-aksi">' + tombolHitung + '<button class="ks-btn" type="button" onclick="ksBiayaMuat()">Muat ulang</button></div></div>';
+  // v449 (Femri 28 Nov 2026): filter klien dicari dengan mengetik, sama dengan filter buku kas. Kartu ini digambar ulang lewat
+  // innerHTML, jadi kombonya dipasang ulang tiap render (idempoten per ELEMEN -- select yang baru lahir belum bertanda).
+  ksKomboPasang_(document.getElementById("ks-biaya-klien"));
 }
 
 
@@ -2251,7 +2391,7 @@ function ksKpiBuka(kpi) { KS_KPI_BUKA = KS_KPI_BUKA === kpi ? "" : kpi; ksKpiRen
 function ksKpiNilai_(k) {
   if (k.nilai === null || k.nilai === undefined || k.nilai === "") return "-";
   const n = Number(k.nilai);
-  if (k.satuan === "Rp") return "Rp " + ksRp(n);   // ksRp kas tanpa awalan; di ubin satuannya harus terbaca
+  if (k.satuan === "Rp") return "Rp " + ksRpBulat_(n);   // ksRp kas tanpa awalan; di ubin satuannya harus terbaca. v449: ubin = ringkasan, dibulatkan ke rupiah
   if (k.satuan === "%") return n.toLocaleString("id-ID") + "%";
   return n.toLocaleString("id-ID") + " " + k.satuan;
 }

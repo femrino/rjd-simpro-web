@@ -443,3 +443,52 @@ tr.iv-baris-batal td { color: var(--ink-soft); }
 
 /* 3C (v423): label status barang (Noda / Tanpa Label) di baris draf invoice -- ikut sebagai keterangan baris. */
 .iv-status-brg { display: inline-block; margin-left: 4px; padding: 0 6px; border: 1px solid var(--thread); border-radius: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+
+/* ============================================================
+ * v449 -- POTONGAN PEMBAYARAN TUNGGAL = BLOK SELEBAR FORM (#iv-bayar-potongan-blok, ivPasangKotakPotongan_), bukan sel grid.
+ * Tiap jenis potongan satu baris berkolom sama: jumlah | jenis | qty x harga (kurang terima) | hapus. Kolom diikat lewat
+ * grid-column, jadi baris tanpa qty x harga tetap menaruh Hapus di kolom keempat. Semua kotak 16 px (lantai zoom iOS, PF-12);
+ * selektor berawalan .iv-pot-blok (0,2,0) mengalahkan aturan lama .iv-pot-baris (0,1,0) yang tetap dipakai split.
+ * Ringkasan = pita krem selebar blok, kosong = tidak tampil.
+ * ============================================================ */
+.iv-pot-blok { margin-top: 14px; padding: 12px 14px 14px; border: 1px solid var(--line-soft); border-radius: 12px; background: #FFFDF8; }
+.iv-pot-kepala { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin-bottom: 8px; }
+.iv-pot-judul { font-size: 13px; font-weight: 800; color: var(--ink); }
+.iv-pot-sub { font-size: 11.5px; color: var(--ink-soft); }
+.iv-pot-blok .iv-pot-baris { display: grid; grid-template-columns: 160px minmax(190px, 250px) auto auto; justify-content: start; align-items: end;
+  gap: 8px 12px; margin: 0; padding: 0; border: 0; border-radius: 0; }
+#iv-bayar-potongan-lain .iv-pot-baris { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line-soft); }
+.iv-pot-blok .iv-pot-sel { min-width: 0; }
+.iv-pot-blok .iv-pot-sel:first-child, .iv-pot-blok .iv-pot-jumlah { grid-column: 1; }
+.iv-pot-blok #iv-bayar-jenispotongan-wrap, .iv-pot-blok .iv-pot-jenis { grid-column: 2; }
+.iv-pot-blok .iv-pot-kt { grid-column: 3; margin: 0; flex-wrap: nowrap; }
+.iv-pot-blok .iv-pot-hapus { grid-column: 4; }
+.iv-pot-blok label { display: block; margin: 0 0 4px; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); }
+.iv-pot-blok .iv-pot-kt label { display: flex; flex-direction: column; gap: 3px; margin: 0; }
+.iv-pot-blok .iv-pot-angka { width: 100%; padding: 8px 9px; font-size: 16px; text-align: right; border: 1px solid var(--line-soft);
+  border-radius: 8px; background: var(--white); color: var(--ink); font-family: 'Inter', sans-serif; }
+.iv-pot-blok .iv-pot-kt .iv-pot-angka { width: 110px; }
+.iv-pot-blok select { width: 100%; min-width: 0; padding: 8px 9px; font-size: 16px; border: 1px solid var(--line-soft); border-radius: 8px;
+  background: var(--white); color: var(--ink); font-family: inherit; }
+.iv-pot-blok .iv-pot-tambah { margin-top: 10px; }
+.iv-pot-blok .iv-pot-ringkas { margin-top: 10px; padding: 9px 12px; border-radius: 9px; background: var(--cream); font-size: 12.5px;
+  line-height: 1.6; color: var(--ink); }
+.iv-pot-blok .iv-pot-ringkas:empty { display: none; }
+/* HP: jumlah (+ Hapus di sebelahnya) baris 1, jenis SELEBAR blok baris 2, qty x harga baris 3. Diukur pratinjau 390 px: jumlah | jenis
+   berdampingan memotong nama jenis ("Ongkir dipotong kli") -- select 16 px tidak bisa dikecilkan (lantai zoom iOS). Jenis muncul DI BAWAH
+   kotak jumlah yang sedang diketik, jadi kemunculannya tidak menggeser kotak itu. */
+@media (max-width: 640px) {
+  .iv-pot-blok { padding: 10px 10px 12px; }
+  .iv-pot-blok .iv-pot-baris { grid-template-columns: minmax(0, 1fr) auto; justify-content: stretch; }
+  .iv-pot-blok .iv-pot-sel:first-child, .iv-pot-blok .iv-pot-jumlah { grid-column: 1; grid-row: 1; }
+  .iv-pot-blok .iv-pot-hapus { grid-column: 2; grid-row: 1; justify-self: end; }
+  .iv-pot-blok #iv-bayar-jenispotongan-wrap, .iv-pot-blok .iv-pot-jenis { grid-column: 1 / -1; grid-row: 2; }
+  .iv-pot-blok .iv-pot-kt { grid-column: 1 / -1; grid-row: 3; flex-wrap: wrap; }
+}
+
+/* v449 (Femri 28 Nov 2026): dropdown Metode bayar (#iv-bayar-metode, #iv-split-metode -- satu-satunya <select> di .iv-biaya-field)
+   dulu tanpa aturan sama sekali: kotak kecil bergaya bawaan browser di samping kotak isian selebar kolom. Disamakan dengan
+   .iv-biaya-field input (lebar penuh, padding, tepi, sudut, font). */
+.iv-biaya-field select { width: 100%; padding: 9px 11px; background: var(--white); border: 1px solid var(--line-soft); border-radius: 9px;
+  font-family: 'Inter', sans-serif; font-size: 13px; color: var(--ink); }
+.iv-biaya-field select:focus { outline: none; border-color: var(--ink); }

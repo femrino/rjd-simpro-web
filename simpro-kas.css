@@ -42,7 +42,9 @@
 .ks-saldo-info { font-size: 12px; color: var(--ink-soft, #5F6B7A); margin: 0 4px 14px; }
 
 /* ---------- form ---------- */
-.ks-form-wrap { background: #fff; border: 1px solid var(--line, #E5E0D6); border-radius: 14px; margin-bottom: 14px; overflow: hidden; }
+/* v449: overflow:hidden DICABUT -- ia memotong daftar kategori yang melayang (lihat blok v441 di bawah). Peninggalan unggahan pertama
+   tanpa alasan tertulis; tidak ada anak berlatar yang perlu dipotong sudut bulatnya (diukur jalan160 L & AUDIT). */
+.ks-form-wrap { background: #fff; border: 1px solid var(--line, #E5E0D6); border-radius: 14px; margin-bottom: 14px; }
 .ks-form-wrap > summary { list-style: none; cursor: pointer; padding: 11px 16px; font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13.5px; color: var(--navy, #17212F); display: flex; align-items: center; gap: 8px; }
 .ks-form-wrap > summary::-webkit-details-marker { display: none; }
 .ks-form-wrap > summary::before { content: "+"; font-size: 16px; line-height: 1; width: 14px; }
@@ -58,11 +60,13 @@
 .ks-arah label:has(input:checked) { background: var(--navy, #17212F); color: #fff; border-color: var(--navy, #17212F); }
 .ks-f-tgl { flex: 1 1 150px; } .ks-f-akun { flex: 1 1 170px; } .ks-f-kat { flex: 2 1 200px; } .ks-f-rp { flex: 1 1 150px; }
 /* v441: kategori dicari dengan mengetik (ksPasangCariKategori_). <select> asli tetap ada sebagai sumber nilai, disembunyikan
-   VISUAL (bukan display:none -- select_option & jalur .value tetap bekerja). Daftar ikut ALIRAN: .ks-form-wrap overflow:hidden
-   memotong daftar yang melayang. (0,2,1) mengalahkan .ks-form select (0,1,1). */
+   VISUAL (bukan display:none -- select_option & jalur .value tetap bekerja). (0,2,1) mengalahkan .ks-form select (0,1,1).
+   v449: daftar MELAYANG di bawah kotaknya (dulu ikut aliran dan mendorong seluruh baris form ~400 px). z-index 15: di atas isi form &
+   tabel di bawahnya, di BAWAH bilah tab melekat (20) dan header (40) -- daftar yang menutupi bilah tab saat digulir terbaca rusak. */
 .ks-f-kat { position: relative; }
 .ks-form select.ks-kat-asli { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; pointer-events: none; overflow: hidden; }
-.ks-kat-daftar { margin-top: 4px; max-height: 260px; overflow-y: auto; border: 1px solid var(--line, #E5E0D6); border-radius: 9px; background: #fff; }
+.ks-kat-cari-wrap { position: relative; }
+.ks-kat-daftar { position: absolute; z-index: 15; top: calc(100% + 4px); left: 0; right: 0; max-height: 320px; overflow-y: auto; border: 1px solid var(--line, #E5E0D6); border-radius: 10px; background: #fff; box-shadow: 0 10px 28px rgba(23, 33, 52, .16); }
 .ks-kat-opsi { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 7px 10px; cursor: pointer; border-bottom: 1px solid var(--line, #E5E0D6); }
 .ks-kat-opsi:last-child { border-bottom: 0; }
 .ks-kat-opsi.aktif, .ks-kat-opsi:hover { background: var(--cream, #F6F1E7); }
@@ -164,6 +168,7 @@
   /* @K15: di HP kotak cari sebaris penuh, dua select berbagi baris, rentang tanggal sebaris penuh. */
   .ks-sr-q { flex-basis: 100%; }
   .ks-saring select { flex: 1 1 40%; min-width: 0; }
+  .ks-saring .ks-kombo { flex: 1 1 40%; }   /* v449: pembungkus kombo menggantikan select di baris HP */
   .ks-sr-tgl { flex: 1 1 100%; }
   .ks-sr-tgl input { flex: 1 1 0; width: auto; min-width: 0; }
 }
@@ -355,3 +360,32 @@
 .ks-kpi-ubin { container-type: inline-size; }
 .ks-kpi-nilai { font-size: min(20px, calc(170cqi / var(--kpi-huruf, 1))); }
 @media (max-width: 640px) { .ks-kpi-nilai { font-size: min(17px, calc(170cqi / var(--kpi-huruf, 1))); } }
+
+/* ============================================================
+ * v449 -- KOMBO FILTER BUKU KAS (ksKomboPasang_): arah / akun / kategori dicari dengan mengetik, daftar MELAYANG.
+ * <select> asli dipindah ke DALAM .ks-kombo dan disembunyikan visual -- (0,2,1) mengalahkan .ks-saring select (0,1,1), yang kalau
+ * menang memberinya tinggi 36 px & lebar penuh lagi. Kotak ketik (0,2,0) mengalahkan .ks-saring input (0,1,1) untuk padding kanan
+ * (ruang segitiga) -- font 16 px tetap dari aturan .ks-saring input (lantai zoom iOS, PF-12). Segitiga dari border, bukan karakter.
+ * ============================================================ */
+.ks-kombo { position: relative; display: inline-flex; flex: 0 1 165px; min-width: 0; }
+#ks-sr-akun-kombo { flex-basis: 190px; }
+#ks-sr-kat-kombo { flex-basis: 250px; }
+.ks-saring .ks-kombo-input { width: 100%; padding-right: 28px; cursor: pointer; text-overflow: ellipsis; }
+.ks-saring .ks-kombo-input:focus { cursor: text; outline: none; border-color: var(--ink, #17212F); }
+.ks-kombo::after { content: ""; position: absolute; right: 11px; top: 50%; margin-top: -2px; width: 0; height: 0; pointer-events: none;
+  border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--ink-soft, #5F6B7A); }
+.ks-kombo.ks-kombo-aktif .ks-kombo-input { border-color: #2F4A7A; background: #F2F5FA; color: #2F4A7A; font-weight: 600; }
+.ks-saring select.ks-kombo-asli { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; min-height: 0; padding: 0; border: 0; opacity: 0; pointer-events: none; overflow: hidden; }
+.ks-kombo-daftar { position: absolute; z-index: 15; top: calc(100% + 4px); left: 0; min-width: 100%; width: max-content; max-width: min(340px, calc(100vw - 24px));
+  max-height: 300px; overflow-y: auto; padding: 4px 0; background: #fff; border: 1px solid var(--line, #E5E0D6); border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(23, 33, 52, .16); }
+.ks-kombo-daftar.ks-kombo-kanan { left: auto; right: 0; }
+.ks-kombo-opsi { padding: 8px 12px; font-size: 14px; line-height: 1.35; color: var(--ink, #17212F); cursor: pointer; }
+.ks-kombo-opsi.aktif, .ks-kombo-opsi:hover { background: var(--cream, #F6F1E7); }
+.ks-kombo-opsi.terpilih { font-weight: 700; }
+.ks-kombo-kosong { padding: 8px 12px; font-size: 12.5px; color: var(--ink-soft, #5F6B7A); }
+/* v449: pilihan BERKETERANGAN (filter kategori): nama + kode akun sebaris, penjelasan di bawahnya -- kelas .ks-kat-nama/-akun/-ket
+   dipinjam dari daftar kategori form supaya kedua daftar terbaca sama. Daftarnya lebih lebar untuk penjelasan dua baris. */
+.ks-kombo-opsi.ks-kombo-opsi-kaya { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; border-bottom: 1px solid var(--line, #E5E0D6); }
+.ks-kombo-opsi.ks-kombo-opsi-kaya:last-child { border-bottom: 0; }
+#ks-sr-kat-daftar { max-width: min(400px, calc(100vw - 24px)); }
